@@ -38,6 +38,7 @@ h1, h2 {
 .field {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .field.full {
@@ -71,9 +72,13 @@ select {
 
 /* исправление для Safari iPhone */
 input[type="date"] {
+  display: block;
   width: 100%;
+  min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 /* textarea */
@@ -184,7 +189,10 @@ select:required:valid {
 @media (max-width: 768px) {
 
   .grid {
-    grid-template-columns: 1fr;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    min-width: 0;
   }
 
   .container {
