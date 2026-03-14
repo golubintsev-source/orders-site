@@ -97,6 +97,16 @@
           </div>
         </div>
 
+          <div class="field"></div>
+            <label for="attachments">Фото / документы</label>
+            <input
+              type="file"
+              id="attachments"
+              multiple
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+            />
+          </div>
+
         <div class="actions">
           <button type="submit" id="submitBtn">Сохранить заявку</button>
           <button type="button" id="cancelEditBtn" style="display: none;">Отмена</button>
@@ -133,6 +143,7 @@
               <th>Остаток</th>
               <th>Доставка</th>
               <th>Дата доставки</th>
+              <th>Файлы</th>
               <th>Действия</th>
             </tr>
           </thead>
@@ -141,6 +152,17 @@
       </div>
     </div>
   </div>
+
+    <div id="filesModal" class="files-modal" style="display:none;">
+    <div class="files-modal-content">
+        <div class="files-modal-header">
+        <h3 id="filesModalTitle">Файлы заказа</h3>
+        <button type="button" id="closeFilesModal">✖</button>
+        </div>
+
+        <div id="filesModalBody"></div>
+    </div>
+    </div>
 
   <script src="app.js"></script>
 </body>

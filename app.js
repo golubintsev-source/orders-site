@@ -13,11 +13,17 @@ const cancelEditBtn = document.getElementById("cancelEditBtn");
 const submitBtn = document.getElementById("submitBtn");
 const formTitle = document.getElementById("formTitle");
 const clientSearch = document.getElementById("clientSearch");
+const attachmentsInput = document.getElementById("attachments");
+const filesModal = document.getElementById("filesModal");
+const filesModalBody = document.getElementById("filesModalBody");
+const filesModalTitle = document.getElementById("filesModalTitle");
+const closeFilesModal = document.getElementById("closeFilesModal");
 
-let allOrders = [];
 let currentUser = null;
 let currentRole = "user";
 let editingOrderId = null;
+let allOrders = [];
+let filesCountMap = {};
 
 async function checkAuth() {
   const { data, error } = await supabaseClient.auth.getUser();
@@ -62,7 +68,8 @@ async function loadOrders() {
   }
 
   allOrders = data || [];
-  applyClientFilter();
+  await loadFilesCountMap();
+  renderOrders(allOrders);
 }
 
 function renderOrders(orders) {
@@ -81,6 +88,18 @@ function renderOrders(orders) {
         ? `<button type="button" onclick="deleteOrder(${order.id})">Удалить</button>`
         : "";
 
+    const filesCount = filesCountMap[order.id] || 0;
+
+    const filesButton = `
+      <button
+        type="button"
+        class="files-badge-btn"
+        onclick="openFilesModal(${order.id})"
+      >
+        📎 ${filesCount} файл${getFilesWord(filesCount)}
+      </button>
+    `;
+
     const row = `
       <tr>
         <td>${order.id ?? ""}</td>
@@ -90,9 +109,7 @@ function renderOrders(orders) {
         <td>${order.phone ?? ""}</td>
         <td>
           <span class="${
-            order.payment_status === "оплачен"
-              ? "status-paid"
-              : "status-no"
+            order.payment_status === "оплачен" ? "status-paid" : "status-no"
           }">
             ${order.payment_status ?? ""}
           </span>
@@ -102,6 +119,7 @@ function renderOrders(orders) {
         <td>${order.remaining_amount ?? ""}</td>
         <td>${order.delivery ?? ""}</td>
         <td>${order.delivery_date ?? ""}</td>
+        <td>${filesButton}</td>
         <td>
           ${editButton}
           ${deleteButton}
@@ -236,20 +254,33 @@ form.addEventListener("submit", async (event) => {
   const orderData = getFormData();
 
   let error = null;
+  let savedOrderId = editingOrderId;
 
   if (editingOrderId) {
     const result = await supabaseClient
       .from("orders")
       .update(orderData)
-      .eq("id", editingOrderId);
+      .eq("id", editingOrderId)
+      .select()
+      .single();
 
     error = result.error;
+
+    if (!error && result.data) {
+      savedOrderId = result.data.id;
+    }
   } else {
     const result = await supabaseClient
       .from("orders")
-      .insert([orderData]);
+      .insert([orderData])
+      .select()
+      .single();
 
     error = result.error;
+
+    if (!error && result.data) {
+      savedOrderId = result.data.id;
+    }
   }
 
   if (error) {
@@ -260,15 +291,31 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  await uploadFiles(savedOrderId);
+
   message.textContent = editingOrderId
-    ? `Заявка #${editingOrderId} обновлена`
-    : "Заявка сохранена";
+    ? `Заявка #${savedOrderId} обновлена`
+    : `Заявка #${savedOrderId} сохранена`;
 
   resetFormMode();
   await loadOrders();
 });
 
 loadBtn.addEventListener("click", loadOrders);
+
+if (closeFilesModal) {
+  closeFilesModal.addEventListener("click", () => {
+    filesModal.style.display = "none";
+  });
+}
+
+if (filesModal) {
+  filesModal.addEventListener("click", (e) => {
+    if (e.target === filesModal) {
+      filesModal.style.display = "none";
+    }
+  });
+}
 
 if (cancelEditBtn) {
   cancelEditBtn.addEventListener("click", () => {
@@ -304,6 +351,8 @@ async function deleteOrder(orderId) {
 
 window.deleteOrder = deleteOrder;
 window.editOrder = editOrder;
+window.openFilesModal = openFilesModal;
+window.removeFile = removeFile;
 
 async function init() {
   const user = await checkAuth();
@@ -312,6 +361,194 @@ async function init() {
   await loadProfile();
   await loadOrders();
   resetFormMode();
+}
+
+async function uploadFiles(orderId) {
+  const files = attachmentsInput?.files;
+
+  if (!files || files.length === 0) return;
+
+  for (const file of files) {
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+    const filePath = `${currentUser.id}/${orderId}/${Date.now()}_${safeName}`;
+
+    const { error: uploadError } = await supabaseClient.storage
+      .from("order-files")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type || "application/octet-stream",
+      });
+
+    if (uploadError) {
+      console.error("Ошибка загрузки файла:", uploadError);
+      message.textContent = `Ошибка загрузки файла: ${file.name}`;
+      continue;
+    }
+
+    const { error: dbError } = await supabaseClient
+      .from("order_files")
+      .insert([
+        {
+          order_id: orderId,
+          file_name: file.name,
+          storage_path: filePath,
+          mime_type: file.type || null,
+          file_size: file.size || null,
+          uploaded_by: currentUser.id,
+        },
+      ]);
+
+    if (dbError) {
+      console.error("Ошибка записи файла в БД:", dbError);
+      message.textContent = `Файл загружен, но не записан в БД: ${file.name}`;
+    }
+  }
+
+  attachmentsInput.value = "";
+}
+
+async function loadFilesCountMap() {
+  const { data, error } = await supabaseClient
+    .from("order_files")
+    .select("order_id");
+
+  if (error) {
+    console.error("Ошибка загрузки количества файлов:", error);
+    filesCountMap = {};
+    return;
+  }
+
+  const map = {};
+
+  (data || []).forEach((file) => {
+    map[file.order_id] = (map[file.order_id] || 0) + 1;
+  });
+
+  filesCountMap = map;
+}
+
+function getFilesWord(count) {
+  if (count % 10 === 1 && count % 100 !== 11) return "";
+  if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) {
+    return "а";
+  }
+  return "ов";
+}
+
+async function loadOrderFiles(orderId) {
+  const { data, error } = await supabaseClient
+    .from("order_files")
+    .select("*")
+    .eq("order_id", orderId)
+    .order("id", { ascending: false });
+
+  if (error) {
+    console.error("Ошибка загрузки файлов:", error);
+    return [];
+  }
+
+  return data || [];
+}
+
+async function getSignedFileUrl(storagePath) {
+  const { data, error } = await supabaseClient.storage
+    .from("order-files")
+    .createSignedUrl(storagePath, 60 * 10);
+
+  if (error) {
+    console.error("Ошибка получения ссылки:", error);
+    return null;
+  }
+
+  return data?.signedUrl || null;
+}
+
+async function openFilesModal(orderId) {
+  filesModalTitle.textContent = `Файлы заказа #${orderId}`;
+  filesModalBody.innerHTML = "Загрузка...";
+  filesModal.style.display = "flex";
+
+  const files = await loadOrderFiles(orderId);
+
+  if (!files.length) {
+    filesModalBody.innerHTML = "<p>У этого заказа пока нет файлов.</p>";
+    return;
+  }
+
+  let html = `<div class="files-list">`;
+
+  for (const file of files) {
+    const signedUrl = await getSignedFileUrl(file.storage_path);
+
+    html += `
+      <div class="file-row">
+        <div class="file-info">
+          <strong>${file.file_name}</strong><br>
+          <small>${file.mime_type || "неизвестный тип"} | ${formatFileSize(file.file_size)}</small>
+        </div>
+
+        <div class="file-actions">
+          ${
+            signedUrl
+              ? `<a href="${signedUrl}" target="_blank">Открыть</a>`
+              : ""
+          }
+          ${
+            signedUrl
+              ? `<a href="${signedUrl}" download="${file.file_name}">Скачать</a>`
+              : ""
+          }
+          ${
+            currentRole === "admin"
+              ? `<button type="button" onclick="removeFile(${file.id}, '${file.storage_path}', ${orderId})">Удалить</button>`
+              : ""
+          }
+        </div>
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+  filesModalBody.innerHTML = html;
+}
+
+function formatFileSize(bytes) {
+  if (!bytes && bytes !== 0) return "-";
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
+async function removeFile(fileId, storagePath, orderId) {
+  const ok = confirm("Удалить файл?");
+  if (!ok) return;
+
+  const { error: storageError } = await supabaseClient.storage
+    .from("order-files")
+    .remove([storagePath]);
+
+  if (storageError) {
+    console.error("Ошибка удаления файла из Storage:", storageError);
+    message.textContent = "Ошибка удаления файла";
+    return;
+  }
+
+  const { error: dbError } = await supabaseClient
+    .from("order_files")
+    .delete()
+    .eq("id", fileId);
+
+  if (dbError) {
+    console.error("Ошибка удаления записи файла:", dbError);
+    message.textContent = "Файл удалён из Storage, но не удалён из БД";
+    return;
+  }
+
+  message.textContent = "Файл удалён";
+  await loadFilesCountMap();
+  renderOrders(allOrders);
+  await openFilesModal(orderId);
 }
 
 init();
