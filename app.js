@@ -34,54 +34,70 @@ let filesCountMap = {};
 ========================= */
 
 function renderSelectedFiles() {
-
   const files = Array.from(attachmentsInput.files || []);
 
   selectedFiles.innerHTML = "";
 
-  if(files.length === 0){
+  if (files.length === 0) {
     fileUploadText.textContent = "Файлы не выбраны";
     return;
   }
 
-  fileUploadText.textContent = "Выбрано файлов: " + files.length;
+  fileUploadText.textContent = `Выбрано файлов: ${files.length}`;
 
-  files.forEach(file => {
-
+  files.forEach((file, index) => {
     const row = document.createElement("div");
     row.className = "preview-item";
 
     let preview;
 
-    if(file.type.startsWith("image/")){
-
+    if (file.type.startsWith("image/")) {
       const img = document.createElement("img");
       img.className = "preview-thumb";
       img.src = URL.createObjectURL(file);
-
+      img.onload = () => URL.revokeObjectURL(img.src);
       preview = img;
-
-    }else{
-
+    } else {
       const icon = document.createElement("div");
       icon.className = "preview-icon";
       icon.textContent = "📄";
-
       preview = icon;
-
     }
 
     const name = document.createElement("div");
     name.className = "preview-name";
     name.textContent = file.name;
 
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "preview-remove-btn";
+    removeBtn.textContent = "✕";
+    removeBtn.title = "Удалить файл";
+
+    removeBtn.addEventListener("click", () => {
+      removeSelectedFile(index);
+    });
+
     row.appendChild(preview);
     row.appendChild(name);
+    row.appendChild(removeBtn);
 
     selectedFiles.appendChild(row);
+  });
+}
 
+function removeSelectedFile(indexToRemove) {
+  const currentFiles = Array.from(attachmentsInput.files || []);
+  const dt = new DataTransfer();
+
+  currentFiles.forEach((file, index) => {
+    if (index !== indexToRemove) {
+      dt.items.add(file);
+    }
   });
 
+  attachmentsInput.files = dt.files;
+  renderSelectedFiles();
 }
 
 function resetFileUpload() {
