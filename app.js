@@ -1,6 +1,5 @@
-const SUPABASE_URL = "https://yizwpogwabosuguakyzt.supabase.co"
-const SUPABASE_KEY = "sb_publishable_e1pJB18UsEV-o_M43ROi9w_4mS--LrF"
-
+const SUPABASE_URL = "https://yizwpogwabosuguakyzt.supabase.co";
+const SUPABASE_KEY = "sb_publishable_e1pJB18UsEV-o_M43ROi9w_4mS--LrF";
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -13,14 +12,16 @@ const cancelEditBtn = document.getElementById("cancelEditBtn");
 const submitBtn = document.getElementById("submitBtn");
 const formTitle = document.getElementById("formTitle");
 const clientSearch = document.getElementById("clientSearch");
+
 const attachmentsInput = document.getElementById("attachments");
 const fileUploadText = document.getElementById("fileUploadText");
+const selectFilesBtn = document.getElementById("selectFilesBtn");
+const selectedFiles = document.getElementById("selectedFiles");
+
 const filesModal = document.getElementById("filesModal");
 const filesModalBody = document.getElementById("filesModalBody");
 const filesModalTitle = document.getElementById("filesModalTitle");
 const closeFilesModal = document.getElementById("closeFilesModal");
-const selectFilesBtn = document.getElementById("selectFilesBtn");
-const selectedFiles = document.getElementById("selectedFiles");
 
 let currentUser = null;
 let currentRole = "user";
@@ -28,53 +29,49 @@ let editingOrderId = null;
 let allOrders = [];
 let filesCountMap = {};
 
-selectFilesBtn.addEventListener("click", () => {
-  attachmentsInput.click();
-});
+/* =========================
+   FILE UPLOAD UI
+========================= */
 
-attachmentsInput.addEventListener("change", () => {
+function renderSelectedFiles() {
+  const files = Array.from(attachmentsInput.files || []);
 
-  const files = Array.from(attachmentsInput.files);
-
-  if(files.length === 0){
+  if (files.length === 0) {
     fileUploadText.textContent = "Файлы не выбраны";
     selectedFiles.innerHTML = "";
     return;
   }
 
-  fileUploadText.textContent = "Выбрано файлов: " + files.length;
-
+  fileUploadText.textContent = `Выбрано файлов: ${files.length}`;
   selectedFiles.innerHTML = "";
 
-  files.forEach(file => {
-
+  files.forEach((file) => {
     const div = document.createElement("div");
     div.className = "file-item";
     div.textContent = file.name;
-
     selectedFiles.appendChild(div);
-
-  });
-
-});
-
-if (attachmentsInput && fileUploadText) {
-  attachmentsInput.addEventListener("change", () => {
-    const files = attachmentsInput.files;
-
-    if (!files || files.length === 0) {
-      fileUploadText.textContent = "Файлы не выбраны";
-      return;
-    }
-
-    if (files.length === 1) {
-      fileUploadText.textContent = files[0].name;
-      return;
-    }
-
-    fileUploadText.textContent = `Выбрано файлов: ${files.length}`;
   });
 }
+
+function resetFileUpload() {
+  attachmentsInput.value = "";
+  fileUploadText.textContent = "Файлы не выбраны";
+  selectedFiles.innerHTML = "";
+}
+
+if (selectFilesBtn) {
+  selectFilesBtn.addEventListener("click", () => {
+    attachmentsInput.click();
+  });
+}
+
+if (attachmentsInput) {
+  attachmentsInput.addEventListener("change", renderSelectedFiles);
+}
+
+/* =========================
+   AUTH
+========================= */
 
 async function checkAuth() {
   const { data, error } = await supabaseClient.auth.getUser();
@@ -105,6 +102,10 @@ async function loadProfile() {
   currentRole = data.role || "user";
   userInfo.textContent = `Вы вошли как: ${currentUser.email} | Роль: ${currentRole}`;
 }
+
+/* =========================
+   ORDERS
+========================= */
 
 async function loadOrders() {
   const { data, error } = await supabaseClient
@@ -142,16 +143,16 @@ function renderOrders(orders) {
     const filesCount = filesCountMap[order.id] || 0;
 
     const filesButton =
-    filesCount > 0
+      filesCount > 0
         ? `
-    <button
-        type="button"
-        class="files-badge-btn"
-        onclick="openFilesModal(${order.id})"
-    >
-        📎 ${filesCount} файл${getFilesWord(filesCount)}
-    </button>
-    `
+          <button
+            type="button"
+            class="files-badge-btn"
+            onclick="openFilesModal(${order.id})"
+          >
+            📎 ${filesCount} файл${getFilesWord(filesCount)}
+          </button>
+        `
         : "";
 
     const row = `
@@ -163,9 +164,7 @@ function renderOrders(orders) {
         <td>${order.phone ?? ""}</td>
         <td>
           <span class="${
-            order.payment_status === "оплачен"
-              ? "status-paid"
-              : "status-no"
+            order.payment_status === "оплачен" ? "status-paid" : "status-no"
           }">
             ${order.payment_status ?? ""}
           </span>
@@ -203,11 +202,8 @@ function applyClientFilter() {
 }
 
 if (clientSearch) {
-  clientSearch.addEventListener("input", () => {
-    applyClientFilter();
-  });
+  clientSearch.addEventListener("input", applyClientFilter);
 }
-
 
 function getFormData() {
   return {
@@ -251,11 +247,15 @@ function fillForm(order) {
   document.getElementById("delivery").value = order.delivery || "";
   document.getElementById("delivery_date").value = order.delivery_date || "";
   document.getElementById("phone").value = order.phone || "";
+
+  resetFileUpload();
 }
 
 function resetFormMode() {
   editingOrderId = null;
   form.reset();
+  resetFileUpload();
+
   message.textContent = "Режим: новая заявка";
 
   if (submitBtn) {
@@ -303,6 +303,31 @@ async function editOrder(orderId) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+async function deleteOrder(orderId) {
+  if (currentRole !== "admin") return;
+
+  const ok = confirm(`Удалить заявку #${orderId}?`);
+  if (!ok) return;
+
+  const { error } = await supabaseClient
+    .from("orders")
+    .delete()
+    .eq("id", orderId);
+
+  if (error) {
+    console.error("Ошибка удаления:", error);
+    message.textContent = "Ошибка при удалении";
+    return;
+  }
+
+  message.textContent = `Заявка #${orderId} удалена`;
+  await loadOrders();
+}
+
+/* =========================
+   FORM SUBMIT
+========================= */
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   message.textContent = "Сохраняю...";
@@ -311,6 +336,7 @@ form.addEventListener("submit", async (event) => {
 
   let error = null;
   let savedOrderId = editingOrderId;
+  const wasEditing = Boolean(editingOrderId);
 
   if (editingOrderId) {
     const result = await supabaseClient
@@ -341,7 +367,7 @@ form.addEventListener("submit", async (event) => {
 
   if (error) {
     console.error("Ошибка сохранения:", error);
-    message.textContent = editingOrderId
+    message.textContent = wasEditing
       ? "Ошибка при обновлении заявки"
       : "Ошибка при сохранении заявки";
     return;
@@ -349,80 +375,25 @@ form.addEventListener("submit", async (event) => {
 
   await uploadFiles(savedOrderId);
 
-  message.textContent = editingOrderId
+  resetFormMode();
+  await loadOrders();
+
+  message.textContent = wasEditing
     ? `Заявка #${savedOrderId} обновлена`
     : `Заявка #${savedOrderId} сохранена`;
-
-  resetFormMode();
-  await loadOrders();
 });
 
-loadBtn.addEventListener("click", loadOrders);
-
-if (closeFilesModal) {
-  closeFilesModal.addEventListener("click", () => {
-    filesModal.style.display = "none";
-  });
-}
-
-if (filesModal) {
-  filesModal.addEventListener("click", (e) => {
-    if (e.target === filesModal) {
-      filesModal.style.display = "none";
-    }
-  });
-}
-
-if (cancelEditBtn) {
-  cancelEditBtn.addEventListener("click", () => {
-    resetFormMode();
-  });
-}
-
-logoutBtn.addEventListener("click", async () => {
-  await supabaseClient.auth.signOut();
-  window.location.href = "login.html";
-});
-
-async function deleteOrder(orderId) {
-  if (currentRole !== "admin") return;
-
-  const ok = confirm(`Удалить заявку #${orderId}?`);
-  if (!ok) return;
-
-  const { error } = await supabaseClient
-    .from("orders")
-    .delete()
-    .eq("id", orderId);
-
-  if (error) {
-    console.error("Ошибка удаления:", error);
-    message.textContent = "Ошибка при удалении";
-    return;
-  }
-
-  message.textContent = `Заявка #${orderId} удалена`;
-  await loadOrders();
-}
-
-window.deleteOrder = deleteOrder;
-window.editOrder = editOrder;
-window.openFilesModal = openFilesModal;
-window.removeFile = removeFile;
-
-async function init() {
-  const user = await checkAuth();
-  if (!user) return;
-
-  await loadProfile();
-  await loadOrders();
-  resetFormMode();
-}
+/* =========================
+   FILES UPLOAD
+========================= */
 
 async function uploadFiles(orderId) {
   const files = attachmentsInput?.files;
 
-  if (!files || files.length === 0) return;
+  if (!files || files.length === 0) {
+    resetFileUpload();
+    return;
+  }
 
   for (const file of files) {
     const safeName = file.name.replace(/[^\w.\-]+/g, "_");
@@ -461,10 +432,7 @@ async function uploadFiles(orderId) {
     }
   }
 
-  attachmentsInput.value = "";
-  if (fileUploadText) {
-    fileUploadText.textContent = "Файлы не выбраны";
-  }
+  resetFileUpload();
 }
 
 async function loadFilesCountMap() {
@@ -486,7 +454,6 @@ async function loadFilesCountMap() {
 
   filesCountMap = map;
 }
-
 
 function getFilesWord(count) {
   if (count % 10 === 1 && count % 100 !== 11) return "";
@@ -582,13 +549,6 @@ async function openFilesModal(orderId) {
   filesModalBody.innerHTML = html;
 }
 
-function formatFileSize(bytes) {
-  if (!bytes && bytes !== 0) return "-";
-  if (bytes < 1024) return `${bytes} Б`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
-}
-
 async function removeFile(fileId, storagePath, orderId) {
   const ok = confirm("Удалить файл?");
   if (!ok) return;
@@ -616,7 +576,7 @@ async function removeFile(fileId, storagePath, orderId) {
 
   message.textContent = "Файл удалён";
   await loadFilesCountMap();
-  renderOrders(allOrders);
+  applyClientFilter();
   await openFilesModal(orderId);
 }
 
@@ -624,27 +584,64 @@ function isImageFile(file) {
   return (file.mime_type || "").startsWith("image/");
 }
 
-if (attachmentsInput && fileUploadText) {
-  attachmentsInput.addEventListener("change", () => {
-    const files = attachmentsInput.files;
+function formatFileSize(bytes) {
+  if (!bytes && bytes !== 0) return "-";
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+}
 
-    if (!files || files.length === 0) {
-      fileUploadText.textContent = "Файлы не выбраны";
-      return;
-    }
+/* =========================
+   UI EVENTS
+========================= */
 
-    if (files.length === 1) {
-      fileUploadText.textContent = files[0].name;
-      return;
-    }
+loadBtn.addEventListener("click", loadOrders);
 
-    fileUploadText.textContent = `Выбрано файлов: ${files.length}`;
+if (closeFilesModal) {
+  closeFilesModal.addEventListener("click", () => {
+    filesModal.style.display = "none";
   });
 }
 
-window.openFilesModal = openFilesModal;
-window.removeFile = removeFile;
+if (filesModal) {
+  filesModal.addEventListener("click", (e) => {
+    if (e.target === filesModal) {
+      filesModal.style.display = "none";
+    }
+  });
+}
+
+if (cancelEditBtn) {
+  cancelEditBtn.addEventListener("click", () => {
+    resetFormMode();
+  });
+}
+
+logoutBtn.addEventListener("click", async () => {
+  await supabaseClient.auth.signOut();
+  window.location.href = "login.html";
+});
+
+/* =========================
+   GLOBALS
+========================= */
+
 window.deleteOrder = deleteOrder;
 window.editOrder = editOrder;
+window.openFilesModal = openFilesModal;
+window.removeFile = removeFile;
+
+/* =========================
+   INIT
+========================= */
+
+async function init() {
+  const user = await checkAuth();
+  if (!user) return;
+
+  await loadProfile();
+  await loadOrders();
+  resetFormMode();
+}
 
 init();

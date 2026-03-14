@@ -21,87 +21,85 @@
     <div class="card">
       <h2 id="formTitle">Новая заявка</h2>
 
-      <form id="orderForm">
-        <div class="grid">
-          <div class="field">
-            <label>Дата заказа</label>
-            <input type="date" id="order_date" required />
-          </div>
+    <form id="orderForm">
+    <div class="grid">
+        <div class="field">
+        <label>Дата заказа</label>
+        <input type="date" id="order_date" required />
+        </div>
 
-          <div class="field">
-            <label>Номер</label>
-            <input type="text" id="order_number" />
-          </div>
+        <div class="field">
+        <label>Номер</label>
+        <input type="text" id="order_number" />
+        </div>
 
-          <div class="field">
-            <label>Клиент</label>
-            <input type="text" id="client" required />
-          </div>
+        <div class="field">
+        <label>Клиент</label>
+        <input type="text" id="client" required />
+        </div>
 
-          <div class="field">
-            <label>Телефон</label>
-            <input type="text" id="phone" />
-          </div>
+        <div class="field">
+        <label>Телефон</label>
+        <input type="text" id="phone" />
+        </div>
 
-          <div class="field full">
-            <label>Описание</label>
-            <textarea id="description"></textarea>
-          </div>
+        <div class="field full">
+        <label>Описание</label>
+        <textarea id="description"></textarea>
+        </div>
 
-          <div class="field">
-            <label>Статус оплаты</label>
-            <select id="payment_status">
-              <option value="нет" selected>нет</option>
-              <option value="оплачен">оплачен</option>
-            </select>
-          </div>
+        <div class="field">
+        <label>Статус оплаты</label>
+        <select id="payment_status">
+            <option value="нет" selected>нет</option>
+            <option value="оплачен">оплачен</option>
+        </select>
+        </div>
 
-          <div class="field">
-            <label>Сумма</label>
-            <input type="number" step="0.01" id="amount" required />
-          </div>
+        <div class="field">
+        <label>Сумма</label>
+        <input type="number" step="0.01" id="amount" required />
+        </div>
 
-          <div class="field">
-            <label>Предоплата</label>
-            <input type="number" step="0.01" id="prepayment" />
-          </div>
+        <div class="field">
+        <label>Предоплата</label>
+        <input type="number" step="0.01" id="prepayment" />
+        </div>
 
-          <div class="field">
-            <label>Кому предоплата</label>
-            <input type="text" id="prepayment_to" />
-          </div>
+        <div class="field">
+        <label>Кому предоплата</label>
+        <input type="text" id="prepayment_to" />
+        </div>
 
-          <div class="field">
-            <label>Остаток</label>
-            <input type="number" step="0.01" id="remaining_amount" />
-          </div>
+        <div class="field">
+        <label>Остаток</label>
+        <input type="number" step="0.01" id="remaining_amount" />
+        </div>
 
-          <div class="field">
-            <label>Кому остаток</label>
-            <input type="text" id="remaining_to" />
-          </div>
+        <div class="field">
+        <label>Кому остаток</label>
+        <input type="text" id="remaining_to" />
+        </div>
 
-          <div class="field">
-            <label>Площадь м²</label>
-            <input type="number" step="0.01" id="area_m2" />
-          </div>
+        <div class="field">
+        <label>Площадь м²</label>
+        <input type="number" step="0.01" id="area_m2" />
+        </div>
 
-          <div class="field">
-            <label>Доставка</label>
-            <input type="text" id="delivery" placeholder="да / нет / комментарий" />
-          </div>
+        <div class="field">
+        <label>Доставка</label>
+        <input type="text" id="delivery" placeholder="да / нет / комментарий" />
+        </div>
 
-          <div class="field">
-            <label>Дата доставки</label>
-            <input type="date" id="delivery_date" />
-          </div>
+        <div class="field">
+        <label>Дата доставки</label>
+        <input type="date" id="delivery_date" />
         </div>
 
         <div class="field full file-upload-group">
-        <label>Фото / документы</label>
+        <label for="attachments">Фото / документы</label>
 
         <div class="file-upload-box">
-
             <input
             type="file"
             id="attachments"
@@ -110,35 +108,30 @@
             hidden
             />
 
-            <div class="upload-area">
-            <div class="upload-icon">📎</div>
+        <div class="upload-area">
 
-            <div class="upload-text">
-                Перетащите файлы сюда
-                <br>
-                <span>или нажмите кнопку</span>
-            </div>
+        <button type="button" id="selectFilesBtn" class="upload-btn">
+            📎 Выбрать файлы
+        </button>
 
-            <button type="button" id="selectFilesBtn" class="upload-btn">
-                Выбрать файлы
-            </button>
-            </div>
-
-            <div id="fileUploadText" class="file-upload-text">
+        <div id="fileUploadText" class="file-upload-text">
             Файлы не выбраны
-            </div>
+        </div>
 
-            <div id="selectedFiles" class="selected-files"></div>
+        </div>
+
+        <div id="selectedFiles" class="selected-files"></div>
 
         </div>
         </div>
+    </div>
 
-        <div class="actions">
-          <button type="submit" id="submitBtn">Сохранить заявку</button>
-          <button type="button" id="cancelEditBtn" style="display: none;">Отмена</button>
-          <button type="button" id="loadBtn">Обновить таблицу</button>
-        </div>
-      </form>
+    <div class="actions">
+        <button type="submit" id="submitBtn">Сохранить заявку</button>
+        <button type="button" id="cancelEditBtn" style="display: none;">Отмена</button>
+        <button type="button" id="loadBtn">Обновить таблицу</button>
+    </div>
+    </form>
 
       <p id="message"></p>
     </div>
