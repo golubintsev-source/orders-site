@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Заявки</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div>
+        <h1>Заявки</h1>
+        <p id="userInfo"></p>
+      </div>
+      <button id="logoutBtn" type="button">Выйти</button>
+    </div>
+
+    <div class="card">
+      <h2 id="formTitle">Новая заявка</h2>
+
+      <form id="orderForm">
+        <div class="grid">
+          <div class="field">
+            <label>Дата заказа</label>
+            <input type="date" id="order_date" />
+          </div>
+
+          <div class="field">
+            <label>Номер</label>
+            <input type="text" id="order_number" />
+          </div>
+
+          <div class="field">
+            <label>Клиент</label>
+            <input type="text" id="client" required />
+          </div>
+
+          <div class="field">
+            <label>Телефон</label>
+            <input type="text" id="phone" />
+          </div>
+
+          <div class="field full">
+            <label>Описание</label>
+            <textarea id="description"></textarea>
+          </div>
+
+          <div class="field">
+            <label>Статус оплаты</label>
+            <input type="text" id="payment_status" placeholder="не оплачено / частично / оплачено" />
+          </div>
+
+          <div class="field">
+            <label>Сумма</label>
+            <input type="number" step="0.01" id="amount" />
+          </div>
+
+          <div class="field">
+            <label>Предоплата</label>
+            <input type="number" step="0.01" id="prepayment" />
+          </div>
+
+          <div class="field">
+            <label>Кому предоплата</label>
+            <input type="text" id="prepayment_to" />
+          </div>
+
+          <div class="field">
+            <label>Остаток</label>
+            <input type="number" step="0.01" id="remaining_amount" />
+          </div>
+
+          <div class="field">
+            <label>Кому остаток</label>
+            <input type="text" id="remaining_to" />
+          </div>
+
+          <div class="field">
+            <label>Площадь м²</label>
+            <input type="number" step="0.01" id="area_m2" />
+          </div>
+
+          <div class="field">
+            <label>Доставка</label>
+            <input type="text" id="delivery" placeholder="да / нет / комментарий" />
+          </div>
+
+          <div class="field">
+            <label>Дата доставки</label>
+            <input type="date" id="delivery_date" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" id="submitBtn">Сохранить заявку</button>
+          <button type="button" id="cancelEditBtn" style="display: none;">Отмена</button>
+          <button type="button" id="loadBtn">Обновить таблицу</button>
+        </div>
+      </form>
+
+      <p id="message"></p>
+    </div>
+
+    <div class="card">
+      <h2>Список заявок</h2>
+
+      <div class="table-wrap">
+        <table id="ordersTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Дата</th>
+              <th>Номер</th>
+              <th>Клиент</th>
+              <th>Телефон</th>
+              <th>Статус</th>
+              <th>Сумма</th>
+              <th>Предоплата</th>
+              <th>Остаток</th>
+              <th>Доставка</th>
+              <th>Дата доставки</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
