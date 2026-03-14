@@ -19,6 +19,7 @@ h1, h2 {
   margin-top: 0;
 }
 
+/* карточки */
 .card {
   background: white;
   border-radius: 14px;
@@ -27,6 +28,7 @@ h1, h2 {
   box-shadow: 0 2px 10px rgba(0,0,0,0.06);
 }
 
+/* сетка формы */
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -48,42 +50,39 @@ label {
   font-weight: 600;
 }
 
+/* общий стиль элементов формы */
 input,
 textarea,
+select,
 button {
   font: inherit;
 }
-select {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: 14px;
-  box-sizing: border-box;
-}
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid #d7dce5;
   border-radius: 10px;
   background: white;
-}
-select {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: 14px;
   box-sizing: border-box;
 }
 
+/* исправление для Safari iPhone */
+input[type="date"] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* textarea */
 textarea {
   min-height: 90px;
   resize: vertical;
 }
 
+/* кнопки */
 .actions {
   display: flex;
   gap: 10px;
@@ -105,11 +104,13 @@ button:hover {
   opacity: 0.92;
 }
 
+/* сообщение */
 #message {
   margin-top: 12px;
   font-weight: 600;
 }
 
+/* таблица */
 .table-wrap {
   overflow-x: auto;
 }
@@ -132,7 +133,56 @@ th {
   background: #f8fafc;
 }
 
+/* верхняя панель */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+#userInfo {
+  margin: 6px 0 0;
+  color: #666;
+  font-size: 14px;
+}
+
+/* обязательные поля */
+input:required,
+textarea:required,
+select:required {
+  background-color: #ffe5e5;
+  border: 2px solid #ff6b6b;
+}
+
+input:required:valid,
+textarea:required:valid,
+select:required:valid {
+  background-color: #ffffff;
+  border: 2px solid #2ecc71;
+}
+
+/* статус оплаты */
+.status-no {
+  background: #ffe5e5;
+  color: #b00020;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+.status-paid {
+  background: #e6f7e6;
+  color: #1b5e20;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+/* мобильная версия */
 @media (max-width: 768px) {
+
   .grid {
     grid-template-columns: 1fr;
   }
@@ -148,51 +198,9 @@ th {
   button {
     width: 100%;
   }
-}
-.topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
-}
 
-#userInfo {
-  margin: 6px 0 0;
-  color: #666;
-  font-size: 14px;
-}
-
-@media (max-width: 768px) {
   .topbar {
     flex-direction: column;
   }
-}
 
-input:required,
-textarea:required {
-  background-color: #ffe5e5;
-  border: 2px solid #ff6b6b;
-}
-
-input:required:valid,
-textarea:required:valid {
-  background-color: #ffffff;
-  border: 2px solid #2ecc71;
-}
-
-.status-no {
-  background: #ffe5e5;
-  color: #b00020;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-weight: bold;
-}
-
-.status-paid {
-  background: #e6f7e6;
-  color: #1b5e20;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-weight: bold;
 }
