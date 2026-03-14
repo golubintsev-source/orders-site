@@ -12,7 +12,9 @@ const userInfo = document.getElementById("userInfo");
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 const submitBtn = document.getElementById("submitBtn");
 const formTitle = document.getElementById("formTitle");
+const clientSearch = document.getElementById("clientSearch");
 
+let allOrders = [];
 let currentUser = null;
 let currentRole = "user";
 let editingOrderId = null;
@@ -59,10 +61,15 @@ async function loadOrders() {
     return;
   }
 
+  allOrders = data || [];
+  applyClientFilter();
+}
+
+function renderOrders(orders) {
   const table = document.querySelector("#ordersTable tbody");
   table.innerHTML = "";
 
-  data.forEach((order) => {
+  orders.forEach((order) => {
     const editButton = `
       <button type="button" onclick="editOrder(${order.id})">
         Редактировать
@@ -105,6 +112,28 @@ async function loadOrders() {
     table.innerHTML += row;
   });
 }
+
+function applyClientFilter() {
+  const query = clientSearch?.value.trim().toLowerCase() || "";
+
+  if (!query) {
+    renderOrders(allOrders);
+    return;
+  }
+
+  const filteredOrders = allOrders.filter((order) =>
+    (order.client || "").toLowerCase().includes(query)
+  );
+
+  renderOrders(filteredOrders);
+}
+
+if (clientSearch) {
+  clientSearch.addEventListener("input", () => {
+    applyClientFilter();
+  });
+}
+
 
 function getFormData() {
   return {
