@@ -34,23 +34,54 @@ let filesCountMap = {};
 ========================= */
 
 function renderSelectedFiles() {
+
   const files = Array.from(attachmentsInput.files || []);
 
-  if (files.length === 0) {
+  selectedFiles.innerHTML = "";
+
+  if(files.length === 0){
     fileUploadText.textContent = "Файлы не выбраны";
-    selectedFiles.innerHTML = "";
     return;
   }
 
-  fileUploadText.textContent = `Выбрано файлов: ${files.length}`;
-  selectedFiles.innerHTML = "";
+  fileUploadText.textContent = "Выбрано файлов: " + files.length;
 
-  files.forEach((file) => {
-    const div = document.createElement("div");
-    div.className = "file-item";
-    div.textContent = file.name;
-    selectedFiles.appendChild(div);
+  files.forEach(file => {
+
+    const row = document.createElement("div");
+    row.className = "preview-item";
+
+    let preview;
+
+    if(file.type.startsWith("image/")){
+
+      const img = document.createElement("img");
+      img.className = "preview-thumb";
+      img.src = URL.createObjectURL(file);
+
+      preview = img;
+
+    }else{
+
+      const icon = document.createElement("div");
+      icon.className = "preview-icon";
+      icon.textContent = "📄";
+
+      preview = icon;
+
+    }
+
+    const name = document.createElement("div");
+    name.className = "preview-name";
+    name.textContent = file.name;
+
+    row.appendChild(preview);
+    row.appendChild(name);
+
+    selectedFiles.appendChild(row);
+
   });
+
 }
 
 function resetFileUpload() {
