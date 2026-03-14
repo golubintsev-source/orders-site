@@ -60,14 +60,15 @@ button {
 }
 
 input,
-textarea,
 select {
   width: 100%;
+  min-width: 0;
   padding: 10px 12px;
   border: 1px solid #d7dce5;
   border-radius: 10px;
   background: white;
   box-sizing: border-box;
+  height: 42px;
 }
 
 /* исправление для Safari iPhone */
@@ -79,6 +80,8 @@ input[type="date"] {
   box-sizing: border-box;
   -webkit-appearance: none;
   appearance: none;
+  height: 42px;
+  line-height: 42px;
 }
 
 /* textarea */
