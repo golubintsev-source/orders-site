@@ -69,7 +69,7 @@ async function loadOrders() {
 
   allOrders = data || [];
   await loadFilesCountMap();
-  renderOrders(allOrders);
+  applyClientFilter();
 }
 
 function renderOrders(orders) {
@@ -90,15 +90,18 @@ function renderOrders(orders) {
 
     const filesCount = filesCountMap[order.id] || 0;
 
-    const filesButton = `
-      <button
+    const filesButton =
+    filesCount > 0
+        ? `
+    <button
         type="button"
         class="files-badge-btn"
         onclick="openFilesModal(${order.id})"
-      >
+    >
         📎 ${filesCount} файл${getFilesWord(filesCount)}
-      </button>
-    `;
+    </button>
+    `
+        : "";
 
     const row = `
       <tr>
@@ -109,7 +112,9 @@ function renderOrders(orders) {
         <td>${order.phone ?? ""}</td>
         <td>
           <span class="${
-            order.payment_status === "оплачен" ? "status-paid" : "status-no"
+            order.payment_status === "оплачен"
+              ? "status-paid"
+              : "status-no"
           }">
             ${order.payment_status ?? ""}
           </span>
@@ -428,6 +433,7 @@ async function loadFilesCountMap() {
   filesCountMap = map;
 }
 
+
 function getFilesWord(count) {
   if (count % 10 === 1 && count % 100 !== 11) return "";
   if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) {
@@ -480,9 +486,18 @@ async function openFilesModal(orderId) {
 
   for (const file of files) {
     const signedUrl = await getSignedFileUrl(file.storage_path);
+    const isImage = isImageFile(file);
 
     html += `
       <div class="file-row">
+        <div class="file-preview">
+          ${
+            isImage && signedUrl
+              ? `<a href="${signedUrl}" target="_blank"><img src="${signedUrl}" alt="${file.file_name}" class="file-thumb"></a>`
+              : `<div class="file-icon">📄</div>`
+          }
+        </div>
+
         <div class="file-info">
           <strong>${file.file_name}</strong><br>
           <small>${file.mime_type || "неизвестный тип"} | ${formatFileSize(file.file_size)}</small>
@@ -550,5 +565,14 @@ async function removeFile(fileId, storagePath, orderId) {
   renderOrders(allOrders);
   await openFilesModal(orderId);
 }
+
+function isImageFile(file) {
+  return (file.mime_type || "").startsWith("image/");
+}
+
+window.openFilesModal = openFilesModal;
+window.removeFile = removeFile;
+window.deleteOrder = deleteOrder;
+window.editOrder = editOrder;
 
 init();
