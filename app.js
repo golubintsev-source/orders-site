@@ -81,7 +81,15 @@ async function loadOrders() {
         <td>${order.order_number ?? ""}</td>
         <td>${order.client ?? ""}</td>
         <td>${order.phone ?? ""}</td>
-        <td>${order.payment_status ?? ""}</td>
+        <td>
+          <span class="${
+            order.payment_status === "оплачен"
+              ? "status-paid"
+              : "status-no"
+          }">
+            ${order.payment_status ?? ""}
+          </span>
+        </td>
         <td>${order.amount ?? ""}</td>
         <td>${order.prepayment ?? ""}</td>
         <td>${order.remaining_amount ?? ""}</td>

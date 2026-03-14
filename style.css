@@ -53,6 +53,14 @@ textarea,
 button {
   font: inherit;
 }
+select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
 
 input,
 textarea {
@@ -61,6 +69,14 @@ textarea {
   border: 1px solid #d7dce5;
   border-radius: 10px;
   background: white;
+}
+select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
 }
 
 textarea {
@@ -132,4 +148,51 @@ th {
   button {
     width: 100%;
   }
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+#userInfo {
+  margin: 6px 0 0;
+  color: #666;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .topbar {
+    flex-direction: column;
+  }
+}
+
+input:required,
+textarea:required {
+  background-color: #ffe5e5;
+  border: 2px solid #ff6b6b;
+}
+
+input:required:valid,
+textarea:required:valid {
+  background-color: #ffffff;
+  border: 2px solid #2ecc71;
+}
+
+.status-no {
+  background: #ffe5e5;
+  color: #b00020;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+.status-paid {
+  background: #e6f7e6;
+  color: #1b5e20;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: bold;
 }
