@@ -147,7 +147,7 @@ async function loadProfile() {
   }
 
   currentRole = data.role || "user";
-  userInfo.textContent = `Вы вошли как: ${currentUser.email} | Роль: ${currentRole}`;
+  userInfo.textContent = `${currentUser.email} | ${currentRole}`;
 }
 
 /* =========================

@@ -11,15 +11,25 @@
 <body>
   <div class="container">
     <div class="topbar">
-      <div>
-        <h1>Заявки 1.6</h1>
+    <div class="topbar-left">
+
+        <div class="user-row">
         <p id="userInfo"></p>
-      </div>
-      <button id="logoutBtn" type="button">Выйти</button>
+
+        <button id="logoutBtn" class="logout-icon-btn" type="button" title="Выйти">
+
+        <svg class="logout-icon" viewBox="0 0 24 24">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <path d="M16 17l5-5-5-5"/>
+        <path d="M21 12H9"/>
+        </svg>
+
+        </button>
+        </div>
+    </div>
     </div>
 
     <div class="card">
-      <h2 id="formTitle">Новая заявка</h2>
 
     <form id="orderForm">
     <div class="grid">
@@ -137,7 +147,6 @@
     </div>
 
     <div class="card">
-      <h2>Список заявок</h2>
 
       <div class="search-box">
         <input
