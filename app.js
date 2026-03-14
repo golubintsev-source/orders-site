@@ -14,16 +14,67 @@ const submitBtn = document.getElementById("submitBtn");
 const formTitle = document.getElementById("formTitle");
 const clientSearch = document.getElementById("clientSearch");
 const attachmentsInput = document.getElementById("attachments");
+const fileUploadText = document.getElementById("fileUploadText");
 const filesModal = document.getElementById("filesModal");
 const filesModalBody = document.getElementById("filesModalBody");
 const filesModalTitle = document.getElementById("filesModalTitle");
 const closeFilesModal = document.getElementById("closeFilesModal");
+const selectFilesBtn = document.getElementById("selectFilesBtn");
+const selectedFiles = document.getElementById("selectedFiles");
 
 let currentUser = null;
 let currentRole = "user";
 let editingOrderId = null;
 let allOrders = [];
 let filesCountMap = {};
+
+selectFilesBtn.addEventListener("click", () => {
+  attachmentsInput.click();
+});
+
+attachmentsInput.addEventListener("change", () => {
+
+  const files = Array.from(attachmentsInput.files);
+
+  if(files.length === 0){
+    fileUploadText.textContent = "Файлы не выбраны";
+    selectedFiles.innerHTML = "";
+    return;
+  }
+
+  fileUploadText.textContent = "Выбрано файлов: " + files.length;
+
+  selectedFiles.innerHTML = "";
+
+  files.forEach(file => {
+
+    const div = document.createElement("div");
+    div.className = "file-item";
+    div.textContent = file.name;
+
+    selectedFiles.appendChild(div);
+
+  });
+
+});
+
+if (attachmentsInput && fileUploadText) {
+  attachmentsInput.addEventListener("change", () => {
+    const files = attachmentsInput.files;
+
+    if (!files || files.length === 0) {
+      fileUploadText.textContent = "Файлы не выбраны";
+      return;
+    }
+
+    if (files.length === 1) {
+      fileUploadText.textContent = files[0].name;
+      return;
+    }
+
+    fileUploadText.textContent = `Выбрано файлов: ${files.length}`;
+  });
+}
 
 async function checkAuth() {
   const { data, error } = await supabaseClient.auth.getUser();
@@ -411,6 +462,9 @@ async function uploadFiles(orderId) {
   }
 
   attachmentsInput.value = "";
+  if (fileUploadText) {
+    fileUploadText.textContent = "Файлы не выбраны";
+  }
 }
 
 async function loadFilesCountMap() {
@@ -568,6 +622,24 @@ async function removeFile(fileId, storagePath, orderId) {
 
 function isImageFile(file) {
   return (file.mime_type || "").startsWith("image/");
+}
+
+if (attachmentsInput && fileUploadText) {
+  attachmentsInput.addEventListener("change", () => {
+    const files = attachmentsInput.files;
+
+    if (!files || files.length === 0) {
+      fileUploadText.textContent = "Файлы не выбраны";
+      return;
+    }
+
+    if (files.length === 1) {
+      fileUploadText.textContent = files[0].name;
+      return;
+    }
+
+    fileUploadText.textContent = `Выбрано файлов: ${files.length}`;
+  });
 }
 
 window.openFilesModal = openFilesModal;
