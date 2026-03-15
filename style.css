@@ -1,0 +1,544 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f5f7fb;
+  color: #222;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+h1,
+h2,
+h3 {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 4px;
+}
+
+h2 {
+  margin-bottom: 16px;
+}
+
+/* карточки */
+.card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+/* ===== верхняя панель ===== */
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.topbar-left {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+#userInfo {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  flex: 1;
+}
+
+.logout-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.logout-icon-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+  opacity: 1;
+}
+
+.logout-icon-btn:active {
+  transform: translateY(1px);
+}
+
+.logout-icon {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  display: block;
+}
+
+/* ===== сетка формы ===== */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.field.full {
+  grid-column: 1 / -1;
+}
+
+label {
+  font-size: 14px;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+/* ===== общий стиль элементов формы ===== */
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #d7dce5;
+  border-radius: 10px;
+  background: #fff;
+  color: #222;
+}
+
+input,
+select {
+  height: 42px;
+}
+
+textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+/* date */
+input[type="date"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  line-height: normal;
+}
+
+/* focus */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #1f6feb;
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
+}
+
+/* обязательные поля */
+input:required,
+textarea:required,
+select:required {
+  background-color: #ffe5e5;
+  border: 2px solid #ff6b6b;
+}
+
+input:required:valid,
+textarea:required:valid,
+select:required:valid {
+  background-color: #fff;
+  border: 2px solid #2ecc71;
+}
+
+/* ===== кнопки ===== */
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  background: #1f6feb;
+  color: #fff;
+  font-weight: 600;
+  transition: background 0.2s ease, opacity 0.2s ease, transform 0.15s ease;
+}
+
+button:hover {
+  opacity: 0.95;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+/* ===== сообщение ===== */
+#message {
+  margin-top: 12px;
+  font-weight: 600;
+}
+
+/* ===== поиск ===== */
+.search-box {
+  margin-bottom: 14px;
+}
+
+/* ===== таблица ===== */
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e7ebf0;
+  text-align: left;
+  padding: 10px;
+  font-size: 14px;
+  vertical-align: top;
+}
+
+th {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+/* ===== статус оплаты ===== */
+.status-no {
+  display: inline-block;
+  background: #ffe5e5;
+  color: #b00020;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+.status-paid {
+  display: inline-block;
+  background: #e6f7e6;
+  color: #1b5e20;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+/* ===== загрузка файлов ===== */
+.file-upload-group {
+  grid-column: 1 / -1;
+}
+
+.file-upload-box {
+  width: 100%;
+  border: 1px solid #d7dce5;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fafbfe;
+}
+
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upload-btn {
+  background: #1f6feb;
+  color: #fff;
+  border: none;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.upload-btn:hover {
+  background: #1557c0;
+  opacity: 1;
+}
+
+.file-upload-text {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.selected-files {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ===== превью выбранных файлов ===== */
+.preview-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e5eaf3;
+  border-radius: 10px;
+  padding: 8px;
+  background: #fff;
+}
+
+.preview-thumb {
+  width: 70px;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  display: block;
+  flex-shrink: 0;
+}
+
+.preview-icon {
+  width: 70px;
+  height: 70px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  background: #f3f4f6;
+  flex-shrink: 0;
+}
+
+.preview-name {
+  font-size: 13px;
+  flex: 1;
+  word-break: break-word;
+}
+
+.preview-remove-btn {
+  border: none;
+  background: #fee2e2;
+  color: #b91c1c;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.preview-remove-btn:hover {
+  background: #fecaca;
+  opacity: 1;
+}
+
+/* ===== модалка файлов ===== */
+.files-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1000;
+}
+
+.files-modal-content {
+  width: 100%;
+  max-width: 700px;
+  max-height: 85vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.files-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.file-row {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.file-preview {
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  display: block;
+}
+
+.file-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  background: #f7f7f7;
+}
+
+.file-info {
+  word-break: break-word;
+}
+
+.file-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.files-badge-btn {
+  background: #f2f2f2;
+  border: 1px solid #ddd;
+  color: #444;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.files-badge-btn:hover {
+  background: #e6e6e6;
+  opacity: 1;
+}
+
+/* ===== мобильная версия ===== */
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .container {
+    padding: 12px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topbar-left {
+    width: 100%;
+  }
+
+  .user-row {
+    width: 100%;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .actions button {
+    width: 100%;
+  }
+
+  .upload-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .file-row {
+    grid-template-columns: 1fr;
+  }
+
+  .file-preview {
+    width: 100%;
+    height: auto;
+    justify-content: flex-start;
+  }
+
+  .file-actions {
+    width: 100%;
+  }
+
+  .files-badge-btn {
+    width: 100%;
+    text-align: center;
+  }
+}
