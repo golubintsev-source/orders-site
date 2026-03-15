@@ -16,6 +16,8 @@ export const filesModal = document.getElementById("filesModal");
 export const filesModalBody = document.getElementById("filesModalBody");
 export const filesModalTitle = document.getElementById("filesModalTitle");
 export const closeFilesModal = document.getElementById("closeFilesModal");
+export const cellTooltip = document.getElementById("cellTooltip");
+export const ordersTable = document.getElementById("ordersTable");
 
 export const sectionNavBtns = document.querySelectorAll(".section-nav-btn");
 export const contentSections = document.querySelectorAll(".content-section");

@@ -11,6 +11,8 @@ import {
   sectionNavBtns,
   contentSections,
   phoneInput,
+  cellTooltip,
+  ordersTable,
 } from "./dom.js";
 
 import { logout } from "./auth.js";
@@ -134,6 +136,40 @@ export function bindUIEvents() {
 
   if (logoutBtn) {
     logoutBtn.addEventListener("click", logout);
+  }
+
+  if (ordersTable && cellTooltip) {
+    let hideClick, hideKey;
+    ordersTable.addEventListener("click", (e) => {
+      const td = e.target.closest("td.td-truncate-name, td.td-truncate-address");
+      if (!td) return;
+      const text = td.getAttribute("title");
+      if (!text) return;
+      if (hideClick) {
+        document.removeEventListener("click", hideClick);
+        document.removeEventListener("keydown", hideKey);
+      }
+      cellTooltip.textContent = text;
+      cellTooltip.classList.add("visible");
+      cellTooltip.setAttribute("aria-hidden", "false");
+      const rect = td.getBoundingClientRect();
+      cellTooltip.style.left = Math.min(rect.left, window.innerWidth - 330) + "px";
+      cellTooltip.style.top = rect.top - 8 + "px";
+      cellTooltip.style.transform = "translateY(-100%)";
+      function hide() {
+        cellTooltip.classList.remove("visible");
+        cellTooltip.setAttribute("aria-hidden", "true");
+        document.removeEventListener("click", hideClick);
+        document.removeEventListener("keydown", hideKey);
+        hideClick = hideKey = null;
+      }
+      hideClick = hide;
+      hideKey = (ev) => { if (ev.key === "Escape") hide(); };
+      setTimeout(() => {
+        document.addEventListener("click", hideClick);
+        document.addEventListener("keydown", hideKey);
+      }, 0);
+    });
   }
 
   if (window.location.hash === "#all") {

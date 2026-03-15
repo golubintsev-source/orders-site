@@ -35,6 +35,21 @@ export async function loadOrders() {
   applyClientFilter();
 }
 
+function escapeHtml(s) {
+  if (s == null || s === "") return "";
+  const div = document.createElement("div");
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function escapeAttr(s) {
+  if (s == null || s === "") return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
 export function renderOrders(orders) {
   const table = document.querySelector("#ordersTable tbody");
   table.innerHTML = "";
@@ -59,12 +74,14 @@ export function renderOrders(orders) {
     const telHref = phone ? "tel:" + phone.replace(/[^\d+]/g, "") : "";
     const phoneCell = phone ? `<a href="${telHref}" class="tel-link">${phone}</a>` : "";
 
+    const client = order.client ?? "";
+    const address = order.address ?? "";
     const row = `
       <tr>
         <td class="td-actions">${editIcon}${historyIcon}${filesIcon}</td>
         <td>${phoneCell}</td>
-        <td>${order.client ?? ""}</td>
-        <td>${order.address ?? ""}</td>
+        <td class="td-truncate-name" title="${escapeAttr(client)}">${escapeHtml(client)}</td>
+        <td class="td-truncate-address" title="${escapeAttr(address)}">${escapeHtml(address)}</td>
         <td>
           <span class="${
             order.payment_status === "оплачен" ? "status-paid" : "status-no"

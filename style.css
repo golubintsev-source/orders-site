@@ -344,12 +344,12 @@ td {
 }
 
 #ordersTable th {
-  padding: 6px 8px;
+  padding: 4px 2px;
   font-size: 13px;
 }
 
 #ordersTable td {
-  padding: 6px 8px;
+  padding: 4px 2px;
   font-size: 13px;
 }
 
@@ -450,7 +450,7 @@ th {
 #ordersTable td.td-delete {
   width: 1%;
   min-width: 1px;
-  padding: 4px 0 4px 2px;
+  padding: 4px 0 4px 1px;
 }
 
 #ordersTable th:nth-child(2),
@@ -463,6 +463,43 @@ th {
 #ordersTable td:nth-child(6) {
   min-width: 150px;
   white-space: nowrap;
+}
+
+/* Имя и Адрес — в одну строку, обрезка с подсказкой */
+#ordersTable th:nth-child(3),
+#ordersTable td.td-truncate-name {
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#ordersTable th:nth-child(4),
+#ordersTable td.td-truncate-address {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#ordersTable td.td-truncate-name,
+#ordersTable td.td-truncate-address {
+  cursor: help;
+}
+.cell-tooltip {
+  position: fixed;
+  z-index: 1000;
+  max-width: 320px;
+  padding: 10px 14px;
+  background: #1f2937;
+  color: #fff;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.4;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  pointer-events: none;
+  display: none;
+}
+.cell-tooltip.visible {
+  display: block;
 }
 
 /* ===== статус оплаты ===== */
@@ -720,12 +757,12 @@ th {
   }
 
   #ordersTable th {
-    padding: 6px 8px;
+    padding: 4px 2px;
     font-size: 13px;
   }
 
   #ordersTable td {
-    padding: 6px 8px;
+    padding: 4px 2px;
     font-size: 13px;
   }
 
