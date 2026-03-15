@@ -1140,6 +1140,20 @@ th {
     width: 100%;
   }
 
+  #section-new .actions,
+  #section-new .actions-top {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+
+  #section-new .actions button,
+  #section-new .actions-top button {
+    width: auto;
+    flex-shrink: 0;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
   .upload-btn {
     width: 100%;
     min-width: 0;
