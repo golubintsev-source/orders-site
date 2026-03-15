@@ -36,15 +36,18 @@ function switchSection(sectionId) {
 function formatPhoneValue(digits) {
   digits = digits.replace(/\D/g, "").slice(0, 11);
   if (digits.length === 0) return "";
-  let s = digits[0];
-  if (digits.length <= 1) return s;
-  s += "-" + digits.slice(1, 4);
-  if (digits.length <= 4) return s;
-  s += "-" + digits.slice(4, 7);
-  if (digits.length <= 7) return s;
-  s += "-" + digits.slice(7, 9);
-  if (digits.length <= 9) return s;
-  s += "-" + digits.slice(9, 11);
+  const first = digits[0];
+  if (first !== "8" && first !== "7") return digits;
+  const prefix = first === "7" ? "+7-" : "8-";
+  const rest = digits.slice(1);
+  if (rest.length === 0) return first === "7" ? "+7" : "8";
+  let s = prefix + rest.slice(0, 3);
+  if (rest.length <= 3) return s;
+  s += "-" + rest.slice(3, 6);
+  if (rest.length <= 6) return s;
+  s += "-" + rest.slice(6, 8);
+  if (rest.length <= 8) return s;
+  s += "-" + rest.slice(8, 10);
   return s;
 }
 
