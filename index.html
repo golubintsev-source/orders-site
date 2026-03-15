@@ -12,7 +12,6 @@
       <div class="topbar-left">
         <div class="user-row">
           <p id="userInfo"></p>
-
           <button id="logoutBtn" class="logout-icon-btn" type="button" title="Выйти">
             <svg class="logout-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -27,7 +26,7 @@
     <nav class="section-nav" role="navigation">
       <button type="button" class="section-nav-btn active" data-section="all">Заказы</button>
       <button type="button" class="section-nav-btn" data-section="new">Новый</button>
-      <button type="button" class="section-nav-btn" data-section="inprogress">В работе</button>
+      <button type="button" class="section-nav-btn" data-section="calculations">Расчеты</button>
     </nav>
 
     <section id="section-new" class="content-section">
@@ -262,12 +261,75 @@
     </div>
     </section>
 
-    <section id="section-inprogress" class="content-section">
+    <section id="section-calculations" class="content-section">
       <div class="card">
-        <p class="section-placeholder">Раздел «В работе». Здесь можно показывать заявки в работе.</p>
-        <div class="inprogress-picture">
-          <img src="https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=600&q=80" alt="Цветок" />
+        <form id="calculationsForm" class="calculations-form" aria-label="Добавить запись в расчеты">
+          <div class="calculations-form-column">
+            <div class="field">
+              <label for="calcFrom">Откуда</label>
+              <select id="calcFrom">
+                <option value="">—</option>
+                <option value="Вова">Вова</option>
+                <option value="Дима">Дима</option>
+                <option value="Касса">Касса</option>
+                <option value="Безнал">Безнал</option>
+                <option value="Другое">Другое</option>
+                <option value="Костя">Костя</option>
+                <option value="Безнал Костя">Безнал Костя</option>
+                <option value="Клиент магазин">Клиент магазин</option>
+                <option value="Безнал магазазин">Безнал магазазин</option>
+                <option value="Дима магазин">Дима магазин</option>
+                <option value="Вова магазин">Вова магазин</option>
+                <option value="Касса магазин">Касса магазин</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="calcTo">Куда</label>
+              <select id="calcTo">
+                <option value="">—</option>
+                <option value="Вова">Вова</option>
+                <option value="Дима">Дима</option>
+                <option value="Касса">Касса</option>
+                <option value="Зарплата">Зарплата</option>
+                <option value="Покупка">Покупка</option>
+                <option value="Списание">Списание</option>
+                <option value="Безнал">Безнал</option>
+                <option value="Другое">Другое</option>
+                <option value="Костя">Костя</option>
+                <option value="Безнал Костя">Безнал Костя</option>
+                <option value="Безнал магазин">Безнал магазин</option>
+                <option value="Дима магазин">Дима магазин</option>
+                <option value="В магаз.">В магаз.</option>
+                <option value="К магаз.">К магаз.</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="calcAmount">Сумма</label>
+              <input type="number" id="calcAmount" step="0.01" placeholder="0" />
+            </div>
+            <div class="field">
+              <label for="calcComment">Комментарий</label>
+              <input type="text" id="calcComment" placeholder="Комментарий" />
+            </div>
+            <button type="submit" id="calcSubmitBtn" class="calculations-submit-btn">Добавить</button>
+          </div>
+        </form>
+        <div class="table-wrap">
+          <table id="calculationsTable">
+            <thead>
+              <tr>
+                <th>Дата время</th>
+                <th>Откуда</th>
+                <th>Куда</th>
+                <th>Сумма</th>
+                <th>Комментарий</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
+        <p id="calculationsMessage"></p>
       </div>
     </section>
   </div>

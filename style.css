@@ -66,6 +66,19 @@ h2 {
   flex: 1;
 }
 
+.topbar-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f6feb;
+  text-decoration: none;
+  margin-right: 12px;
+  padding: 4px 0;
+}
+
+.topbar-link:hover {
+  text-decoration: underline;
+}
+
 .logout-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -190,6 +203,21 @@ h2 {
   margin-top: 16px;
   max-width: 100%;
 }
+
+/* ===== секция Расчеты ===== */
+.calculations-form { margin-bottom: 16px; }
+.calculations-form-column { display: flex; flex-direction: column; gap: 12px; max-width: 320px; }
+.calculations-form .field { margin: 0; }
+.calculations-form label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.calculations-form input, .calculations-form select { width: 100%; padding: 8px 10px; font-size: 13px; border-radius: 8px; border: 1px solid #d7dce5; }
+.calculations-form input:focus, .calculations-form select:focus { outline: none; border-color: #1f6feb; }
+.calculations-submit-btn { padding: 10px 20px; font-size: 14px; font-weight: 600; background: #1f6feb; color: #fff; border: none; border-radius: 8px; cursor: pointer; align-self: flex-start; }
+.calculations-submit-btn:hover { opacity: 0.95; }
+#calculationsTable { min-width: 500px; }
+#calculationsTable th, #calculationsTable td { padding: 8px 10px; font-size: 13px; }
+#calculationsTable .td-actions { white-space: nowrap; }
+#calculationsTable .btn-icon { padding: 4px; border: none; background: none; cursor: pointer; color: #6b7280; }
+#calculationsTable .btn-icon:hover { color: #1f6feb; }
 
 .inprogress-picture img {
   width: 100%;

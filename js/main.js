@@ -1,6 +1,7 @@
 import { checkAuth, loadProfile } from "./auth.js";
 import { bindUIEvents } from "./ui.js";
 import { loadOrders, resetFormMode, editOrder, deleteOrder } from "./orders.js";
+import { initCalculationsSection } from "./calculations.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { userInfo } from "./dom.js";
 import { message } from "./dom.js";
@@ -23,6 +24,7 @@ async function init() {
     await loadProfile();
     await loadOrders();
     resetFormMode();
+    await initCalculationsSection();
   } catch (err) {
     console.error("Ошибка инициализации:", err);
     if (message) {
