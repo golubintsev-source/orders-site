@@ -134,6 +134,10 @@ h2 {
   display: block;
 }
 
+#section-new .field-order-date-hidden {
+  display: none;
+}
+
 .section-placeholder {
   margin: 0;
   color: #6b7280;
@@ -218,7 +222,8 @@ textarea {
 }
 
 /* date */
-input[type="date"] {
+input[type="date"],
+input[type="datetime-local"] {
   display: block;
   width: 100%;
   min-width: 0;
@@ -313,6 +318,18 @@ td {
 th {
   background: #f8fafc;
   font-weight: 700;
+}
+
+#ordersTable td:last-child {
+  white-space: nowrap;
+}
+
+#ordersTable td:last-child button {
+  margin-right: 6px;
+}
+
+#ordersTable td:last-child button:last-child {
+  margin-right: 0;
 }
 
 /* ===== статус оплаты ===== */

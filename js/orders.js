@@ -64,11 +64,9 @@ export function renderOrders(orders) {
 
     const row = `
       <tr>
-        <td>${order.id ?? ""}</td>
-        <td>${order.order_date ?? ""}</td>
-        <td>${order.order_number ?? ""}</td>
-        <td>${order.client ?? ""}</td>
         <td>${order.phone ?? ""}</td>
+        <td>${order.client ?? ""}</td>
+        <td>${order.address ?? ""}</td>
         <td>
           <span class="${
             order.payment_status === "оплачен" ? "status-paid" : "status-no"
@@ -76,10 +74,12 @@ export function renderOrders(orders) {
             ${order.payment_status ?? ""}
           </span>
         </td>
+        <td>${order.order_date ?? ""}</td>
+        <td>${order.order_number ?? ""}</td>
+        <td>${order.description ?? ""}</td>
         <td>${order.amount ?? ""}</td>
         <td>${order.prepayment ?? ""}</td>
         <td>${order.remaining_amount ?? ""}</td>
-        <td>${order.delivery ?? ""}</td>
         <td>${order.delivery_date ?? ""}</td>
         <td>${filesButton}</td>
         <td>
@@ -110,11 +110,13 @@ export function applyClientFilter() {
 
 export function getFormData() {
   return {
+    phone: document.getElementById("phone").value.trim() || null,
+    client: document.getElementById("client").value.trim() || null,
+    address: document.getElementById("address").value.trim() || null,
+    payment_status: document.getElementById("payment_status").value.trim() || null,
     order_date: document.getElementById("order_date").value || null,
     order_number: document.getElementById("order_number").value.trim() || null,
-    client: document.getElementById("client").value.trim() || null,
     description: document.getElementById("description").value.trim() || null,
-    payment_status: document.getElementById("payment_status").value.trim() || null,
     amount: document.getElementById("amount").value
       ? Number(document.getElementById("amount").value)
       : null,
@@ -131,16 +133,18 @@ export function getFormData() {
       : null,
     delivery: document.getElementById("delivery").value.trim() || null,
     delivery_date: document.getElementById("delivery_date").value || null,
-    phone: document.getElementById("phone").value.trim() || null,
   };
 }
 
 export function fillForm(order) {
-  document.getElementById("order_date").value = order.order_date || "";
-  document.getElementById("order_number").value = order.order_number || "";
+  document.getElementById("phone").value = order.phone || "";
   document.getElementById("client").value = order.client || "";
-  document.getElementById("description").value = order.description || "";
+  document.getElementById("address").value = order.address || "";
   document.getElementById("payment_status").value = order.payment_status || "";
+  const orderDateVal = order.order_date || "";
+  document.getElementById("order_date").value = orderDateVal.includes("T") ? orderDateVal.slice(0, 16) : (orderDateVal ? orderDateVal + "T00:00" : "");
+  document.getElementById("order_number").value = order.order_number || "";
+  document.getElementById("description").value = order.description || "";
   document.getElementById("amount").value = order.amount ?? "";
   document.getElementById("prepayment").value = order.prepayment ?? "";
   document.getElementById("prepayment_to").value = order.prepayment_to || "";
@@ -149,14 +153,21 @@ export function fillForm(order) {
   document.getElementById("area_m2").value = order.area_m2 ?? "";
   document.getElementById("delivery").value = order.delivery || "";
   document.getElementById("delivery_date").value = order.delivery_date || "";
-  document.getElementById("phone").value = order.phone || "";
 
   resetFileUpload();
+}
+
+function getNowForDateTimeLocal() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function resetFormMode() {
   state.editingOrderId = null;
   document.getElementById("orderForm").reset();
+  const orderDateInput = document.getElementById("order_date");
+  if (orderDateInput) orderDateInput.value = getNowForDateTimeLocal();
   resetFileUpload();
 
   message.textContent = "Режим: новая заявка";
@@ -266,9 +277,9 @@ export async function submitOrderForm(event) {
 
   if (error) {
     console.error("Ошибка сохранения:", error);
-    message.textContent = wasEditing
-      ? "Ошибка при обновлении заявки"
-      : "Ошибка при сохранении заявки";
+    const detail = error.message || error.hint || String(error.code);
+    message.textContent = (wasEditing ? "Ошибка при обновлении заявки. " : "Ошибка при сохранении заявки. ") + detail;
+    message.style.color = "#b00020";
     return;
   }
 
@@ -277,6 +288,7 @@ export async function submitOrderForm(event) {
   resetFormMode();
   await loadOrders();
 
+  message.style.color = "";
   message.textContent = wasEditing
     ? `Заявка #${savedOrderId} обновлена`
     : `Заявка #${savedOrderId} сохранена`;
