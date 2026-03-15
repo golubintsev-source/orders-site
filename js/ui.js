@@ -132,4 +132,8 @@ export function bindUIEvents() {
   if (logoutBtn) {
     logoutBtn.addEventListener("click", logout);
   }
+
+  if (window.location.hash === "#all") {
+    switchSection("all");
+  }
 }

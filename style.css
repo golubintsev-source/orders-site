@@ -392,6 +392,10 @@ th {
   transition: background 0.2s, color 0.2s;
 }
 
+#ordersTable a.btn-icon {
+  text-decoration: none;
+}
+
 #ordersTable .btn-icon:last-child {
   margin-right: 0;
 }
@@ -403,6 +407,10 @@ th {
 
 #ordersTable .btn-edit:hover {
   color: #1f6feb;
+}
+
+#ordersTable .btn-history:hover {
+  color: #059669;
 }
 
 #ordersTable .btn-delete:hover {
