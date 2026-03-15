@@ -46,6 +46,15 @@
           </div>
 
           <div class="field">
+            <label>Тип клиента</label>
+            <select id="client_type">
+              <option value="" selected></option>
+              <option value="Частник">Частник</option>
+              <option value="Диллер">Диллер</option>
+            </select>
+          </div>
+
+          <div class="field">
             <label>Адрес</label>
             <input type="text" id="address" />
           </div>
@@ -135,18 +144,43 @@
           </div>
 
           <div class="field">
-            <label>Доставка</label>
+            <label>Тип доставки</label>
             <select id="delivery">
               <option value="">—</option>
               <option value="Доставка">Доставка</option>
               <option value="Самовывоз">Самовывоз</option>
-              <option value="Монтажники">Монтажники</option>
             </select>
           </div>
 
           <div class="field">
-            <label>Дата доставки</label>
+            <label>Дата доставки/самовывоза</label>
             <input type="date" id="delivery_date" />
+          </div>
+
+          <div class="field installation-row">
+            <div class="installation-checkbox-wrap">
+              <label class="label-checkbox">
+                <input type="checkbox" id="installation" />
+                Монтаж
+              </label>
+            </div>
+            <div class="field installation-date-wrap" id="installationDateWrap" style="display: none;">
+              <label>Дата монтажа</label>
+              <input type="date" id="installation_date" />
+            </div>
+          </div>
+
+          <div class="field installation-row">
+            <div class="installation-checkbox-wrap">
+              <label class="label-checkbox">
+                <input type="checkbox" id="reveals" />
+                Откосы
+              </label>
+            </div>
+            <div class="field installation-date-wrap" id="revealsDateWrap" style="display: none;">
+              <label>Дата откосов</label>
+              <input type="date" id="reveals_date" />
+            </div>
           </div>
 
           <div class="field full">
@@ -216,8 +250,8 @@
               <th>Стоимость</th>
               <th>Предоплата</th>
               <th>Остаток</th>
-              <th>Доставка</th>
-              <th>Дата доставки</th>
+              <th>Тип доставки</th>
+              <th>Дата доставки/самовывоза</th>
               <th>Телефон</th>
               <th></th>
             </tr>

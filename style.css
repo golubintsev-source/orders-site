@@ -234,6 +234,30 @@ label {
   font-weight: 600;
 }
 
+.label-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.label-checkbox input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+
+.installation-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.installation-row .installation-date-wrap {
+  flex: 1;
+  min-width: 140px;
+}
+
 /* ===== общий стиль элементов формы ===== */
 input,
 textarea,

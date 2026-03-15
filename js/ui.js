@@ -118,6 +118,27 @@ export function bindUIEvents() {
   });
   const deliveryDateEl = document.getElementById("delivery_date");
   if (deliveryDateEl) deliveryDateEl.addEventListener("input", updateConditionalRequiredHighlight);
+
+  const installationCb = document.getElementById("installation");
+  const installationDateWrap = document.getElementById("installationDateWrap");
+  const installationDateInput = document.getElementById("installation_date");
+  if (installationCb && installationDateWrap) {
+    installationCb.addEventListener("change", () => {
+      installationDateWrap.style.display = installationCb.checked ? "" : "none";
+      if (!installationCb.checked && installationDateInput) installationDateInput.value = "";
+    });
+  }
+
+  const revealsCb = document.getElementById("reveals");
+  const revealsDateWrap = document.getElementById("revealsDateWrap");
+  const revealsDateInput = document.getElementById("reveals_date");
+  if (revealsCb && revealsDateWrap) {
+    revealsCb.addEventListener("change", () => {
+      revealsDateWrap.style.display = revealsCb.checked ? "" : "none";
+      if (!revealsCb.checked && revealsDateInput) revealsDateInput.value = "";
+    });
+  }
+
   updatePaidField();
   updateConditionalRequiredHighlight();
 

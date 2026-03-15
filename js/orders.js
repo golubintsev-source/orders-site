@@ -161,6 +161,7 @@ export function getFormData() {
   return {
     phone: document.getElementById("phone").value.trim() || null,
     client: document.getElementById("client").value.trim() || null,
+    client_type: document.getElementById("client_type").value.trim() || null,
     address: document.getElementById("address").value.trim() || null,
     payment_status: document.getElementById("payment_status").value.trim() || null,
     order_date: document.getElementById("order_date").value || null,
@@ -188,6 +189,14 @@ export function getFormData() {
       : null,
     delivery: document.getElementById("delivery").value.trim() || null,
     delivery_date: document.getElementById("delivery_date").value || null,
+    installation: document.getElementById("installation").checked,
+    installation_date: document.getElementById("installation").checked
+      ? (document.getElementById("installation_date").value || null)
+      : null,
+    reveals: document.getElementById("reveals").checked,
+    reveals_date: document.getElementById("reveals").checked
+      ? (document.getElementById("reveals_date").value || null)
+      : null,
   };
 }
 
@@ -224,6 +233,8 @@ export function fillForm(order) {
   document.getElementById("phone").value = order.phone || "";
   document.getElementById("phone").dispatchEvent(new Event("input", { bubbles: true }));
   document.getElementById("client").value = order.client || "";
+  const clientTypeEl = document.getElementById("client_type");
+  if (clientTypeEl) clientTypeEl.value = order.client_type || "";
   document.getElementById("address").value = order.address || "";
   const statusVal = order.payment_status || "";
   document.getElementById("payment_status").value =
@@ -244,6 +255,18 @@ export function fillForm(order) {
   document.getElementById("construction_count").value = order.construction_count ?? "";
   document.getElementById("delivery").value = order.delivery || "";
   document.getElementById("delivery_date").value = order.delivery_date || "";
+  const installationCb = document.getElementById("installation");
+  const installationDateWrap = document.getElementById("installationDateWrap");
+  const installationDateInput = document.getElementById("installation_date");
+  if (installationCb) installationCb.checked = !!order.installation;
+  if (installationDateWrap) installationDateWrap.style.display = order.installation ? "" : "none";
+  if (installationDateInput) installationDateInput.value = order.installation_date || "";
+  const revealsCb = document.getElementById("reveals");
+  const revealsDateWrap = document.getElementById("revealsDateWrap");
+  const revealsDateInput = document.getElementById("reveals_date");
+  if (revealsCb) revealsCb.checked = !!order.reveals;
+  if (revealsDateWrap) revealsDateWrap.style.display = order.reveals ? "" : "none";
+  if (revealsDateInput) revealsDateInput.value = order.reveals_date || "";
 
   updatePaidField();
   updateConditionalRequiredHighlight();
@@ -264,6 +287,20 @@ export function resetFormMode() {
   updateConditionalRequiredHighlight();
   const orderDateInput = document.getElementById("order_date");
   if (orderDateInput) orderDateInput.value = getNowForDateTimeLocal();
+  const clientTypeInput = document.getElementById("client_type");
+  if (clientTypeInput) clientTypeInput.value = "";
+  const installationCb = document.getElementById("installation");
+  const installationDateWrap = document.getElementById("installationDateWrap");
+  const installationDateInput = document.getElementById("installation_date");
+  if (installationCb) installationCb.checked = false;
+  if (installationDateWrap) installationDateWrap.style.display = "none";
+  if (installationDateInput) installationDateInput.value = "";
+  const revealsCb = document.getElementById("reveals");
+  const revealsDateWrap = document.getElementById("revealsDateWrap");
+  const revealsDateInput = document.getElementById("reveals_date");
+  if (revealsCb) revealsCb.checked = false;
+  if (revealsDateWrap) revealsDateWrap.style.display = "none";
+  if (revealsDateInput) revealsDateInput.value = "";
   const phoneEl = document.getElementById("phone");
   if (phoneEl) phoneEl.dispatchEvent(new Event("input", { bubbles: true }));
   resetFileUpload();
@@ -384,7 +421,7 @@ export async function submitOrderForm(event) {
   if (remainingVal && !remainingToVal) conditionalMissing.push("Кому остаток");
   const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
   const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
-  if (deliveryVal && !deliveryDateVal) conditionalMissing.push("Дата доставки");
+  if (deliveryVal && !deliveryDateVal) conditionalMissing.push("Дата доставки/самовывоза");
   if (conditionalMissing.length > 0) {
     message.textContent = "Заполните поля: " + conditionalMissing.join(", ");
     message.style.color = "#d32f2f";
