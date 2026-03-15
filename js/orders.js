@@ -114,6 +114,7 @@ function isOrderPaid(order) {
 }
 
 function paidBadge(order) {
+  if (order.amount == null || order.amount === "") return "";
   const paid = isOrderPaid(order);
   const status = order.payment_status || "";
   if (paid) return '<span class="status-paid">да</span>';
@@ -161,9 +162,9 @@ export function renderOrders(orders) {
             ${order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом")}
           </span>
         </td>
-        <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-order-date">${formatDateDDMMYYYY(order.order_date)}</td>
         <td class="td-order-number">${order.order_number ?? ""}</td>
+        <td class="td-paid">${paidBadge(order)}</td>
         <td>${order.amount != null && order.amount !== "" ? `<span class="status-value">${order.amount}</span>` : ""}</td>
         <td class="td-prepayment">${(order.prepayment ?? "") + (order.prepayment_to ? " | " + escapeHtml(order.prepayment_to) : "")}</td>
         <td class="td-remaining">${(order.remaining_amount ?? "") + (order.remaining_to ? " | " + escapeHtml(order.remaining_to) : "")}</td>
