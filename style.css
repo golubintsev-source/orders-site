@@ -138,6 +138,49 @@ h2 {
   display: none;
 }
 
+#section-new .card {
+  max-width: 480px;
+  padding: 12px;
+}
+
+#section-new .grid {
+  gap: 8px;
+}
+
+#section-new label {
+  font-size: 13px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+#section-new input,
+#section-new select,
+#section-new textarea {
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+#section-new input,
+#section-new select {
+  height: 36px;
+}
+
+#section-new textarea {
+  min-height: 72px;
+}
+
+#section-new .actions {
+  margin-top: 10px;
+  gap: 8px;
+}
+
+#section-new button[type="submit"],
+#section-new #cancelEditBtn {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
 .section-placeholder {
   margin: 0;
   color: #6b7280;
@@ -171,7 +214,7 @@ h2 {
 /* ===== сетка формы ===== */
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -242,29 +285,72 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
 }
 
-input.phone-invalid {
-  border-color: #b00020;
-  box-shadow: 0 0 0 2px rgba(176, 0, 32, 0.2);
-}
-
-input.phone-invalid:focus {
-  border-color: #b00020;
-  box-shadow: 0 0 0 3px rgba(176, 0, 32, 0.2);
-}
-
-/* обязательные поля */
-input:required,
+/* обязательные поля (кроме телефона и клиента — у них своя логика) */
+input:required:not(#phone):not(#client),
 textarea:required,
 select:required {
-  background-color: #ffe5e5;
-  border: 2px solid #ff6b6b;
+  background-color: #ffebee;
+  border: 2px solid #d32f2f;
 }
 
-input:required:valid,
+input:required:valid:not(#phone):not(#client),
 textarea:required:valid,
 select:required:valid {
   background-color: #fff;
   border: 2px solid #2ecc71;
+}
+
+/* Поле телефон: серая рамка при корректном, красная при пустом или некорректном */
+#phone {
+  border: 1px solid #d7dce5;
+  background-color: #fff;
+}
+
+#phone.phone-invalid,
+#phone:invalid {
+  border: 1px solid #d7dce5;
+  background-color: #ffebee;
+}
+
+#phone.phone-invalid:focus,
+#phone:invalid:focus {
+  outline: none;
+  border-color: #d7dce5;
+}
+
+#phone:focus:not(.phone-invalid):not(:invalid) {
+  outline: none;
+  border-color: #1f6feb;
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
+}
+
+/* Поле Клиент: серая рамка при заполненном, красная при пустом */
+#client {
+  border: 1px solid #d7dce5;
+  background-color: #fff;
+}
+
+#client.client-invalid {
+  border: 1px solid #d7dce5;
+  background-color: #ffebee;
+}
+
+#client.client-invalid:focus {
+  outline: none;
+  border-color: #d7dce5;
+}
+
+#client:focus:not(.client-invalid) {
+  outline: none;
+  border-color: #1f6feb;
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
+}
+
+/* Кому предоплата / Кому остаток — алая заливка, когда обязательны к заполнению */
+#prepayment_to.conditional-invalid,
+#remaining_to.conditional-invalid,
+#delivery_date.conditional-invalid {
+  background-color: #ffebee;
 }
 
 /* ===== кнопки ===== */
@@ -451,7 +537,7 @@ th {
 }
 
 #ordersTable .btn-delete:hover {
-  color: #b00020;
+  color: #d32f2f;
 }
 
 #ordersTable th:last-child,
@@ -472,7 +558,23 @@ th {
   white-space: nowrap;
 }
 
+#ordersTable th:nth-child(11),
+#ordersTable td.td-paid {
+  white-space: nowrap;
+}
+
+#ordersTable th:nth-child(12),
+#ordersTable td.td-delivery {
+  white-space: nowrap;
+}
+
 #ordersTable th:nth-child(13),
+#ordersTable td:nth-child(13) {
+  min-width: 95px;
+  white-space: nowrap;
+}
+
+#ordersTable th:nth-child(14),
 #ordersTable td.td-phone {
   min-width: 110px;
   white-space: nowrap;
@@ -545,6 +647,28 @@ th {
   font-size: 13px;
 }
 
+.status-paid {
+  display: inline-block;
+  white-space: nowrap;
+  background: #e8f5e9;
+  color: #1b5e20;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.paid-no-alert {
+  display: inline-block;
+  white-space: nowrap;
+  background: #ffebee;
+  color: #d32f2f;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 /* ===== загрузка файлов ===== */
 .file-upload-group {
   grid-column: 1 / -1;
@@ -552,33 +676,48 @@ th {
 
 .file-upload-box {
   width: 100%;
-  border: 1px solid #d7dce5;
-  border-radius: 12px;
-  padding: 16px;
-  background: #fafbfe;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #f9fafb;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.file-upload-box:hover {
+  border-color: #9ca3af;
+  background: #f3f4f6;
 }
 
 .upload-area {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
 .upload-btn {
-  background: #1f6feb;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #6b7280;
   color: #fff;
   border: none;
-  padding: 12px 16px;
-  border-radius: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
   width: fit-content;
+  transition: background 0.2s;
+}
+
+.upload-btn .upload-btn-icon {
+  flex-shrink: 0;
+  opacity: 0.95;
 }
 
 .upload-btn:hover {
-  background: #1557c0;
-  opacity: 1;
+  background: #4b5563;
 }
 
 .file-upload-text {

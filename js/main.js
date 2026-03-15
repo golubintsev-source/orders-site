@@ -27,7 +27,7 @@ async function init() {
     console.error("Ошибка инициализации:", err);
     if (message) {
       message.textContent = "Ошибка подключения к базе. Проверьте интернет и настройки Supabase.";
-      message.style.color = "#b00020";
+      message.style.color = "#d32f2f";
     }
   }
 }

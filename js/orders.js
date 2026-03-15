@@ -50,6 +50,21 @@ function escapeAttr(s) {
     .replace(/</g, "&lt;");
 }
 
+function isOrderPaid(order) {
+  const a = parseFloat(order.amount) || 0;
+  const p = parseFloat(order.prepayment) || 0;
+  const r = parseFloat(order.remaining_amount) || 0;
+  return Math.abs(a - (p + r)) < 0.01 && a > 0;
+}
+
+function paidBadge(order) {
+  const paid = isOrderPaid(order);
+  const status = order.payment_status || "";
+  if (paid) return '<span class="status-paid">да</span>';
+  if (status === "Производство" || status === "Монтаж выполнен") return '<span class="paid-no-alert">нет</span>';
+  return '<span class="status-value">нет</span>';
+}
+
 export function renderOrders(orders) {
   const table = document.querySelector("#ordersTable tbody");
   table.innerHTML = "";
@@ -91,10 +106,11 @@ export function renderOrders(orders) {
         </td>
         <td>${order.order_date ?? ""}</td>
         <td>${order.order_number ?? ""}</td>
-        <td>${order.description ?? ""}</td>
         <td>${order.amount ?? ""}</td>
         <td>${order.prepayment ?? ""}</td>
         <td>${order.remaining_amount ?? ""}</td>
+        <td class="td-paid">${paidBadge(order)}</td>
+        <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
         <td>${order.delivery_date ?? ""}</td>
         <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
         <td class="td-actions td-delete">${deleteButton}</td>
@@ -155,9 +171,44 @@ export function getFormData() {
     area_m2: document.getElementById("area_m2").value
       ? Number(document.getElementById("area_m2").value)
       : null,
+    mosquito_nets: document.getElementById("mosquito_nets").value
+      ? Number(document.getElementById("mosquito_nets").value)
+      : null,
+    construction_count: document.getElementById("construction_count").value
+      ? Number(document.getElementById("construction_count").value)
+      : null,
     delivery: document.getElementById("delivery").value.trim() || null,
     delivery_date: document.getElementById("delivery_date").value || null,
   };
+}
+
+export function updatePaidField() {
+  const amountEl = document.getElementById("amount");
+  const prepaymentEl = document.getElementById("prepayment");
+  const remainingEl = document.getElementById("remaining_amount");
+  const paidEl = document.getElementById("paid");
+  if (!amountEl || !prepaymentEl || !remainingEl || !paidEl) return;
+  const amount = parseFloat(amountEl.value) || 0;
+  const prepayment = parseFloat(prepaymentEl.value) || 0;
+  const remaining = parseFloat(remainingEl.value) || 0;
+  const sum = prepayment + remaining;
+  const isPaid = Math.abs(amount - sum) < 0.01 && amount > 0;
+  paidEl.value = isPaid ? "да" : "нет";
+}
+
+export function updateConditionalRequiredHighlight() {
+  const prepaymentVal = (document.getElementById("prepayment")?.value || "").trim();
+  const prepaymentToVal = (document.getElementById("prepayment_to")?.value || "").trim();
+  const remainingVal = (document.getElementById("remaining_amount")?.value || "").trim();
+  const remainingToVal = (document.getElementById("remaining_to")?.value || "").trim();
+  const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
+  const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
+  const prepaymentToEl = document.getElementById("prepayment_to");
+  const remainingToEl = document.getElementById("remaining_to");
+  const deliveryDateEl = document.getElementById("delivery_date");
+  if (prepaymentToEl) prepaymentToEl.classList.toggle("conditional-invalid", !!prepaymentVal && !prepaymentToVal);
+  if (remainingToEl) remainingToEl.classList.toggle("conditional-invalid", !!remainingVal && !remainingToVal);
+  if (deliveryDateEl) deliveryDateEl.classList.toggle("conditional-invalid", !!deliveryVal && !deliveryDateVal);
 }
 
 export function fillForm(order) {
@@ -173,16 +224,20 @@ export function fillForm(order) {
   const orderDateVal = order.order_date || "";
   document.getElementById("order_date").value = orderDateVal.includes("T") ? orderDateVal.slice(0, 16) : (orderDateVal ? orderDateVal + "T00:00" : "");
   document.getElementById("order_number").value = order.order_number || "";
-  document.getElementById("description").value = order.description || "";
+  document.getElementById("description").value = "";
   document.getElementById("amount").value = order.amount ?? "";
   document.getElementById("prepayment").value = order.prepayment ?? "";
   document.getElementById("prepayment_to").value = order.prepayment_to || "";
   document.getElementById("remaining_amount").value = order.remaining_amount ?? "";
   document.getElementById("remaining_to").value = order.remaining_to || "";
   document.getElementById("area_m2").value = order.area_m2 ?? "";
+  document.getElementById("mosquito_nets").value = order.mosquito_nets ?? "";
+  document.getElementById("construction_count").value = order.construction_count ?? "";
   document.getElementById("delivery").value = order.delivery || "";
   document.getElementById("delivery_date").value = order.delivery_date || "";
 
+  updatePaidField();
+  updateConditionalRequiredHighlight();
   resetFileUpload();
 }
 
@@ -194,7 +249,10 @@ function getNowForDateTimeLocal() {
 
 export function resetFormMode() {
   state.editingOrderId = null;
+  state.editingOrderDescription = null;
   document.getElementById("orderForm").reset();
+  updatePaidField();
+  updateConditionalRequiredHighlight();
   const orderDateInput = document.getElementById("order_date");
   if (orderDateInput) orderDateInput.value = getNowForDateTimeLocal();
   const phoneEl = document.getElementById("phone");
@@ -233,6 +291,7 @@ export async function editOrder(orderId) {
   }
 
   state.editingOrderId = orderId;
+  state.editingOrderDescription = data.description || null;
   fillForm(data);
   message.textContent = `Режим: редактирование заявки #${orderId}`;
 
@@ -286,12 +345,41 @@ export async function submitOrderForm(event) {
   event.preventDefault();
 
   const phoneVal = (document.getElementById("phone")?.value || "").trim();
-  const phoneDigits = phoneVal.replace(/\D/g, "");
-  const phoneValid = phoneVal === "" || (phoneDigits.length === 11 && (phoneDigits[0] === "8" || phoneDigits[0] === "7"));
-  if (!phoneValid) {
-    message.textContent = "Телефон";
-    message.style.color = "#b00020";
-    document.getElementById("phone")?.classList.add("phone-invalid");
+  const clientVal = (document.getElementById("client")?.value || "").trim();
+
+  if (!clientVal) {
+    message.textContent = "Не заполнено Клиент";
+    message.style.color = "#d32f2f";
+    document.getElementById("client")?.classList.add("client-invalid");
+    return;
+  }
+  document.getElementById("client")?.classList.remove("client-invalid");
+
+  if (phoneVal) {
+    const phoneDigits = phoneVal.replace(/\D/g, "");
+    const phoneValid = phoneDigits.length === 11 && (phoneDigits[0] === "8" || phoneDigits[0] === "7");
+    if (!phoneValid) {
+      message.textContent = "Неверный формат телефона.";
+      message.style.color = "#d32f2f";
+      document.getElementById("phone")?.classList.add("phone-invalid");
+      return;
+    }
+  }
+
+  const prepaymentVal = (document.getElementById("prepayment")?.value || "").trim();
+  const prepaymentToVal = (document.getElementById("prepayment_to")?.value || "").trim();
+  const remainingVal = (document.getElementById("remaining_amount")?.value || "").trim();
+  const remainingToVal = (document.getElementById("remaining_to")?.value || "").trim();
+  const conditionalMissing = [];
+  if (prepaymentVal && !prepaymentToVal) conditionalMissing.push("Кому предоплата");
+  if (remainingVal && !remainingToVal) conditionalMissing.push("Кому остаток");
+  const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
+  const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
+  if (deliveryVal && !deliveryDateVal) conditionalMissing.push("Дата доставки");
+  if (conditionalMissing.length > 0) {
+    message.textContent = "Заполните поля: " + conditionalMissing.join(", ");
+    message.style.color = "#d32f2f";
+    updateConditionalRequiredHighlight();
     return;
   }
 
@@ -299,6 +387,9 @@ export async function submitOrderForm(event) {
   message.textContent = "Сохраняю...";
 
   const orderData = getFormData();
+  if (state.editingOrderId) {
+    orderData.description = state.editingOrderDescription ?? null;
+  }
 
   let error = null;
   let savedOrderId = state.editingOrderId;
@@ -335,15 +426,27 @@ export async function submitOrderForm(event) {
     console.error("Ошибка сохранения:", error);
     const detail = error.message || error.hint || String(error.code);
     message.textContent = (wasEditing ? "Ошибка при обновлении заявки. " : "Ошибка при сохранении заявки. ") + detail;
-    message.style.color = "#b00020";
+    message.style.color = "#d32f2f";
     return;
   }
 
   await uploadFiles(savedOrderId);
 
+  const addCommentText = (document.getElementById("description")?.value || "").trim();
+
   if (!wasEditing && savedOrderId && state.currentUser?.email) {
-    await supabaseClient.from("order_history").insert([
+    const historyRows = [
       { order_id: savedOrderId, user_email: state.currentUser.email, comment: "Заказ создан" },
+    ];
+    if (addCommentText) {
+      historyRows.push({ order_id: savedOrderId, user_email: state.currentUser.email, comment: addCommentText });
+    }
+    await supabaseClient.from("order_history").insert(historyRows);
+  }
+
+  if (wasEditing && savedOrderId && addCommentText && state.currentUser?.email) {
+    await supabaseClient.from("order_history").insert([
+      { order_id: savedOrderId, user_email: state.currentUser.email, comment: addCommentText },
     ]);
   }
 

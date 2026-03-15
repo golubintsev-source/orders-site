@@ -1,6 +1,5 @@
 export const form = document.getElementById("orderForm");
 export const message = document.getElementById("message");
-export const loadBtn = document.getElementById("loadBtn");
 export const logoutBtn = document.getElementById("logoutBtn");
 export const userInfo = document.getElementById("userInfo");
 export const cancelEditBtn = document.getElementById("cancelEditBtn");

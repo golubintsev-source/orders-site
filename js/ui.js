@@ -1,6 +1,5 @@
 import {
   form,
-  loadBtn,
   logoutBtn,
   cancelEditBtn,
   clientSearch,
@@ -18,10 +17,11 @@ import {
 import { logout } from "./auth.js";
 import { state } from "./state.js";
 import {
-  loadOrders,
   applyClientFilter,
   resetFormMode,
   submitOrderForm,
+  updatePaidField,
+  updateConditionalRequiredHighlight,
 } from "./orders.js";
 import { renderSelectedFiles } from "./files.js";
 
@@ -56,8 +56,12 @@ function formatPhoneValue(digits) {
 export function validatePhone() {
   if (!phoneInput) return;
   const raw = (phoneInput.value || "").trim();
+  if (raw === "") {
+    phoneInput.classList.remove("phone-invalid");
+    return;
+  }
   const digits = raw.replace(/\D/g, "");
-  const valid = raw === "" || (digits.length === 11 && (digits[0] === "8" || digits[0] === "7"));
+  const valid = digits.length === 11 && (digits[0] === "8" || digits[0] === "7");
   phoneInput.classList.toggle("phone-invalid", !valid);
 }
 
@@ -90,13 +94,32 @@ export function bindUIEvents() {
     phoneInput.addEventListener("blur", validatePhone);
   }
 
+  const clientInput = document.getElementById("client");
+  if (clientInput) {
+    clientInput.addEventListener("input", () => clientInput.classList.remove("client-invalid"));
+  }
+
   if (form) {
     form.addEventListener("submit", submitOrderForm);
   }
 
-  if (loadBtn) {
-    loadBtn.addEventListener("click", loadOrders);
-  }
+  ["amount", "prepayment", "remaining_amount"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener("input", () => {
+        updatePaidField();
+        updateConditionalRequiredHighlight();
+      });
+    }
+  });
+  ["prepayment_to", "remaining_to", "delivery", "delivery_date"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", updateConditionalRequiredHighlight);
+  });
+  const deliveryDateEl = document.getElementById("delivery_date");
+  if (deliveryDateEl) deliveryDateEl.addEventListener("input", updateConditionalRequiredHighlight);
+  updatePaidField();
+  updateConditionalRequiredHighlight();
 
   if (clientSearch) {
     clientSearch.addEventListener("input", applyClientFilter);
