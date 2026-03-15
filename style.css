@@ -1,4 +1,4 @@
-﻿* {
+* {
   box-sizing: border-box;
 }
 
@@ -137,6 +137,20 @@ h2 {
 .section-placeholder {
   margin: 0;
   color: #6b7280;
+}
+
+.inprogress-picture {
+  margin-top: 16px;
+  max-width: 100%;
+}
+
+.inprogress-picture img {
+  width: 100%;
+  max-width: 500px;
+  height: auto;
+  border-radius: 12px;
+  display: block;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .logout-icon {
