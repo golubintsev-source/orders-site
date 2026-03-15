@@ -38,7 +38,6 @@ export async function loadOrders() {
 }
 
 const STATUS_OPTIONS = [
-  "",
   "Контакт с клиентом",
   "Замер назначен",
   "Замер проведен",
@@ -196,22 +195,35 @@ function renderStatusFilterDropdown() {
   const container = document.getElementById("statusFilterCheckboxes");
   if (!container) return;
   const allSelected = !state.statusFilterSelected || state.statusFilterSelected.length === 0;
-  container.innerHTML = STATUS_OPTIONS.map((value) => {
-    const id = "status-filter-" + (value ? value.replace(/\s/g, "-") : "empty");
-    const label = value || "—";
+  const allHtml = `<label class="status-filter-item status-filter-all"><input type="checkbox" data-all="true" ${allSelected ? "checked" : ""}> Все</label>`;
+  const optionsHtml = STATUS_OPTIONS.map((value) => {
     const checked = allSelected || state.statusFilterSelected.includes(value);
-    return `<label class="status-filter-item"><input type="checkbox" data-status="${escapeAttr(value)}" ${checked ? "checked" : ""}> ${escapeHtml(label)}</label>`;
+    return `<label class="status-filter-item"><input type="checkbox" data-status="${escapeAttr(value)}" ${checked ? "checked" : ""}> ${escapeHtml(value)}</label>`;
   }).join("");
+  container.innerHTML = allHtml + optionsHtml;
   container.querySelectorAll("input[type=checkbox]").forEach((cb) => {
     cb.addEventListener("change", onStatusFilterChange);
   });
 }
 
-function onStatusFilterChange() {
+function onStatusFilterChange(e) {
   const container = document.getElementById("statusFilterCheckboxes");
   if (!container) return;
-  const checked = Array.from(container.querySelectorAll("input[type=checkbox]:checked")).map((el) => el.dataset.status);
-  state.statusFilterSelected = checked.length === STATUS_OPTIONS.length ? [] : checked;
+  const target = e.target;
+  const allCb = container.querySelector('input[data-all="true"]');
+  const statusCbs = container.querySelectorAll('input[type=checkbox][data-status]');
+
+  if (target === allCb) {
+    const checked = allCb.checked;
+    statusCbs.forEach((cb) => { cb.checked = checked; });
+    state.statusFilterSelected = checked ? [] : [];
+    applyFiltersAndRender();
+    return;
+  }
+
+  const checkedValues = Array.from(statusCbs).filter((cb) => cb.checked).map((el) => el.dataset.status);
+  state.statusFilterSelected = checkedValues.length === STATUS_OPTIONS.length ? [] : checkedValues;
+  if (allCb) allCb.checked = checkedValues.length === STATUS_OPTIONS.length;
   applyFiltersAndRender();
 }
 
