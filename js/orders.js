@@ -105,6 +105,7 @@ export function renderOrders(orders) {
       <tr>
         <td class="td-phone-call">${phoneCallIcon}</td>
         <td class="td-actions">${editIcon}${historyIcon}${filesIcon}</td>
+        <td class="td-order-id"><span class="status-value">${order.id != null ? String(order.id).padStart(4, "0") : ""}</span></td>
         <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${clientCell}</td>
         <td class="td-truncate-address" data-fulltext="${escapeAttr(address)}">${escapeHtml(address)}</td>
         <td>
