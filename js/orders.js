@@ -104,12 +104,12 @@ export function renderOrders(orders) {
             ${order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом")}
           </span>
         </td>
-        <td>${order.order_date ?? ""}</td>
-        <td>${order.order_number ?? ""}</td>
+        <td class="td-paid">${paidBadge(order)}</td>
+        <td class="td-order-date">${order.order_date ?? ""}</td>
+        <td class="td-order-number">${order.order_number ?? ""}</td>
         <td>${order.amount ?? ""}</td>
         <td>${order.prepayment ?? ""}</td>
         <td>${order.remaining_amount ?? ""}</td>
-        <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
         <td>${order.delivery_date ?? ""}</td>
         <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
@@ -265,7 +265,7 @@ export function resetFormMode() {
     sectionNewTab.textContent = "Новый";
   }
   if (submitBtn) {
-    submitBtn.textContent = "Сохранить заявку";
+    submitBtn.textContent = "Сохранить заказ";
   }
 
   if (formTitle) {

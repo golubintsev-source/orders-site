@@ -553,14 +553,26 @@ th {
 }
 
 #ordersTable th:nth-child(6),
-#ordersTable td:nth-child(6) {
-  min-width: 95px;
+#ordersTable td.td-paid {
   white-space: nowrap;
 }
 
-#ordersTable th:nth-child(11),
-#ordersTable td.td-paid {
+#ordersTable th:nth-child(7),
+#ordersTable td.td-order-date {
+  min-width: 95px;
   white-space: nowrap;
+  padding-left: 2px;
+  padding-right: 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+#ordersTable th:nth-child(8),
+#ordersTable td.td-order-number {
+  padding-left: 0;
+  padding-right: 2px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 #ordersTable th:nth-child(12),
@@ -927,6 +939,16 @@ th {
   #ordersTable td {
     padding: 4px 2px;
     font-size: 13px;
+  }
+
+  #ordersTable th:nth-child(7),
+  #ordersTable td.td-order-date {
+    padding: 4px 0 4px 2px;
+  }
+
+  #ordersTable th:nth-child(8),
+  #ordersTable td.td-order-number {
+    padding: 4px 2px 4px 0;
   }
 
   .topbar {
