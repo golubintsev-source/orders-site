@@ -239,6 +239,9 @@
       </div>
 
       <div id="cellTooltip" class="cell-tooltip" aria-hidden="true"></div>
+      <div id="statusFilterDropdown" class="status-filter-dropdown" role="dialog" aria-label="Фильтр по статусу" style="display: none;">
+        <div class="status-filter-dropdown-inner" id="statusFilterCheckboxes"></div>
+      </div>
       <div class="table-wrap">
         <table id="ordersTable">
           <thead>
@@ -248,7 +251,12 @@
               <th>ID</th>
               <th>Клиент</th>
               <th>Адрес</th>
-              <th>Статус</th>
+              <th class="th-status-header">
+                <span class="th-status-label">Статус</span>
+                <button type="button" class="status-filter-btn" id="statusFilterBtn" title="Фильтр по статусу" aria-haspopup="true" aria-expanded="false">
+                  <svg class="status-filter-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                </button>
+              </th>
               <th>Оплачено</th>
               <th>Дата заказа</th>
               <th>Номер</th>
@@ -257,6 +265,8 @@
               <th>Остаток</th>
               <th>Тип доставки</th>
               <th>Дата</th>
+              <th>Дата монтажа</th>
+              <th>Дата откосов</th>
               <th>Телефон</th>
               <th></th>
             </tr>

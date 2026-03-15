@@ -514,6 +514,16 @@ select:required:valid {
   box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
 }
 
+#payment_status.payment-status-invalid {
+  border-color: #d32f2f;
+  background-color: #ffebee;
+}
+
+#payment_status.payment-status-invalid:focus {
+  outline: none;
+  border-color: #d32f2f;
+}
+
 /* Кому предоплата / Кому остаток — алая заливка, когда обязательны к заполнению */
 #prepayment_to.conditional-invalid,
 #remaining_to.conditional-invalid,
@@ -600,6 +610,7 @@ td {
 #ordersTable th {
   padding: 4px 2px;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 #ordersTable td {
@@ -715,6 +726,83 @@ th {
   padding: 4px 0 4px 1px;
 }
 
+#ordersTable .th-status-header {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#ordersTable .th-status-label {
+  flex-shrink: 0;
+}
+
+.status-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.status-filter-btn:hover {
+  color: #1f6feb;
+  background: rgba(31, 111, 235, 0.08);
+}
+
+.status-filter-btn[aria-expanded="true"] {
+  color: #1f6feb;
+  background: rgba(31, 111, 235, 0.12);
+}
+
+.status-filter-icon {
+  display: block;
+}
+
+.status-filter-dropdown {
+  z-index: 100;
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+  padding: 8px 0;
+}
+
+.status-filter-dropdown-inner {
+  padding: 0 4px;
+}
+
+.status-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.status-filter-item:hover {
+  background: #f3f4f6;
+}
+
+.status-filter-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 #ordersTable th:nth-child(5),
 #ordersTable td:nth-child(5) {
   white-space: nowrap;
@@ -722,6 +810,14 @@ th {
 
 #ordersTable th:nth-child(6),
 #ordersTable td.td-paid {
+  white-space: nowrap;
+}
+
+#ordersTable td.td-prepayment {
+  white-space: nowrap;
+}
+
+#ordersTable td.td-remaining {
   white-space: nowrap;
 }
 

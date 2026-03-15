@@ -19,6 +19,7 @@ import { logout } from "./auth.js";
 import { state } from "./state.js";
 import {
   applyClientFilter,
+  initStatusFilter,
   resetFormMode,
   submitOrderForm,
   updatePaidField,
@@ -100,6 +101,11 @@ export function bindUIEvents() {
     clientInput.addEventListener("input", () => clientInput.classList.remove("client-invalid"));
   }
 
+  const paymentStatusEl = document.getElementById("payment_status");
+  if (paymentStatusEl) {
+    paymentStatusEl.addEventListener("change", () => paymentStatusEl.classList.remove("payment-status-invalid"));
+  }
+
   if (form) {
     form.addEventListener("submit", submitOrderForm);
   }
@@ -146,6 +152,8 @@ export function bindUIEvents() {
   if (clientSearch) {
     clientSearch.addEventListener("input", applyClientFilter);
   }
+
+  initStatusFilter();
 
   if (selectFilesBtn) {
     selectFilesBtn.addEventListener("click", () => {

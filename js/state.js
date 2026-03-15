@@ -6,4 +6,6 @@ export const state = {
   initialPaymentStatus: null,
   allOrders: [],
   filesCountMap: {},
+  /** выбранные статусы для фильтра; пустой массив = показывать все */
+  statusFilterSelected: [],
 };

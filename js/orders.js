@@ -34,7 +34,54 @@ export async function loadOrders() {
 
   state.allOrders = data || [];
   await loadFilesCountMap();
-  applyClientFilter();
+  applyFiltersAndRender();
+}
+
+const STATUS_OPTIONS = [
+  "",
+  "Контакт с клиентом",
+  "Замер назначен",
+  "Замер проведен",
+  "Расчет сформирован",
+  "Предложение направлено",
+  "Клиент согласен",
+  "Производство",
+  "Монтаж выполнен",
+  "Заказ закрыт",
+];
+
+function normalizeStatus(val) {
+  if (val === "нет" || val === "оплачен" || val == null || val === "") return "Контакт с клиентом";
+  return val;
+}
+
+function getFilteredOrders() {
+  let list = state.allOrders;
+
+  if (state.statusFilterSelected && state.statusFilterSelected.length > 0) {
+    list = list.filter((order) => {
+      const norm = normalizeStatus(order.payment_status);
+      return state.statusFilterSelected.includes(norm);
+    });
+  }
+
+  const query = clientSearch?.value.trim().toLowerCase() || "";
+  if (query) {
+    list = list.filter((order) => {
+      const phone = (order.phone || "").toLowerCase();
+      const name = (order.client || "").toLowerCase();
+      const address = (order.address || "").toLowerCase();
+      const number = (order.order_number || "").toLowerCase();
+      const description = (order.description || "").toLowerCase();
+      return phone.includes(query) || name.includes(query) || address.includes(query) || number.includes(query) || description.includes(query);
+    });
+  }
+
+  return list;
+}
+
+function applyFiltersAndRender() {
+  renderOrders(getFilteredOrders());
 }
 
 function escapeHtml(s) {
@@ -118,11 +165,13 @@ export function renderOrders(orders) {
         <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-order-date">${formatDateDDMMYYYY(order.order_date)}</td>
         <td class="td-order-number">${order.order_number ?? ""}</td>
-        <td>${order.amount ?? ""}</td>
-        <td>${order.prepayment ?? ""}</td>
-        <td>${order.remaining_amount ?? ""}</td>
+        <td>${order.amount != null && order.amount !== "" ? `<span class="status-value">${order.amount}</span>` : ""}</td>
+        <td class="td-prepayment">${(order.prepayment ?? "") + (order.prepayment_to ? " | " + escapeHtml(order.prepayment_to) : "")}</td>
+        <td class="td-remaining">${(order.remaining_amount ?? "") + (order.remaining_to ? " | " + escapeHtml(order.remaining_to) : "")}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
         <td>${formatDateDDMMYYYY(order.delivery_date)}</td>
+        <td>${formatDateDDMMYYYY(order.installation_date)}</td>
+        <td>${formatDateDDMMYYYY(order.reveals_date)}</td>
         <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
         <td class="td-actions td-delete">${deleteButton}</td>
       </tr>
@@ -140,23 +189,62 @@ export function renderOrders(orders) {
 }
 
 export function applyClientFilter() {
-  const query = clientSearch?.value.trim().toLowerCase() || "";
+  applyFiltersAndRender();
+}
 
-  if (!query) {
-    renderOrders(state.allOrders);
-    return;
-  }
+function renderStatusFilterDropdown() {
+  const container = document.getElementById("statusFilterCheckboxes");
+  if (!container) return;
+  const allSelected = !state.statusFilterSelected || state.statusFilterSelected.length === 0;
+  container.innerHTML = STATUS_OPTIONS.map((value) => {
+    const id = "status-filter-" + (value ? value.replace(/\s/g, "-") : "empty");
+    const label = value || "—";
+    const checked = allSelected || state.statusFilterSelected.includes(value);
+    return `<label class="status-filter-item"><input type="checkbox" data-status="${escapeAttr(value)}" ${checked ? "checked" : ""}> ${escapeHtml(label)}</label>`;
+  }).join("");
+  container.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.addEventListener("change", onStatusFilterChange);
+  });
+}
 
-  const filteredOrders = state.allOrders.filter((order) => {
-    const phone = (order.phone || "").toLowerCase();
-    const name = (order.client || "").toLowerCase();
-    const address = (order.address || "").toLowerCase();
-    const number = (order.order_number || "").toLowerCase();
-    const description = (order.description || "").toLowerCase();
-    return phone.includes(query) || name.includes(query) || address.includes(query) || number.includes(query) || description.includes(query);
+function onStatusFilterChange() {
+  const container = document.getElementById("statusFilterCheckboxes");
+  if (!container) return;
+  const checked = Array.from(container.querySelectorAll("input[type=checkbox]:checked")).map((el) => el.dataset.status);
+  state.statusFilterSelected = checked.length === STATUS_OPTIONS.length ? [] : checked;
+  applyFiltersAndRender();
+}
+
+export function initStatusFilter() {
+  const btn = document.getElementById("statusFilterBtn");
+  const dropdown = document.getElementById("statusFilterDropdown");
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = dropdown.style.display === "block";
+    if (isOpen) {
+      dropdown.style.display = "none";
+      btn.setAttribute("aria-expanded", "false");
+    } else {
+      renderStatusFilterDropdown();
+      const rect = btn.getBoundingClientRect();
+      dropdown.style.position = "fixed";
+      dropdown.style.top = rect.bottom + 4 + "px";
+      dropdown.style.left = rect.left + "px";
+      dropdown.style.display = "block";
+      btn.setAttribute("aria-expanded", "true");
+    }
   });
 
-  renderOrders(filteredOrders);
+  document.addEventListener("click", () => {
+    if (dropdown.style.display === "block") {
+      dropdown.style.display = "none";
+      btn.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  dropdown.addEventListener("click", (e) => e.stopPropagation());
 }
 
 export function getFormData() {
@@ -404,6 +492,15 @@ export async function submitOrderForm(event) {
     return;
   }
   document.getElementById("client")?.classList.remove("client-invalid");
+
+  const statusVal = (document.getElementById("payment_status")?.value || "").trim();
+  if (!statusVal) {
+    message.textContent = "Не заполнено Статус";
+    message.style.color = "#d32f2f";
+    document.getElementById("payment_status")?.classList.add("payment-status-invalid");
+    return;
+  }
+  document.getElementById("payment_status")?.classList.remove("payment-status-invalid");
 
   if (phoneVal) {
     const phoneDigits = phoneVal.replace(/\D/g, "");
