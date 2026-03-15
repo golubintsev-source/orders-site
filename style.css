@@ -12,7 +12,7 @@ body {
 .container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 6px 16px 16px 16px;
 }
 
 h1,
@@ -43,7 +43,7 @@ h2 {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 6px;
 }
 
 .topbar-left {
@@ -97,7 +97,7 @@ h2 {
 .section-nav {
   display: flex;
   gap: 4px;
-  margin-bottom: 16px;
+  margin-bottom: 6px;
   border-bottom: 1px solid #e5e7eb;
   padding-bottom: 0;
 }
@@ -302,7 +302,20 @@ button:active {
 
 /* ===== поиск ===== */
 .search-box {
-  margin-bottom: 14px;
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
+#section-all > .card {
+  padding-top: 8px;
+}
+
+.search-box input {
+  box-sizing: border-box;
+  padding: 6px 10px;
+  min-height: 36px;
+  height: 36px;
+  font-size: 13px;
 }
 
 /* ===== таблица ===== */
@@ -330,6 +343,16 @@ td {
   vertical-align: middle;
 }
 
+#ordersTable th {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+#ordersTable td {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
 th {
   background: #f8fafc;
   font-weight: 700;
@@ -348,8 +371,9 @@ th {
 #ordersTable td.td-actions {
   white-space: nowrap;
   width: 1%;
-  min-width: 52px;
-  padding-right: 8px;
+  min-width: 48px;
+  padding-left: 0;
+  padding-right: 4px;
 }
 
 #ordersTable .btn-icon {
@@ -359,7 +383,7 @@ th {
   width: 32px;
   height: 32px;
   padding: 0;
-  margin-right: 2px;
+  margin-right: 0;
   border: none;
   border-radius: 6px;
   background: transparent;
@@ -632,11 +656,33 @@ th {
   }
 
   .container {
-    padding: 12px;
+    padding: 6px 12px 12px 12px;
   }
 
   .card {
     padding: 12px;
+  }
+
+  .search-box {
+    margin-top: 4px;
+    margin-bottom: 6px;
+  }
+
+  .search-box input {
+    padding: 6px 10px;
+    min-height: 36px;
+    height: 36px;
+    font-size: 13px;
+  }
+
+  #ordersTable th {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+
+  #ordersTable td {
+    padding: 6px 8px;
+    font-size: 13px;
   }
 
   .topbar {
