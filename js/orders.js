@@ -4,8 +4,10 @@ import {
   clientSearch,
   message,
   submitBtn,
+  submitBtnTop,
   formTitle,
   cancelEditBtn,
+  cancelEditBtnTop,
   sectionNavBtns,
   contentSections,
   sectionNewTab,
@@ -161,7 +163,7 @@ export function getFormData() {
   return {
     phone: document.getElementById("phone").value.trim() || null,
     client: document.getElementById("client").value.trim() || null,
-    client_type: document.getElementById("client_type").value.trim() || null,
+    client_type: document.getElementById("client_type_dealer")?.checked ? "Диллер" : "Частник",
     address: document.getElementById("address").value.trim() || null,
     payment_status: document.getElementById("payment_status").value.trim() || null,
     order_date: document.getElementById("order_date").value || null,
@@ -233,14 +235,19 @@ export function fillForm(order) {
   document.getElementById("phone").value = order.phone || "";
   document.getElementById("phone").dispatchEvent(new Event("input", { bubbles: true }));
   document.getElementById("client").value = order.client || "";
-  const clientTypeEl = document.getElementById("client_type");
-  if (clientTypeEl) clientTypeEl.value = order.client_type || "";
+  const clientTypeDealerCb = document.getElementById("client_type_dealer");
+  if (clientTypeDealerCb) clientTypeDealerCb.checked = order.client_type === "Диллер";
   document.getElementById("address").value = order.address || "";
   const statusVal = order.payment_status || "";
-  document.getElementById("payment_status").value =
-    statusVal === "нет" || statusVal === "оплачен" || !statusVal
-      ? "Контакт с клиентом"
-      : statusVal;
+  const displayStatus = statusVal === "нет" || statusVal === "оплачен" || !statusVal
+    ? ""
+    : statusVal;
+  const paymentStatusEl = document.getElementById("payment_status");
+  if (paymentStatusEl) {
+    paymentStatusEl.value = displayStatus;
+    if (paymentStatusEl.value !== displayStatus) paymentStatusEl.value = ""; /* fallback if option missing */
+  }
+  state.initialPaymentStatus = displayStatus;
   const orderDateVal = order.order_date || "";
   document.getElementById("order_date").value = orderDateVal.includes("T") ? orderDateVal.slice(0, 16) : (orderDateVal ? orderDateVal + "T00:00" : "");
   document.getElementById("order_number").value = order.order_number || "";
@@ -282,13 +289,14 @@ function getNowForDateTimeLocal() {
 export function resetFormMode() {
   state.editingOrderId = null;
   state.editingOrderDescription = null;
+  state.initialPaymentStatus = null;
   document.getElementById("orderForm").reset();
   updatePaidField();
   updateConditionalRequiredHighlight();
   const orderDateInput = document.getElementById("order_date");
   if (orderDateInput) orderDateInput.value = getNowForDateTimeLocal();
-  const clientTypeInput = document.getElementById("client_type");
-  if (clientTypeInput) clientTypeInput.value = "";
+  const clientTypeDealerCb = document.getElementById("client_type_dealer");
+  if (clientTypeDealerCb) clientTypeDealerCb.checked = false;
   const installationCb = document.getElementById("installation");
   const installationDateWrap = document.getElementById("installationDateWrap");
   const installationDateInput = document.getElementById("installation_date");
@@ -310,17 +318,15 @@ export function resetFormMode() {
   if (sectionNewTab) {
     sectionNewTab.textContent = "Новый";
   }
-  if (submitBtn) {
-    submitBtn.textContent = "Сохранить заказ";
-  }
+  if (submitBtn) submitBtn.textContent = "Сохранить заказ";
+  if (submitBtnTop) submitBtnTop.textContent = "Сохранить заказ";
 
   if (formTitle) {
     formTitle.textContent = "Новая заявка";
   }
 
-  if (cancelEditBtn) {
-    cancelEditBtn.style.display = "none";
-  }
+  if (cancelEditBtn) cancelEditBtn.style.display = "inline-block";
+  if (cancelEditBtnTop) cancelEditBtnTop.style.display = "inline-block";
 }
 
 export async function editOrder(orderId) {
@@ -341,17 +347,15 @@ export async function editOrder(orderId) {
   fillForm(data);
   message.textContent = `Режим: редактирование заявки #${orderId}`;
 
-  if (submitBtn) {
-    submitBtn.textContent = "Сохранить изменения";
-  }
+  if (submitBtn) submitBtn.textContent = "Сохранить изменения";
+  if (submitBtnTop) submitBtnTop.textContent = "Сохранить изменения";
 
   if (formTitle) {
     formTitle.textContent = `Редактирование заявки #${orderId}`;
   }
 
-  if (cancelEditBtn) {
-    cancelEditBtn.style.display = "inline-block";
-  }
+  if (cancelEditBtn) cancelEditBtn.style.display = "inline-block";
+  if (cancelEditBtnTop) cancelEditBtnTop.style.display = "inline-block";
 
   if (sectionNewTab) {
     sectionNewTab.textContent = "Редактирование";
@@ -421,7 +425,7 @@ export async function submitOrderForm(event) {
   if (remainingVal && !remainingToVal) conditionalMissing.push("Кому остаток");
   const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
   const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
-  if (deliveryVal && !deliveryDateVal) conditionalMissing.push("Дата доставки/самовывоза");
+  if (deliveryVal && !deliveryDateVal) conditionalMissing.push("Дата");
   if (conditionalMissing.length > 0) {
     message.textContent = "Заполните поля: " + conditionalMissing.join(", ");
     message.style.color = "#d32f2f";
@@ -479,6 +483,7 @@ export async function submitOrderForm(event) {
   await uploadFiles(savedOrderId);
 
   const addCommentText = (document.getElementById("description")?.value || "").trim();
+  const newStatus = orderData.payment_status || "";
 
   if (!wasEditing && savedOrderId && state.currentUser?.email) {
     const historyRows = [
@@ -490,10 +495,22 @@ export async function submitOrderForm(event) {
     await supabaseClient.from("order_history").insert(historyRows);
   }
 
-  if (wasEditing && savedOrderId && addCommentText && state.currentUser?.email) {
-    await supabaseClient.from("order_history").insert([
-      { order_id: savedOrderId, user_email: state.currentUser.email, comment: addCommentText },
-    ]);
+  if (wasEditing && savedOrderId && state.currentUser?.email) {
+    const historyRows = [];
+    const oldStatus = state.initialPaymentStatus ?? "";
+    if (oldStatus !== newStatus) {
+      historyRows.push({
+        order_id: savedOrderId,
+        user_email: state.currentUser.email,
+        comment: `Статус изменён: ${oldStatus || "—"} → ${newStatus || "—"}`,
+      });
+    }
+    if (addCommentText) {
+      historyRows.push({ order_id: savedOrderId, user_email: state.currentUser.email, comment: addCommentText });
+    }
+    if (historyRows.length > 0) {
+      await supabaseClient.from("order_history").insert(historyRows);
+    }
   }
 
   resetFormMode();

@@ -2,6 +2,7 @@ import {
   form,
   logoutBtn,
   cancelEditBtn,
+  cancelEditBtnTop,
   clientSearch,
   selectFilesBtn,
   attachmentsInput,
@@ -170,13 +171,12 @@ export function bindUIEvents() {
     });
   }
 
-  if (cancelEditBtn) {
-    cancelEditBtn.addEventListener("click", () => {
-      const wasEditing = Boolean(state.editingOrderId);
-      resetFormMode();
-      if (wasEditing) switchSection("all");
-    });
-  }
+  const onCancelEdit = () => {
+    resetFormMode();
+    switchSection("all");
+  };
+  if (cancelEditBtn) cancelEditBtn.addEventListener("click", onCancelEdit);
+  if (cancelEditBtnTop) cancelEditBtnTop.addEventListener("click", onCancelEdit);
 
   if (logoutBtn) {
     logoutBtn.addEventListener("click", logout);
