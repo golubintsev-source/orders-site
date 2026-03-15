@@ -50,6 +50,14 @@ function escapeAttr(s) {
     .replace(/</g, "&lt;");
 }
 
+function formatDateDDMMYYYY(dateStr) {
+  if (!dateStr || typeof dateStr !== "string") return "";
+  const s = dateStr.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return dateStr;
+  const [, y, m, d] = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return `${d}.${m}.${y}`;
+}
+
 function isOrderPaid(order) {
   const a = parseFloat(order.amount) || 0;
   const p = parseFloat(order.prepayment) || 0;
@@ -105,13 +113,13 @@ export function renderOrders(orders) {
           </span>
         </td>
         <td class="td-paid">${paidBadge(order)}</td>
-        <td class="td-order-date">${order.order_date ?? ""}</td>
+        <td class="td-order-date">${formatDateDDMMYYYY(order.order_date)}</td>
         <td class="td-order-number">${order.order_number ?? ""}</td>
         <td>${order.amount ?? ""}</td>
         <td>${order.prepayment ?? ""}</td>
         <td>${order.remaining_amount ?? ""}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
-        <td>${order.delivery_date ?? ""}</td>
+        <td>${formatDateDDMMYYYY(order.delivery_date)}</td>
         <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
         <td class="td-actions td-delete">${deleteButton}</td>
       </tr>
