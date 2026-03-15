@@ -80,15 +80,13 @@ export function renderOrders(orders) {
       : "";
     const row = `
       <tr>
+        <td class="td-phone-call">${phoneCallIcon}</td>
         <td class="td-actions">${editIcon}${historyIcon}${filesIcon}</td>
         <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${clientCell}</td>
-        <td class="td-phone-call">${phoneCallIcon}</td>
         <td class="td-truncate-address" data-fulltext="${escapeAttr(address)}">${escapeHtml(address)}</td>
         <td>
-          <span class="${
-            order.payment_status === "оплачен" ? "status-paid" : "status-no"
-          }">
-            ${order.payment_status ?? ""}
+          <span class="status-value">
+            ${order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом")}
           </span>
         </td>
         <td>${order.order_date ?? ""}</td>
@@ -167,7 +165,11 @@ export function fillForm(order) {
   document.getElementById("phone").dispatchEvent(new Event("input", { bubbles: true }));
   document.getElementById("client").value = order.client || "";
   document.getElementById("address").value = order.address || "";
-  document.getElementById("payment_status").value = order.payment_status || "";
+  const statusVal = order.payment_status || "";
+  document.getElementById("payment_status").value =
+    statusVal === "нет" || statusVal === "оплачен" || !statusVal
+      ? "Контакт с клиентом"
+      : statusVal;
   const orderDateVal = order.order_date || "";
   document.getElementById("order_date").value = orderDateVal.includes("T") ? orderDateVal.slice(0, 16) : (orderDateVal ? orderDateVal + "T00:00" : "");
   document.getElementById("order_number").value = order.order_number || "";

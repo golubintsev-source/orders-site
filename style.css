@@ -368,6 +368,14 @@ th {
 }
 
 #ordersTable th:first-child,
+#ordersTable td.td-phone-call {
+  white-space: nowrap;
+  width: 1%;
+  min-width: 1px;
+  padding: 4px 2px 4px 0;
+}
+
+#ordersTable th:nth-child(2),
 #ordersTable td.td-actions {
   white-space: nowrap;
   width: 1%;
@@ -453,6 +461,11 @@ th {
   padding: 4px 0 4px 1px;
 }
 
+#ordersTable th:nth-child(5),
+#ordersTable td:nth-child(5) {
+  white-space: nowrap;
+}
+
 #ordersTable th:nth-child(6),
 #ordersTable td:nth-child(6) {
   min-width: 95px;
@@ -465,12 +478,9 @@ th {
   white-space: nowrap;
 }
 
-/* Узкий столбец с иконкой звонка */
-#ordersTable th:nth-child(3),
+/* Узкий столбец с иконкой звонка (первый столбец) */
+#ordersTable th:first-child,
 #ordersTable td.td-phone-call {
-  width: 1%;
-  min-width: 1px;
-  padding: 4px 2px;
   text-align: center;
   vertical-align: middle;
 }
@@ -488,7 +498,7 @@ th {
 }
 
 /* Клиент и Адрес — в одну строку, обрезка с подсказкой */
-#ordersTable th:nth-child(2),
+#ordersTable th:nth-child(3),
 #ordersTable td.td-truncate-name {
   max-width: 140px;
   white-space: nowrap;
@@ -524,23 +534,15 @@ th {
   display: block;
 }
 
-/* ===== статус оплаты ===== */
-.status-no {
+/* ===== статус ===== */
+.status-value {
   display: inline-block;
-  background: #ffe5e5;
-  color: #b00020;
+  white-space: nowrap;
+  background: #f3f4f6;
+  color: #374151;
   padding: 4px 8px;
   border-radius: 6px;
-  font-weight: 700;
-}
-
-.status-paid {
-  display: inline-block;
-  background: #e6f7e6;
-  color: #1b5e20;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-weight: 700;
+  font-size: 13px;
 }
 
 /* ===== загрузка файлов ===== */
