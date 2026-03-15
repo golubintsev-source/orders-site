@@ -8,8 +8,8 @@
 orders-site/
 ├── index.html      # основная страница
 ├── login.html      # страница входа
-├── style-old.css   # стили
-├── js/             # скрипты (так и должно быть)
+├── style.css       # стили
+├── js/             # скрипты
 │   ├── main.js
 │   ├── auth.js
 │   ├── config.js
@@ -18,8 +18,7 @@ orders-site/
 │   ├── orders.js
 │   ├── state.js
 │   └── ui.js
-├── login.js
-└── app-old.js
+└── login.js
 ```
 
 ## Как залить на GitHub
