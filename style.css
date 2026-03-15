@@ -320,6 +320,15 @@ th {
   font-weight: 700;
 }
 
+.tel-link {
+  color: #1f6feb;
+  text-decoration: none;
+}
+
+.tel-link:hover {
+  text-decoration: underline;
+}
+
 #ordersTable td:last-child {
   white-space: nowrap;
 }

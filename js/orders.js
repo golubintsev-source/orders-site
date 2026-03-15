@@ -62,9 +62,13 @@ export function renderOrders(orders) {
         `
         : "";
 
+    const phone = order.phone ?? "";
+    const telHref = phone ? "tel:" + phone.replace(/[^\d+]/g, "") : "";
+    const phoneCell = phone ? `<a href="${telHref}" class="tel-link">${phone}</a>` : "";
+
     const row = `
       <tr>
-        <td>${order.phone ?? ""}</td>
+        <td>${phoneCell}</td>
         <td>${order.client ?? ""}</td>
         <td>${order.address ?? ""}</td>
         <td>
