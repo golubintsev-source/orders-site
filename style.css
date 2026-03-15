@@ -453,20 +453,42 @@ th {
   padding: 4px 0 4px 1px;
 }
 
-#ordersTable th:nth-child(2),
-#ordersTable td:nth-child(2) {
-  min-width: 130px;
-  white-space: nowrap;
-}
-
 #ordersTable th:nth-child(6),
 #ordersTable td:nth-child(6) {
-  min-width: 150px;
+  min-width: 95px;
   white-space: nowrap;
 }
 
-/* Имя и Адрес — в одну строку, обрезка с подсказкой */
+#ordersTable th:nth-child(13),
+#ordersTable td.td-phone {
+  min-width: 110px;
+  white-space: nowrap;
+}
+
+/* Узкий столбец с иконкой звонка */
 #ordersTable th:nth-child(3),
+#ordersTable td.td-phone-call {
+  width: 1%;
+  min-width: 1px;
+  padding: 4px 2px;
+  text-align: center;
+  vertical-align: middle;
+}
+#ordersTable .btn-phone-call {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #059669;
+  padding: 4px;
+  border-radius: 6px;
+}
+#ordersTable .btn-phone-call:hover {
+  background: #d1fae5;
+  color: #047857;
+}
+
+/* Клиент и Адрес — в одну строку, обрезка с подсказкой */
+#ordersTable th:nth-child(2),
 #ordersTable td.td-truncate-name {
   max-width: 140px;
   white-space: nowrap;

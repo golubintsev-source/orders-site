@@ -141,10 +141,15 @@ export function bindUIEvents() {
   if (ordersTable && cellTooltip) {
     let hideClick, hideKey;
     ordersTable.addEventListener("click", (e) => {
+      if (e.target.closest("a.tel-link")) return;
       const td = e.target.closest("td.td-truncate-name, td.td-truncate-address");
       if (!td) return;
-      const text = td.getAttribute("title");
-      if (!text) return;
+      if (td.scrollWidth <= td.clientWidth) return;
+      const raw = td.getAttribute("data-fulltext") || td.getAttribute("title");
+      if (!raw) return;
+      const decodeEl = document.createElement("div");
+      decodeEl.innerHTML = raw;
+      const text = decodeEl.textContent;
       if (hideClick) {
         document.removeEventListener("click", hideClick);
         document.removeEventListener("keydown", hideKey);

@@ -72,16 +72,18 @@ export function renderOrders(orders) {
 
     const phone = order.phone ?? "";
     const telHref = phone ? "tel:" + phone.replace(/[^\d+]/g, "") : "";
-    const phoneCell = phone ? `<a href="${telHref}" class="tel-link">${phone}</a>` : "";
-
     const client = order.client ?? "";
     const address = order.address ?? "";
+    const clientCell = client ? escapeHtml(client) : "";
+    const phoneCallIcon = phone
+      ? `<a href="${escapeAttr(telHref)}" class="btn-icon btn-phone-call" title="Позвонить"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></a>`
+      : "";
     const row = `
       <tr>
         <td class="td-actions">${editIcon}${historyIcon}${filesIcon}</td>
-        <td>${phoneCell}</td>
-        <td class="td-truncate-name" title="${escapeAttr(client)}">${escapeHtml(client)}</td>
-        <td class="td-truncate-address" title="${escapeAttr(address)}">${escapeHtml(address)}</td>
+        <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${clientCell}</td>
+        <td class="td-phone-call">${phoneCallIcon}</td>
+        <td class="td-truncate-address" data-fulltext="${escapeAttr(address)}">${escapeHtml(address)}</td>
         <td>
           <span class="${
             order.payment_status === "оплачен" ? "status-paid" : "status-no"
@@ -96,11 +98,19 @@ export function renderOrders(orders) {
         <td>${order.prepayment ?? ""}</td>
         <td>${order.remaining_amount ?? ""}</td>
         <td>${order.delivery_date ?? ""}</td>
+        <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
         <td class="td-actions td-delete">${deleteButton}</td>
       </tr>
     `;
 
     table.innerHTML += row;
+  });
+
+  table.querySelectorAll(".td-truncate-name, .td-truncate-address").forEach((cell) => {
+    const full = cell.getAttribute("data-fulltext");
+    if (full && cell.scrollWidth > cell.clientWidth) {
+      cell.setAttribute("title", full);
+    }
   });
 }
 
