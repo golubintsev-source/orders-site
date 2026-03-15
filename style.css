@@ -1,4 +1,4 @@
-* {
+﻿* {
   box-sizing: border-box;
 }
 
@@ -91,6 +91,52 @@ h2 {
 
 .logout-icon-btn:active {
   transform: translateY(1px);
+}
+
+/* ===== меню разделов ===== */
+.section-nav {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0;
+}
+
+.section-nav-btn {
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  transition: background 0.2s, color 0.2s;
+}
+
+.section-nav-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.section-nav-btn.active {
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 -2px 0 0 #3b82f6 inset;
+  margin-bottom: -1px;
+}
+
+.content-section {
+  display: none;
+}
+
+.content-section.active {
+  display: block;
+}
+
+.section-placeholder {
+  margin: 0;
+  color: #6b7280;
 }
 
 .logout-icon {
@@ -541,4 +587,3 @@ th {
     width: 100%;
     text-align: center;
   }
-}
