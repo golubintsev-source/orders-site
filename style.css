@@ -327,7 +327,7 @@ td {
   text-align: left;
   padding: 10px;
   font-size: 14px;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 th {
@@ -344,28 +344,57 @@ th {
   text-decoration: underline;
 }
 
-#ordersTable th:nth-child(1),
-#ordersTable td:nth-child(1) {
+#ordersTable th:first-child,
+#ordersTable td.td-actions {
+  white-space: nowrap;
+  width: 1%;
+  min-width: 52px;
+  padding-right: 8px;
+}
+
+#ordersTable .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin-right: 2px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+#ordersTable .btn-icon:last-child {
+  margin-right: 0;
+}
+
+#ordersTable .btn-icon:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+#ordersTable .btn-edit:hover {
+  color: #1f6feb;
+}
+
+#ordersTable .btn-delete:hover {
+  color: #b00020;
+}
+
+#ordersTable th:nth-child(2),
+#ordersTable td:nth-child(2) {
   min-width: 130px;
   white-space: nowrap;
 }
 
-#ordersTable th:nth-child(5),
-#ordersTable td:nth-child(5) {
+#ordersTable th:nth-child(6),
+#ordersTable td:nth-child(6) {
   min-width: 150px;
   white-space: nowrap;
-}
-
-#ordersTable td:last-child {
-  white-space: nowrap;
-}
-
-#ordersTable td:last-child button {
-  margin-right: 6px;
-}
-
-#ordersTable td:last-child button:last-child {
-  margin-right: 0;
 }
 
 /* ===== статус оплаты ===== */
