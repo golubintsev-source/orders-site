@@ -6,6 +6,9 @@ import {
   submitBtn,
   formTitle,
   cancelEditBtn,
+  sectionNavBtns,
+  contentSections,
+  sectionNewTab,
 } from "./dom.js";
 import {
   loadFilesCountMap,
@@ -105,9 +108,14 @@ export function applyClientFilter() {
     return;
   }
 
-  const filteredOrders = state.allOrders.filter((order) =>
-    (order.client || "").toLowerCase().includes(query)
-  );
+  const filteredOrders = state.allOrders.filter((order) => {
+    const phone = (order.phone || "").toLowerCase();
+    const name = (order.client || "").toLowerCase();
+    const address = (order.address || "").toLowerCase();
+    const number = (order.order_number || "").toLowerCase();
+    const description = (order.description || "").toLowerCase();
+    return phone.includes(query) || name.includes(query) || address.includes(query) || number.includes(query) || description.includes(query);
+  });
 
   renderOrders(filteredOrders);
 }
@@ -142,6 +150,7 @@ export function getFormData() {
 
 export function fillForm(order) {
   document.getElementById("phone").value = order.phone || "";
+  document.getElementById("phone").dispatchEvent(new Event("input", { bubbles: true }));
   document.getElementById("client").value = order.client || "";
   document.getElementById("address").value = order.address || "";
   document.getElementById("payment_status").value = order.payment_status || "";
@@ -172,10 +181,15 @@ export function resetFormMode() {
   document.getElementById("orderForm").reset();
   const orderDateInput = document.getElementById("order_date");
   if (orderDateInput) orderDateInput.value = getNowForDateTimeLocal();
+  const phoneEl = document.getElementById("phone");
+  if (phoneEl) phoneEl.dispatchEvent(new Event("input", { bubbles: true }));
   resetFileUpload();
 
   message.textContent = "Режим: новая заявка";
 
+  if (sectionNewTab) {
+    sectionNewTab.textContent = "Новый";
+  }
   if (submitBtn) {
     submitBtn.textContent = "Сохранить заявку";
   }
@@ -218,6 +232,16 @@ export async function editOrder(orderId) {
     cancelEditBtn.style.display = "inline-block";
   }
 
+  if (sectionNewTab) {
+    sectionNewTab.textContent = "Редактирование";
+  }
+  sectionNavBtns.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.section === "new");
+  });
+  contentSections.forEach((section) => {
+    section.classList.toggle("active", section.id === "section-new");
+  });
+
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -244,6 +268,18 @@ export async function deleteOrder(orderId) {
 
 export async function submitOrderForm(event) {
   event.preventDefault();
+
+  const phoneVal = (document.getElementById("phone")?.value || "").trim();
+  const phoneDigits = phoneVal.replace(/\D/g, "");
+  const phoneValid = phoneVal === "" || (phoneDigits.length === 11 && (phoneDigits[0] === "8" || phoneDigits[0] === "7"));
+  if (!phoneValid) {
+    message.textContent = "Телефон";
+    message.style.color = "#b00020";
+    document.getElementById("phone")?.classList.add("phone-invalid");
+    return;
+  }
+
+  message.style.color = "";
   message.textContent = "Сохраняю...";
 
   const orderData = getFormData();
@@ -291,6 +327,13 @@ export async function submitOrderForm(event) {
 
   resetFormMode();
   await loadOrders();
+
+  sectionNavBtns.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.section === "all");
+  });
+  contentSections.forEach((section) => {
+    section.classList.toggle("active", section.id === "section-all");
+  });
 
   message.style.color = "";
   message.textContent = wasEditing

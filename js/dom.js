@@ -7,6 +7,7 @@ export const cancelEditBtn = document.getElementById("cancelEditBtn");
 export const submitBtn = document.getElementById("submitBtn");
 export const formTitle = document.getElementById("formTitle");
 export const clientSearch = document.getElementById("clientSearch");
+export const phoneInput = document.getElementById("phone");
 export const attachmentsInput = document.getElementById("attachments");
 export const fileUploadText = document.getElementById("fileUploadText");
 export const selectFilesBtn = document.getElementById("selectFilesBtn");
@@ -18,3 +19,4 @@ export const closeFilesModal = document.getElementById("closeFilesModal");
 
 export const sectionNavBtns = document.querySelectorAll(".section-nav-btn");
 export const contentSections = document.querySelectorAll(".content-section");
+export const sectionNewTab = document.querySelector('.section-nav-btn[data-section="new"]');

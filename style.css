@@ -242,6 +242,16 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
 }
 
+input.phone-invalid {
+  border-color: #b00020;
+  box-shadow: 0 0 0 2px rgba(176, 0, 32, 0.2);
+}
+
+input.phone-invalid:focus {
+  border-color: #b00020;
+  box-shadow: 0 0 0 3px rgba(176, 0, 32, 0.2);
+}
+
 /* обязательные поля */
 input:required,
 textarea:required,
@@ -298,6 +308,11 @@ button:active {
 /* ===== таблица ===== */
 .table-wrap {
   overflow-x: auto;
+  transform: scaleY(-1);
+}
+
+.table-wrap > table {
+  transform: scaleY(-1);
 }
 
 table {
@@ -327,6 +342,18 @@ th {
 
 .tel-link:hover {
   text-decoration: underline;
+}
+
+#ordersTable th:nth-child(1),
+#ordersTable td:nth-child(1) {
+  min-width: 130px;
+  white-space: nowrap;
+}
+
+#ordersTable th:nth-child(5),
+#ordersTable td:nth-child(5) {
+  min-width: 150px;
+  white-space: nowrap;
 }
 
 #ordersTable td:last-child {
