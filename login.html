@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="UTF-8">
+<title>Login</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+
+body{
+font-family:Arial;
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+background:#f4f4f4;
+}
+
+.card{
+background:white;
+padding:30px;
+border-radius:10px;
+width:300px;
+}
+
+input{
+width:100%;
+padding:10px;
+margin-bottom:10px;
+}
+
+button{
+width:100%;
+padding:10px;
+background:#007bff;
+color:white;
+border:none;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="card">
+
+<h2>Login</h2>
+
+<input id="email" placeholder="email">
+
+<input id="password" type="password" placeholder="password">
+
+<button onclick="login()">Войти</button>
+
+<p id="message"></p>
+
+</div>
+
+<script src="login.js"></script>
+
+</body>
+</html>
