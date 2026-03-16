@@ -229,7 +229,46 @@ export function bindUIEvents() {
     logoutBtn.addEventListener("click", logout);
   }
 
-  if (ordersTable) {
+  let tooltipHideClick = null;
+  let tooltipHideKey = null;
+
+  function showCellTooltip(td) {
+    if (!cellTooltip || !td) return;
+    const raw = td.getAttribute("data-fulltext") || td.getAttribute("title");
+    if (!raw) return;
+    const decodeEl = document.createElement("div");
+    decodeEl.innerHTML = raw;
+    const text = decodeEl.textContent || raw;
+    if (tooltipHideClick) {
+      document.removeEventListener("click", tooltipHideClick);
+      document.removeEventListener("touchend", tooltipHideClick);
+      document.removeEventListener("keydown", tooltipHideKey);
+    }
+    cellTooltip.textContent = text;
+    cellTooltip.classList.add("visible");
+    cellTooltip.setAttribute("aria-hidden", "false");
+    const rect = td.getBoundingClientRect();
+    cellTooltip.style.left = Math.min(rect.left, window.innerWidth - 330) + "px";
+    cellTooltip.style.top = rect.top - 8 + "px";
+    cellTooltip.style.transform = "translateY(-100%)";
+    function hide() {
+      cellTooltip.classList.remove("visible");
+      cellTooltip.setAttribute("aria-hidden", "true");
+      document.removeEventListener("click", tooltipHideClick);
+      document.removeEventListener("touchend", tooltipHideClick);
+      document.removeEventListener("keydown", tooltipHideKey);
+      tooltipHideClick = tooltipHideKey = null;
+    }
+    tooltipHideClick = hide;
+    tooltipHideKey = (ev) => { if (ev.key === "Escape") hide(); };
+    setTimeout(() => {
+      document.addEventListener("click", tooltipHideClick);
+      document.addEventListener("touchend", tooltipHideClick);
+      document.addEventListener("keydown", tooltipHideKey);
+    }, 150);
+  }
+
+  if (ordersTable && cellTooltip) {
     ordersTable.addEventListener("click", (e) => {
       const idTd = e.target.closest("td.td-order-id");
       if (idTd) {
@@ -240,40 +279,21 @@ export function bindUIEvents() {
         if (tr && !wasThisRowHighlighted) tr.classList.add("row-highlighted");
         return;
       }
-      if (!cellTooltip) return;
+      if (e.target.closest("a.tel-link")) return;
+      const td = e.target.closest("td.td-truncate-name, td.td-truncate-address, td.td-truncate-description");
+      if (td) {
+        e.stopPropagation();
+        showCellTooltip(td);
+      }
+    });
+    ordersTable.addEventListener("touchend", (e) => {
       if (e.target.closest("a.tel-link")) return;
       const td = e.target.closest("td.td-truncate-name, td.td-truncate-address, td.td-truncate-description");
       if (!td) return;
-      const raw = td.getAttribute("data-fulltext") || td.getAttribute("title");
-      if (!raw) return;
-      const decodeEl = document.createElement("div");
-      decodeEl.innerHTML = raw;
-      const text = decodeEl.textContent;
-      if (hideClick) {
-        document.removeEventListener("click", hideClick);
-        document.removeEventListener("keydown", hideKey);
-      }
-      cellTooltip.textContent = text;
-      cellTooltip.classList.add("visible");
-      cellTooltip.setAttribute("aria-hidden", "false");
-      const rect = td.getBoundingClientRect();
-      cellTooltip.style.left = Math.min(rect.left, window.innerWidth - 330) + "px";
-      cellTooltip.style.top = rect.top - 8 + "px";
-      cellTooltip.style.transform = "translateY(-100%)";
-      function hide() {
-        cellTooltip.classList.remove("visible");
-        cellTooltip.setAttribute("aria-hidden", "true");
-        document.removeEventListener("click", hideClick);
-        document.removeEventListener("keydown", hideKey);
-        hideClick = hideKey = null;
-      }
-      hideClick = hide;
-      hideKey = (ev) => { if (ev.key === "Escape") hide(); };
-      setTimeout(() => {
-        document.addEventListener("click", hideClick);
-        document.addEventListener("keydown", hideKey);
-      }, 0);
-    });
+      e.preventDefault();
+      e.stopPropagation();
+      showCellTooltip(td);
+    }, { passive: false });
   }
 
   if (window.location.hash === "#all") {
