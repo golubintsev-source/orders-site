@@ -25,6 +25,8 @@ import {
   updatePaidField,
   updateRemainingFromCostAndPrepayment,
   updateConditionalRequiredHighlight,
+  updateInstallerPaymentAmountFromArea,
+  submitInstallerPayment,
 } from "./orders.js";
 import { renderSelectedFiles } from "./files.js";
 
@@ -153,8 +155,14 @@ export function bindUIEvents() {
     });
   }
 
+  const areaM2El = document.getElementById("area_m2");
+  if (areaM2El) areaM2El.addEventListener("input", updateInstallerPaymentAmountFromArea);
+  const installerPayBtn = document.getElementById("installer_pay_btn");
+  if (installerPayBtn) installerPayBtn.addEventListener("click", () => submitInstallerPayment());
+
   updatePaidField();
   updateConditionalRequiredHighlight();
+  updateInstallerPaymentAmountFromArea();
 
   if (clientSearch) {
     clientSearch.addEventListener("input", applyClientFilter);

@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { checkAuth } from "./auth.js";
+import { formatAmount } from "./format.js";
 
 let editingId = null;
 let editingCreatedAt = null;
@@ -41,7 +42,7 @@ function setMessage(text, isError) {
   }
 }
 
-async function loadCalculations() {
+export async function loadCalculations() {
   const { data, error } = await supabaseClient
     .from("calculations")
     .select("id, created_at, from_place, to_place, amount, comment")
@@ -70,7 +71,7 @@ async function loadCalculations() {
       <td>${escapeHtml(formatDateTime(row.created_at))}</td>
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
-      <td>${escapeHtml(row.amount != null ? row.amount : "")}</td>
+      <td>${escapeHtml(formatAmount(row.amount))}</td>
       <td>${escapeHtml(row.comment)}</td>
       <td class="td-actions">
         <button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">✎</button>

@@ -223,6 +223,30 @@ h2 {
   min-width: 0;
 }
 
+#section-new .installer-pay-btn-wrap {
+  flex: 0 0 auto;
+}
+
+#section-new .installer-pay-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #1f6feb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#section-new .installer-pay-btn:hover:not(:disabled) {
+  opacity: 0.95;
+}
+
+#section-new .installer-pay-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 #section-new .actions {
   margin-top: 10px;
   gap: 8px;

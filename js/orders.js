@@ -18,6 +18,8 @@ import {
   uploadFiles,
   resetFileUpload,
 } from "./files.js";
+import { loadCalculations } from "./calculations.js";
+import { formatAmount } from "./format.js";
 
 export async function loadOrders() {
   const { data, error } = await supabaseClient
@@ -164,9 +166,9 @@ export function renderOrders(orders) {
         <td class="td-order-date">${formatDateDDMMYYYY(order.order_date)}</td>
         <td class="td-order-number">${order.order_number ?? ""}</td>
         <td class="td-paid">${paidBadge(order)}</td>
-        <td>${order.amount != null && order.amount !== "" ? `<span class="status-value">${order.amount}</span>` : ""}</td>
-        <td class="td-prepayment">${(order.prepayment ?? "") + (order.prepayment_to ? " | " + escapeHtml(order.prepayment_to) : "")}</td>
-        <td class="td-remaining">${(order.remaining_amount ?? "") + (order.remaining_to ? " | " + escapeHtml(order.remaining_to) : "")}</td>
+        <td>${order.amount != null && order.amount !== "" ? `<span class="status-value">${formatAmount(order.amount)}</span>` : ""}</td>
+        <td class="td-prepayment">${formatAmount(order.prepayment) + (order.prepayment_to ? " | " + escapeHtml(order.prepayment_to) : "")}</td>
+        <td class="td-remaining">${formatAmount(order.remaining_amount) + (order.remaining_to ? " | " + escapeHtml(order.remaining_to) : "")}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
         <td>${formatDateDDMMYYYY(order.delivery_date)}</td>
         <td>${formatDateDDMMYYYY(order.installation_date)}</td>
@@ -338,6 +340,76 @@ export function updateConditionalRequiredHighlight() {
   if (deliveryDateEl) deliveryDateEl.classList.toggle("conditional-invalid", !!deliveryVal && !deliveryDateVal);
 }
 
+function getInstallerPaymentElements() {
+  return {
+    block: document.getElementById("installer_payment_block"),
+    amountEl: document.getElementById("installer_payment_amount"),
+    byEl: document.getElementById("installer_payment_by"),
+    btn: document.getElementById("installer_pay_btn"),
+  };
+}
+
+export function setInstallerPaymentBlockDisabled(disabled) {
+  const { amountEl, byEl, btn } = getInstallerPaymentElements();
+  if (amountEl) amountEl.disabled = disabled;
+  if (byEl) byEl.disabled = disabled;
+  if (btn) btn.disabled = disabled;
+}
+
+/** Подставить Оплата монтажнику = Площадь * 1400 (если блок не отключён). */
+export function updateInstallerPaymentAmountFromArea() {
+  const { amountEl, btn } = getInstallerPaymentElements();
+  if (!amountEl || (btn && btn.disabled)) return;
+  const areaEl = document.getElementById("area_m2");
+  const area = parseFloat(areaEl?.value) || 0;
+  amountEl.value = area > 0 ? String(area * 1400) : "";
+}
+
+export async function submitInstallerPayment() {
+  const { amountEl, byEl, btn } = getInstallerPaymentElements();
+  if (!amountEl || !byEl || !btn) return;
+  const amount = parseFloat(amountEl.value);
+  const who = (byEl.value || "").trim();
+  if (!(amount > 0) || !who) {
+    message.textContent = "Укажите сумму и кто оплатил";
+    message.style.color = "#d32f2f";
+    return;
+  }
+  const orderId = state.editingOrderId;
+  const comment = orderId != null ? `монтажнику за заказ -${orderId}-` : "монтажнику за заказ -(новая)-";
+  const { error } = await supabaseClient.from("calculations").insert([
+    { from_place: who, to_place: "Зарплата", amount, comment },
+  ]);
+  if (error) {
+    console.error("Ошибка добавления оплаты монтажнику:", error);
+    message.textContent = "Ошибка при добавлении записи в Расчёты";
+    message.style.color = "#d32f2f";
+    return;
+  }
+  message.textContent = "Оплата монтажнику добавлена в Расчёты";
+  message.style.color = "";
+  setInstallerPaymentBlockDisabled(true);
+  sectionNavBtns.forEach((btn) => btn.classList.toggle("active", btn.dataset.section === "calculations"));
+  contentSections.forEach((section) => section.classList.toggle("active", section.id === "section-calculations"));
+  await loadCalculations();
+}
+
+/** При открытии заказа проверить, есть ли уже запись об оплате монтажнику; если да — заполнить и отключить блок. */
+export async function checkInstallerPaymentDone(orderId) {
+  if (orderId == null) return;
+  const { data } = await supabaseClient
+    .from("calculations")
+    .select("from_place, amount")
+    .ilike("comment", `%монтажнику за заказ -${orderId}-%`)
+    .limit(1);
+  const row = data?.[0];
+  if (!row) return;
+  const { amountEl, byEl } = getInstallerPaymentElements();
+  if (amountEl) amountEl.value = row.amount != null ? String(row.amount) : "";
+  if (byEl) byEl.value = row.from_place || "";
+  setInstallerPaymentBlockDisabled(true);
+}
+
 export function fillForm(order) {
   document.getElementById("phone").value = order.phone || "";
   document.getElementById("phone").dispatchEvent(new Event("input", { bubbles: true }));
@@ -385,6 +457,8 @@ export function fillForm(order) {
   updatePaidField();
   updateConditionalRequiredHighlight();
   resetFileUpload();
+  checkInstallerPaymentDone(order.id);
+  updateInstallerPaymentAmountFromArea();
 }
 
 function getNowForDateTimeLocal() {
@@ -400,6 +474,10 @@ export function resetFormMode() {
   document.getElementById("orderForm").reset();
   updatePaidField();
   updateConditionalRequiredHighlight();
+  const inst = getInstallerPaymentElements();
+  if (inst.amountEl) inst.amountEl.value = "";
+  if (inst.byEl) inst.byEl.value = "";
+  setInstallerPaymentBlockDisabled(false);
   const orderDateInput = document.getElementById("order_date");
   if (orderDateInput) orderDateInput.value = getNowForDateTimeLocal();
   const clientTypeDealerCb = document.getElementById("client_type_dealer");
