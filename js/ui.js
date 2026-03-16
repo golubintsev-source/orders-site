@@ -13,6 +13,7 @@ import {
   phoneInput,
   cellTooltip,
   ordersTable,
+  message,
 } from "./dom.js";
 
 import { logout } from "./auth.js";
@@ -29,6 +30,7 @@ import {
   updateInstallerBlockByInstallationDate,
 } from "./orders.js";
 import { renderSelectedFiles } from "./files.js";
+import { saveInstallerRate, updateSettingsSaveButtonState } from "./settings.js";
 
 function switchSection(sectionId) {
   if (!sectionId || !sectionNavBtns.length || !contentSections.length) return;
@@ -162,10 +164,29 @@ export function bindUIEvents() {
 
   const installerCalcBtn = document.getElementById("installer_calc_btn");
   if (installerCalcBtn) installerCalcBtn.addEventListener("click", updateInstallerPaymentAmountFromArea);
+  const installerAmountEl = document.getElementById("installer_payment_amount");
+  if (installerAmountEl) {
+    installerAmountEl.addEventListener("input", updateInstallerBlockByInstallationDate);
+    installerAmountEl.addEventListener("change", updateInstallerBlockByInstallationDate);
+  }
 
   updatePaidField();
   updateConditionalRequiredHighlight();
   updateInstallerBlockByInstallationDate();
+
+  const settingsSaveInstallerRateBtn = document.getElementById("settingsSaveInstallerRateBtn");
+  const settingsInstallerRateInput = document.getElementById("settings_installer_rate_per_m2");
+  if (settingsSaveInstallerRateBtn && settingsInstallerRateInput) {
+    settingsSaveInstallerRateBtn.addEventListener("click", async () => {
+      const ok = await saveInstallerRate(settingsInstallerRateInput.value);
+      if (message) {
+        message.textContent = ok ? "Сохранено" : "Ошибка сохранения или неверное значение";
+        message.style.color = ok ? "" : "#d32f2f";
+      }
+    });
+    settingsInstallerRateInput.addEventListener("input", updateSettingsSaveButtonState);
+    settingsInstallerRateInput.addEventListener("change", updateSettingsSaveButtonState);
+  }
 
   if (clientSearch) {
     clientSearch.addEventListener("input", applyClientFilter);

@@ -372,9 +372,11 @@ export function updateInstallerBlockByInstallationDate() {
   block.classList.toggle(INSTALLER_BLOCK_INACTIVE_CLASS, !hasDate);
   if (rateEl) rateEl.disabled = !hasDate;
   if (calcBtn) calcBtn.disabled = !hasDate;
-  const amountByDisabled = !hasDate || state.installerPaymentDone;
-  if (amountEl) amountEl.disabled = amountByDisabled;
-  if (byEl) byEl.disabled = amountByDisabled;
+  const amountDisabled = !hasDate || state.installerPaymentDone;
+  if (amountEl) amountEl.disabled = amountDisabled;
+  const hasAmount = !!(amountEl && String(amountEl.value || "").trim());
+  const byDisabled = !hasDate || state.installerPaymentDone || !hasAmount;
+  if (byEl) byEl.disabled = byDisabled;
 }
 
 /** По умолчанию Сумма (монтаж) = Площадь м² × Монтаж 1м²; вызывается при изменении площади/ставки и при открытии/сбросе формы. */
@@ -384,8 +386,9 @@ export function updateInstallerPaymentAmountFromArea() {
   const areaEl = document.getElementById("area_m2");
   const rateEl = document.getElementById("installer_rate_per_m2");
   const area = parseFloat(areaEl?.value) || 0;
-  const rate = parseFloat(rateEl?.value) || 1400;
+  const rate = parseFloat(rateEl?.value) || (state.defaultInstallerRatePerM2 ?? 1400);
   amountEl.value = area > 0 && rate > 0 ? String(area * rate) : "";
+  updateInstallerBlockByInstallationDate();
 }
 
 /** При открытии заказа проверить, есть ли уже запись об оплате монтажнику; если да — заполнить и отключить блок. */
@@ -480,7 +483,7 @@ export function resetFormMode() {
   if (inst.byEl) inst.byEl.value = "";
   setInstallerPaymentBlockDisabled(false);
   const ratePerM2El = document.getElementById("installer_rate_per_m2");
-  if (ratePerM2El) ratePerM2El.value = "1400";
+  if (ratePerM2El) ratePerM2El.value = String(state.defaultInstallerRatePerM2 ?? 1400);
   const orderDateInput = document.getElementById("order_date");
   if (orderDateInput) orderDateInput.value = getNowForDateTimeLocal();
   const clientTypeDealerCb = document.getElementById("client_type_dealer");

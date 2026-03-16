@@ -28,6 +28,7 @@
       <button type="button" class="section-nav-btn active" data-section="all">Заказы</button>
       <button type="button" class="section-nav-btn" data-section="new">Новый</button>
       <button type="button" class="section-nav-btn" data-section="calculations">Расчеты</button>
+      <button type="button" class="section-nav-btn" data-section="settings">Настройки</button>
     </nav>
 
     <section id="section-new" class="content-section">
@@ -177,23 +178,10 @@
             </div>
           </div>
 
-          <div class="field installation-row">
-            <div class="installation-checkbox-wrap">
-              <label class="label-checkbox">
-                <input type="checkbox" id="reveals" />
-                Откосы
-              </label>
-            </div>
-            <div class="installation-date-inline" id="revealsDateWrap" style="display: none;">
-              <label for="reveals_date">Дата</label>
-              <input type="date" id="reveals_date" />
-            </div>
-          </div>
-
           <div class="field compact-fields-row installer-payment-one-row" id="installer_payment_block">
             <div class="field">
               <label for="installer_rate_per_m2">Монтаж 1м², руб</label>
-              <input type="number" step="0.01" min="0" id="installer_rate_per_m2" value="1400" />
+              <input type="number" step="0.01" min="0" id="installer_rate_per_m2" />
             </div>
             <div class="field installer-calc-wrap">
               <label>&nbsp;</label>
@@ -213,6 +201,19 @@
                 <option value="Вова">Вова</option>
                 <option value="Касса">Касса</option>
               </select>
+            </div>
+          </div>
+
+          <div class="field installation-row">
+            <div class="installation-checkbox-wrap">
+              <label class="label-checkbox">
+                <input type="checkbox" id="reveals" />
+                Откосы
+              </label>
+            </div>
+            <div class="installation-date-inline" id="revealsDateWrap" style="display: none;">
+              <label for="reveals_date">Дата</label>
+              <input type="date" id="reveals_date" />
             </div>
           </div>
 
@@ -363,6 +364,16 @@
           </table>
         </div>
         <p id="calculationsMessage"></p>
+      </div>
+    </section>
+
+    <section id="section-settings" class="content-section">
+      <div class="card">
+        <div class="settings-rate-row">
+          <label for="settings_installer_rate_per_m2">Стоимость монтажа 1м², руб</label>
+          <input type="number" step="0.01" min="0" id="settings_installer_rate_per_m2" />
+          <button type="button" id="settingsSaveInstallerRateBtn" class="btn-primary">Сохранить</button>
+        </div>
       </div>
     </section>
   </div>

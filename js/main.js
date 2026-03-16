@@ -2,6 +2,7 @@ import { checkAuth, loadProfile } from "./auth.js";
 import { bindUIEvents } from "./ui.js";
 import { loadOrders, resetFormMode, editOrder, deleteOrder } from "./orders.js";
 import { initCalculationsSection } from "./calculations.js";
+import { loadSettings } from "./settings.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { userInfo } from "./dom.js";
 import { message } from "./dom.js";
@@ -22,6 +23,7 @@ async function init() {
       userInfo.textContent = user.email;
     }
     await loadProfile();
+    await loadSettings();
     await loadOrders();
     resetFormMode();
     await initCalculationsSection();
