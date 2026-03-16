@@ -223,28 +223,63 @@ h2 {
   min-width: 0;
 }
 
-#section-new .installer-pay-btn-wrap {
+#section-new .installer-payment-one-row {
+  width: 100%;
+  gap: 16px;
+}
+
+#section-new .installer-payment-one-row > .field {
+  flex: 1;
+  min-width: 100px;
+}
+
+#section-new .installer-payment-one-row > .field.installer-calc-wrap {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+#section-new .installer-payment-one-row > .field label {
+  white-space: nowrap;
+}
+
+#section-new .installer-payment-one-row > .field input,
+#section-new .installer-payment-one-row > .field select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#installer_payment_block.installer-block-inactive {
+  background: #e5e7eb;
+  opacity: 0.9;
+  border-radius: 10px;
+}
+
+#section-new .installer-calc-wrap {
   flex: 0 0 auto;
 }
 
-#section-new .installer-pay-btn {
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  background: #1f6feb;
-  color: #fff;
-  border: none;
+#section-new .installer-calc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #d1d5db;
   border-radius: 8px;
+  background: #f9fafb;
+  color: #374151;
   cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
 }
 
-#section-new .installer-pay-btn:hover:not(:disabled) {
-  opacity: 0.95;
+#section-new .installer-calc-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
 }
 
-#section-new .installer-pay-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+#section-new .installer-calc-icon {
+  display: block;
 }
 
 #section-new .actions {
@@ -972,6 +1007,17 @@ th {
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
+}
+
+/* Сумма (монтаж) — как status-value (ID), но зелёный фон когда «Оплатил» заполнен */
+.installer-paid-value {
+  display: inline-block;
+  white-space: nowrap;
+  background: #e8f5e9;
+  color: #1b5e20;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
 }
 
 .paid-no-alert {

@@ -26,7 +26,7 @@ import {
   updateRemainingFromCostAndPrepayment,
   updateConditionalRequiredHighlight,
   updateInstallerPaymentAmountFromArea,
-  submitInstallerPayment,
+  updateInstallerBlockByInstallationDate,
 } from "./orders.js";
 import { renderSelectedFiles } from "./files.js";
 
@@ -142,7 +142,12 @@ export function bindUIEvents() {
     installationCb.addEventListener("change", () => {
       installationDateWrap.style.display = installationCb.checked ? "" : "none";
       if (!installationCb.checked && installationDateInput) installationDateInput.value = "";
+      updateInstallerBlockByInstallationDate();
     });
+  }
+  if (installationDateInput) {
+    installationDateInput.addEventListener("input", updateInstallerBlockByInstallationDate);
+    installationDateInput.addEventListener("change", updateInstallerBlockByInstallationDate);
   }
 
   const revealsCb = document.getElementById("reveals");
@@ -155,14 +160,12 @@ export function bindUIEvents() {
     });
   }
 
-  const areaM2El = document.getElementById("area_m2");
-  if (areaM2El) areaM2El.addEventListener("input", updateInstallerPaymentAmountFromArea);
-  const installerPayBtn = document.getElementById("installer_pay_btn");
-  if (installerPayBtn) installerPayBtn.addEventListener("click", () => submitInstallerPayment());
+  const installerCalcBtn = document.getElementById("installer_calc_btn");
+  if (installerCalcBtn) installerCalcBtn.addEventListener("click", updateInstallerPaymentAmountFromArea);
 
   updatePaidField();
   updateConditionalRequiredHighlight();
-  updateInstallerPaymentAmountFromArea();
+  updateInstallerBlockByInstallationDate();
 
   if (clientSearch) {
     clientSearch.addEventListener("input", applyClientFilter);

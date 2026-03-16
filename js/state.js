@@ -8,4 +8,6 @@ export const state = {
   filesCountMap: {},
   /** выбранные статусы для фильтра; пустой массив = показывать все */
   statusFilterSelected: [],
+  /** оплата монтажнику уже проведена по этой заявке — поля суммы и «кто оплатил» не включать */
+  installerPaymentDone: false,
 };
