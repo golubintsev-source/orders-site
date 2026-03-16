@@ -106,11 +106,10 @@ function formatDateDDMMYYYY(dateStr) {
   return `${d}.${m}.${y}`;
 }
 
+/** Оплачено в таблице только по полю "Кому остаток", без проверки суммы. */
 function isOrderPaid(order) {
-  const a = parseFloat(order.amount) || 0;
-  const p = parseFloat(order.prepayment) || 0;
-  const r = parseFloat(order.remaining_amount) || 0;
-  return Math.abs(a - (p + r)) < 0.01 && a > 0;
+  const raw = (order.remaining_to || "").trim();
+  return raw !== "" && raw !== "—";
 }
 
 function paidBadge(order) {
@@ -318,21 +317,14 @@ export function updateRemainingFromCostAndPrepayment() {
   remainingEl.value = remaining === 0 ? "0" : String(remaining);
 }
 
+/** Оплачено = "да" только если заполнено "Кому остаток" (select). Правило по сумме не используется. */
 export function updatePaidField() {
-  const amountEl = document.getElementById("amount");
-  const prepaymentEl = document.getElementById("prepayment");
-  const remainingEl = document.getElementById("remaining_amount");
   const remainingToEl = document.getElementById("remaining_to");
   const paidEl = document.getElementById("paid");
-  if (!amountEl || !prepaymentEl || !remainingEl || !paidEl) return;
-  const amount = parseFloat(amountEl.value) || 0;
-  const prepayment = parseFloat(prepaymentEl.value) || 0;
-  const remaining = parseFloat(remainingEl.value) || 0;
-  const sum = prepayment + remaining;
-  const remainingToFilled = (remainingToEl?.value || "").trim() !== "";
-  const isPaidBySum = Math.abs(amount - sum) < 0.01 && amount > 0;
-  const isPaid = isPaidBySum || remainingToFilled;
-  paidEl.value = isPaid ? "да" : "нет";
+  if (!paidEl || !remainingToEl || remainingToEl.tagName !== "SELECT") return;
+  const raw = (remainingToEl.value || "").trim();
+  const remainingToFilled = raw !== "" && raw !== "—";
+  paidEl.value = remainingToFilled ? "да" : "нет";
 }
 
 export function updateConditionalRequiredHighlight() {

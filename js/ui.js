@@ -116,7 +116,6 @@ export function bindUIEvents() {
     if (el) {
       el.addEventListener("input", () => {
         if (id === "amount" || id === "prepayment") updateRemainingFromCostAndPrepayment();
-        updatePaidField();
         updateConditionalRequiredHighlight();
       });
     }
@@ -128,6 +127,7 @@ export function bindUIEvents() {
         if (id === "remaining_to") updatePaidField();
         updateConditionalRequiredHighlight();
       });
+      if (id === "remaining_to") el.addEventListener("input", updatePaidField);
     }
   });
   const deliveryDateEl = document.getElementById("delivery_date");
@@ -202,7 +202,10 @@ export function bindUIEvents() {
       const idTd = e.target.closest("td.td-order-id");
       if (idTd) {
         const tr = idTd.closest("tr");
-        if (tr) tr.classList.toggle("row-highlighted");
+        const wasThisRowHighlighted = tr && tr.classList.contains("row-highlighted");
+        const tbody = ordersTable.querySelector("tbody");
+        if (tbody) tbody.querySelectorAll("tr.row-highlighted").forEach((row) => row.classList.remove("row-highlighted"));
+        if (tr && !wasThisRowHighlighted) tr.classList.add("row-highlighted");
         return;
       }
       if (!cellTooltip) return;
