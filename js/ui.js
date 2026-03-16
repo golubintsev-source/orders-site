@@ -197,9 +197,15 @@ export function bindUIEvents() {
     logoutBtn.addEventListener("click", logout);
   }
 
-  if (ordersTable && cellTooltip) {
-    let hideClick, hideKey;
+  if (ordersTable) {
     ordersTable.addEventListener("click", (e) => {
+      const idTd = e.target.closest("td.td-order-id");
+      if (idTd) {
+        const tr = idTd.closest("tr");
+        if (tr) tr.classList.toggle("row-highlighted");
+        return;
+      }
+      if (!cellTooltip) return;
       if (e.target.closest("a.tel-link")) return;
       const td = e.target.closest("td.td-truncate-name, td.td-truncate-address");
       if (!td) return;

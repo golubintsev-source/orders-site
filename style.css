@@ -669,6 +669,11 @@ th {
   height: 18px;
 }
 
+/* Подсветка строки по клику на ID */
+#ordersTable tr.row-highlighted td {
+  background-color: #e3f2fd;
+}
+
 #ordersTable a.btn-icon {
   text-decoration: none;
 }
