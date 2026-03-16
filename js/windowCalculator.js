@@ -20,6 +20,8 @@ import { SYSTEMS } from "./windowSystemKbe.js";
  * @property {number=} leftPartWidthMm - ширина левой части (для схем с импостом), мм
  * @property {"left"|"right"=} openingSide - сторона открывания (петли), только для одной створки
  * @property {"turn_tilt"|"turn_only"|"tilt_only"=} openingType - тип открывания: П/О, только поворот, только откид
+ * @property {number=} beadDeductionMm - технологический вычет для штапика, мм (по умолчанию 2)
+ * @property {number=} profileAllowanceMm - припуск на каждый профиль, мм (по умолчанию 0)
  */
 
 /**
@@ -47,7 +49,8 @@ import { SYSTEMS } from "./windowSystemKbe.js";
  *   sashes: ProfileCut[],
  *   glazingUnits: GlazingUnit[],
  *   reinforcement: ProfileCut[],
- *   hardware: any[]
+ *   hardware: any[],
+ *   beads: ProfileCut[]
  * }}
  */
 export function calculateWindow(input) {
@@ -60,14 +63,13 @@ export function calculateWindow(input) {
 
   validateSize(system, width, height);
 
+  let result;
   if (schema === "fixed") {
-    return calculateFixedWindow(system, width, height, input.system);
-  }
-  if (schema === "one_sash") {
-    return calculateOneSashWindow(system, width, height, input.system, input.openingSide, input.openingType);
-  }
-  if (schema === "one_sash_left_fixed") {
-    return calculateOneSashLeftFixedWindow(
+    result = calculateFixedWindow(system, width, height, input.system);
+  } else if (schema === "one_sash") {
+    result = calculateOneSashWindow(system, width, height, input.system, input.openingSide, input.openingType);
+  } else if (schema === "one_sash_left_fixed") {
+    result = calculateOneSashLeftFixedWindow(
       system,
       width,
       height,
@@ -76,9 +78,8 @@ export function calculateWindow(input) {
       input.openingSide,
       input.openingType
     );
-  }
-  if (schema === "fixed_left_one_sash") {
-    return calculateFixedLeftOneSashWindow(
+  } else if (schema === "fixed_left_one_sash") {
+    result = calculateFixedLeftOneSashWindow(
       system,
       width,
       height,
@@ -87,9 +88,48 @@ export function calculateWindow(input) {
       input.openingSide,
       input.openingType
     );
+  } else {
+    throw new Error(`Unsupported schema: ${schema}`);
   }
 
-  throw new Error(`Unsupported schema: ${schema}`);
+  const deduction = typeof input.beadDeductionMm === "number" && input.beadDeductionMm >= 0
+    ? input.beadDeductionMm
+    : 2;
+  result.beads = computeBeads(result.glazingUnits || [], deduction);
+
+  const allowance = typeof input.profileAllowanceMm === "number" && input.profileAllowanceMm > 0
+    ? input.profileAllowanceMm
+    : 0;
+  if (allowance > 0) {
+    if (result.profiles) {
+      result.profiles = result.profiles.map((p) => ({
+        ...p,
+        length: p.length + allowance,
+      }));
+    }
+    if (result.sashes) {
+      result.sashes = result.sashes.map((p) => ({
+        ...p,
+        length: p.length + allowance,
+      }));
+    }
+  }
+  return result;
+}
+
+/** По каждому стеклопакету — 4 штапика: 2 по ширине, 2 по высоте (с вычетом) */
+function computeBeads(glazingUnits, deductionMm) {
+  /** @type {ProfileCut[]} */
+  const beads = [];
+  glazingUnits.forEach((g) => {
+    const w = Math.max(0, g.width - deductionMm);
+    const h = Math.max(0, g.height - deductionMm);
+    beads.push({ element: `${g.element}_bead_w1`, profile: "bead", length: w });
+    beads.push({ element: `${g.element}_bead_w2`, profile: "bead", length: w });
+    beads.push({ element: `${g.element}_bead_h1`, profile: "bead", length: h });
+    beads.push({ element: `${g.element}_bead_h2`, profile: "bead", length: h });
+  });
+  return beads;
 }
 
 function validateSize(system, width, height) {

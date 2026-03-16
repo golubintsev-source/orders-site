@@ -54,6 +54,7 @@ function profileLabelRu(profile) {
     frame_reinforcement: "Армирование рамы",
     sash_reinforcement: "Армирование створки",
     impost_reinforcement: "Армирование импоста",
+    bead: "Штапик",
   };
   return map[profile] || profile;
 }
@@ -238,16 +239,17 @@ function renderResult(calc) {
   diagramBlock.appendChild(diagramWrap);
   container.appendChild(diagramBlock);
 
-  // Общая таблица «Профили и армирование»: столбцы Тип и Длина, мм; строки — профили, затем армирование
+  // Общая таблица «Профили и армирование»: профили, армирование, штапики
   const allProfiles = []
     .concat(calc.profiles || [])
     .concat(calc.sashes || []);
   const reinforcementList = calc.reinforcement || [];
+  const beadsList = calc.beads || [];
   const quantityEl = document.getElementById("winQuantity");
   const quantityRaw = quantityEl && quantityEl.value !== "" ? Number(quantityEl.value) : 1;
   const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.round(quantityRaw) : 1;
 
-  if (allProfiles.length || reinforcementList.length) {
+  if (allProfiles.length || reinforcementList.length || beadsList.length) {
     const block = document.createElement("div");
     block.className = "results-block";
 
@@ -290,12 +292,32 @@ function renderResult(calc) {
       rowsMap.set(key, (prev || 0) + quantity);
     });
 
+    beadsList.forEach((b) => {
+      const type = profileLabelRu(b.profile);
+      const len = b.length;
+      const key = `${type}___${len}`;
+      const prev = rowsMap.get(key);
+      rowsMap.set(key, (prev || 0) + quantity);
+    });
+
+    const typeOrder = {
+      "Рама": 1,
+      "Армирование рамы": 2,
+      "Импост": 3,
+      "Армирование импоста": 4,
+      "Створка": 5,
+      "Армирование створки": 6,
+      "Штапик": 7,
+    };
+
     Array.from(rowsMap.entries())
       .sort((a, b) => {
         const [typeA, lenA] = a[0].split("___");
         const [typeB, lenB] = b[0].split("___");
-        if (typeA === typeB) return Number(lenA) - Number(lenB);
-        return typeA.localeCompare(typeB, "ru");
+        const orderA = typeOrder[typeA] ?? 99;
+        const orderB = typeOrder[typeB] ?? 99;
+        if (orderA !== orderB) return orderA - orderB;
+        return Number(lenA) - Number(lenB);
       })
       .forEach(([key, count]) => {
         const [type, len] = key.split("___");
@@ -416,11 +438,6 @@ function renderResult(calc) {
     container.appendChild(block);
   }
 
-  // Сырой JSON (для проверки логики)
-  const jsonBlock = document.createElement("pre");
-  jsonBlock.className = "results-raw-json";
-  jsonBlock.textContent = JSON.stringify(calc, null, 2);
-  container.appendChild(jsonBlock);
 }
 
 function setupForm() {
@@ -484,6 +501,18 @@ function setupForm() {
     const openingSide = document.getElementById("winOpeningSide")?.value || "right";
     const openingType = document.getElementById("winOpeningType")?.value || "turn_tilt";
 
+    const beadDeductionEl = document.getElementById("winBeadDeduction");
+    const beadDeductionRaw =
+      beadDeductionEl && beadDeductionEl.value !== "" ? Number(beadDeductionEl.value) : 2;
+    const beadDeductionMm =
+      Number.isFinite(beadDeductionRaw) && beadDeductionRaw >= 0 ? beadDeductionRaw : 2;
+
+    const profileAllowanceEl = document.getElementById("winProfileAllowance");
+    const profileAllowanceRaw =
+      profileAllowanceEl && profileAllowanceEl.value !== "" ? Number(profileAllowanceEl.value) : 0;
+    const profileAllowanceMm =
+      Number.isFinite(profileAllowanceRaw) && profileAllowanceRaw >= 0 ? profileAllowanceRaw : 0;
+
     try {
       const calc = calculateWindow({
         system: "KBE_70",
@@ -493,6 +522,8 @@ function setupForm() {
         leftPartWidthMm,
         openingSide,
         openingType,
+        beadDeductionMm,
+        profileAllowanceMm,
       });
       setMessage("", false);
       renderResult(calc);

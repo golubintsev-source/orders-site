@@ -143,8 +143,16 @@
             </select>
           </div>
           <div class="field">
-            <label for="winQuantity">Кол-во</label>
+            <label for="winQuantity">Кол-во окон</label>
             <input type="number" id="winQuantity" min="1" step="1" value="1" />
+          </div>
+          <div class="field">
+            <label for="winBeadDeduction">Вычет штапика, мм</label>
+            <input type="number" id="winBeadDeduction" min="0" step="0.5" value="2" title="Технологический вычет для длины штапика" />
+          </div>
+          <div class="field">
+            <label for="winProfileAllowance">Припуск на профиль, мм</label>
+            <input type="number" id="winProfileAllowance" min="0" step="0.5" value="6" title="Дополнительная длина на каждый профиль для спайки" />
           </div>
         </div>
         <button type="submit" class="calculations-submit-btn">Рассчитать</button>
