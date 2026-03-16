@@ -234,6 +234,7 @@ export function bindUIEvents() {
 
   function showCellTooltip(td) {
     if (!cellTooltip || !td) return;
+    if (td.scrollWidth <= td.clientWidth) return;
     const raw = td.getAttribute("data-fulltext") || td.getAttribute("title");
     if (!raw) return;
     const decodeEl = document.createElement("div");
