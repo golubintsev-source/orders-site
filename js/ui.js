@@ -242,9 +242,8 @@ export function bindUIEvents() {
       }
       if (!cellTooltip) return;
       if (e.target.closest("a.tel-link")) return;
-      const td = e.target.closest("td.td-truncate-name, td.td-truncate-address");
+      const td = e.target.closest("td.td-truncate-name, td.td-truncate-address, td.td-truncate-description");
       if (!td) return;
-      if (td.scrollWidth <= td.clientWidth) return;
       const raw = td.getAttribute("data-fulltext") || td.getAttribute("title");
       if (!raw) return;
       const decodeEl = document.createElement("div");

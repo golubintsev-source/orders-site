@@ -994,8 +994,16 @@ th {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+#ordersTable th:nth-child(6),
+#ordersTable td.td-truncate-description {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 #ordersTable td.td-truncate-name,
-#ordersTable td.td-truncate-address {
+#ordersTable td.td-truncate-address,
+#ordersTable td.td-truncate-description {
   cursor: help;
 }
 .cell-tooltip {
@@ -1021,17 +1029,6 @@ th {
   display: inline-block;
   white-space: nowrap;
   background: #f3f4f6;
-  color: #374151;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 13px;
-}
-
-/* Клиент — как status-value (ID), но жёлтый фон для заказов с типом Диллер */
-.client-dealer-value {
-  display: inline-block;
-  white-space: nowrap;
-  background: #fff7cc;
   color: #374151;
   padding: 4px 8px;
   border-radius: 6px;

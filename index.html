@@ -61,6 +61,11 @@
             <input type="text" id="address" />
           </div>
 
+          <div class="field full">
+            <label for="description">Описание</label>
+            <input type="text" id="description" />
+          </div>
+
           <div class="field">
             <label>Статус</label>
             <select id="payment_status">
@@ -217,11 +222,6 @@
             </div>
           </div>
 
-          <div class="field full">
-            <label>Добавить комментарий</label>
-            <textarea id="description"></textarea>
-          </div>
-
           <div class="field full file-upload-group">
             <label for="attachments">Фото и документы</label>
 
@@ -280,6 +280,7 @@
               <th>ID</th>
               <th>Клиент</th>
               <th>Адрес</th>
+              <th>Описание</th>
               <th class="th-status-header">
                 <span class="th-status-label">Статус</span>
                 <button type="button" class="status-filter-btn" id="statusFilterBtn" title="Фильтр по статусу" aria-haspopup="true" aria-expanded="false">

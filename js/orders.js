@@ -146,6 +146,7 @@ export function renderOrders(orders) {
     const telHref = phone ? "tel:" + phone.replace(/[^\d+]/g, "") : "";
     const client = order.client ?? "";
     const address = order.address ?? "";
+    const description = order.description ?? "";
     const clientCell = client ? escapeHtml(client) : "";
     const phoneCallIcon = phone
       ? `<a href="${escapeAttr(telHref)}" class="btn-icon btn-phone-call" title="Позвонить"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></a>`
@@ -155,8 +156,9 @@ export function renderOrders(orders) {
         <td class="td-phone-call">${phoneCallIcon}</td>
         <td class="td-actions">${editIcon}${filesIcon}</td>
         <td class="td-order-id"><span class="status-value">${order.id != null ? String(order.id).padStart(4, "0") : ""}</span></td>
-        <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${order.client_type === "Диллер" && clientCell ? `<span class="client-dealer-value">${clientCell}</span>` : clientCell}</td>
+        <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${clientCell}</td>
         <td class="td-truncate-address" data-fulltext="${escapeAttr(address)}">${escapeHtml(address)}</td>
+        <td class="td-truncate-description" data-fulltext="${escapeAttr(description)}">${escapeHtml(description)}</td>
         <td>
           <span class="status-value">
             ${order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом")}
@@ -182,7 +184,7 @@ export function renderOrders(orders) {
     table.innerHTML += row;
   });
 
-  table.querySelectorAll(".td-truncate-name, .td-truncate-address").forEach((cell) => {
+  table.querySelectorAll(".td-truncate-name, .td-truncate-address, .td-truncate-description").forEach((cell) => {
     const full = cell.getAttribute("data-fulltext");
     if (full && cell.scrollWidth > cell.clientWidth) {
       cell.setAttribute("title", full);
@@ -429,7 +431,7 @@ export function fillForm(order) {
   const orderDateVal = order.order_date || "";
   document.getElementById("order_date").value = orderDateVal.includes("T") ? orderDateVal.slice(0, 16) : (orderDateVal ? orderDateVal + "T00:00" : "");
   document.getElementById("order_number").value = order.order_number || "";
-  document.getElementById("description").value = "";
+  document.getElementById("description").value = order.description ?? "";
   document.getElementById("amount").value = order.amount ?? "";
   document.getElementById("prepayment").value = order.prepayment ?? "";
   document.getElementById("prepayment_to").value = order.prepayment_to || "";
