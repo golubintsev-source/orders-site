@@ -386,6 +386,12 @@ export async function submitInstallerPayment() {
     message.style.color = "#d32f2f";
     return;
   }
+  if (orderId != null && state.currentUser?.email) {
+    const historyComment = `Оплата за монтаж: ${formatAmount(amount)} руб, оплатил: ${who}`;
+    await supabaseClient.from("order_history").insert([
+      { order_id: orderId, user_email: state.currentUser.email, comment: historyComment },
+    ]);
+  }
   message.textContent = "Оплата монтажнику добавлена в Расчёты";
   message.style.color = "";
   setInstallerPaymentBlockDisabled(true);
@@ -679,6 +685,7 @@ export async function submitOrderForm(event) {
   if (!wasEditing && savedOrderId && state.currentUser?.email) {
     const historyRows = [
       { order_id: savedOrderId, user_email: state.currentUser.email, comment: "Заказ создан" },
+      { order_id: savedOrderId, user_email: state.currentUser.email, comment: `Статус: ${newStatus || "Контакт с клиентом"}` },
     ];
     if (addCommentText) {
       historyRows.push({ order_id: savedOrderId, user_email: state.currentUser.email, comment: addCommentText });
