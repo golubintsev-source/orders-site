@@ -268,7 +268,6 @@ export function getFormData() {
   return {
     phone: document.getElementById("phone").value.trim() || null,
     client: document.getElementById("client").value.trim() || null,
-    client_type: document.getElementById("client_type_dealer")?.checked ? "Диллер" : "Частник",
     address: document.getElementById("address").value.trim() || null,
     payment_status: document.getElementById("payment_status").value.trim() || null,
     order_date: document.getElementById("order_date").value || null,
@@ -415,8 +414,6 @@ export function fillForm(order) {
   document.getElementById("phone").value = order.phone || "";
   document.getElementById("phone").dispatchEvent(new Event("input", { bubbles: true }));
   document.getElementById("client").value = order.client || "";
-  const clientTypeDealerCb = document.getElementById("client_type_dealer");
-  if (clientTypeDealerCb) clientTypeDealerCb.checked = order.client_type === "Диллер";
   document.getElementById("address").value = order.address || "";
   const statusVal = order.payment_status || "";
   const displayStatus = statusVal === "нет" || statusVal === "оплачен" || !statusVal
@@ -488,8 +485,6 @@ export function resetFormMode() {
   if (ratePerM2El) ratePerM2El.value = String(state.defaultInstallerRatePerM2 ?? 1400);
   const orderDateInput = document.getElementById("order_date");
   if (orderDateInput) orderDateInput.value = getNowForDateTimeLocal();
-  const clientTypeDealerCb = document.getElementById("client_type_dealer");
-  if (clientTypeDealerCb) clientTypeDealerCb.checked = false;
   const installationCb = document.getElementById("installation");
   const installationDateWrap = document.getElementById("installationDateWrap");
   const installationDateInput = document.getElementById("installation_date");
