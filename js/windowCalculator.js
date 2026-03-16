@@ -361,6 +361,7 @@ function calculateFixedLeftOneSashWindow(
   height,
   systemId,
   leftPartWidthMm,
+  openingSide,
   openingType
 ) {
   const { frameProfile, sashProfile, impostProfile, clearances, glazingTechnology } = system;
