@@ -271,6 +271,10 @@ export function bindUIEvents() {
 
   if (ordersTable && cellTooltip) {
     ordersTable.addEventListener("click", (e) => {
+      if (cellTooltip.classList.contains("visible") && tooltipHideClick) {
+        tooltipHideClick();
+        return;
+      }
       const idTd = e.target.closest("td.td-order-id");
       if (idTd) {
         const tr = idTd.closest("tr");
@@ -288,6 +292,11 @@ export function bindUIEvents() {
       }
     });
     ordersTable.addEventListener("touchend", (e) => {
+      if (cellTooltip.classList.contains("visible") && tooltipHideClick) {
+        tooltipHideClick();
+        e.preventDefault();
+        return;
+      }
       if (e.target.closest("a.tel-link")) return;
       const td = e.target.closest("td.td-truncate-name, td.td-truncate-address, td.td-truncate-description");
       if (!td) return;
