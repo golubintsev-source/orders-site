@@ -69,12 +69,22 @@ function buildDiagramSvg({ widthMm, heightMm, schema, leftPartWidthMm, openingSi
   const padL = 70;
   const padT = 24;
   const padR = 24;
-  const padB = 48;
+  const padB = 52;
 
-  const rectX = padL;
-  const rectY = padT;
-  const rectW = vbW - padL - padR;
-  const rectH = vbH - padT - padB;
+  // Область под рисунок окна; вписываем с сохранением пропорций widthMm : heightMm
+  const maxW = vbW - padL - padR;
+  const maxH = vbH - padT - padB;
+  const aspect = widthMm / heightMm;
+  let rectW; let rectH;
+  if (aspect >= maxW / maxH) {
+    rectW = maxW;
+    rectH = maxW / aspect;
+  } else {
+    rectH = maxH;
+    rectW = maxH * aspect;
+  }
+  const rectX = padL + (maxW - rectW) / 2;
+  const rectY = padT + (maxH - rectH) / 2;
 
   const hasImpost = schema === "one_sash_left_fixed" || schema === "fixed_left_one_sash";
   const leftW = typeof leftPartWidthMm === "number" && Number.isFinite(leftPartWidthMm) && leftPartWidthMm > 0
@@ -89,41 +99,47 @@ function buildDiagramSvg({ widthMm, heightMm, schema, leftPartWidthMm, openingSi
     schema === "fixed_left_one_sash" ? "right" :
     null;
 
-  // Ручка: для одной створки и для импостных — по выбранной стороне открывания
+  // Петли: слева true, справа false (сторона открывания = где ручка; петли с противоположной стороны)
   const hingeLeft =
     sashSide === "full" ? openingSide === "left" :
     sashSide === "left" ? openingSide === "left" :
     sashSide === "right" ? openingSide === "left" :
     false;
-  const handleX =
-    sashSide === "full"
-      ? hingeLeft ? rectX + 16 : rectX + rectW - 16
-      : sashSide === "left"
-        ? hingeLeft ? rectX + 16 : (impostX != null ? impostX - 16 : rectX + rectW / 2 - 16)
-        : sashSide === "right"
-          ? hingeLeft ? (impostX != null ? impostX + 16 : rectX + rectW / 2 + 16) : rectX + rectW - 16
-          : null;
-  const handleY = rectY + rectH / 2;
+
+  // Прямоугольник створки внутри рамы
+  let sx; let sy; let sw; let sh;
+  if (sashSide === "full") {
+    sx = rectX + 6; sy = rectY + 6; sw = rectW - 12; sh = rectH - 12;
+  } else if (sashSide === "left" && impostX != null) {
+    sx = rectX + 6; sy = rectY + 6; sw = (impostX - rectX) - 12; sh = rectH - 12;
+  } else if (sashSide === "right" && impostX != null) {
+    sx = impostX + 6; sy = rectY + 6; sw = (rectX + rectW - impostX) - 12; sh = rectH - 12;
+  } else {
+    sx = rectX; sy = rectY; sw = rectW; sh = rectH;
+  }
+
+  const lineStroke = 'stroke="#1f6feb" stroke-width="1.5"';
+  // Открывание: шеврон от стороны петель к середине противоположной (как на фото — петли слева, галочка вправо)
+  let openingChevron = "";
+  if (sashSide != null && sw > 0 && sh > 0) {
+    const midY = sy + sh / 2;
+    if (hingeLeft) {
+      openingChevron = `<line x1="${sx}" y1="${sy}" x2="${sx + sw}" y2="${midY}" fill="none" ${lineStroke} /><line x1="${sx}" y1="${sy + sh}" x2="${sx + sw}" y2="${midY}" fill="none" ${lineStroke} />`;
+    } else {
+      openingChevron = `<line x1="${sx + sw}" y1="${sy}" x2="${sx}" y2="${midY}" fill="none" ${lineStroke} /><line x1="${sx + sw}" y1="${sy + sh}" x2="${sx}" y2="${midY}" fill="none" ${lineStroke} />`;
+    }
+  }
 
   const showTilt = (openingType === "turn_tilt" || openingType === "tilt_only") && sashSide != null;
   // Откидывание: перевёрнутая V — от нижних углов створки к середине верха (верх откидывается)
-  const tiltStroke = 'stroke="#1f6feb" stroke-width="1.5"';
   let tiltPath = "";
   if (showTilt) {
-    let sx; let sy; let sw; let sh;
-    if (sashSide === "full") {
-      sx = rectX + 6; sy = rectY + 6; sw = rectW - 12; sh = rectH - 12;
-    } else if (sashSide === "left" && impostX != null) {
-      sx = rectX + 6; sy = rectY + 6; sw = (impostX - rectX) - 12; sh = rectH - 12;
-    } else if (sashSide === "right" && impostX != null) {
-      sx = impostX + 6; sy = rectY + 6; sw = (rectX + rectW - impostX) - 12; sh = rectH - 12;
-    } else { sx = rectX; sy = rectY; sw = rectW; sh = rectH; }
     const topCenterX = sx + sw / 2;
     const topY = sy;
     const bottomY = sy + sh;
     tiltPath = [
-      `<line x1="${sx}" y1="${bottomY}" x2="${topCenterX}" y2="${topY}" fill="none" ${tiltStroke} />`,
-      `<line x1="${sx + sw}" y1="${bottomY}" x2="${topCenterX}" y2="${topY}" fill="none" ${tiltStroke} />`,
+      `<line x1="${sx}" y1="${bottomY}" x2="${topCenterX}" y2="${topY}" fill="none" ${lineStroke} />`,
+      `<line x1="${sx + sw}" y1="${bottomY}" x2="${topCenterX}" y2="${topY}" fill="none" ${lineStroke} />`,
     ].join("");
   }
 
@@ -133,7 +149,10 @@ function buildDiagramSvg({ widthMm, heightMm, schema, leftPartWidthMm, openingSi
   return `
   <svg class="diagram-svg" viewBox="0 0 ${vbW} ${vbH}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Схема окна">
     <defs>
-      <marker id="arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+      <marker id="arrowEnd" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 Z" fill="#6b7280" />
+      </marker>
+      <marker id="arrowStart" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse">
         <path d="M0,0 L8,4 L0,8 Z" fill="#6b7280" />
       </marker>
     </defs>
@@ -156,31 +175,24 @@ function buildDiagramSvg({ widthMm, heightMm, schema, leftPartWidthMm, openingSi
             : ""
     }
 
+    ${openingChevron}
+
     ${tiltPath}
 
-    ${
-      handleX != null
-        ? `<circle cx="${handleX}" cy="${handleY}" r="5" fill="#1f6feb" />`
-        : ""
-    }
-
-    <line x1="${rectX}" y1="${rectY + rectH + 22}" x2="${rectX + rectW}" y2="${rectY + rectH + 22}" stroke="#6b7280" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+    <line x1="${rectX}" y1="${rectY + rectH + 22}" x2="${rectX + rectW}" y2="${rectY + rectH + 22}" stroke="#6b7280" stroke-width="1.5" marker-start="url(#arrowStart)" marker-end="url(#arrowEnd)" />
     <text x="${rectX + rectW / 2}" y="${rectY + rectH + 40}" text-anchor="middle" font-size="13" fill="#374151">${safe(widthMm)} мм</text>
 
-    <line x1="${rectX - 32}" y1="${rectY}" x2="${rectX - 32}" y2="${rectY + rectH}" stroke="#6b7280" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+    <line x1="${rectX - 32}" y1="${rectY}" x2="${rectX - 32}" y2="${rectY + rectH}" stroke="#6b7280" stroke-width="1.5" marker-start="url(#arrowStart)" marker-end="url(#arrowEnd)" />
     <text x="${rectX - 46}" y="${rectY + rectH / 2}" text-anchor="middle" font-size="13" fill="#374151" transform="rotate(-90 ${rectX - 46} ${rectY + rectH / 2})">${safe(heightMm)} мм</text>
 
     ${
       hasImpost
         ? `
-          <line x1="${rectX}" y1="${rectY + rectH + 6}" x2="${impostX}" y2="${rectY + rectH + 6}" stroke="#9ca3af" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)" />
-          <text x="${rectX + (impostX - rectX) / 2}" y="${rectY + rectH + 18}" text-anchor="middle" font-size="12" fill="#6b7280">левая часть: ${safe(Math.round(leftW))} мм</text>
+          <line x1="${rectX}" y1="${rectY + rectH + 6}" x2="${impostX}" y2="${rectY + rectH + 6}" stroke="#9ca3af" stroke-width="1.5" marker-start="url(#arrowStart)" marker-end="url(#arrowEnd)" />
+          <text x="${rectX + (impostX - rectX) / 2}" y="${rectY + rectH + 18}" text-anchor="middle" font-size="12" fill="#6b7280">${safe(Math.round(leftW))} мм</text>
         `
         : ""
     }
-
-    <text x="${rectX}" y="${rectY - 6}" text-anchor="start" font-size="12" fill="#6b7280">${safe(schemaLabel)}</text>
-    ${showTilt ? `<text x="${rectX + rectW - 85}" y="${rectY + rectH + 52}" text-anchor="start" font-size="12" fill="#374151">ОТКИДНОЕ</text>` : ""}
   </svg>
   `;
 }
@@ -226,14 +238,22 @@ function renderResult(calc) {
   diagramBlock.appendChild(diagramWrap);
   container.appendChild(diagramBlock);
 
-  // Таблица профилей (рама + створка)
-  if ((calc.profiles && calc.profiles.length) || (calc.sashes && calc.sashes.length)) {
+  // Общая таблица «Профили и армирование»: столбцы Тип и Длина, мм; строки — профили, затем армирование
+  const allProfiles = []
+    .concat(calc.profiles || [])
+    .concat(calc.sashes || []);
+  const reinforcementList = calc.reinforcement || [];
+  const quantityEl = document.getElementById("winQuantity");
+  const quantityRaw = quantityEl && quantityEl.value !== "" ? Number(quantityEl.value) : 1;
+  const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.round(quantityRaw) : 1;
+
+  if (allProfiles.length || reinforcementList.length) {
     const block = document.createElement("div");
     block.className = "results-block";
 
     const title = document.createElement("p");
     title.className = "results-title";
-    title.textContent = "Профили (распил, мм)";
+    title.textContent = "Профили и армирование";
     block.appendChild(title);
 
     const table = document.createElement("table");
@@ -243,66 +263,50 @@ function renderResult(calc) {
     thead.innerHTML = `
       <tr>
         <th>Элемент</th>
-        <th>Тип профиля</th>
         <th>Длина, мм</th>
+        <th>Кол-во</th>
       </tr>
     `;
     table.appendChild(thead);
 
     const tbody = document.createElement("tbody");
 
-    const allProfiles = []
-      .concat(calc.profiles || [])
-      .concat(calc.sashes || []);
+    // Группируем по (тип, длина)
+    const rowsMap = new Map();
 
     allProfiles.forEach((p) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${elementLabelRu(p.element)}</td>
-        <td>${profileLabelRu(p.profile)}</td>
-        <td>${p.length}</td>
-      `;
-      tbody.appendChild(tr);
+      const type = profileLabelRu(p.profile);
+      const len = p.length;
+      const key = `${type}___${len}`;
+      const prev = rowsMap.get(key);
+      rowsMap.set(key, (prev || 0) + quantity);
     });
 
-    table.appendChild(tbody);
-    block.appendChild(table);
-    container.appendChild(block);
-  }
-
-  // Таблица армирования (металл)
-  if (calc.reinforcement && calc.reinforcement.length) {
-    const block = document.createElement("div");
-    block.className = "results-block";
-
-    const title = document.createElement("p");
-    title.className = "results-title";
-    title.textContent = "Армирование (металл)";
-    block.appendChild(title);
-
-    const table = document.createElement("table");
-    table.className = "results-table";
-
-    const thead = document.createElement("thead");
-    thead.innerHTML = `
-      <tr>
-        <th>Элемент</th>
-        <th>Тип</th>
-        <th>Длина, мм</th>
-      </tr>
-    `;
-    table.appendChild(thead);
-
-    const tbody = document.createElement("tbody");
-    calc.reinforcement.forEach((r) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${elementLabelRu(r.element)}</td>
-        <td>${profileLabelRu(r.profile)}</td>
-        <td>${r.length}</td>
-      `;
-      tbody.appendChild(tr);
+    reinforcementList.forEach((r) => {
+      const type = profileLabelRu(r.profile);
+      const len = r.length;
+      const key = `${type}___${len}`;
+      const prev = rowsMap.get(key);
+      rowsMap.set(key, (prev || 0) + quantity);
     });
+
+    Array.from(rowsMap.entries())
+      .sort((a, b) => {
+        const [typeA, lenA] = a[0].split("___");
+        const [typeB, lenB] = b[0].split("___");
+        if (typeA === typeB) return Number(lenA) - Number(lenB);
+        return typeA.localeCompare(typeB, "ru");
+      })
+      .forEach(([key, count]) => {
+        const [type, len] = key.split("___");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${type}</td>
+          <td>${len}</td>
+          <td>${count}</td>
+        `;
+        tbody.appendChild(tr);
+      });
     table.appendChild(tbody);
     block.appendChild(table);
     container.appendChild(block);
@@ -330,12 +334,17 @@ function renderResult(calc) {
         <th>Тип открывания</th>
         <th>Размер, мм</th>
         <th>Сторона петель</th>
+        <th>Кол-во</th>
       </tr>
     `;
     table.appendChild(thead);
 
     const openingTypeLabels = { turn_tilt: "П/О", turn_only: "П", tilt_only: "О" };
     const tbody = document.createElement("tbody");
+    const quantityElHw = document.getElementById("winQuantity");
+    const quantityRawHw = quantityElHw && quantityElHw.value !== "" ? Number(quantityElHw.value) : 1;
+    const quantityHw =
+      Number.isFinite(quantityRawHw) && quantityRawHw > 0 ? Math.round(quantityRawHw) : 1;
     calc.hardware.forEach((h) => {
       const tr = document.createElement("tr");
       const sideLabel =
@@ -350,6 +359,7 @@ function renderResult(calc) {
         <td>${typeLabel}</td>
         <td>${h.width} × ${h.height}</td>
         <td>${sideLabel}</td>
+        <td>${quantityHw}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -378,11 +388,18 @@ function renderResult(calc) {
         <th>Ширина, мм</th>
         <th>Высота, мм</th>
         <th>Структура</th>
+        <th>Кол-во</th>
       </tr>
     `;
     table.appendChild(thead);
 
     const tbody = document.createElement("tbody");
+    const quantityElGlass = document.getElementById("winQuantity");
+    const quantityRawGlass =
+      quantityElGlass && quantityElGlass.value !== "" ? Number(quantityElGlass.value) : 1;
+    const quantityGlass =
+      Number.isFinite(quantityRawGlass) && quantityRawGlass > 0 ? Math.round(quantityRawGlass) : 1;
+
     calc.glazingUnits.forEach((g) => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -390,6 +407,7 @@ function renderResult(calc) {
         <td>${g.width}</td>
         <td>${g.height}</td>
         <td>${g.structure}</td>
+        <td>${quantityGlass}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -460,6 +478,9 @@ function setupForm() {
     const schema = schemaElLocal.value;
     const leftPartWidthMm =
       leftInputLocal && leftInputLocal.value !== "" ? Number(leftInputLocal.value) : undefined;
+    const quantityEl = document.getElementById("winQuantity");
+    const quantityRaw = quantityEl && quantityEl.value !== "" ? Number(quantityEl.value) : 1;
+    const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.round(quantityRaw) : 1;
     const openingSide = document.getElementById("winOpeningSide")?.value || "right";
     const openingType = document.getElementById("winOpeningType")?.value || "turn_tilt";
 
