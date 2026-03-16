@@ -155,7 +155,7 @@ export function renderOrders(orders) {
         <td class="td-phone-call">${phoneCallIcon}</td>
         <td class="td-actions">${editIcon}${historyIcon}${filesIcon}</td>
         <td class="td-order-id"><span class="status-value">${order.id != null ? String(order.id).padStart(4, "0") : ""}</span></td>
-        <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${clientCell}</td>
+        <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${order.client_type === "Диллер" && clientCell ? `<span class="client-dealer-value">${clientCell}</span>` : clientCell}</td>
         <td class="td-truncate-address" data-fulltext="${escapeAttr(address)}">${escapeHtml(address)}</td>
         <td>
           <span class="status-value">
@@ -303,32 +303,46 @@ export function getFormData() {
   };
 }
 
+/** Автозаполнение Остаток = Стоимость - Предоплата, если Стоимость заполнена */
+export function updateRemainingFromCostAndPrepayment() {
+  const amountEl = document.getElementById("amount");
+  const prepaymentEl = document.getElementById("prepayment");
+  const remainingEl = document.getElementById("remaining_amount");
+  if (!amountEl || !prepaymentEl || !remainingEl) return;
+  const amountVal = (amountEl.value || "").trim();
+  if (amountVal === "") return;
+  const amount = parseFloat(amountVal);
+  if (Number.isNaN(amount)) return;
+  const prepayment = parseFloat(prepaymentEl.value) || 0;
+  const remaining = amount - prepayment;
+  remainingEl.value = remaining === 0 ? "0" : String(remaining);
+}
+
 export function updatePaidField() {
   const amountEl = document.getElementById("amount");
   const prepaymentEl = document.getElementById("prepayment");
   const remainingEl = document.getElementById("remaining_amount");
+  const remainingToEl = document.getElementById("remaining_to");
   const paidEl = document.getElementById("paid");
   if (!amountEl || !prepaymentEl || !remainingEl || !paidEl) return;
   const amount = parseFloat(amountEl.value) || 0;
   const prepayment = parseFloat(prepaymentEl.value) || 0;
   const remaining = parseFloat(remainingEl.value) || 0;
   const sum = prepayment + remaining;
-  const isPaid = Math.abs(amount - sum) < 0.01 && amount > 0;
+  const remainingToFilled = (remainingToEl?.value || "").trim() !== "";
+  const isPaidBySum = Math.abs(amount - sum) < 0.01 && amount > 0;
+  const isPaid = isPaidBySum || remainingToFilled;
   paidEl.value = isPaid ? "да" : "нет";
 }
 
 export function updateConditionalRequiredHighlight() {
   const prepaymentVal = (document.getElementById("prepayment")?.value || "").trim();
   const prepaymentToVal = (document.getElementById("prepayment_to")?.value || "").trim();
-  const remainingVal = (document.getElementById("remaining_amount")?.value || "").trim();
-  const remainingToVal = (document.getElementById("remaining_to")?.value || "").trim();
   const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
   const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
   const prepaymentToEl = document.getElementById("prepayment_to");
-  const remainingToEl = document.getElementById("remaining_to");
   const deliveryDateEl = document.getElementById("delivery_date");
   if (prepaymentToEl) prepaymentToEl.classList.toggle("conditional-invalid", !!prepaymentVal && !prepaymentToVal);
-  if (remainingToEl) remainingToEl.classList.toggle("conditional-invalid", !!remainingVal && !remainingToVal);
   if (deliveryDateEl) deliveryDateEl.classList.toggle("conditional-invalid", !!deliveryVal && !deliveryDateVal);
 }
 
@@ -528,11 +542,8 @@ export async function submitOrderForm(event) {
 
   const prepaymentVal = (document.getElementById("prepayment")?.value || "").trim();
   const prepaymentToVal = (document.getElementById("prepayment_to")?.value || "").trim();
-  const remainingVal = (document.getElementById("remaining_amount")?.value || "").trim();
-  const remainingToVal = (document.getElementById("remaining_to")?.value || "").trim();
   const conditionalMissing = [];
   if (prepaymentVal && !prepaymentToVal) conditionalMissing.push("Кому предоплата");
-  if (remainingVal && !remainingToVal) conditionalMissing.push("Кому остаток");
   const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
   const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
   if (deliveryVal && !deliveryDateVal) conditionalMissing.push("Дата");

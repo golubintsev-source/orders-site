@@ -923,6 +923,17 @@ th {
   font-size: 13px;
 }
 
+/* Клиент — как status-value (ID), но жёлтый фон для заказов с типом Диллер */
+.client-dealer-value {
+  display: inline-block;
+  white-space: nowrap;
+  background: #fff7cc;
+  color: #374151;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
 .status-paid {
   display: inline-block;
   white-space: nowrap;

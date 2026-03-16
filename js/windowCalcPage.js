@@ -1,4 +1,5 @@
 import { calculateWindow } from "./windowCalculator.js";
+import { GRID_PRESETS, resolveRowHeights, resolveColumnWidths } from "./windowGridSchema.js";
 
 function setMessage(text, isError) {
   const el = document.getElementById("windowCalcMessage");
@@ -43,7 +44,19 @@ function elementLabelRu(element) {
     fixed_glazing_left: "Стеклопакет глухой (левый)",
     sash_1: "Створка 1",
   };
-  return map[s] || s;
+  if (map[s]) return map[s];
+  const cellMatch = s.match(/^cell_(\d+)_(\d+)_(glazing|sash_|door_)/);
+  if (cellMatch) {
+    const r = Number(cellMatch[1]) + 1;
+    const c = Number(cellMatch[2]) + 1;
+    const part = cellMatch[3];
+    if (part === "glazing") return `Стеклопакет ${r}×${c}`;
+    if (part.startsWith("sash_")) return `Створка ${r}×${c} ${part.replace("sash_", "")}`;
+    if (part.startsWith("door_")) return `Дверь ${r}×${c} ${part.replace("door_", "")}`;
+  }
+  const impMatch = s.match(/^impost_(vertical|horizontal)_(\d+)$/);
+  if (impMatch) return impMatch[1] === "vertical" ? `Импост верт. ${impMatch[2]}` : `Импост гориз. ${impMatch[2]}`;
+  return s;
 }
 
 function profileLabelRu(profile) {
@@ -61,7 +74,107 @@ function profileLabelRu(profile) {
 
 function hardwareElementLabelRu(id) {
   const map = { sash_1: "Створка 1", sash_left: "Створка левая", sash_right: "Створка правая" };
-  return map[id] || id;
+  if (map[id]) return map[id];
+  const cellMatch = String(id).match(/^cell_(\d+)_(\d+)$/);
+  if (cellMatch) return `Ячейка ${Number(cellMatch[1]) + 1}×${Number(cellMatch[2]) + 1}`;
+  return id;
+}
+
+/** Схема для универсальной сетки: пропорции по gridSchema и размерам */
+function buildDiagramSvgGrid({ widthMm, heightMm, gridSchema }) {
+  const vbW = 760;
+  const vbH = 320;
+  const padL = 70;
+  const padT = 24;
+  const padR = 24;
+  const padB = 52;
+
+  const maxW = vbW - padL - padR;
+  const maxH = vbH - padT - padB;
+  const aspect = widthMm / heightMm;
+  let rectW, rectH;
+  if (aspect >= maxW / maxH) {
+    rectW = maxW;
+    rectH = maxW / aspect;
+  } else {
+    rectH = maxH;
+    rectW = maxH * aspect;
+  }
+  const rectX = padL + (maxW - rectW) / 2;
+  const rectY = padT + (maxH - rectH) / 2;
+
+  const rowHeights = resolveRowHeights(gridSchema.rows, heightMm);
+  const colWidths = resolveColumnWidths(gridSchema.columns, widthMm);
+  const nRows = rowHeights.length;
+  const nCols = colWidths.length;
+  const cells = gridSchema.cells || [];
+
+  const lineStroke = 'stroke="#1f6feb" stroke-width="1.5"';
+  const strokeFrame = 'stroke="#111827" stroke-width="2"';
+
+  let innerParts = "";
+  for (let c = 0; c < nCols; c++) {
+    const cellW = (colWidths[c] / widthMm) * rectW;
+    const x = rectX + colWidths.slice(0, c).reduce((a, w) => a + (w / widthMm) * rectW, 0);
+    for (let r = 0; r < nRows; r++) {
+      const cellH = (rowHeights[r] / heightMm) * rectH;
+      const y = rectY + rowHeights.slice(0, r).reduce((a, h) => a + (h / heightMm) * rectH, 0);
+      const cell = cells[r]?.[c];
+      if (cell && (cell.type === "sash" || cell.type === "door")) {
+        const inset = 6;
+        const sx = x + inset;
+        const sy = y + inset;
+        const sw = cellW - 2 * inset;
+        const sh = cellH - 2 * inset;
+        innerParts += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="none" stroke="#1f6feb" stroke-width="2" stroke-dasharray="6 6" />`;
+        const hingeLeft = cell.openingSide === "left";
+        const midY = sy + sh / 2;
+        if (hingeLeft) {
+          innerParts += `<line x1="${sx}" y1="${sy}" x2="${sx + sw}" y2="${midY}" fill="none" ${lineStroke} /><line x1="${sx}" y1="${sy + sh}" x2="${sx + sw}" y2="${midY}" fill="none" ${lineStroke} />`;
+        } else {
+          innerParts += `<line x1="${sx + sw}" y1="${sy}" x2="${sx}" y2="${midY}" fill="none" ${lineStroke} /><line x1="${sx + sw}" y1="${sy + sh}" x2="${sx}" y2="${midY}" fill="none" ${lineStroke} />`;
+        }
+        const showTilt = cell.openingType === "turn_tilt" || cell.openingType === "tilt_only";
+        if (showTilt) {
+          const topCenterX = sx + sw / 2;
+          innerParts += `<line x1="${sx}" y1="${sy + sh}" x2="${topCenterX}" y2="${sy}" fill="none" ${lineStroke} /><line x1="${sx + sw}" y1="${sy + sh}" x2="${topCenterX}" y2="${sy}" fill="none" ${lineStroke} />`;
+        }
+      }
+    }
+  }
+
+  let impostLines = "";
+  let accX = rectX;
+  for (let c = 0; c < nCols - 1; c++) {
+    accX += (colWidths[c] / widthMm) * rectW;
+    impostLines += `<line x1="${accX}" y1="${rectY}" x2="${accX}" y2="${rectY + rectH}" ${strokeFrame} />`;
+  }
+  let accY = rectY;
+  for (let r = 0; r < nRows - 1; r++) {
+    accY += (rowHeights[r] / heightMm) * rectH;
+    impostLines += `<line x1="${rectX}" y1="${accY}" x2="${rectX + rectW}" y2="${accY}" ${strokeFrame} />`;
+  }
+
+  const safe = (v) => String(v).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return `
+  <svg class="diagram-svg" viewBox="0 0 ${vbW} ${vbH}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Схема окна (сетка)">
+    <defs>
+      <marker id="arrowEndGrid" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 Z" fill="#6b7280" />
+      </marker>
+      <marker id="arrowStartGrid" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse">
+        <path d="M0,0 L8,4 L0,8 Z" fill="#6b7280" />
+      </marker>
+    </defs>
+    <rect x="${rectX}" y="${rectY}" width="${rectW}" height="${rectH}" fill="#f9fafb" ${strokeFrame} />
+    ${impostLines}
+    ${innerParts}
+    <line x1="${rectX}" y1="${rectY + rectH + 22}" x2="${rectX + rectW}" y2="${rectY + rectH + 22}" stroke="#6b7280" stroke-width="1.5" marker-start="url(#arrowStartGrid)" marker-end="url(#arrowEndGrid)" />
+    <text x="${rectX + rectW / 2}" y="${rectY + rectH + 40}" text-anchor="middle" font-size="13" fill="#374151">${safe(widthMm)} мм</text>
+    <line x1="${rectX - 32}" y1="${rectY}" x2="${rectX - 32}" y2="${rectY + rectH}" stroke="#6b7280" stroke-width="1.5" marker-start="url(#arrowStartGrid)" marker-end="url(#arrowEndGrid)" />
+    <text x="${rectX - 46}" y="${rectY + rectH / 2}" text-anchor="middle" font-size="13" fill="#374151" transform="rotate(-90 ${rectX - 46} ${rectY + rectH / 2})">${safe(heightMm)} мм</text>
+  </svg>
+  `;
 }
 
 function buildDiagramSvg({ widthMm, heightMm, schema, leftPartWidthMm, openingSide, openingType }) {
@@ -225,17 +338,25 @@ function renderResult(calc) {
 
   const diagramWrap = document.createElement("div");
   diagramWrap.className = "diagram-wrap";
-  diagramWrap.innerHTML = buildDiagramSvg({
-    widthMm: calc?.input?.width,
-    heightMm: calc?.input?.height,
-    schema: calc?.type,
-    leftPartWidthMm: (() => {
-      const el = document.getElementById("leftPartWidthMm");
-      return el && el.value !== "" ? Number(el.value) : undefined;
-    })(),
-    openingSide: document.getElementById("winOpeningSide")?.value || "right",
-    openingType: document.getElementById("winOpeningType")?.value || "turn_tilt",
-  });
+  if (calc.type === "grid" && calc.input?.gridSchema) {
+    diagramWrap.innerHTML = buildDiagramSvgGrid({
+      widthMm: calc.input.width,
+      heightMm: calc.input.height,
+      gridSchema: calc.input.gridSchema,
+    });
+  } else {
+    diagramWrap.innerHTML = buildDiagramSvg({
+      widthMm: calc?.input?.width,
+      heightMm: calc?.input?.height,
+      schema: calc?.type,
+      leftPartWidthMm: (() => {
+        const el = document.getElementById("leftPartWidthMm");
+        return el && el.value !== "" ? Number(el.value) : undefined;
+      })(),
+      openingSide: document.getElementById("winOpeningSide")?.value || "right",
+      openingType: document.getElementById("winOpeningType")?.value || "turn_tilt",
+    });
+  }
   diagramBlock.appendChild(diagramWrap);
   container.appendChild(diagramBlock);
 
@@ -444,12 +565,45 @@ function setupForm() {
   const form = document.getElementById("windowCalcForm");
   if (!form) return;
 
+  const calcModeEl = document.getElementById("calcMode");
   const schemaEl = document.getElementById("winSchema");
+  const simpleSchemaWrap = document.getElementById("simpleSchemaWrap");
+  const gridPresetWrap = document.getElementById("gridPresetWrap");
+  const gridCustomWrap = document.getElementById("gridCustomWrap");
+  const gridPresetEl = document.getElementById("gridPreset");
+  const gridRowsEl = document.getElementById("gridRows");
+  const gridColsEl = document.getElementById("gridCols");
+  const gridApplySizeBtn = document.getElementById("gridApplySize");
+  const gridCellsEditor = document.getElementById("gridCellsEditor");
   const leftWrap = document.getElementById("leftPartWidthWrap");
   const leftInput = document.getElementById("leftPartWidthMm");
   const sashOptionsWrap = document.getElementById("sashOptionsWrap");
   const openingTypeWrap = document.getElementById("openingTypeWrap");
   const grid = document.getElementById("windowCalcGrid");
+
+  let customGridState = {
+    rows: 2,
+    cols: 2,
+    cells: [
+      [{ type: "fixed" }, { type: "fixed" }],
+      [{ type: "fixed" }, { type: "fixed" }],
+    ],
+  };
+
+  function syncModeUi() {
+    const mode = calcModeEl?.value || "simple";
+    const isGrid = mode === "grid";
+    const isSimple = !isGrid;
+
+    document.querySelectorAll(".simple-only").forEach((el) => el.classList.toggle("is-hidden", !isSimple));
+    document.querySelectorAll(".grid-only").forEach((el) => el.classList.toggle("is-hidden", !isGrid));
+
+    if (isGrid) {
+      syncGridPresetUi();
+    } else {
+      syncSashUi();
+    }
+  }
 
   function syncSashUi() {
     const schema = schemaEl?.value;
@@ -462,51 +616,158 @@ function setupForm() {
     if (sashOptionsWrap) sashOptionsWrap.classList.toggle("is-hidden", !hasSash);
     if (openingTypeWrap) openingTypeWrap.classList.toggle("is-hidden", !hasSash);
 
-    if (grid) {
-      grid.classList.toggle("is-5-cols", needsLeftWidth || hasSash);
-    }
+    if (grid) grid.classList.toggle("is-5-cols", needsLeftWidth || hasSash);
 
     if (leftInput) {
-      if (needsLeftWidth) {
-        leftInput.setAttribute("required", "required");
-      } else {
+      if (needsLeftWidth) leftInput.setAttribute("required", "required");
+      else {
         leftInput.removeAttribute("required");
         leftInput.value = "";
       }
     }
   }
 
-  if (schemaEl) {
-    schemaEl.addEventListener("change", syncSashUi);
+  function syncGridPresetUi() {
+    const preset = gridPresetEl?.value || "fixed";
+    if (gridCustomWrap) gridCustomWrap.classList.toggle("is-hidden", preset !== "custom");
+    if (preset === "custom") renderCustomGridEditor();
   }
-  syncSashUi();
+
+  function renderCustomGridEditor() {
+    if (!gridCellsEditor) return;
+    const { rows, cols, cells } = customGridState;
+    let html = "<table><thead><tr><th></th>";
+    for (let c = 0; c < cols; c++) html += `<th>Столбец ${c + 1}</th>`;
+    html += "</tr></thead><tbody>";
+    for (let r = 0; r < rows; r++) {
+      html += `<tr><th>Строка ${r + 1}</th>`;
+      for (let c = 0; c < cols; c++) {
+        const cell = cells[r]?.[c] || { type: "fixed" };
+        html += `<td class="grid-cell-td">
+          <select data-row="${r}" data-col="${c}" data-field="type" class="grid-cell-type">
+            <option value="fixed" ${cell.type === "fixed" ? "selected" : ""}>Глухое</option>
+            <option value="sash" ${cell.type === "sash" ? "selected" : ""}>Створка</option>
+            <option value="door" ${cell.type === "door" ? "selected" : ""}>Дверь</option>
+          </select>
+          <div class="grid-cell-sash-options" data-row="${r}" data-col="${c}">
+            <select data-field="openingSide" class="grid-cell-side" title="Сторона открывания">
+              <option value="left" ${(cell.openingSide || "right") === "left" ? "selected" : ""}>Петли слева</option>
+              <option value="right" ${(cell.openingSide || "right") === "right" ? "selected" : ""}>Петли справа</option>
+            </select>
+            <select data-field="openingType" class="grid-cell-opening" title="Тип открывания">
+              <option value="turn_tilt" ${(cell.openingType || "turn_tilt") === "turn_tilt" ? "selected" : ""}>П/О</option>
+              <option value="turn_only" ${cell.openingType === "turn_only" ? "selected" : ""}>П</option>
+              <option value="tilt_only" ${cell.openingType === "tilt_only" ? "selected" : ""}>О</option>
+            </select>
+          </div>
+        </td>`;
+      }
+      html += "</tr>";
+    }
+    html += "</tbody></table>";
+    gridCellsEditor.innerHTML = html;
+
+    gridCellsEditor.querySelectorAll(".grid-cell-type").forEach((sel) => {
+      sel.addEventListener("change", (e) => {
+        const r = Number(e.target.dataset.row);
+        const c = Number(e.target.dataset.col);
+        if (!customGridState.cells[r]) customGridState.cells[r] = [];
+        customGridState.cells[r][c] = { ...(customGridState.cells[r][c] || {}), type: e.target.value };
+        const sashOpts = gridCellsEditor.querySelector(`.grid-cell-sash-options[data-row="${r}"][data-col="${c}"]`);
+        if (sashOpts) sashOpts.style.display = e.target.value === "fixed" ? "none" : "flex";
+      });
+    });
+    gridCellsEditor.querySelectorAll(".grid-cell-side, .grid-cell-opening").forEach((sel) => {
+      sel.addEventListener("change", (e) => {
+        const wrap = e.target.closest("[data-row][data-col]");
+        const r = Number(wrap?.dataset.row);
+        const c = Number(wrap?.dataset.col);
+        const field = e.target.classList.contains("grid-cell-side") ? "openingSide" : "openingType";
+        if (r != null && c != null && customGridState.cells[r]?.[c]) {
+          customGridState.cells[r][c][field] = e.target.value;
+        }
+      });
+    });
+    gridCellsEditor.querySelectorAll(".grid-cell-sash-options").forEach((wrap) => {
+      const r = Number(wrap.dataset.row);
+      const c = Number(wrap.dataset.col);
+      const type = customGridState.cells[r]?.[c]?.type || "fixed";
+      wrap.style.display = type === "fixed" ? "none" : "flex";
+    });
+  }
+
+  function getGridSchema() {
+    const preset = gridPresetEl?.value;
+    if (preset && preset !== "custom" && GRID_PRESETS[preset]) {
+      return JSON.parse(JSON.stringify(GRID_PRESETS[preset]));
+    }
+    const rows = Number(gridRowsEl?.value) || 1;
+    const cols = Number(gridColsEl?.value) || 1;
+    const nRows = Math.max(1, Math.min(6, rows));
+    const nCols = Math.max(1, Math.min(6, cols));
+    const cells = [];
+    for (let r = 0; r < nRows; r++) {
+      cells[r] = [];
+      for (let c = 0; c < nCols; c++) {
+        const cell = customGridState.cells[r]?.[c] || { type: "fixed" };
+        cells[r][c] = {
+          type: cell.type,
+          openingSide: cell.type !== "fixed" ? (cell.openingSide || "right") : undefined,
+          openingType: cell.type !== "fixed" ? (cell.openingType || "turn_tilt") : undefined,
+        };
+      }
+    }
+    return {
+      rows: Array.from({ length: nRows }, () => ({ fraction: 1 / nRows })),
+      columns: Array.from({ length: nCols }, () => ({ fraction: 1 / nCols })),
+      cells,
+    };
+  }
+
+  if (calcModeEl) calcModeEl.addEventListener("change", syncModeUi);
+  if (gridPresetEl) gridPresetEl.addEventListener("change", syncGridPresetUi);
+
+  if (schemaEl) schemaEl.addEventListener("change", syncSashUi);
+
+  if (gridApplySizeBtn && gridRowsEl && gridColsEl) {
+    gridApplySizeBtn.addEventListener("click", () => {
+      const rows = Math.max(1, Math.min(6, Number(gridRowsEl.value) || 2));
+      const cols = Math.max(1, Math.min(6, Number(gridColsEl.value) || 2));
+      customGridState.rows = rows;
+      customGridState.cols = cols;
+      if (!customGridState.cells.length || customGridState.cells.length !== rows || (customGridState.cells[0]?.length || 0) !== cols) {
+        const cells = [];
+        for (let r = 0; r < rows; r++) {
+          cells[r] = [];
+          for (let c = 0; c < cols; c++) {
+            cells[r][c] = customGridState.cells[r]?.[c] ? { ...customGridState.cells[r][c] } : { type: "fixed" };
+          }
+        }
+        customGridState.cells = cells;
+      }
+      renderCustomGridEditor();
+    });
+  }
+
+  syncModeUi();
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const widthEl = document.getElementById("winWidth");
     const heightEl = document.getElementById("winHeight");
-    const schemaElLocal = document.getElementById("winSchema");
-    const leftInputLocal = document.getElementById("leftPartWidthMm");
+    const mode = calcModeEl?.value || "simple";
 
-    if (!widthEl || !heightEl || !schemaElLocal) return;
+    if (!widthEl || !heightEl) return;
 
     const width = Number(widthEl.value);
     const height = Number(heightEl.value);
-    const schema = schemaElLocal.value;
-    const leftPartWidthMm =
-      leftInputLocal && leftInputLocal.value !== "" ? Number(leftInputLocal.value) : undefined;
     const quantityEl = document.getElementById("winQuantity");
     const quantityRaw = quantityEl && quantityEl.value !== "" ? Number(quantityEl.value) : 1;
-    const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.round(quantityRaw) : 1;
-    const openingSide = document.getElementById("winOpeningSide")?.value || "right";
-    const openingType = document.getElementById("winOpeningType")?.value || "turn_tilt";
-
     const beadDeductionEl = document.getElementById("winBeadDeduction");
     const beadDeductionRaw =
       beadDeductionEl && beadDeductionEl.value !== "" ? Number(beadDeductionEl.value) : 2;
     const beadDeductionMm =
       Number.isFinite(beadDeductionRaw) && beadDeductionRaw >= 0 ? beadDeductionRaw : 2;
-
     const profileAllowanceEl = document.getElementById("winProfileAllowance");
     const profileAllowanceRaw =
       profileAllowanceEl && profileAllowanceEl.value !== "" ? Number(profileAllowanceEl.value) : 0;
@@ -514,17 +775,38 @@ function setupForm() {
       Number.isFinite(profileAllowanceRaw) && profileAllowanceRaw >= 0 ? profileAllowanceRaw : 0;
 
     try {
-      const calc = calculateWindow({
-        system: "KBE_70",
-        width,
-        height,
-        schema,
-        leftPartWidthMm,
-        openingSide,
-        openingType,
-        beadDeductionMm,
-        profileAllowanceMm,
-      });
+      let calc;
+      if (mode === "grid") {
+        const gridSchema = getGridSchema();
+        calc = calculateWindow({
+          system: "KBE_70",
+          width,
+          height,
+          schema: "grid",
+          gridSchema,
+          beadDeductionMm,
+          profileAllowanceMm,
+        });
+      } else {
+        const schemaElLocal = document.getElementById("winSchema");
+        const leftInputLocal = document.getElementById("leftPartWidthMm");
+        const schema = schemaElLocal?.value || "fixed";
+        const leftPartWidthMm =
+          leftInputLocal && leftInputLocal.value !== "" ? Number(leftInputLocal.value) : undefined;
+        const openingSide = document.getElementById("winOpeningSide")?.value || "right";
+        const openingType = document.getElementById("winOpeningType")?.value || "turn_tilt";
+        calc = calculateWindow({
+          system: "KBE_70",
+          width,
+          height,
+          schema,
+          leftPartWidthMm,
+          openingSide,
+          openingType,
+          beadDeductionMm,
+          profileAllowanceMm,
+        });
+      }
       setMessage("", false);
       renderResult(calc);
     } catch (err) {

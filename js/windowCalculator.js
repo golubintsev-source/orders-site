@@ -4,11 +4,20 @@
 // - "one_sash"             — окно с одной створкой (рама + створка + стеклопакет в створке)
 // - "one_sash_left_fixed"  — окно с вертикальным импостом: слева створка, справа глухое
 // - "fixed_left_one_sash"  — окно с вертикальным импостом: слева глухое, справа створка
+// - "grid"                 — универсальная сетка (строки × столбцы, ячейки: глухое/створка/дверь)
 
 import { SYSTEMS } from "./windowSystemKbe.js";
+import {
+  resolveRowHeights,
+  resolveColumnWidths,
+} from "./windowGridSchema.js";
 
 /**
- * @typedef {"fixed" | "one_sash" | "one_sash_left_fixed" | "fixed_left_one_sash"} WindowSchema
+ * @typedef {"fixed" | "one_sash" | "one_sash_left_fixed" | "fixed_left_one_sash" | "grid"} WindowSchema
+ */
+
+/**
+ * @typedef {import("./windowGridSchema.js").GridSchema} GridSchema
  */
 
 /**
@@ -17,6 +26,7 @@ import { SYSTEMS } from "./windowSystemKbe.js";
  * @property {number} width  - габаритная ширина окна, мм
  * @property {number} height - габаритная высота окна, мм
  * @property {WindowSchema} schema - схема конструкции
+ * @property {GridSchema=} gridSchema - для schema "grid": строки, столбцы, ячейки
  * @property {number=} leftPartWidthMm - ширина левой части (для схем с импостом), мм
  * @property {"left"|"right"=} openingSide - сторона открывания (петли), только для одной створки
  * @property {"turn_tilt"|"turn_only"|"tilt_only"=} openingType - тип открывания: П/О, только поворот, только откид
@@ -88,6 +98,11 @@ export function calculateWindow(input) {
       input.openingSide,
       input.openingType
     );
+  } else if (schema === "grid" && input.gridSchema) {
+    result = calculateWindowGrid(system, width, height, input.gridSchema, input.system, {
+      beadDeductionMm: input.beadDeductionMm,
+      profileAllowanceMm: input.profileAllowanceMm,
+    });
   } else {
     throw new Error(`Unsupported schema: ${schema}`);
   }
@@ -515,6 +530,167 @@ function calculateFixedLeftOneSashWindow(
         side: openingSide === "right" ? "right" : "left",
       }, openingType),
     ],
+  };
+}
+
+/**
+ * Универсальный расчёт по сетке: рама, вертикальные и горизонтальные импосты,
+ * по ячейкам — глухие (стеклопакет в раме), створки или двери (профиль створки, стеклопакет, армирование, фурнитура).
+ * @param {object} system - объект системы (KBE_70 и т.д.)
+ * @param {number} width - габаритная ширина, мм
+ * @param {number} height - габаритная высота, мм
+ * @param {GridSchema} gridSchema - строки, столбцы, ячейки
+ * @param {string} systemId - код системы
+ * @param {{ beadDeductionMm?: number, profileAllowanceMm?: number }} options
+ */
+export function calculateWindowGrid(system, width, height, gridSchema, systemId, options = {}) {
+  const { frameProfile, sashProfile, impostProfile, clearances, glazingTechnology } = system;
+  const { rows, columns, cells } = gridSchema;
+
+  if (!rows?.length || !columns?.length || !cells?.length) {
+    throw new Error("Сетка должна содержать строки, столбцы и ячейки");
+  }
+
+  const rowHeights = resolveRowHeights(rows, height);
+  const colWidths = resolveColumnWidths(columns, width);
+
+  const nRows = rowHeights.length;
+  const nCols = colWidths.length;
+
+  if (cells.length !== nRows || cells.some((row) => row.length !== nCols)) {
+    throw new Error("Массив ячеек должен соответствовать числу строк и столбцов");
+  }
+
+  validateSize(system, width, height);
+
+  /** @type {ProfileCut[]} */
+  const frameCuts = [
+    { element: "frame_top", length: width, profile: "frame" },
+    { element: "frame_bottom", length: width, profile: "frame" },
+    { element: "frame_left", length: height, profile: "frame" },
+    { element: "frame_right", length: height, profile: "frame" },
+  ];
+
+  /** @type {ProfileCut[]} */
+  const impostCuts = [];
+
+  for (let c = 0; c < nCols - 1; c++) {
+    impostCuts.push({
+      element: `impost_vertical_${c + 1}`,
+      length: height,
+      profile: "impost",
+    });
+  }
+  for (let r = 0; r < nRows - 1; r++) {
+    impostCuts.push({
+      element: `impost_horizontal_${r + 1}`,
+      length: width,
+      profile: "impost",
+    });
+  }
+
+  /** @type {ProfileCut[]} */
+  const sashCuts = [];
+  /** @type {GlazingUnit[]} */
+  const glazingUnits = [];
+  /** @type {ProfileCut[]} */
+  const reinforcement = [];
+  /** @type {any[]} */
+  const hardware = [];
+
+  const frameRebate = frameProfile.glazingRebate;
+  const impostRebate = impostProfile.glazingRebate;
+
+  for (let r = 0; r < nRows; r++) {
+    for (let c = 0; c < nCols; c++) {
+      const cell = cells[r][c];
+      const cellW = colWidths[c];
+      const cellH = rowHeights[r];
+      const leftRebate = c === 0 ? frameRebate : impostRebate;
+      const rightRebate = c === nCols - 1 ? frameRebate : impostRebate;
+      const topRebate = r === 0 ? frameRebate : impostRebate;
+      const bottomRebate = r === nRows - 1 ? frameRebate : impostRebate;
+
+      const cellId = `cell_${r}_${c}`;
+
+      if (cell.type === "fixed") {
+        const lightW = cellW - leftRebate - rightRebate;
+        const lightH = cellH - topRebate - bottomRebate;
+        const gW = lightW - glazingTechnology.widthDeduction;
+        const gH = lightH - glazingTechnology.heightDeduction;
+        glazingUnits.push({
+          element: `${cellId}_glazing`,
+          width: Math.max(0, gW),
+          height: Math.max(0, gH),
+          structure: "4-16-4",
+        });
+        continue;
+      }
+
+      if (cell.type === "sash" || cell.type === "door") {
+        const sashWidth = cellW - clearances.sashGapHorizontal;
+        const sashHeight = cellH - clearances.sashGapVertical;
+        if (sashWidth < 100 || sashHeight < 100) {
+          throw new Error(`Ячейка ${r + 1}×${c + 1}: слишком малый размер створки/двери`);
+        }
+        const prefix = cell.type === "door" ? "door" : "sash";
+        sashCuts.push(
+          { element: `${cellId}_${prefix}_top`, length: sashWidth, profile: "sash" },
+          { element: `${cellId}_${prefix}_bottom`, length: sashWidth, profile: "sash" },
+          { element: `${cellId}_${prefix}_left`, length: sashHeight, profile: "sash" },
+          { element: `${cellId}_${prefix}_right`, length: sashHeight, profile: "sash" }
+        );
+        const lightW = sashWidth - 2 * sashProfile.glazingRebate;
+        const lightH = sashHeight - 2 * sashProfile.glazingRebate;
+        const gW = lightW - glazingTechnology.widthDeduction;
+        const gH = lightH - glazingTechnology.heightDeduction;
+        glazingUnits.push({
+          element: `${cellId}_glazing`,
+          width: Math.max(0, gW),
+          height: Math.max(0, gH),
+          structure: "4-16-4",
+        });
+        const inset = sashProfile.reinforcementInset || 0;
+        reinforcement.push(
+          { element: `arm_${cellId}_${prefix}_top`, profile: "sash_reinforcement", length: Math.max(0, sashWidth - 2 * inset) },
+          { element: `arm_${cellId}_${prefix}_bottom`, profile: "sash_reinforcement", length: Math.max(0, sashWidth - 2 * inset) },
+          { element: `arm_${cellId}_${prefix}_left`, profile: "sash_reinforcement", length: Math.max(0, sashHeight - 2 * inset) },
+          { element: `arm_${cellId}_${prefix}_right`, profile: "sash_reinforcement", length: Math.max(0, sashHeight - 2 * inset) }
+        );
+        const side = cell.openingSide === "left" ? "left" : "right";
+        const openingType = cell.openingType === "turn_only" || cell.openingType === "tilt_only" ? cell.openingType : "turn_tilt";
+        hardware.push(
+          pickSashHardware(
+            system,
+            { id: cellId, width: sashWidth, height: sashHeight, side },
+            openingType
+          )
+        );
+      }
+    }
+  }
+
+  reinforcement.push(
+    ...frameCuts.map((p) => ({
+      element: `arm_${p.element}`,
+      profile: "frame_reinforcement",
+      length: Math.max(0, p.length - 2 * (frameProfile.reinforcementInset || 0)),
+    })),
+    ...impostCuts.map((p) => ({
+      element: `arm_${p.element}`,
+      profile: "impost_reinforcement",
+      length: Math.max(0, p.length - 2 * (frameProfile.reinforcementInset || 0)),
+    }))
+  );
+
+  return {
+    type: "grid",
+    input: { width, height, system: systemId, gridSchema },
+    profiles: frameCuts.concat(impostCuts),
+    sashes: sashCuts,
+    glazingUnits,
+    reinforcement,
+    hardware,
   };
 }
 

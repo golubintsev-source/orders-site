@@ -92,6 +92,15 @@
       max-width: 760px;
       height: auto;
     }
+    .grid-size-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .grid-size-row input[type="number"] { width: 56px; }
+    .grid-cells-editor { margin-top: 8px; overflow-x: auto; }
+    .grid-cells-editor table { border-collapse: collapse; font-size: 12px; }
+    .grid-cells-editor td, .grid-cells-editor th { border: 1px solid #e5e7eb; padding: 4px 6px; }
+    .grid-cells-editor select { min-width: 100px; }
+    .grid-cell-sash-options { display: flex; gap: 4px; flex-wrap: wrap; }
+    .small-btn { padding: 4px 10px; font-size: 12px; cursor: pointer; border-radius: 6px; border: 1px solid #d1d5db; background: #fff; }
+    .small-btn:hover { background: #f3f4f6; }
     @media (max-width: 768px) {
       .window-calc-form-grid {
         grid-template-columns: 1fr;
@@ -108,13 +117,20 @@
         <div class="window-calc-form-grid" id="windowCalcGrid">
           <div class="field">
             <label for="winWidth">Ширина, мм</label>
-            <input type="number" id="winWidth" min="300" step="10" required />
+            <input type="number" id="winWidth" min="300" step="1" required />
           </div>
           <div class="field">
             <label for="winHeight">Высота, мм</label>
-            <input type="number" id="winHeight" min="300" step="10" required />
+            <input type="number" id="winHeight" min="300" step="1" required />
           </div>
           <div class="field">
+            <label for="calcMode">Режим</label>
+            <select id="calcMode">
+              <option value="simple">Простые схемы</option>
+              <option value="grid">Универсальный редактор (сетка)</option>
+            </select>
+          </div>
+          <div class="field simple-only" id="simpleSchemaWrap">
             <label for="winSchema">Схема</label>
             <select id="winSchema">
               <option value="fixed">Глухое</option>
@@ -122,6 +138,32 @@
               <option value="one_sash_left_fixed">Створка слева + глухое справа (импост)</option>
               <option value="fixed_left_one_sash">Глухое слева + створка справа (импост)</option>
             </select>
+          </div>
+          <div class="field grid-only is-hidden" id="gridPresetWrap">
+            <label for="gridPreset">Пресет схемы</label>
+            <select id="gridPreset">
+              <option value="fixed">Глухое окно</option>
+              <option value="one_sash">Одна створка</option>
+              <option value="sash_left_fixed_right">Створка слева + глухое справа</option>
+              <option value="fixed_left_sash_right">Глухое слева + створка справа</option>
+              <option value="two_sashes">Две створки</option>
+              <option value="three_sashes">Три створки</option>
+              <option value="horizontal_impost_sash_bottom">Гориз. импост: верх глухой, низ створка</option>
+              <option value="balcony_block">Балконный блок (2 створки + дверь)</option>
+              <option value="balcony_simple">Балконный: окно + дверь</option>
+              <option value="custom">Своя схема…</option>
+            </select>
+          </div>
+          <div class="field grid-only is-hidden" id="gridCustomWrap">
+            <label>Своя сетка</label>
+            <div class="grid-size-row">
+              <span>Строк</span>
+              <input type="number" id="gridRows" min="1" max="6" value="2" />
+              <span>Столбцов</span>
+              <input type="number" id="gridCols" min="1" max="6" value="2" />
+              <button type="button" id="gridApplySize" class="small-btn">Применить</button>
+            </div>
+            <div id="gridCellsEditor" class="grid-cells-editor"></div>
           </div>
           <div class="field is-hidden" id="leftPartWidthWrap">
             <label for="leftPartWidthMm">Левая часть, мм</label>

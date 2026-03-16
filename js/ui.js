@@ -23,6 +23,7 @@ import {
   resetFormMode,
   submitOrderForm,
   updatePaidField,
+  updateRemainingFromCostAndPrepayment,
   updateConditionalRequiredHighlight,
 } from "./orders.js";
 import { renderSelectedFiles } from "./files.js";
@@ -114,6 +115,7 @@ export function bindUIEvents() {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener("input", () => {
+        if (id === "amount" || id === "prepayment") updateRemainingFromCostAndPrepayment();
         updatePaidField();
         updateConditionalRequiredHighlight();
       });
@@ -121,7 +123,12 @@ export function bindUIEvents() {
   });
   ["prepayment_to", "remaining_to", "delivery", "delivery_date"].forEach((id) => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener("change", updateConditionalRequiredHighlight);
+    if (el) {
+      el.addEventListener("change", () => {
+        if (id === "remaining_to") updatePaidField();
+        updateConditionalRequiredHighlight();
+      });
+    }
   });
   const deliveryDateEl = document.getElementById("delivery_date");
   if (deliveryDateEl) deliveryDateEl.addEventListener("input", updateConditionalRequiredHighlight);
