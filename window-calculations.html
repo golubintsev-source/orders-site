@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Расчет окон</title>
+  <link rel="stylesheet" href="./style.css" />
+  <style>
+    .window-calc-page .container { padding: 12px; }
+    .window-calc-page h1 { font-size: 20px; margin: 0 0 12px; }
+    .window-calc-page .back-btn {
+      margin-bottom: 12px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1f6feb;
+      background: transparent;
+      border: 1px solid #1f6feb;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .window-calc-page .back-btn:hover { background: rgba(31, 111, 235, 0.08); }
+    .window-calc-form-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .window-calc-form-grid.is-4-cols {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .window-calc-form-grid.is-5-cols {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    .field.is-hidden {
+      display: none;
+    }
+    .window-calc-form-grid .field {
+      margin: 0;
+    }
+    .window-calc-page .results-block {
+      margin-top: 12px;
+    }
+    .window-calc-page .results-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 6px;
+    }
+    .window-calc-page .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+    .window-calc-page .results-table th,
+    .window-calc-page .results-table td {
+      border-bottom: 1px solid #e5e7eb;
+      padding: 4px 6px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .window-calc-page .results-table th {
+      background: #f8fafc;
+      font-weight: 600;
+    }
+    .window-calc-page .results-empty-text {
+      font-size: 13px;
+      color: #6b7280;
+      margin: 0;
+    }
+    .window-calc-page .results-raw-json {
+      margin-top: 8px;
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #f9fafb;
+      border-radius: 10px;
+      padding: 8px 10px;
+      border: 1px solid #e5e7eb;
+    }
+    .window-calc-page .diagram-wrap {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+      overflow-x: auto;
+    }
+    .window-calc-page .diagram-svg {
+      display: block;
+      width: 100%;
+      min-width: 320px;
+      max-width: 760px;
+      height: auto;
+    }
+    @media (max-width: 768px) {
+      .window-calc-form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body class="window-calc-page">
+  <div class="container">
+    <button type="button" id="backToOrdersBtn" class="back-btn">← Назад к заказам</button>
+    <h1>Расчет окон (KBE)</h1>
+    <div class="card">
+      <form id="windowCalcForm" class="calculations-form" aria-label="Расчет окна">
+        <div class="window-calc-form-grid" id="windowCalcGrid">
+          <div class="field">
+            <label for="winWidth">Ширина, мм</label>
+            <input type="number" id="winWidth" min="300" step="10" required />
+          </div>
+          <div class="field">
+            <label for="winHeight">Высота, мм</label>
+            <input type="number" id="winHeight" min="300" step="10" required />
+          </div>
+          <div class="field">
+            <label for="winSchema">Схема</label>
+            <select id="winSchema">
+              <option value="fixed">Глухое</option>
+              <option value="one_sash">Одна створка</option>
+              <option value="one_sash_left_fixed">Створка слева + глухое справа (импост)</option>
+              <option value="fixed_left_one_sash">Глухое слева + створка справа (импост)</option>
+            </select>
+          </div>
+          <div class="field is-hidden" id="leftPartWidthWrap">
+            <label for="leftPartWidthMm">Левая часть, мм</label>
+            <input type="number" id="leftPartWidthMm" min="200" step="10" placeholder="например 700" />
+          </div>
+          <div class="field is-hidden" id="sashOptionsWrap">
+            <label for="winOpeningSide">Сторона открывания</label>
+            <select id="winOpeningSide">
+              <option value="right">Право (петли справа)</option>
+              <option value="left">Лево (петли слева)</option>
+            </select>
+          </div>
+          <div class="field is-hidden" id="openingTypeWrap">
+            <label for="winOpeningType">Тип открывания</label>
+            <select id="winOpeningType">
+              <option value="turn_tilt">Поворотно-откидная (П/О)</option>
+              <option value="turn_only">Только поворотная</option>
+              <option value="tilt_only">Только откидная</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="calculations-submit-btn">Рассчитать</button>
+      </form>
+      <p id="windowCalcMessage"></p>
+      <div id="windowCalcResultContainer">
+        <p class="results-empty-text">
+          Введите размеры и нажмите «Рассчитать», чтобы увидеть размеры распила и стеклопакета.
+        </p>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="./js/windowCalcPage.js"></script>
+</body>
+</html>
+
