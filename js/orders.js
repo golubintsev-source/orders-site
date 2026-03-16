@@ -153,7 +153,7 @@ export function renderOrders(orders) {
     const row = `
       <tr>
         <td class="td-phone-call">${phoneCallIcon}</td>
-        <td class="td-actions">${editIcon}${historyIcon}${filesIcon}</td>
+        <td class="td-actions">${editIcon}${filesIcon}</td>
         <td class="td-order-id"><span class="status-value">${order.id != null ? String(order.id).padStart(4, "0") : ""}</span></td>
         <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${order.client_type === "Диллер" && clientCell ? `<span class="client-dealer-value">${clientCell}</span>` : clientCell}</td>
         <td class="td-truncate-address" data-fulltext="${escapeAttr(address)}">${escapeHtml(address)}</td>
@@ -175,7 +175,7 @@ export function renderOrders(orders) {
         <td>${order.installer_payment_by ? escapeHtml(order.installer_payment_by) : ""}</td>
         <td>${formatDateDDMMYYYY(order.reveals_date)}</td>
         <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
-        <td class="td-actions td-delete">${deleteButton}</td>
+        <td class="td-actions td-delete">${historyIcon}${deleteButton}</td>
       </tr>
     `;
 
