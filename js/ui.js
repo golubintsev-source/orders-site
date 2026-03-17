@@ -311,7 +311,6 @@ export function bindUIEvents() {
       // На телефоне: приоритет у выделения строки (подсказки не мешают выделению)
       if (isTouch) {
         if (tr) {
-          e.preventDefault();
           toggleRowHighlight(tr);
         }
         return;
@@ -360,7 +359,7 @@ export function bindUIEvents() {
         if (!t) return;
         const dx = Math.abs(t.clientX - touchStart.x);
         const dy = Math.abs(t.clientY - touchStart.y);
-        if (dx > 8 || dy > 8) touchMoved = true;
+        if (dx > 15 || dy > 15) touchMoved = true;
       },
       { passive: true, capture: true }
     );

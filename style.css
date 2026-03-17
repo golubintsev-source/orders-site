@@ -703,6 +703,10 @@ table {
   min-width: 900px;
 }
 
+#ordersTable {
+  touch-action: manipulation;
+}
+
 th,
 td {
   border-bottom: 1px solid #e7ebf0;
