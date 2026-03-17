@@ -965,8 +965,13 @@ th {
 
 #ordersTable th.th-delivery-date,
 #ordersTable td.td-delivery-date {
-  min-width: 95px;
+  min-width: 0;
+  width: 1%;
   white-space: nowrap;
+}
+
+#ordersTable th.th-installation-date,
+#ordersTable td.td-installation-date {
 }
 
 #ordersTable th.th-phone,

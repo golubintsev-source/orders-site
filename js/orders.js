@@ -185,12 +185,12 @@ export function renderOrders(orders) {
         <td class="td-remaining td-money">${order.remaining_amount != null && order.remaining_amount !== "" ? `<span class="status-value">${formatAmount(order.remaining_amount)}</span>` : ""}</td>
         <td class="td-remaining-to">${order.remaining_to ? escapeHtml(order.remaining_to) : ""}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
-        <td class="td-delivery-date">${formatDateDDMMYYYY(order.delivery_date)}</td>
-        <td class="td-installation-date">${formatDateDDMMYYYY(order.installation_date)}</td>
+        <td class="td-delivery-date">${formatDateShortRU(order.delivery_date)}</td>
+        <td class="td-installation-date">${formatDateShortRU(order.installation_date)}</td>
         <td class="td-area-m2">${order.area_m2 != null && order.area_m2 !== "" ? escapeHtml(String(order.area_m2)) : ""}</td>
         <td class="td-money">${order.installer_payment_by && order.installer_payment_amount != null && order.installer_payment_amount !== "" ? `<span class="installer-paid-value">${formatAmount(order.installer_payment_amount)}</span>` : (order.installer_payment_amount != null && order.installer_payment_amount !== "" ? formatAmount(order.installer_payment_amount) : "")}</td>
         <td>${order.installer_payment_by ? escapeHtml(order.installer_payment_by) : ""}</td>
-        <td>${formatDateDDMMYYYY(order.reveals_date)}</td>
+        <td>${formatDateShortRU(order.reveals_date)}</td>
         <td class="td-mosquito-nets">${order.mosquito_nets != null && order.mosquito_nets !== "" ? escapeHtml(String(order.mosquito_nets)) : ""}</td>
         <td class="td-construction-count">${order.construction_count != null && order.construction_count !== "" ? escapeHtml(String(order.construction_count)) : ""}</td>
         <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
