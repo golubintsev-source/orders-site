@@ -178,8 +178,8 @@ export function renderOrders(orders) {
             ${order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом")}
           </span>
         </td>
-        <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-money">${order.amount != null && order.amount !== "" ? `<span class="status-value">${formatAmount(order.amount)}</span>` : ""}</td>
+        <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-prepayment td-money">${order.prepayment != null && order.prepayment !== "" ? `<span class="status-value">${formatAmount(order.prepayment)}</span>` : ""}</td>
         <td class="td-prepayment-to">${order.prepayment_to ? escapeHtml(order.prepayment_to) : ""}</td>
         <td class="td-remaining td-money">${order.remaining_amount != null && order.remaining_amount !== "" ? `<span class="status-value">${formatAmount(order.remaining_amount)}</span>` : ""}</td>
