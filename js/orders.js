@@ -167,7 +167,9 @@ export function renderOrders(orders) {
       <tr>
         <td></td>
         <td></td>
-        <td class="td-order-id"><span class="status-value">${order.id != null ? String(order.id).padStart(4, "0") : ""}</span></td>
+        <td class="td-order-id" data-order-id="${order.id ?? ""}">
+          <span class="status-value">${order.id != null ? String(order.id).padStart(4, "0") : ""}</span>
+        </td>
         <td class="td-order-date">${formatDateDDMMYYYY(order.order_date)}</td>
         <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${clientCell}</td>
         <td class="td-truncate-address" data-fulltext="${escapeAttr(address)}">${escapeHtml(address)}</td>
@@ -177,7 +179,6 @@ export function renderOrders(orders) {
             ${order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом")}
           </span>
         </td>
-        <td class="td-order-number">${order.order_number ?? ""}</td>
         <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-money">${order.amount != null && order.amount !== "" ? `<span class="status-value">${formatAmount(order.amount)}</span>` : ""}</td>
         <td class="td-prepayment td-money">${formatAmount(order.prepayment) + (order.prepayment_to ? " | " + escapeHtml(order.prepayment_to) : "")}</td>

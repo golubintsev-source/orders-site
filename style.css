@@ -783,6 +783,11 @@ th {
   height: 18px;
 }
 
+/* ID в таблице — клик открывает редактирование */
+#ordersTable td.td-order-id {
+  cursor: pointer;
+}
+
 /* Подсветка строки по клику на ID */
 #ordersTable tr.row-highlighted td {
   background-color: #e3f2fd;
@@ -946,14 +951,6 @@ th {
 
 #ordersTable td.td-truncate-name {
   padding-left: 2px;
-}
-
-#ordersTable th:nth-child(8),
-#ordersTable td.td-order-number {
-  padding-left: 0;
-  padding-right: 2px;
-  padding-top: 4px;
-  padding-bottom: 4px;
 }
 
 #ordersTable th:nth-child(12),
@@ -1353,7 +1350,7 @@ th {
   }
 
   #ordersTable th:nth-child(8),
-  #ordersTable td.td-order-number {
+  #ordersTable td.td-paid {
     padding: 4px 2px 4px 0;
   }
 

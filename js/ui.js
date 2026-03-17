@@ -270,6 +270,15 @@ export function bindUIEvents() {
   }
 
   if (ordersTable && cellTooltip) {
+    const toggleRowHighlight = (tr) => {
+      if (!tr) return;
+      const tbody = ordersTable.querySelector("tbody");
+      if (!tbody) return;
+      const wasHighlighted = tr.classList.contains("row-highlighted");
+      tbody.querySelectorAll("tr.row-highlighted").forEach((row) => row.classList.remove("row-highlighted"));
+      if (!wasHighlighted) tr.classList.add("row-highlighted");
+    };
+
     ordersTable.addEventListener("click", (e) => {
       if (cellTooltip.classList.contains("visible") && tooltipHideClick) {
         tooltipHideClick();
@@ -277,13 +286,20 @@ export function bindUIEvents() {
       }
       const idTd = e.target.closest("td.td-order-id");
       if (idTd) {
-        const tr = idTd.closest("tr");
-        const wasThisRowHighlighted = tr && tr.classList.contains("row-highlighted");
-        const tbody = ordersTable.querySelector("tbody");
-        if (tbody) tbody.querySelectorAll("tr.row-highlighted").forEach((row) => row.classList.remove("row-highlighted"));
-        if (tr && !wasThisRowHighlighted) tr.classList.add("row-highlighted");
+        const raw = idTd.getAttribute("data-order-id") || "";
+        const orderId = raw ? Number(raw) : NaN;
+        if (!Number.isNaN(orderId) && typeof window.editOrder === "function") {
+          window.editOrder(orderId);
+        }
         return;
       }
+
+      // Клик по интерактивным элементам строки не должен включать выделение
+      if (e.target.closest("button, a, .btn-icon, input, select, textarea, label")) return;
+
+      const tr = e.target.closest("tbody tr");
+      if (tr) toggleRowHighlight(tr);
+
       if (e.target.closest("a.tel-link")) return;
       const td = e.target.closest("td.td-truncate-name, td.td-truncate-address, td.td-truncate-description");
       if (td) {
