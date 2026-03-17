@@ -922,12 +922,6 @@ th {
   flex-shrink: 0;
 }
 
-#ordersTable th:nth-child(5),
-#ordersTable td:nth-child(5) {
-  white-space: nowrap;
-}
-
-#ordersTable th:nth-child(6),
 #ordersTable td.td-paid {
   white-space: nowrap;
 }
@@ -940,14 +934,18 @@ th {
   white-space: nowrap;
 }
 
-#ordersTable th:nth-child(7),
-#ordersTable td.td-order-date {
+.th-order-date,
+.td-order-date {
   min-width: 95px;
   white-space: nowrap;
   padding-left: 2px;
-  padding-right: 0;
+  padding-right: 2px;
   padding-top: 4px;
   padding-bottom: 4px;
+}
+
+#ordersTable td.td-truncate-name {
+  padding-left: 2px;
 }
 
 #ordersTable th:nth-child(8),
@@ -975,11 +973,17 @@ th {
   white-space: nowrap;
 }
 
-/* Узкий столбец с иконкой звонка (первый столбец) */
+/* Узкий столбец с иконкой звонка */
 #ordersTable th:first-child,
 #ordersTable td.td-phone-call {
   text-align: center;
   vertical-align: middle;
+}
+
+#ordersTable td.td-history {
+  width: 1%;
+  min-width: 1px;
+  padding: 4px 2px 4px 0;
 }
 #ordersTable .btn-phone-call {
   display: inline-flex;

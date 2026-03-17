@@ -107,6 +107,18 @@ function formatDateDDMMYYYY(dateStr) {
   return `${d}.${m}.${y}`;
 }
 
+function formatDateShortRU(dateStr) {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return "";
+    const months = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+    return `${d.getDate()} ${months[d.getMonth()]}`;
+  } catch {
+    return "";
+  }
+}
+
 /** Оплачено в таблице только по полю "Кому остаток", без проверки суммы. */
 function isOrderPaid(order) {
   const raw = (order.remaining_to || "").trim();
@@ -153,9 +165,10 @@ export function renderOrders(orders) {
       : "";
     const row = `
       <tr>
-        <td class="td-phone-call">${phoneCallIcon}</td>
-        <td class="td-actions">${editIcon}${filesIcon}</td>
+        <td></td>
+        <td></td>
         <td class="td-order-id"><span class="status-value">${order.id != null ? String(order.id).padStart(4, "0") : ""}</span></td>
+        <td class="td-order-date">${formatDateDDMMYYYY(order.order_date)}</td>
         <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${clientCell}</td>
         <td class="td-truncate-address" data-fulltext="${escapeAttr(address)}">${escapeHtml(address)}</td>
         <td class="td-truncate-description" data-fulltext="${escapeAttr(description)}">${escapeHtml(description)}</td>
@@ -164,7 +177,6 @@ export function renderOrders(orders) {
             ${order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом")}
           </span>
         </td>
-        <td class="td-order-date">${formatDateDDMMYYYY(order.order_date)}</td>
         <td class="td-order-number">${order.order_number ?? ""}</td>
         <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-money">${order.amount != null && order.amount !== "" ? `<span class="status-value">${formatAmount(order.amount)}</span>` : ""}</td>
@@ -177,7 +189,11 @@ export function renderOrders(orders) {
         <td>${order.installer_payment_by ? escapeHtml(order.installer_payment_by) : ""}</td>
         <td>${formatDateDDMMYYYY(order.reveals_date)}</td>
         <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
-        <td class="td-actions td-delete">${historyIcon}${deleteButton}</td>
+        <td class="td-actions td-phone-call">${phoneCallIcon}</td>
+        <td class="td-actions td-edit">${editIcon}</td>
+        <td class="td-actions td-files">${filesIcon}</td>
+        <td class="td-actions td-history">${historyIcon}</td>
+        <td class="td-actions td-delete">${deleteButton}</td>
       </tr>
     `;
 
