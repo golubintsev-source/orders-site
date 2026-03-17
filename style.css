@@ -1058,6 +1058,12 @@ th {
   font-size: 13px;
 }
 
+/* В колонке Остаток делаем сиреневую заливку */
+#ordersTable td.td-remaining .status-value {
+  background: #f3e8ff;
+  color: #4b0082;
+}
+
 .status-paid {
   display: inline-block;
   white-space: nowrap;
