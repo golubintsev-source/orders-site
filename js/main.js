@@ -1,5 +1,5 @@
 import { checkAuth, loadProfile } from "./auth.js";
-import { bindUIEvents } from "./ui.js";
+import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
 import { loadOrders, resetFormMode, editOrder, deleteOrder } from "./orders.js";
 import { initCalculationsSection } from "./calculations.js";
 import { loadSettings } from "./settings.js";
@@ -11,6 +11,7 @@ window.editOrder = editOrder;
 window.deleteOrder = deleteOrder;
 window.openFilesModal = openFilesModal;
 window.removeFile = removeFile;
+window.toggleOrderRowHighlightById = toggleOrderRowHighlightById;
 
 async function init() {
   bindUIEvents();

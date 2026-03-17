@@ -32,6 +32,18 @@ import {
 import { renderSelectedFiles } from "./files.js";
 import { saveInstallerRate, updateSettingsSaveButtonState } from "./settings.js";
 
+export function toggleOrderRowHighlightById(orderId) {
+  if (!ordersTable || orderId == null) return;
+  const tbody = ordersTable.querySelector("tbody");
+  if (!tbody) return;
+  const idStr = String(orderId);
+  const tr = tbody.querySelector(`td.td-order-id[data-order-id="${CSS.escape(idStr)}"]`)?.closest("tr");
+  if (!tr) return;
+  const wasHighlighted = tr.classList.contains("row-highlighted");
+  tbody.querySelectorAll("tr.row-highlighted").forEach((row) => row.classList.remove("row-highlighted"));
+  if (!wasHighlighted) tr.classList.add("row-highlighted");
+}
+
 function switchSection(sectionId) {
   if (!sectionId || !sectionNavBtns.length || !contentSections.length) return;
   sectionNavBtns.forEach((btn) => {
