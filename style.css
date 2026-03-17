@@ -1064,6 +1064,12 @@ th {
   color: #4b0082;
 }
 
+/* В колонке Стоимость (основная сумма заказа) тоже сиреневая заливка */
+#ordersTable td:nth-child(8) .status-value {
+  background: #f3e8ff;
+  color: #4b0082;
+}
+
 .status-paid {
   display: inline-block;
   white-space: nowrap;
