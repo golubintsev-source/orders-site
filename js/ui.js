@@ -280,6 +280,8 @@ export function bindUIEvents() {
     };
 
     let suppressClickUntilTs = 0;
+    let touchStart = null; // { x, y }
+    let touchMoved = false;
 
     const handleRowTapOrClick = (e, { isTouch }) => {
       if (cellTooltip.classList.contains("visible") && tooltipHideClick) {
@@ -339,10 +341,38 @@ export function bindUIEvents() {
       );
     }
 
+    // iOS: отличаем тап от скролла (иначе выделение срабатывает странно)
+    ordersTable.addEventListener(
+      "touchstart",
+      (e) => {
+        const t = e.touches && e.touches[0];
+        if (!t) return;
+        touchStart = { x: t.clientX, y: t.clientY };
+        touchMoved = false;
+      },
+      { passive: true, capture: true }
+    );
+    ordersTable.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!touchStart) return;
+        const t = e.touches && e.touches[0];
+        if (!t) return;
+        const dx = Math.abs(t.clientX - touchStart.x);
+        const dy = Math.abs(t.clientY - touchStart.y);
+        if (dx > 8 || dy > 8) touchMoved = true;
+      },
+      { passive: true, capture: true }
+    );
+
     // Fallback для Safari/iOS, если pointer events не срабатывают как ожидается
     ordersTable.addEventListener(
       "touchend",
       (e) => {
+        const wasMoved = touchMoved;
+        touchStart = null;
+        touchMoved = false;
+        if (wasMoved) return; // это был скролл/свайп, не тап
         suppressClickUntilTs = Date.now() + 800;
         handleRowTapOrClick(e, { isTouch: true });
       },

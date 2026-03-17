@@ -193,8 +193,8 @@ export function renderOrders(orders) {
         <td>${formatDateShortRU(order.reveals_date)}</td>
         <td class="td-mosquito-nets">${order.mosquito_nets != null && order.mosquito_nets !== "" ? escapeHtml(String(order.mosquito_nets)) : ""}</td>
         <td class="td-construction-count">${order.construction_count != null && order.construction_count !== "" ? escapeHtml(String(order.construction_count)) : ""}</td>
-        <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
         <td class="td-actions td-phone-call">${phoneCallIcon}</td>
+        <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
         <td class="td-actions td-edit">${editIcon}</td>
         <td class="td-actions td-history">${historyIcon}</td>
         <td class="td-actions td-delete">${deleteButton}</td>
