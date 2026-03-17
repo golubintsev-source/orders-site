@@ -939,12 +939,13 @@ th {
   white-space: nowrap;
 }
 
-.th-order-date,
-.td-order-date {
-  min-width: 95px;
+#ordersTable th.th-order-date,
+#ordersTable td.td-order-date {
+  min-width: 0;
+  width: 1%;
   white-space: nowrap;
   padding-left: 2px;
-  padding-right: 0;
+  padding-right: 10px;
   padding-top: 4px;
   padding-bottom: 4px;
 }
