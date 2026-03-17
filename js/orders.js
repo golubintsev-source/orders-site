@@ -165,8 +165,6 @@ export function renderOrders(orders) {
       : "";
     const row = `
       <tr>
-        <td></td>
-        <td></td>
         <td class="td-order-id" data-order-id="${order.id ?? ""}">
           <span class="status-value">${order.id != null ? String(order.id).padStart(4, "0") : ""}</span>
         </td>

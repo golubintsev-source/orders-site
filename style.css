@@ -746,7 +746,6 @@ th {
   text-decoration: underline;
 }
 
-#ordersTable th:first-child,
 #ordersTable td.td-phone-call {
   white-space: nowrap;
   width: 1%;
@@ -754,7 +753,6 @@ th {
   padding: 4px 2px 4px 0;
 }
 
-#ordersTable th:nth-child(2),
 #ordersTable td.td-actions {
   white-space: nowrap;
   width: 1%;
@@ -977,7 +975,6 @@ th {
 }
 
 /* Узкий столбец с иконкой звонка */
-#ordersTable th:first-child,
 #ordersTable td.td-phone-call {
   text-align: center;
   vertical-align: middle;
