@@ -717,18 +717,24 @@ td {
   text-align: right;
 }
 
+/* В таблице "Заказы" заголовки всегда слева (даже денежные) */
+#ordersTable th.th-money {
+  text-align: left;
+}
+
 .td-money {
   white-space: nowrap;
 }
 
 #ordersTable th {
-  padding: 4px 2px;
+  padding: 4px 3px;
   font-size: 13px;
   white-space: nowrap;
+  text-align: left;
 }
 
 #ordersTable td {
-  padding: 4px 2px;
+  padding: 4px 3px;
   font-size: 13px;
 }
 
@@ -784,11 +790,6 @@ th {
 /* ID в таблице — клик открывает редактирование */
 #ordersTable td.td-order-id {
   cursor: pointer;
-  padding-left: 0;
-}
-
-#ordersTable th:nth-child(3) {
-  padding-left: 0;
 }
 
 /* Подсветка строки по клику на ID */
@@ -947,14 +948,14 @@ th {
   min-width: 0;
   width: 1%;
   white-space: nowrap;
-  padding-left: 2px;
-  padding-right: 10px;
+  padding-left: 3px;
+  padding-right: 3px;
   padding-top: 4px;
   padding-bottom: 4px;
 }
 
 #ordersTable td.td-truncate-name {
-  padding-left: 0;
+  padding-left: 3px;
 }
 
 #ordersTable th.th-delivery,
@@ -1347,12 +1348,12 @@ th {
     font-size: 13px;
   }
 
-  #ordersTable th:nth-child(7),
+  #ordersTable th.th-order-date,
   #ordersTable td.td-order-date {
     padding: 4px 0 4px 2px;
   }
 
-  #ordersTable th:nth-child(8),
+  #ordersTable th.th-paid,
   #ordersTable td.td-paid {
     padding: 4px 2px 4px 0;
   }

@@ -179,8 +179,10 @@ export function renderOrders(orders) {
         </td>
         <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-money">${order.amount != null && order.amount !== "" ? `<span class="status-value">${formatAmount(order.amount)}</span>` : ""}</td>
-        <td class="td-prepayment td-money">${formatAmount(order.prepayment) + (order.prepayment_to ? " | " + escapeHtml(order.prepayment_to) : "")}</td>
-        <td class="td-remaining td-money">${formatAmount(order.remaining_amount) + (order.remaining_to ? " | " + escapeHtml(order.remaining_to) : "")}</td>
+        <td class="td-prepayment td-money">${formatAmount(order.prepayment)}</td>
+        <td class="td-prepayment-to">${order.prepayment_to ? escapeHtml(order.prepayment_to) : ""}</td>
+        <td class="td-remaining td-money">${formatAmount(order.remaining_amount)}</td>
+        <td class="td-remaining-to">${order.remaining_to ? escapeHtml(order.remaining_to) : ""}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
         <td class="td-delivery-date">${formatDateDDMMYYYY(order.delivery_date)}</td>
         <td class="td-installation-date">${formatDateDDMMYYYY(order.installation_date)}</td>
