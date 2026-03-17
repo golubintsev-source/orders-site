@@ -170,7 +170,7 @@ export function renderOrders(orders) {
         <td class="td-order-id" data-order-id="${order.id ?? ""}">
           <span class="status-value">${order.id != null ? String(order.id).padStart(4, "0") : ""}</span>
         </td>
-        <td class="td-order-date">${formatDateDDMMYYYY(order.order_date)}</td>
+        <td class="td-order-date">${formatDateShortRU(order.order_date)}</td>
         <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${clientCell}</td>
         <td class="td-truncate-address" data-fulltext="${escapeAttr(address)}">${escapeHtml(address)}</td>
         <td class="td-truncate-description" data-fulltext="${escapeAttr(description)}">${escapeHtml(description)}</td>
