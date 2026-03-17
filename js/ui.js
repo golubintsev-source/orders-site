@@ -313,12 +313,35 @@ export function bindUIEvents() {
         e.preventDefault();
         return;
       }
+      const idTd = e.target.closest("td.td-order-id");
+      if (idTd) {
+        const raw = idTd.getAttribute("data-order-id") || "";
+        const orderId = raw ? Number(raw) : NaN;
+        if (!Number.isNaN(orderId) && typeof window.editOrder === "function") {
+          window.editOrder(orderId);
+          e.preventDefault();
+        }
+        return;
+      }
+
+      // Тап по интерактивным элементам строки не должен включать выделение
+      if (e.target.closest("button, a, .btn-icon, input, select, textarea, label")) return;
+
       if (e.target.closest("a.tel-link")) return;
+
       const td = e.target.closest("td.td-truncate-name, td.td-truncate-address, td.td-truncate-description");
-      if (!td) return;
-      e.preventDefault();
-      e.stopPropagation();
-      showCellTooltip(td);
+      if (td) {
+        e.preventDefault();
+        e.stopPropagation();
+        showCellTooltip(td);
+        return;
+      }
+
+      const tr = e.target.closest("tbody tr");
+      if (tr) {
+        e.preventDefault();
+        toggleRowHighlight(tr);
+      }
     }, { passive: false });
   }
 

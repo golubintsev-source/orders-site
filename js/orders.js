@@ -182,8 +182,9 @@ export function renderOrders(orders) {
         <td class="td-prepayment td-money">${formatAmount(order.prepayment) + (order.prepayment_to ? " | " + escapeHtml(order.prepayment_to) : "")}</td>
         <td class="td-remaining td-money">${formatAmount(order.remaining_amount) + (order.remaining_to ? " | " + escapeHtml(order.remaining_to) : "")}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
-        <td>${formatDateDDMMYYYY(order.delivery_date)}</td>
-        <td>${formatDateDDMMYYYY(order.installation_date)}</td>
+        <td class="td-delivery-date">${formatDateDDMMYYYY(order.delivery_date)}</td>
+        <td class="td-installation-date">${formatDateDDMMYYYY(order.installation_date)}</td>
+        <td class="td-area-m2">${order.area_m2 != null && order.area_m2 !== "" ? escapeHtml(String(order.area_m2)) : ""}</td>
         <td class="td-money">${order.installer_payment_by && order.installer_payment_amount != null && order.installer_payment_amount !== "" ? `<span class="installer-paid-value">${formatAmount(order.installer_payment_amount)}</span>` : (order.installer_payment_amount != null && order.installer_payment_amount !== "" ? formatAmount(order.installer_payment_amount) : "")}</td>
         <td>${order.installer_payment_by ? escapeHtml(order.installer_payment_by) : ""}</td>
         <td>${formatDateDDMMYYYY(order.reveals_date)}</td>

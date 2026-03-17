@@ -957,18 +957,18 @@ th {
   padding-left: 0;
 }
 
-#ordersTable th:nth-child(12),
+#ordersTable th.th-delivery,
 #ordersTable td.td-delivery {
   white-space: nowrap;
 }
 
-#ordersTable th:nth-child(13),
-#ordersTable td:nth-child(13) {
+#ordersTable th.th-delivery-date,
+#ordersTable td.td-delivery-date {
   min-width: 95px;
   white-space: nowrap;
 }
 
-#ordersTable th:nth-child(14),
+#ordersTable th.th-phone,
 #ordersTable td.td-phone {
   min-width: 110px;
   white-space: nowrap;
