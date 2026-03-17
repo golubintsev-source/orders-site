@@ -288,6 +288,8 @@ export function bindUIEvents() {
         return;
       }
 
+      const tr = e.target.closest("tbody tr");
+
       const idTd = e.target.closest("td.td-order-id");
       if (idTd) {
         const raw = idTd.getAttribute("data-order-id") || "";
@@ -304,19 +306,22 @@ export function bindUIEvents() {
 
       if (e.target.closest("a.tel-link")) return;
 
+      // На телефоне: приоритет у выделения строки (подсказки не мешают выделению)
+      if (isTouch) {
+        if (tr) {
+          e.preventDefault();
+          toggleRowHighlight(tr);
+        }
+        return;
+      }
+
       const td = e.target.closest("td.td-truncate-name, td.td-truncate-address, td.td-truncate-description");
       if (td) {
-        if (isTouch) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
         showCellTooltip(td);
         return;
       }
 
-      const tr = e.target.closest("tbody tr");
       if (tr) {
-        if (isTouch) e.preventDefault();
         toggleRowHighlight(tr);
       }
     };

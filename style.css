@@ -981,6 +981,11 @@ th {
   vertical-align: middle;
 }
 
+#ordersTable td.td-files {
+  text-align: center;
+  vertical-align: middle;
+}
+
 #ordersTable td.td-history {
   width: 1%;
   min-width: 1px;

@@ -169,6 +169,7 @@ export function renderOrders(orders) {
           <span class="status-value">${order.id != null ? String(order.id).padStart(4, "0") : ""}</span>
         </td>
         <td class="td-order-date">${formatDateShortRU(order.order_date)}</td>
+        <td class="td-actions td-files">${filesIcon}</td>
         <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${clientCell}</td>
         <td class="td-truncate-address" data-fulltext="${escapeAttr(address)}">${escapeHtml(address)}</td>
         <td class="td-truncate-description" data-fulltext="${escapeAttr(description)}">${escapeHtml(description)}</td>
@@ -195,7 +196,6 @@ export function renderOrders(orders) {
         <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
         <td class="td-actions td-phone-call">${phoneCallIcon}</td>
         <td class="td-actions td-edit">${editIcon}</td>
-        <td class="td-actions td-files">${filesIcon}</td>
         <td class="td-actions td-history">${historyIcon}</td>
         <td class="td-actions td-delete">${deleteButton}</td>
       </tr>
