@@ -285,13 +285,14 @@ export function initStatusFilter() {
 }
 
 export function getFormData() {
+  const orderNumberEl = document.getElementById("order_number");
   return {
     phone: document.getElementById("phone").value.trim() || null,
     client: document.getElementById("client").value.trim() || null,
     address: document.getElementById("address").value.trim() || null,
     payment_status: document.getElementById("payment_status").value.trim() || null,
     order_date: document.getElementById("order_date").value || null,
-    order_number: document.getElementById("order_number").value.trim() || null,
+    order_number: orderNumberEl ? (orderNumberEl.value.trim() || null) : null,
     description: document.getElementById("description").value.trim() || null,
     amount: document.getElementById("amount").value
       ? Number(document.getElementById("amount").value)
@@ -447,7 +448,8 @@ export function fillForm(order) {
   state.initialPaymentStatus = displayStatus;
   const orderDateVal = order.order_date || "";
   document.getElementById("order_date").value = orderDateVal.includes("T") ? orderDateVal.slice(0, 16) : (orderDateVal ? orderDateVal + "T00:00" : "");
-  document.getElementById("order_number").value = order.order_number || "";
+  const orderNumberEl = document.getElementById("order_number");
+  if (orderNumberEl) orderNumberEl.value = order.order_number || "";
   document.getElementById("description").value = order.description ?? "";
   document.getElementById("amount").value = order.amount ?? "";
   document.getElementById("prepayment").value = order.prepayment ?? "";
