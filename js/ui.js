@@ -279,70 +279,59 @@ export function bindUIEvents() {
       if (!wasHighlighted) tr.classList.add("row-highlighted");
     };
 
-    ordersTable.addEventListener("click", (e) => {
+    let suppressClickUntilTs = 0;
+
+    const handleRowTapOrClick = (e, { isTouch }) => {
       if (cellTooltip.classList.contains("visible") && tooltipHideClick) {
         tooltipHideClick();
+        if (isTouch) e.preventDefault();
         return;
       }
+
       const idTd = e.target.closest("td.td-order-id");
       if (idTd) {
         const raw = idTd.getAttribute("data-order-id") || "";
         const orderId = raw ? Number(raw) : NaN;
         if (!Number.isNaN(orderId) && typeof window.editOrder === "function") {
           window.editOrder(orderId);
+          if (isTouch) e.preventDefault();
         }
         return;
       }
 
-      // Клик по интерактивным элементам строки не должен включать выделение
+      // Тап/клик по интерактивным элементам строки не должен включать выделение
       if (e.target.closest("button, a, .btn-icon, input, select, textarea, label")) return;
 
-      const tr = e.target.closest("tbody tr");
-      if (tr) toggleRowHighlight(tr);
-
       if (e.target.closest("a.tel-link")) return;
+
       const td = e.target.closest("td.td-truncate-name, td.td-truncate-address, td.td-truncate-description");
       if (td) {
-        e.stopPropagation();
-        showCellTooltip(td);
-      }
-    });
-    ordersTable.addEventListener("touchend", (e) => {
-      if (cellTooltip.classList.contains("visible") && tooltipHideClick) {
-        tooltipHideClick();
-        e.preventDefault();
-        return;
-      }
-      const idTd = e.target.closest("td.td-order-id");
-      if (idTd) {
-        const raw = idTd.getAttribute("data-order-id") || "";
-        const orderId = raw ? Number(raw) : NaN;
-        if (!Number.isNaN(orderId) && typeof window.editOrder === "function") {
-          window.editOrder(orderId);
+        if (isTouch) {
           e.preventDefault();
+          e.stopPropagation();
         }
-        return;
-      }
-
-      // Тап по интерактивным элементам строки не должен включать выделение
-      if (e.target.closest("button, a, .btn-icon, input, select, textarea, label")) return;
-
-      if (e.target.closest("a.tel-link")) return;
-
-      const td = e.target.closest("td.td-truncate-name, td.td-truncate-address, td.td-truncate-description");
-      if (td) {
-        e.preventDefault();
-        e.stopPropagation();
         showCellTooltip(td);
         return;
       }
 
       const tr = e.target.closest("tbody tr");
       if (tr) {
-        e.preventDefault();
+        if (isTouch) e.preventDefault();
         toggleRowHighlight(tr);
       }
+    };
+
+    // Для телефонов: pointer events работают стабильнее, чем touchend
+    ordersTable.addEventListener("pointerup", (e) => {
+      if (e.pointerType !== "touch") return;
+      suppressClickUntilTs = Date.now() + 800;
+      handleRowTapOrClick(e, { isTouch: true });
     }, { passive: false });
+
+    ordersTable.addEventListener("click", (e) => {
+      if (Date.now() < suppressClickUntilTs) return;
+      handleRowTapOrClick(e, { isTouch: false });
+    });
   }
 
   if (window.location.hash === "#all") {
