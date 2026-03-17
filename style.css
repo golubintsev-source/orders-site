@@ -690,11 +690,7 @@ button:active {
 /* ===== таблица ===== */
 .table-wrap {
   overflow-x: auto;
-  transform: scaleY(-1);
-}
-
-.table-wrap > table {
-  transform: scaleY(-1);
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -972,10 +968,6 @@ th {
   min-width: 0;
   width: 1%;
   white-space: nowrap;
-}
-
-#ordersTable th.th-installation-date,
-#ordersTable td.td-installation-date {
 }
 
 #ordersTable th.th-phone,
