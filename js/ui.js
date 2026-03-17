@@ -321,12 +321,28 @@ export function bindUIEvents() {
       }
     };
 
-    // Для телефонов: pointer events работают стабильнее, чем touchend
-    ordersTable.addEventListener("pointerup", (e) => {
-      if (e.pointerType !== "touch") return;
-      suppressClickUntilTs = Date.now() + 800;
-      handleRowTapOrClick(e, { isTouch: true });
-    }, { passive: false });
+    // Для телефонов: пробуем Pointer Events, а для iOS добавляем fallback на touchend
+    if ("PointerEvent" in window) {
+      ordersTable.addEventListener(
+        "pointerup",
+        (e) => {
+          if (e.pointerType !== "touch") return;
+          suppressClickUntilTs = Date.now() + 800;
+          handleRowTapOrClick(e, { isTouch: true });
+        },
+        { passive: false, capture: true }
+      );
+    }
+
+    // Fallback для Safari/iOS, если pointer events не срабатывают как ожидается
+    ordersTable.addEventListener(
+      "touchend",
+      (e) => {
+        suppressClickUntilTs = Date.now() + 800;
+        handleRowTapOrClick(e, { isTouch: true });
+      },
+      { passive: false, capture: true }
+    );
 
     ordersTable.addEventListener("click", (e) => {
       if (Date.now() < suppressClickUntilTs) return;
