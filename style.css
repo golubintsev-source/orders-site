@@ -786,6 +786,11 @@ th {
 /* ID в таблице — клик открывает редактирование */
 #ordersTable td.td-order-id {
   cursor: pointer;
+  padding-left: 0;
+}
+
+#ordersTable th:nth-child(3) {
+  padding-left: 0;
 }
 
 /* Подсветка строки по клику на ID */
