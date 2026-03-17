@@ -375,7 +375,13 @@ h2 {
 }
 
 #calculationsTable { min-width: 500px; }
-#calculationsTable th, #calculationsTable td { padding: 8px 10px; font-size: 13px; }
+#calculationsTable th, #calculationsTable td { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
+#calculationsTable td.td-calc-comment {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+}
 #calculationsTable .td-actions { white-space: nowrap; }
 #calculationsTable .btn-icon { padding: 4px; border: none; background: none; cursor: pointer; color: #6b7280; }
 #calculationsTable .btn-icon:hover { color: #1f6feb; }

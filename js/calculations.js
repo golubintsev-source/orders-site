@@ -5,12 +5,12 @@ import { formatAmount } from "./format.js";
 let editingId = null;
 let editingCreatedAt = null;
 
-function formatDateTime(iso) {
+function formatDateShort(iso) {
   if (!iso) return "";
   try {
     const d = new Date(iso);
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const months = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+    return `${d.getDate()} ${months[d.getMonth()]}`;
   } catch {
     return iso;
   }
@@ -66,13 +66,15 @@ export async function loadCalculations() {
   }
 
   data.forEach((row) => {
+    const comment = row.comment ?? "";
+    const escapedComment = escapeHtml(comment);
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(formatDateTime(row.created_at))}</td>
+      <td>${escapeHtml(formatDateShort(row.created_at))}</td>
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
       <td>${escapeHtml(formatAmount(row.amount))}</td>
-      <td>${escapeHtml(row.comment)}</td>
+      <td class="td-calc-comment" title="${escapedComment}">${escapedComment}</td>
       <td class="td-actions">
         <button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">✎</button>
         <button type="button" class="btn-icon btn-delete" data-id="${row.id}" title="Удалить">✕</button>
