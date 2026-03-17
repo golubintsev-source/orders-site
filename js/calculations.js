@@ -73,7 +73,7 @@ export async function loadCalculations() {
       <td>${escapeHtml(formatDateShort(row.created_at))}</td>
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
-      <td>${escapeHtml(formatAmount(row.amount))}</td>
+      <td class="td-money">${escapeHtml(formatAmount(row.amount))}</td>
       <td class="td-calc-comment" title="${escapedComment}">${escapedComment}</td>
       <td class="td-actions">
         <button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">✎</button>

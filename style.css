@@ -712,6 +712,15 @@ td {
   vertical-align: middle;
 }
 
+.th-money,
+.td-money {
+  text-align: right;
+}
+
+.td-money {
+  white-space: nowrap;
+}
+
 #ordersTable th {
   padding: 4px 2px;
   font-size: 13px;
