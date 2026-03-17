@@ -291,14 +291,9 @@ export function bindUIEvents() {
       if (!wasHighlighted) tr.classList.add("row-highlighted");
     };
 
-    let suppressClickUntilTs = 0;
-    let touchStart = null; // { x, y }
-    let touchMoved = false;
-
-    const handleRowTapOrClick = (e, { isTouch }) => {
+    const handleRowClick = (e) => {
       if (cellTooltip.classList.contains("visible") && tooltipHideClick) {
         tooltipHideClick();
-        if (isTouch) e.preventDefault();
         return;
       }
 
@@ -310,7 +305,6 @@ export function bindUIEvents() {
         const orderId = raw ? Number(raw) : NaN;
         if (!Number.isNaN(orderId) && typeof window.editOrder === "function") {
           window.editOrder(orderId);
-          if (isTouch) e.preventDefault();
         }
         return;
       }
@@ -319,14 +313,6 @@ export function bindUIEvents() {
       if (e.target.closest("button, a, .btn-icon, input, select, textarea, label")) return;
 
       if (e.target.closest("a.tel-link")) return;
-
-      // На телефоне: приоритет у выделения строки (подсказки не мешают выделению)
-      if (isTouch) {
-        if (tr) {
-          toggleRowHighlight(tr);
-        }
-        return;
-      }
 
       const td = e.target.closest("td.td-truncate-name, td.td-truncate-address, td.td-truncate-description");
       if (td) {
@@ -339,60 +325,8 @@ export function bindUIEvents() {
       }
     };
 
-    // Для телефонов: пробуем Pointer Events, а для iOS добавляем fallback на touchend
-    if ("PointerEvent" in window) {
-      ordersTable.addEventListener(
-        "pointerup",
-        (e) => {
-          if (e.pointerType !== "touch") return;
-          suppressClickUntilTs = Date.now() + 800;
-          handleRowTapOrClick(e, { isTouch: true });
-        },
-        { passive: false, capture: true }
-      );
-    }
-
-    // iOS: отличаем тап от скролла (иначе выделение срабатывает странно)
-    ordersTable.addEventListener(
-      "touchstart",
-      (e) => {
-        const t = e.touches && e.touches[0];
-        if (!t) return;
-        touchStart = { x: t.clientX, y: t.clientY };
-        touchMoved = false;
-      },
-      { passive: true, capture: true }
-    );
-    ordersTable.addEventListener(
-      "touchmove",
-      (e) => {
-        if (!touchStart) return;
-        const t = e.touches && e.touches[0];
-        if (!t) return;
-        const dx = Math.abs(t.clientX - touchStart.x);
-        const dy = Math.abs(t.clientY - touchStart.y);
-        if (dx > 15 || dy > 15) touchMoved = true;
-      },
-      { passive: true, capture: true }
-    );
-
-    // Fallback для Safari/iOS, если pointer events не срабатывают как ожидается
-    ordersTable.addEventListener(
-      "touchend",
-      (e) => {
-        const wasMoved = touchMoved;
-        touchStart = null;
-        touchMoved = false;
-        if (wasMoved) return; // это был скролл/свайп, не тап
-        suppressClickUntilTs = Date.now() + 800;
-        handleRowTapOrClick(e, { isTouch: true });
-      },
-      { passive: false, capture: true }
-    );
-
     ordersTable.addEventListener("click", (e) => {
-      if (Date.now() < suppressClickUntilTs) return;
-      handleRowTapOrClick(e, { isTouch: false });
+      handleRowClick(e);
     });
   }
 
