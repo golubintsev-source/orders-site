@@ -7,7 +7,7 @@ import {
   filesModal,
   filesModalBody,
   filesModalTitle,
-  message,
+  setMessage,
 } from "./dom.js";
 
 export function renderSelectedFiles() {
@@ -105,7 +105,7 @@ export async function uploadFiles(orderId) {
 
     if (uploadError) {
       console.error("Ошибка загрузки файла:", uploadError);
-      message.textContent = `Ошибка загрузки файла: ${file.name}`;
+      setMessage(`Ошибка загрузки файла: ${file.name}`, "#d32f2f");
       continue;
     }
 
@@ -124,7 +124,7 @@ export async function uploadFiles(orderId) {
 
     if (dbError) {
       console.error("Ошибка записи файла в БД:", dbError);
-      message.textContent = `Файл загружен, но не записан в БД: ${file.name}`;
+      setMessage(`Файл загружен, но не записан в БД: ${file.name}`, "#d32f2f");
     }
   }
 
@@ -258,7 +258,7 @@ export async function removeFile(fileId, storagePath, orderId) {
 
   if (storageError) {
     console.error("Ошибка удаления файла из Storage:", storageError);
-    message.textContent = "Ошибка удаления файла";
+    setMessage("Ошибка удаления файла", "#d32f2f");
     return;
   }
 
@@ -269,11 +269,11 @@ export async function removeFile(fileId, storagePath, orderId) {
 
   if (dbError) {
     console.error("Ошибка удаления записи файла:", dbError);
-    message.textContent = "Файл удалён из Storage, но не удалён из БД";
+    setMessage("Файл удалён из Storage, но не удалён из БД", "#d32f2f");
     return;
   }
 
-  message.textContent = "Файл удалён";
+  setMessage("Файл удалён");
   await loadFilesCountMap();
 
   const { applyClientFilter } = await import("./orders.js");

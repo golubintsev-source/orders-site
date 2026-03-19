@@ -2,7 +2,7 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import {
   clientSearch,
-  message,
+  setMessage,
   submitBtn,
   submitBtnTop,
   formTitle,
@@ -29,7 +29,7 @@ export async function loadOrders() {
 
   if (error) {
     console.error("Ошибка загрузки:", error);
-    message.textContent = "Ошибка загрузки заявок";
+    setMessage("Ошибка загрузки заявок", "#d32f2f");
     return;
   }
 
@@ -46,6 +46,7 @@ const STATUS_OPTIONS = [
   "Предложение направлено",
   "Клиент согласен",
   "Производство",
+  "Товар передан заказчику",
   "Монтаж выполнен",
   "Заказ закрыт",
 ];
@@ -53,6 +54,83 @@ const STATUS_OPTIONS = [
 function normalizeStatus(val) {
   if (val === "нет" || val === "оплачен" || val == null || val === "") return "Контакт с клиентом";
   return val;
+}
+
+const ORDER_FORM_NUMERIC_FIELD_DECIMALS = {
+  amount: 2,
+  prepayment: 2,
+  remaining_amount: 2,
+  area_m2: 2,
+  mosquito_nets: 0,
+  construction_count: 0,
+  installer_rate_per_m2: 2,
+  installer_payment_amount: 2,
+};
+
+function parseOrderFormNumber(raw) {
+  if (raw == null) return null;
+  const s0 = String(raw).trim();
+  if (!s0) return null;
+
+  // Убираем пробелы как разделители тысяч
+  const s = s0.replace(/[\s\u00A0\u202F]/g, "").replace(",", ".");
+  if (s === "" || s === "." || s === "-" || s === "-.") return null;
+
+  // Контроль на слишком много точек (например, "1.2.3")
+  const dotCount = (s.match(/\./g) || []).length;
+  if (dotCount > 1) return null;
+
+  const n = Number(s);
+  return Number.isNaN(n) ? null : n;
+}
+
+function formatNumberWithSpaces(num, decimals) {
+  if (num == null || !Number.isFinite(num)) return "";
+
+  const sign = num < 0 ? "-" : "";
+  const abs = Math.abs(num);
+
+  let fixed;
+  if (decimals != null) {
+    fixed = abs.toFixed(decimals);
+  } else {
+    fixed = String(abs);
+  }
+
+  let intPart = fixed;
+  let fracPart = "";
+  if (fixed.includes(".")) {
+    [intPart, fracPart] = fixed.split(".");
+  }
+
+  intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+  if (decimals != null && decimals > 0) {
+    fracPart = (fracPart || "").replace(/0+$/g, "");
+    if (fracPart) return `${sign}${intPart}.${fracPart}`;
+  }
+
+  return `${sign}${intPart}`;
+}
+
+function formatOrderFormNumberValue(value, decimals) {
+  const n = typeof value === "number" ? value : parseOrderFormNumber(value);
+  return n == null ? "" : formatNumberWithSpaces(n, decimals);
+}
+
+export function formatOrderFormNumericInputById(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const decimals = ORDER_FORM_NUMERIC_FIELD_DECIMALS[id];
+  if (decimals == null) return;
+  const raw = el.value;
+  if (raw == null || String(raw).trim() === "") {
+    el.value = "";
+    return;
+  }
+  const n = parseOrderFormNumber(raw);
+  if (n == null) return; /* Не очищаем поле, если введён частично/нечисловое */
+  el.value = formatNumberWithSpaces(n, decimals);
 }
 
 // ===== Синхронизация верхнего скролла таблицы "Заказы" =====
@@ -126,10 +204,16 @@ function getFilteredOrders() {
     list = list.filter((order) => {
       const phone = (order.phone || "").toLowerCase();
       const name = (order.client || "").toLowerCase();
+      const orderType = (order.order_type || "").toLowerCase();
       const address = (order.address || "").toLowerCase();
       const number = (order.order_number || "").toLowerCase();
       const description = (order.description || "").toLowerCase();
-      return phone.includes(query) || name.includes(query) || address.includes(query) || number.includes(query) || description.includes(query);
+      return phone.includes(query)
+        || name.includes(query)
+        || orderType.includes(query)
+        || address.includes(query)
+        || number.includes(query)
+        || description.includes(query);
     });
   }
 
@@ -186,7 +270,7 @@ function paidBadge(order) {
   const paid = isOrderPaid(order);
   const status = order.payment_status || "";
   if (paid) return '<span class="status-paid">да</span>';
-  if (status === "Производство" || status === "Монтаж выполнен") return '<span class="paid-no-alert">нет</span>';
+  if (status === "Производство" || status === "Товар передан заказчику" || status === "Монтаж выполнен") return '<span class="paid-no-alert">нет</span>';
   return '<span class="status-value">нет</span>';
 }
 
@@ -213,6 +297,8 @@ export function renderOrders(orders) {
     const phone = order.phone ?? "";
     const telHref = phone ? "tel:" + phone.replace(/[^\d+]/g, "") : "";
     const client = order.client ?? "";
+    const orderType = order.order_type ?? "";
+    const orderTypeFirstLetter = orderType.trim() ? orderType.trim().charAt(0) : "";
     const address = order.address ?? "";
     const description = order.description ?? "";
     const clientCell = client ? escapeHtml(client) : "";
@@ -222,7 +308,9 @@ export function renderOrders(orders) {
     const row = `
       <tr>
         <td class="td-order-id" data-order-id="${order.id ?? ""}">
-          <span class="status-value">${order.id != null ? String(order.id).padStart(4, "0") : ""}</span>
+          <span class="status-value">
+            ${order.id != null ? String(order.id).padStart(4, "0") : ""}${orderTypeFirstLetter ? escapeHtml(orderTypeFirstLetter) : ""}
+          </span>
         </td>
         <td class="td-order-date">${formatDateShortRU(order.order_date)}</td>
         <td class="td-actions td-files">${filesIcon}</td>
@@ -234,11 +322,11 @@ export function renderOrders(orders) {
             ${order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом")}
           </span>
         </td>
-        <td class="td-money">${order.amount != null && order.amount !== "" ? `<span class="status-value">${formatAmount(order.amount)}</span>` : ""}</td>
-        <td class="td-paid">${paidBadge(order)}</td>
+        <td class="td-money td-main-amount">${order.amount != null && order.amount !== "" ? `<span class="status-value">${formatAmount(order.amount)}</span>` : ""}</td>
         <td class="td-prepayment td-money">${order.prepayment != null && order.prepayment !== "" ? `<span class="status-value">${formatAmount(order.prepayment)}</span>` : ""}</td>
         <td class="td-prepayment-to">${order.prepayment_to ? escapeHtml(order.prepayment_to) : ""}</td>
         <td class="td-remaining td-money">${order.remaining_amount != null && order.remaining_amount !== "" ? `<span class="status-value">${formatAmount(order.remaining_amount)}</span>` : ""}</td>
+        <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-remaining-to">${order.remaining_to ? escapeHtml(order.remaining_to) : ""}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
         <td class="td-delivery-date">${formatDateShortRU(order.delivery_date)}</td>
@@ -350,31 +438,20 @@ export function getFormData() {
   return {
     phone: document.getElementById("phone").value.trim() || null,
     client: document.getElementById("client").value.trim() || null,
+    order_type: document.getElementById("order_type")?.value.trim() || null,
     address: document.getElementById("address").value.trim() || null,
     payment_status: document.getElementById("payment_status").value.trim() || null,
     order_date: document.getElementById("order_date").value || null,
     order_number: orderNumberEl ? (orderNumberEl.value.trim() || null) : null,
     description: document.getElementById("description").value.trim() || null,
-    amount: document.getElementById("amount").value
-      ? Number(document.getElementById("amount").value)
-      : null,
-    prepayment: document.getElementById("prepayment").value
-      ? Number(document.getElementById("prepayment").value)
-      : null,
+    amount: parseOrderFormNumber(document.getElementById("amount").value),
+    prepayment: parseOrderFormNumber(document.getElementById("prepayment").value),
     prepayment_to: document.getElementById("prepayment_to").value.trim() || null,
-    remaining_amount: document.getElementById("remaining_amount").value
-      ? Number(document.getElementById("remaining_amount").value)
-      : null,
+    remaining_amount: parseOrderFormNumber(document.getElementById("remaining_amount").value),
     remaining_to: document.getElementById("remaining_to").value.trim() || null,
-    area_m2: document.getElementById("area_m2").value
-      ? Number(document.getElementById("area_m2").value)
-      : null,
-    mosquito_nets: document.getElementById("mosquito_nets").value
-      ? Number(document.getElementById("mosquito_nets").value)
-      : null,
-    construction_count: document.getElementById("construction_count").value
-      ? Number(document.getElementById("construction_count").value)
-      : null,
+    area_m2: parseOrderFormNumber(document.getElementById("area_m2").value),
+    mosquito_nets: parseOrderFormNumber(document.getElementById("mosquito_nets").value),
+    construction_count: parseOrderFormNumber(document.getElementById("construction_count").value),
     delivery: document.getElementById("delivery").value.trim() || null,
     delivery_date: document.getElementById("delivery_date").value || null,
     installation: document.getElementById("installation").checked,
@@ -385,9 +462,7 @@ export function getFormData() {
     reveals_date: document.getElementById("reveals").checked
       ? (document.getElementById("reveals_date").value || null)
       : null,
-    installer_payment_amount: document.getElementById("installer_payment_amount")?.value
-      ? Number(document.getElementById("installer_payment_amount").value)
-      : null,
+    installer_payment_amount: parseOrderFormNumber(document.getElementById("installer_payment_amount")?.value),
     installer_payment_by: document.getElementById("installer_payment_by")?.value?.trim() || null,
   };
 }
@@ -398,13 +473,11 @@ export function updateRemainingFromCostAndPrepayment() {
   const prepaymentEl = document.getElementById("prepayment");
   const remainingEl = document.getElementById("remaining_amount");
   if (!amountEl || !prepaymentEl || !remainingEl) return;
-  const amountVal = (amountEl.value || "").trim();
-  if (amountVal === "") return;
-  const amount = parseFloat(amountVal);
-  if (Number.isNaN(amount)) return;
-  const prepayment = parseFloat(prepaymentEl.value) || 0;
+  const amount = parseOrderFormNumber(amountEl.value);
+  if (amount == null) return;
+  const prepayment = parseOrderFormNumber(prepaymentEl.value) ?? 0;
   const remaining = amount - prepayment;
-  remainingEl.value = remaining === 0 ? "0" : String(remaining);
+  remainingEl.value = formatOrderFormNumberValue(remaining, ORDER_FORM_NUMERIC_FIELD_DECIMALS.remaining_amount);
 }
 
 /** Оплачено = "да" только если заполнено "Кому остаток" (select). Правило по сумме не используется. */
@@ -468,9 +541,11 @@ export function updateInstallerPaymentAmountFromArea() {
   if (!amountEl || amountEl.disabled) return;
   const areaEl = document.getElementById("area_m2");
   const rateEl = document.getElementById("installer_rate_per_m2");
-  const area = parseFloat(areaEl?.value) || 0;
-  const rate = parseFloat(rateEl?.value) || (state.defaultInstallerRatePerM2 ?? 1400);
-  amountEl.value = area > 0 && rate > 0 ? String(area * rate) : "";
+  const area = parseOrderFormNumber(areaEl?.value) ?? 0;
+  const rate = parseOrderFormNumber(rateEl?.value) ?? (state.defaultInstallerRatePerM2 ?? 1400);
+  amountEl.value = area > 0 && rate > 0
+    ? formatOrderFormNumberValue(area * rate, ORDER_FORM_NUMERIC_FIELD_DECIMALS.installer_payment_amount)
+    : "";
   updateInstallerBlockByInstallationDate();
 }
 
@@ -486,7 +561,9 @@ export async function checkInstallerPaymentDone(orderId) {
   if (!row) return;
   state.installerPaymentDone = true;
   const { amountEl, byEl } = getInstallerPaymentElements();
-  if (amountEl) amountEl.value = row.amount != null ? String(row.amount) : "";
+  if (amountEl) amountEl.value = row.amount != null
+    ? formatOrderFormNumberValue(row.amount, ORDER_FORM_NUMERIC_FIELD_DECIMALS.installer_payment_amount)
+    : "";
   if (byEl) byEl.value = row.from_place || "";
   updateInstallerBlockByInstallationDate();
 }
@@ -496,6 +573,8 @@ export function fillForm(order) {
   document.getElementById("phone").value = order.phone || "";
   document.getElementById("phone").dispatchEvent(new Event("input", { bubbles: true }));
   document.getElementById("client").value = order.client || "";
+  const orderTypeEl = document.getElementById("order_type");
+  if (orderTypeEl) orderTypeEl.value = order.order_type || "";
   document.getElementById("address").value = order.address || "";
   const statusVal = order.payment_status || "";
   const displayStatus = statusVal === "нет" || statusVal === "оплачен" || !statusVal
@@ -512,18 +591,32 @@ export function fillForm(order) {
   const orderNumberEl = document.getElementById("order_number");
   if (orderNumberEl) orderNumberEl.value = order.order_number || "";
   document.getElementById("description").value = order.description ?? "";
-  document.getElementById("amount").value = order.amount ?? "";
-  document.getElementById("prepayment").value = order.prepayment ?? "";
+  document.getElementById("amount").value = order.amount != null
+    ? formatOrderFormNumberValue(order.amount, ORDER_FORM_NUMERIC_FIELD_DECIMALS.amount)
+    : "";
+  document.getElementById("prepayment").value = order.prepayment != null
+    ? formatOrderFormNumberValue(order.prepayment, ORDER_FORM_NUMERIC_FIELD_DECIMALS.prepayment)
+    : "";
   document.getElementById("prepayment_to").value = order.prepayment_to || "";
-  document.getElementById("remaining_amount").value = order.remaining_amount ?? "";
+  document.getElementById("remaining_amount").value = order.remaining_amount != null
+    ? formatOrderFormNumberValue(order.remaining_amount, ORDER_FORM_NUMERIC_FIELD_DECIMALS.remaining_amount)
+    : "";
   document.getElementById("remaining_to").value = order.remaining_to || "";
-  document.getElementById("area_m2").value = order.area_m2 ?? "";
+  document.getElementById("area_m2").value = order.area_m2 != null
+    ? formatOrderFormNumberValue(order.area_m2, ORDER_FORM_NUMERIC_FIELD_DECIMALS.area_m2)
+    : "";
   const installerAmountEl = document.getElementById("installer_payment_amount");
-  if (installerAmountEl) installerAmountEl.value = order.installer_payment_amount != null ? String(order.installer_payment_amount) : "";
+  if (installerAmountEl) installerAmountEl.value = order.installer_payment_amount != null
+    ? formatOrderFormNumberValue(order.installer_payment_amount, ORDER_FORM_NUMERIC_FIELD_DECIMALS.installer_payment_amount)
+    : "";
   const installerByEl = document.getElementById("installer_payment_by");
   if (installerByEl) installerByEl.value = order.installer_payment_by || "";
-  document.getElementById("mosquito_nets").value = order.mosquito_nets ?? "";
-  document.getElementById("construction_count").value = order.construction_count ?? "";
+  document.getElementById("mosquito_nets").value = order.mosquito_nets != null
+    ? formatOrderFormNumberValue(order.mosquito_nets, ORDER_FORM_NUMERIC_FIELD_DECIMALS.mosquito_nets)
+    : "";
+  document.getElementById("construction_count").value = order.construction_count != null
+    ? formatOrderFormNumberValue(order.construction_count, ORDER_FORM_NUMERIC_FIELD_DECIMALS.construction_count)
+    : "";
   document.getElementById("delivery").value = order.delivery || "";
   document.getElementById("delivery_date").value = order.delivery_date || "";
   const installationCb = document.getElementById("installation");
@@ -565,7 +658,12 @@ export function resetFormMode() {
   if (inst.byEl) inst.byEl.value = "";
   setInstallerPaymentBlockDisabled(false);
   const ratePerM2El = document.getElementById("installer_rate_per_m2");
-  if (ratePerM2El) ratePerM2El.value = String(state.defaultInstallerRatePerM2 ?? 1400);
+  if (ratePerM2El) {
+    ratePerM2El.value = formatOrderFormNumberValue(
+      state.defaultInstallerRatePerM2 ?? 1400,
+      ORDER_FORM_NUMERIC_FIELD_DECIMALS.installer_rate_per_m2
+    );
+  }
   const orderDateInput = document.getElementById("order_date");
   if (orderDateInput) orderDateInput.value = getNowForDateTimeLocal();
   const installationCb = document.getElementById("installation");
@@ -585,7 +683,7 @@ export function resetFormMode() {
   if (phoneEl) phoneEl.dispatchEvent(new Event("input", { bubbles: true }));
   resetFileUpload();
 
-  message.textContent = "Режим: новая заявка";
+  setMessage("Режим: новая заявка", "");
 
   if (sectionNewTab) {
     sectionNewTab.textContent = "Новый";
@@ -610,14 +708,14 @@ export async function editOrder(orderId) {
 
   if (error) {
     console.error("Ошибка загрузки заявки:", error);
-    message.textContent = "Ошибка загрузки заявки";
+    setMessage("Ошибка загрузки заявки", "#d32f2f");
     return;
   }
 
   state.editingOrderId = orderId;
   state.editingOrderDescription = data.description || null;
   fillForm(data);
-  message.textContent = `Режим: редактирование заявки #${orderId}`;
+  setMessage(`Режим: редактирование заявки #${orderId}`, "");
 
   if (submitBtn) submitBtn.textContent = "Сохранить изменения";
   if (submitBtnTop) submitBtnTop.textContent = "Сохранить изменения";
@@ -655,11 +753,11 @@ export async function deleteOrder(orderId) {
 
   if (error) {
     console.error("Ошибка удаления:", error);
-    message.textContent = "Ошибка при удалении";
+    setMessage("Ошибка при удалении", "#d32f2f");
     return;
   }
 
-  message.textContent = `Заявка #${orderId} удалена`;
+  setMessage(`Заявка #${orderId} удалена`, "");
   await loadOrders();
 }
 
@@ -670,8 +768,7 @@ export async function submitOrderForm(event) {
   const clientVal = (document.getElementById("client")?.value || "").trim();
 
   if (!clientVal) {
-    message.textContent = "Не заполнено Клиент";
-    message.style.color = "#d32f2f";
+    setMessage("Не заполнено Клиент", "#d32f2f");
     document.getElementById("client")?.classList.add("client-invalid");
     return;
   }
@@ -679,19 +776,26 @@ export async function submitOrderForm(event) {
 
   const statusVal = (document.getElementById("payment_status")?.value || "").trim();
   if (!statusVal) {
-    message.textContent = "Не заполнено Статус";
-    message.style.color = "#d32f2f";
+    setMessage("Не заполнено Статус", "#d32f2f");
     document.getElementById("payment_status")?.classList.add("payment-status-invalid");
     return;
   }
   document.getElementById("payment_status")?.classList.remove("payment-status-invalid");
 
+  // Правило: нельзя ставить "Заказ закрыт", если "Оплачено" = "нет"
+  // "Оплачено" вычисляется от поля "Кому остаток" через updatePaidField().
+  updatePaidField();
+  const paidVal = document.getElementById("paid")?.value;
+  if (statusVal === "Заказ закрыт" && paidVal === "нет") {
+    setMessage("Заказ нельзя закрыть, если он не оплачен", "#d32f2f");
+    return;
+  }
+
   if (phoneVal) {
     const phoneDigits = phoneVal.replace(/\D/g, "");
     const phoneValid = phoneDigits.length === 11 && (phoneDigits[0] === "8" || phoneDigits[0] === "7");
     if (!phoneValid) {
-      message.textContent = "Неверный формат телефона.";
-      message.style.color = "#d32f2f";
+      setMessage("Неверный формат телефона.", "#d32f2f");
       document.getElementById("phone")?.classList.add("phone-invalid");
       return;
     }
@@ -705,19 +809,14 @@ export async function submitOrderForm(event) {
   const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
   if (deliveryVal && !deliveryDateVal) conditionalMissing.push("Дата");
   if (conditionalMissing.length > 0) {
-    message.textContent = "Заполните поля: " + conditionalMissing.join(", ");
-    message.style.color = "#d32f2f";
+    setMessage("Заполните поля: " + conditionalMissing.join(", "), "#d32f2f");
     updateConditionalRequiredHighlight();
     return;
   }
 
-  message.style.color = "";
-  message.textContent = "Сохраняю...";
+  setMessage("Сохраняю...", "");
 
   const orderData = getFormData();
-  if (state.editingOrderId) {
-    orderData.description = state.editingOrderDescription ?? null;
-  }
 
   let error = null;
   let savedOrderId = state.editingOrderId;
@@ -753,8 +852,7 @@ export async function submitOrderForm(event) {
   if (error) {
     console.error("Ошибка сохранения:", error);
     const detail = error.message || error.hint || String(error.code);
-    message.textContent = (wasEditing ? "Ошибка при обновлении заявки. " : "Ошибка при сохранении заявки. ") + detail;
-    message.style.color = "#d32f2f";
+    setMessage((wasEditing ? "Ошибка при обновлении заявки. " : "Ошибка при сохранении заявки. ") + detail, "#d32f2f");
     return;
   }
 
@@ -802,8 +900,10 @@ export async function submitOrderForm(event) {
     section.classList.toggle("active", section.id === "section-all");
   });
 
-  message.style.color = "";
-  message.textContent = wasEditing
+  setMessage(
+    wasEditing
     ? `Заявка #${savedOrderId} обновлена`
-    : `Заявка #${savedOrderId} сохранена`;
+    : `Заявка #${savedOrderId} сохранена`,
+    ""
+  );
 }

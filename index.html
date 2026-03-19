@@ -39,15 +39,27 @@
           <button type="submit" id="submitBtnTop">Сохранить заказ</button>
           <button type="button" id="cancelEditBtnTop" style="display: none;">Отмена</button>
         </div>
+        <p id="messageTop"></p>
         <div class="grid">
           <div class="field">
             <label>Телефон</label>
             <input type="text" id="phone" />
           </div>
 
-          <div class="field">
-            <label>Клиент</label>
-            <input type="text" id="client" />
+          <div class="client-row">
+            <div class="field client-field">
+              <label>Клиент</label>
+              <input type="text" id="client" />
+            </div>
+            <div class="field">
+              <label>Тип заказа</label>
+              <select id="order_type">
+                <option value="" selected>—</option>
+                <option value="Окна">Окна</option>
+                <option value="Подоконники">Подоконники</option>
+                <option value="Сетки/мелочь">Сетки/мелочь</option>
+              </select>
+            </div>
           </div>
 
           <div class="field">
@@ -71,6 +83,7 @@
               <option value="Предложение направлено">Предложение направлено</option>
               <option value="Клиент согласен">Клиент согласен</option>
               <option value="Производство">Производство</option>
+              <option value="Товар передан заказчику">Товар передан заказчику</option>
               <option value="Монтаж выполнен">Монтаж выполнен</option>
               <option value="Заказ закрыт">Заказ закрыт</option>
             </select>
@@ -84,7 +97,7 @@
           <div class="field compact-fields-row">
             <div class="field">
               <label>Стоимость</label>
-              <input type="number" step="0.01" id="amount" />
+              <input type="text" inputmode="decimal" id="amount" />
             </div>
             <div class="field">
               <label>Оплачено</label>
@@ -98,7 +111,7 @@
           <div class="field compact-fields-row">
             <div class="field">
               <label>Предоплата</label>
-              <input type="number" step="0.01" id="prepayment" />
+              <input type="text" inputmode="decimal" id="prepayment" />
             </div>
             <div class="field">
               <label>Кому предоплата</label>
@@ -115,7 +128,7 @@
           <div class="field compact-fields-row">
             <div class="field">
               <label>Остаток</label>
-              <input type="number" step="0.01" id="remaining_amount" />
+              <input type="text" inputmode="decimal" id="remaining_amount" />
             </div>
             <div class="field">
               <label>Кому остаток</label>
@@ -132,15 +145,15 @@
           <div class="field compact-fields-row">
             <div class="field">
               <label>Площадь м²</label>
-              <input type="number" step="0.01" id="area_m2" />
+              <input type="text" inputmode="decimal" id="area_m2" />
             </div>
             <div class="field">
               <label>Москитки</label>
-              <input type="number" step="1" min="0" id="mosquito_nets" />
+              <input type="text" inputmode="numeric" id="mosquito_nets" />
             </div>
             <div class="field">
               <label>Конструкций</label>
-              <input type="number" step="1" min="0" id="construction_count" />
+              <input type="text" inputmode="numeric" id="construction_count" />
             </div>
           </div>
 
@@ -175,7 +188,7 @@
           <div class="field compact-fields-row installer-payment-one-row" id="installer_payment_block">
             <div class="field">
               <label for="installer_rate_per_m2">Монтаж 1м², руб</label>
-              <input type="number" step="0.01" min="0" id="installer_rate_per_m2" />
+              <input type="text" inputmode="decimal" id="installer_rate_per_m2" />
             </div>
             <div class="field installer-calc-wrap">
               <label>&nbsp;</label>
@@ -185,7 +198,7 @@
             </div>
             <div class="field">
               <label for="installer_payment_amount">Сумма, руб</label>
-              <input type="number" step="0.01" min="0" id="installer_payment_amount" />
+              <input type="text" inputmode="decimal" id="installer_payment_amount" />
             </div>
             <div class="field">
               <label for="installer_payment_by">Оплатил</label>
@@ -270,9 +283,9 @@
               <th>Номер</th>
               <th class="th-order-date">Дата</th>
               <th></th>
-              <th>Клиент</th>
-              <th>Адрес</th>
-              <th>Описание</th>
+              <th class="th-truncate-name">Клиент</th>
+              <th class="th-truncate-address">Адрес</th>
+              <th class="th-truncate-description">Описание</th>
               <th class="th-status-header">
                 <span class="th-status-label">Статус</span>
                 <button type="button" class="status-filter-btn" id="statusFilterBtn" title="Фильтр по статусу" aria-haspopup="true" aria-expanded="false">
@@ -280,10 +293,10 @@
                 </button>
               </th>
               <th class="th-money">Стоимость</th>
-              <th class="th-paid">Оплачено</th>
               <th class="th-money">Предоплата</th>
               <th>Кому</th>
               <th class="th-money">Остаток</th>
+              <th class="th-paid">Оплачено</th>
               <th>Кому</th>
               <th>Отправка</th>
               <th class="th-delivery-date">Дата</th>

@@ -5,7 +5,7 @@ import { initCalculationsSection } from "./calculations.js";
 import { loadSettings } from "./settings.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { userInfo } from "./dom.js";
-import { message } from "./dom.js";
+import { setMessage } from "./dom.js";
 
 window.editOrder = editOrder;
 window.deleteOrder = deleteOrder;
@@ -30,10 +30,7 @@ async function init() {
     await initCalculationsSection();
   } catch (err) {
     console.error("Ошибка инициализации:", err);
-    if (message) {
-      message.textContent = "Ошибка подключения к базе. Проверьте интернет и настройки Supabase.";
-      message.style.color = "#d32f2f";
-    }
+    setMessage("Ошибка подключения к базе. Проверьте интернет и настройки Supabase.", "#d32f2f");
   }
 }
 

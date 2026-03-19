@@ -13,7 +13,7 @@ import {
   phoneInput,
   cellTooltip,
   ordersTable,
-  message,
+  setMessage,
 } from "./dom.js";
 
 import { logout } from "./auth.js";
@@ -28,6 +28,7 @@ import {
   updateConditionalRequiredHighlight,
   updateInstallerPaymentAmountFromArea,
   updateInstallerBlockByInstallationDate,
+  formatOrderFormNumericInputById,
 } from "./orders.js";
 import { renderSelectedFiles } from "./files.js";
 import { saveInstallerRate, updateSettingsSaveButtonState } from "./settings.js";
@@ -136,6 +137,29 @@ export function bindUIEvents() {
       });
     }
   });
+
+  // Форматирование всех числовых полей на странице "Новый" с пробелами тысяч
+  [
+    "amount",
+    "prepayment",
+    "remaining_amount",
+    "area_m2",
+    "mosquito_nets",
+    "construction_count",
+    "installer_rate_per_m2",
+    "installer_payment_amount",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("blur", () => {
+      formatOrderFormNumericInputById(id);
+
+      if (id === "amount" || id === "prepayment") updateRemainingFromCostAndPrepayment();
+      if (id === "area_m2" || id === "installer_rate_per_m2") updateInstallerPaymentAmountFromArea();
+      if (id === "installer_payment_amount") updateInstallerBlockByInstallationDate();
+      if (id === "amount" || id === "prepayment" || id === "remaining_amount") updateConditionalRequiredHighlight();
+    });
+  });
   ["prepayment_to", "remaining_to", "delivery", "delivery_date"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) {
@@ -191,10 +215,7 @@ export function bindUIEvents() {
   if (settingsSaveInstallerRateBtn && settingsInstallerRateInput) {
     settingsSaveInstallerRateBtn.addEventListener("click", async () => {
       const ok = await saveInstallerRate(settingsInstallerRateInput.value);
-      if (message) {
-        message.textContent = ok ? "Сохранено" : "Ошибка сохранения или неверное значение";
-        message.style.color = ok ? "" : "#d32f2f";
-      }
+      setMessage(ok ? "Сохранено" : "Ошибка сохранения или неверное значение", ok ? "" : "#d32f2f");
     });
     settingsInstallerRateInput.addEventListener("input", updateSettingsSaveButtonState);
     settingsInstallerRateInput.addEventListener("change", updateSettingsSaveButtonState);

@@ -188,7 +188,7 @@ h2 {
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 12px;
+  gap: 0px;
 }
 
 #section-new .client-row .client-field {
@@ -200,6 +200,17 @@ h2 {
 #section-new .client-row .client-field input {
   width: 100%;
   box-sizing: border-box;
+}
+
+/* Визуально "склеиваем" поля Клиент + Тип заказа (убираем внутренние скругления) */
+#section-new .client-row .client-field input {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+#section-new .client-row > .field select {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 #section-new .client-row .client-type-checkbox {
@@ -669,6 +680,11 @@ button:active {
   font-weight: 600;
 }
 
+#messageTop {
+  margin-top: 8px;
+  font-weight: 600;
+}
+
 /* ===== поиск ===== */
 .search-box {
   margin-top: 0;
@@ -1017,21 +1033,21 @@ th {
 }
 
 /* Клиент и Адрес — в одну строку, обрезка с подсказкой */
-#ordersTable th:nth-child(3),
+#ordersTable .th-truncate-name,
 #ordersTable td.td-truncate-name {
   max-width: 140px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-#ordersTable th:nth-child(4),
+#ordersTable .th-truncate-address,
 #ordersTable td.td-truncate-address {
   max-width: 180px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-#ordersTable th:nth-child(6),
+#ordersTable .th-truncate-description,
 #ordersTable td.td-truncate-description {
   max-width: 180px;
   white-space: nowrap;
@@ -1080,7 +1096,7 @@ th {
 }
 
 /* В колонке Стоимость (основная сумма заказа) тоже сиреневая заливка */
-#ordersTable td:nth-child(8) .status-value {
+#ordersTable td.td-main-amount .status-value {
   background: #f3e8ff;
   color: #4b0082;
 }
