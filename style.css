@@ -327,7 +327,7 @@ h2 {
 /* ===== секция Расчеты (как страница Новый) ===== */
 #section-calculations .card,
 .calculations-page .card {
-  max-width: 480px;
+  max-width: 600px;
   padding: 12px;
 }
 
