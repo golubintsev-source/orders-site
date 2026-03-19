@@ -2,6 +2,7 @@ import { checkAuth, loadProfile } from "./auth.js";
 import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
 import { loadOrders, resetFormMode, editOrder, deleteOrder } from "./orders.js";
 import { initCalculationsSection } from "./calculations.js";
+import { initBalanceSection } from "./balance.js";
 import { loadSettings } from "./settings.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { userInfo } from "./dom.js";
@@ -28,6 +29,7 @@ async function init() {
     await loadOrders();
     resetFormMode();
     await initCalculationsSection();
+    await initBalanceSection();
   } catch (err) {
     console.error("Ошибка инициализации:", err);
     setMessage("Ошибка подключения к базе. Проверьте интернет и настройки Supabase.", "#d32f2f");

@@ -32,6 +32,7 @@ import {
 } from "./orders.js";
 import { renderSelectedFiles } from "./files.js";
 import { saveInstallerRate, updateSettingsSaveButtonState } from "./settings.js";
+import { loadBalance } from "./balance.js";
 
 export function toggleOrderRowHighlightById(orderId) {
   if (!ordersTable || orderId == null) return;
@@ -106,7 +107,13 @@ function onPhoneInput() {
 
 export function bindUIEvents() {
   sectionNavBtns.forEach((btn) => {
-    btn.addEventListener("click", () => switchSection(btn.dataset.section));
+    btn.addEventListener("click", () => {
+      switchSection(btn.dataset.section);
+      if (btn.dataset.section === "balance") {
+        // Пересчитываем баланс при каждом заходе на вкладку "Баланс"
+        loadBalance();
+      }
+    });
   });
 
   if (phoneInput) {

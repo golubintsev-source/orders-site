@@ -28,6 +28,7 @@
       <button type="button" class="section-nav-btn active" data-section="all">Заказы</button>
       <button type="button" class="section-nav-btn" data-section="new">Новый</button>
       <button type="button" class="section-nav-btn" data-section="calculations">Расчеты</button>
+      <button type="button" class="section-nav-btn" data-section="balance">Баланс</button>
       <button type="button" class="section-nav-btn" data-section="settings">Настройки</button>
     </nav>
 
@@ -376,6 +377,23 @@
           </table>
         </div>
         <p id="calculationsMessage"></p>
+      </div>
+    </section>
+
+    <section id="section-balance" class="content-section">
+      <div class="card">
+        <div class="table-wrap">
+          <table id="balanceTable">
+            <thead>
+              <tr>
+                <th>Участник</th>
+                <th class="th-money">Сумма</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="balanceMessage"></p>
       </div>
     </section>
 

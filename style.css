@@ -397,6 +397,9 @@ h2 {
 #calculationsTable .btn-icon { padding: 4px; border: none; background: none; cursor: pointer; color: #6b7280; }
 #calculationsTable .btn-icon:hover { color: #1f6feb; }
 
+#balanceTable { min-width: 200px; }
+#balanceTable th, #balanceTable td { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
+
 #section-settings .settings-rate-row {
   display: flex;
   align-items: center;
@@ -728,6 +731,12 @@ table {
   width: 100%;
   border-collapse: collapse;
   min-width: 900px;
+}
+
+/* Баланс: фиксируем ширину как в требованиях */
+#balanceTable {
+  width: 200px;
+  min-width: 200px;
 }
 
 th,
