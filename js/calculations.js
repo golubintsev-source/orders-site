@@ -34,6 +34,24 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+function parseCalcAmountInput(raw) {
+  if (raw == null) return null;
+  const s0 = String(raw).trim();
+  if (!s0) return null;
+  // Убираем пробелы-разделители тысяч и незначащие пробелы
+  const s = s0.replace(/[\s\u00A0\u202F]/g, "").replace(",", ".");
+  const n = Number(s);
+  return Number.isNaN(n) ? null : n;
+}
+
+function formatCalcAmountInput() {
+  const amountEl = document.getElementById("calcAmount");
+  if (!amountEl) return;
+  const n = parseCalcAmountInput(amountEl.value);
+  if (n == null) return;
+  amountEl.value = formatAmount(n);
+}
+
 function setMessage(text, isError) {
   const el = document.getElementById("calculationsMessage");
   if (el) {
@@ -99,7 +117,7 @@ function getFormValues() {
   const payload = {
     from_place: fromEl?.value?.trim() || null,
     to_place: toEl?.value?.trim() || null,
-    amount: amountEl?.value !== "" ? Number(amountEl.value) : null,
+    amount: amountEl?.value !== "" ? parseCalcAmountInput(amountEl.value) : null,
     comment: commentEl?.value?.trim() || null,
   };
   if (editingId && editingCreatedAt) {
@@ -115,7 +133,7 @@ function setFormValues(row) {
   const commentEl = document.getElementById("calcComment");
   if (fromEl) fromEl.value = row.from_place || "";
   if (toEl) toEl.value = row.to_place || "";
-  if (amountEl) amountEl.value = row.amount != null ? row.amount : "";
+  if (amountEl) amountEl.value = row.amount != null ? formatAmount(row.amount) : "";
   if (commentEl) commentEl.value = row.comment || "";
 }
 
@@ -199,6 +217,11 @@ async function deleteRow(id) {
 function setupCalculationsForm() {
   const form = document.getElementById("calculationsForm");
   if (form) form.addEventListener("submit", submitForm);
+
+  const amountEl = document.getElementById("calcAmount");
+  if (amountEl) {
+    amountEl.addEventListener("blur", formatCalcAmountInput);
+  }
 }
 
 export async function initCalculationsSection() {
