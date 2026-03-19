@@ -693,6 +693,21 @@ button:active {
   -webkit-overflow-scrolling: touch;
 }
 
+.orders-table-scroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* Небольшая высота, чтобы была видна только горизонтальная полоса */
+  height: 16px;
+  background: transparent;
+}
+
+.orders-table-scroll-spacer {
+  /* Ширину выставляем в JS под scrollWidth таблицы */
+  height: 1px;
+  width: 1px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

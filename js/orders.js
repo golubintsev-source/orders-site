@@ -55,6 +55,62 @@ function normalizeStatus(val) {
   return val;
 }
 
+// ===== Синхронизация верхнего скролла таблицы "Заказы" =====
+let ordersScrollSyncAttached = false;
+let ordersScrollSyncing = false;
+let ordersScrollTopEl = null;
+let ordersScrollBottomEl = null;
+let ordersScrollSpacerEl = null;
+
+function ensureOrdersScrollSync() {
+  if (ordersScrollSyncAttached) return;
+
+  ordersScrollTopEl = document.getElementById("ordersTableScrollTop");
+  ordersScrollBottomEl = document.getElementById("ordersTableScrollBottom");
+  ordersScrollSpacerEl = document.getElementById("ordersTableScrollSpacer");
+
+  if (!ordersScrollTopEl || !ordersScrollBottomEl || !ordersScrollSpacerEl) return;
+
+  const onTopScroll = () => {
+    if (ordersScrollSyncing) return;
+    ordersScrollSyncing = true;
+    ordersScrollBottomEl.scrollLeft = ordersScrollTopEl.scrollLeft;
+    ordersScrollSyncing = false;
+  };
+
+  const onBottomScroll = () => {
+    if (ordersScrollSyncing) return;
+    ordersScrollSyncing = true;
+    ordersScrollTopEl.scrollLeft = ordersScrollBottomEl.scrollLeft;
+    ordersScrollSyncing = false;
+  };
+
+  ordersScrollTopEl.addEventListener("scroll", onTopScroll, { passive: true });
+  ordersScrollBottomEl.addEventListener("scroll", onBottomScroll, { passive: true });
+
+  window.addEventListener(
+    "resize",
+    () => {
+      updateOrdersScrollSpacerWidth();
+      syncOrdersScrollPositions();
+    },
+    { passive: true }
+  );
+
+  ordersScrollSyncAttached = true;
+}
+
+function updateOrdersScrollSpacerWidth() {
+  if (!ordersScrollSpacerEl || !ordersScrollBottomEl) return;
+  const w = ordersScrollBottomEl.scrollWidth;
+  ordersScrollSpacerEl.style.width = `${w}px`;
+}
+
+function syncOrdersScrollPositions() {
+  if (!ordersScrollTopEl || !ordersScrollBottomEl) return;
+  ordersScrollTopEl.scrollLeft = ordersScrollBottomEl.scrollLeft;
+}
+
 function getFilteredOrders() {
   let list = state.allOrders;
 
@@ -210,6 +266,11 @@ export function renderOrders(orders) {
       cell.setAttribute("title", full);
     }
   });
+
+  // Синхронизация горизонтальной прокрутки: сверху и снизу
+  ensureOrdersScrollSync();
+  updateOrdersScrollSpacerWidth();
+  syncOrdersScrollPositions();
 }
 
 export function applyClientFilter() {
