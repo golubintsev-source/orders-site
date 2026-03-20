@@ -4,6 +4,8 @@ export const state = {
   editingOrderId: null,
   editingOrderDescription: null,
   initialPaymentStatus: null,
+  /** снапшот числовых полей (сумм) при открытии заказа на редактирование */
+  initialOrderSums: null,
   allOrders: [],
   filesCountMap: {},
   /** выбранные статусы для фильтра; пустой массив = показывать все */

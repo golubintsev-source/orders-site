@@ -133,7 +133,7 @@ export function formatOrderFormNumericInputById(id) {
   el.value = formatNumberWithSpaces(n, decimals);
 }
 
-// ===== Синхронизация верхнего скролла таблицы "Заказы" =====
+// ===== Синхронизация верхнего скролла таблицы "Заказы2" =====
 let ordersScrollSyncAttached = false;
 let ordersScrollSyncing = false;
 let ordersScrollTopEl = null;
@@ -570,6 +570,12 @@ export async function checkInstallerPaymentDone(orderId) {
 
 export function fillForm(order) {
   state.installerPaymentDone = false;
+  state.initialOrderSums = {
+    amount: order.amount != null ? Number(order.amount) : null,
+    prepayment: order.prepayment != null ? Number(order.prepayment) : null,
+    remaining_amount: order.remaining_amount != null ? Number(order.remaining_amount) : null,
+    installer_payment_amount: order.installer_payment_amount != null ? Number(order.installer_payment_amount) : null,
+  };
   document.getElementById("phone").value = order.phone || "";
   document.getElementById("phone").dispatchEvent(new Event("input", { bubbles: true }));
   document.getElementById("client").value = order.client || "";
@@ -649,6 +655,7 @@ export function resetFormMode() {
   state.editingOrderId = null;
   state.editingOrderDescription = null;
   state.initialPaymentStatus = null;
+  state.initialOrderSums = null;
   state.installerPaymentDone = false;
   document.getElementById("orderForm").reset();
   updatePaidField();
@@ -882,6 +889,41 @@ export async function submitOrderForm(event) {
         comment: `Статус изменён: ${oldStatus || "—"} → ${newStatus || "—"}`,
       });
     }
+
+    // История изменений сумм
+    const initialSums = state.initialOrderSums || {};
+    const toComparable = (v) => (v == null ? null : (Number.isFinite(Number(v)) ? Number(v) : null));
+    const numbersEqual = (a, b) => {
+      if (a == null && b == null) return true;
+      if (a == null || b == null) return false;
+      return Math.abs(a - b) < 0.000001;
+    };
+    const formatSum = (v) => (v == null ? "—" : formatAmount(v));
+
+    const sumChanges = [];
+    const fieldsToCheck = [
+      { key: "amount", label: "Стоимость", oldVal: initialSums.amount, newVal: orderData.amount },
+      { key: "prepayment", label: "Предоплата", oldVal: initialSums.prepayment, newVal: orderData.prepayment },
+      { key: "remaining_amount", label: "Остаток", oldVal: initialSums.remaining_amount, newVal: orderData.remaining_amount },
+      { key: "installer_payment_amount", label: "Сумма за монтаж", oldVal: initialSums.installer_payment_amount, newVal: orderData.installer_payment_amount },
+    ];
+
+    fieldsToCheck.forEach((f) => {
+      const oldN = toComparable(f.oldVal);
+      const newN = toComparable(f.newVal);
+      if (!numbersEqual(oldN, newN)) {
+        sumChanges.push(`${f.label}: ${formatSum(oldN)} → ${formatSum(newN)}`);
+      }
+    });
+
+    if (sumChanges.length > 0) {
+      historyRows.push({
+        order_id: savedOrderId,
+        user_email: state.currentUser.email,
+        comment: sumChanges.join("; "),
+      });
+    }
+
     if (addCommentText) {
       historyRows.push({ order_id: savedOrderId, user_email: state.currentUser.email, comment: addCommentText });
     }

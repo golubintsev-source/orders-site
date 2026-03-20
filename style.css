@@ -109,15 +109,15 @@ h2 {
 /* ===== меню разделов ===== */
 .section-nav {
   display: flex;
-  gap: 4px;
+  gap: 0;
   margin-bottom: 6px;
   border-bottom: 1px solid #e5e7eb;
   padding-bottom: 0;
 }
 
 .section-nav-btn {
-  padding: 10px 20px;
-  font-size: 15px;
+  padding: 10px 3px;
+  font-size: 12px;
   font-weight: 500;
   border: none;
   background: transparent;
@@ -753,7 +753,7 @@ td {
   text-align: right;
 }
 
-/* В таблице "Заказы" заголовки всегда слева (даже денежные) */
+/* В таблице "Заказы2" заголовки всегда слева (даже денежные) */
 #ordersTable th.th-money {
   text-align: left;
 }
