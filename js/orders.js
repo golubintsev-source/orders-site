@@ -133,7 +133,7 @@ export function formatOrderFormNumericInputById(id) {
   el.value = formatNumberWithSpaces(n, decimals);
 }
 
-// ===== Синхронизация верхнего скролла таблицы "Заказы2" =====
+// ===== Синхронизация верхнего скролла таблицы «Заказы» =====
 let ordersScrollSyncAttached = false;
 let ordersScrollTopEl = null;
 let ordersScrollBottomEl = null;
