@@ -712,18 +712,17 @@ button:active {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Заказы2: горизонтальный жест остаётся на таблице (инерция на iOS), без ухода скролла на страницу */
-#ordersTableScrollBottom.table-wrap {
-  touch-action: pan-x pan-y;
-  overscroll-behavior-x: contain;
+/* На телефоне верхняя полоса только индикатор ширины; жест — по таблице (иначе два overflow-x рядом мешают iOS) */
+@media (hover: none) and (pointer: coarse) {
+  .orders-table-scroll-top {
+    pointer-events: none;
+  }
 }
 
 .orders-table-scroll-top {
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
-  overscroll-behavior-x: contain;
   /* Небольшая высота, чтобы была видна только горизонтальная полоса */
   height: 16px;
   background: transparent;

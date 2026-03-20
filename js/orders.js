@@ -135,33 +135,20 @@ export function formatOrderFormNumericInputById(id) {
 
 // ===== Синхронизация верхнего скролла таблицы "Заказы2" =====
 let ordersScrollSyncAttached = false;
-/** Подавляет ответную запись scrollLeft, когда iOS/WKWebKit шлёт scroll после программной установки — иначе инерция обрывается. */
-let suppressOrdersScrollEchoTop = false;
-let suppressOrdersScrollEchoBottom = false;
 let ordersScrollTopEl = null;
 let ordersScrollBottomEl = null;
 let ordersScrollSpacerEl = null;
 
-function setOrdersScrollTopFromBottom() {
+function ordersCopyScrollBottomToTop() {
   if (!ordersScrollTopEl || !ordersScrollBottomEl) return;
   const next = ordersScrollBottomEl.scrollLeft;
-  if (ordersScrollTopEl.scrollLeft === next) return;
-  suppressOrdersScrollEchoTop = true;
-  ordersScrollTopEl.scrollLeft = next;
-  queueMicrotask(() => {
-    suppressOrdersScrollEchoTop = false;
-  });
+  if (ordersScrollTopEl.scrollLeft !== next) ordersScrollTopEl.scrollLeft = next;
 }
 
-function setOrdersScrollBottomFromTop() {
+function ordersCopyScrollTopToBottom() {
   if (!ordersScrollTopEl || !ordersScrollBottomEl) return;
   const next = ordersScrollTopEl.scrollLeft;
-  if (ordersScrollBottomEl.scrollLeft === next) return;
-  suppressOrdersScrollEchoBottom = true;
-  ordersScrollBottomEl.scrollLeft = next;
-  queueMicrotask(() => {
-    suppressOrdersScrollEchoBottom = false;
-  });
+  if (ordersScrollBottomEl.scrollLeft !== next) ordersScrollBottomEl.scrollLeft = next;
 }
 
 function ensureOrdersScrollSync() {
@@ -173,24 +160,40 @@ function ensureOrdersScrollSync() {
 
   if (!ordersScrollTopEl || !ordersScrollBottomEl || !ordersScrollSpacerEl) return;
 
-  const onTopScroll = () => {
-    if (suppressOrdersScrollEchoTop) {
-      suppressOrdersScrollEchoTop = false;
-      return;
-    }
-    setOrdersScrollBottomFromTop();
-  };
+  const touchUi =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 
-  const onBottomScroll = () => {
-    if (suppressOrdersScrollEchoBottom) {
-      suppressOrdersScrollEchoBottom = false;
-      return;
-    }
-    setOrdersScrollTopFromBottom();
-  };
+  /* Не копируем scrollLeft в соседний блок на каждом кадре (инерция iOS обрывается).
+     Синхронизируем только после паузы в событиях scroll — в конце жеста и после докрута. */
+  const idleMs = 80;
+  let bottomIdleTimer = null;
+  ordersScrollBottomEl.addEventListener(
+    "scroll",
+    () => {
+      if (bottomIdleTimer) clearTimeout(bottomIdleTimer);
+      bottomIdleTimer = setTimeout(() => {
+        bottomIdleTimer = null;
+        ordersCopyScrollBottomToTop();
+      }, idleMs);
+    },
+    { passive: true }
+  );
 
-  ordersScrollTopEl.addEventListener("scroll", onTopScroll, { passive: true });
-  ordersScrollBottomEl.addEventListener("scroll", onBottomScroll, { passive: true });
+  if (!touchUi) {
+    let topIdleTimer = null;
+    ordersScrollTopEl.addEventListener(
+      "scroll",
+      () => {
+        if (topIdleTimer) clearTimeout(topIdleTimer);
+        topIdleTimer = setTimeout(() => {
+          topIdleTimer = null;
+          ordersCopyScrollTopToBottom();
+        }, idleMs);
+      },
+      { passive: true }
+    );
+  }
 
   window.addEventListener(
     "resize",
@@ -211,7 +214,7 @@ function updateOrdersScrollSpacerWidth() {
 }
 
 function syncOrdersScrollPositions() {
-  setOrdersScrollTopFromBottom();
+  ordersCopyScrollBottomToTop();
 }
 
 function getFilteredOrders() {
