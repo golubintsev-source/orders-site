@@ -135,10 +135,34 @@ export function formatOrderFormNumericInputById(id) {
 
 // ===== Синхронизация верхнего скролла таблицы "Заказы2" =====
 let ordersScrollSyncAttached = false;
-let ordersScrollSyncing = false;
+/** Подавляет ответную запись scrollLeft, когда iOS/WKWebKit шлёт scroll после программной установки — иначе инерция обрывается. */
+let suppressOrdersScrollEchoTop = false;
+let suppressOrdersScrollEchoBottom = false;
 let ordersScrollTopEl = null;
 let ordersScrollBottomEl = null;
 let ordersScrollSpacerEl = null;
+
+function setOrdersScrollTopFromBottom() {
+  if (!ordersScrollTopEl || !ordersScrollBottomEl) return;
+  const next = ordersScrollBottomEl.scrollLeft;
+  if (ordersScrollTopEl.scrollLeft === next) return;
+  suppressOrdersScrollEchoTop = true;
+  ordersScrollTopEl.scrollLeft = next;
+  queueMicrotask(() => {
+    suppressOrdersScrollEchoTop = false;
+  });
+}
+
+function setOrdersScrollBottomFromTop() {
+  if (!ordersScrollTopEl || !ordersScrollBottomEl) return;
+  const next = ordersScrollTopEl.scrollLeft;
+  if (ordersScrollBottomEl.scrollLeft === next) return;
+  suppressOrdersScrollEchoBottom = true;
+  ordersScrollBottomEl.scrollLeft = next;
+  queueMicrotask(() => {
+    suppressOrdersScrollEchoBottom = false;
+  });
+}
 
 function ensureOrdersScrollSync() {
   if (ordersScrollSyncAttached) return;
@@ -150,17 +174,19 @@ function ensureOrdersScrollSync() {
   if (!ordersScrollTopEl || !ordersScrollBottomEl || !ordersScrollSpacerEl) return;
 
   const onTopScroll = () => {
-    if (ordersScrollSyncing) return;
-    ordersScrollSyncing = true;
-    ordersScrollBottomEl.scrollLeft = ordersScrollTopEl.scrollLeft;
-    ordersScrollSyncing = false;
+    if (suppressOrdersScrollEchoTop) {
+      suppressOrdersScrollEchoTop = false;
+      return;
+    }
+    setOrdersScrollBottomFromTop();
   };
 
   const onBottomScroll = () => {
-    if (ordersScrollSyncing) return;
-    ordersScrollSyncing = true;
-    ordersScrollTopEl.scrollLeft = ordersScrollBottomEl.scrollLeft;
-    ordersScrollSyncing = false;
+    if (suppressOrdersScrollEchoBottom) {
+      suppressOrdersScrollEchoBottom = false;
+      return;
+    }
+    setOrdersScrollTopFromBottom();
   };
 
   ordersScrollTopEl.addEventListener("scroll", onTopScroll, { passive: true });
@@ -185,8 +211,7 @@ function updateOrdersScrollSpacerWidth() {
 }
 
 function syncOrdersScrollPositions() {
-  if (!ordersScrollTopEl || !ordersScrollBottomEl) return;
-  ordersScrollTopEl.scrollLeft = ordersScrollBottomEl.scrollLeft;
+  setOrdersScrollTopFromBottom();
 }
 
 function getFilteredOrders() {
