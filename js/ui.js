@@ -8,13 +8,13 @@ import {
   attachmentsInput,
   closeFilesModal,
   filesModal,
-  sectionNavBtns,
-  contentSections,
   phoneInput,
   cellTooltip,
   ordersTable,
   setMessage,
 } from "./dom.js";
+
+import { switchSection, initSectionNavDropdown } from "./section-nav.js";
 
 import { logout } from "./auth.js";
 import { state } from "./state.js";
@@ -32,7 +32,6 @@ import {
 } from "./orders.js";
 import { renderSelectedFiles } from "./files.js";
 import { saveInstallerRate, updateSettingsSaveButtonState } from "./settings.js";
-import { loadBalance } from "./balance.js";
 
 export function toggleOrderRowHighlightById(orderId) {
   if (!ordersTable || orderId == null) return;
@@ -44,16 +43,6 @@ export function toggleOrderRowHighlightById(orderId) {
   const wasHighlighted = tr.classList.contains("row-highlighted");
   tbody.querySelectorAll("tr.row-highlighted").forEach((row) => row.classList.remove("row-highlighted"));
   if (!wasHighlighted) tr.classList.add("row-highlighted");
-}
-
-function switchSection(sectionId) {
-  if (!sectionId || !sectionNavBtns.length || !contentSections.length) return;
-  sectionNavBtns.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.section === sectionId);
-  });
-  contentSections.forEach((section) => {
-    section.classList.toggle("active", section.id === "section-" + sectionId);
-  });
 }
 
 function formatPhoneValue(digits) {
@@ -106,15 +95,7 @@ function onPhoneInput() {
 }
 
 export function bindUIEvents() {
-  sectionNavBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      switchSection(btn.dataset.section);
-      if (btn.dataset.section === "balance") {
-        // Пересчитываем баланс при каждом заходе на вкладку "Баланс"
-        loadBalance();
-      }
-    });
-  });
+  initSectionNavDropdown();
 
   if (phoneInput) {
     phoneInput.addEventListener("input", onPhoneInput);

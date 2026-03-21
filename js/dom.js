@@ -20,10 +20,6 @@ export const closeFilesModal = document.getElementById("closeFilesModal");
 export const cellTooltip = document.getElementById("cellTooltip");
 export const ordersTable = document.getElementById("ordersTable");
 
-export const sectionNavBtns = document.querySelectorAll(".section-nav-btn");
-export const contentSections = document.querySelectorAll(".content-section");
-export const sectionNewTab = document.querySelector('.section-nav-btn[data-section="new"]');
-
 export function setMessage(text, color) {
   if (message) {
     if (text !== undefined) message.textContent = text;

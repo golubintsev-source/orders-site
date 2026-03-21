@@ -54,17 +54,100 @@ h2 {
   margin-bottom: 0;
   border-bottom: none;
   flex-wrap: nowrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 4px;
 }
 
-.section-nav-tabs-inner {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  align-items: flex-end;
+/* Выпадающий выбор раздела: видно только текущий */
+.section-nav-dropdown-wrap {
+  position: relative;
+  flex: 0 1 auto;
   min-width: 0;
-  gap: 0;
+  align-self: center;
+}
+
+.section-nav-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 8px 10px 10px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  background: #fff;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  box-shadow: 0 -2px 0 0 #3b82f6 inset;
+  margin-bottom: -1px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.section-nav-current:hover {
+  background: #f9fafb;
+  color: #111827;
+}
+
+.section-nav-current:focus-visible {
+  outline: none;
+  box-shadow: 0 -2px 0 0 #3b82f6 inset, 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.section-nav-current-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(220px, 70vw);
+}
+
+.section-nav-chevron {
+  flex-shrink: 0;
+  opacity: 0.75;
+  transition: transform 0.2s ease;
+}
+
+.section-nav-current--open .section-nav-chevron {
+  transform: rotate(180deg);
+}
+
+.section-nav-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  min-width: min(260px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: 6px 0;
+  margin: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  z-index: 1100;
+}
+
+.section-nav-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.section-nav-dropdown-item:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.section-nav-dropdown-item:focus-visible {
+  outline: none;
+  background: #eff6ff;
 }
 
 .section-nav-search-btn {
@@ -88,6 +171,16 @@ h2 {
 .section-nav-search-btn:hover {
   background: #f3f4f6;
   color: #374151;
+}
+
+/* Есть активный запрос в поле поиска по заказам — лупа синяя */
+.section-nav-search-btn.section-nav-search-btn--active-query {
+  color: #1f6feb;
+}
+
+.section-nav-search-btn.section-nav-search-btn--active-query:hover {
+  background: rgba(31, 111, 235, 0.1);
+  color: #1857bc;
 }
 
 .section-nav-search-btn:focus-visible {
@@ -187,30 +280,6 @@ h2 {
   margin-bottom: 0;
   border-bottom: none;
   padding-bottom: 0;
-}
-
-.section-nav-btn {
-  padding: 10px 3px;
-  font-size: 12px;
-  font-weight: 700;
-  border: none;
-  background: transparent;
-  color: #6b7280;
-  cursor: pointer;
-  border-radius: 8px 8px 0 0;
-  transition: background 0.2s, color 0.2s;
-}
-
-.section-nav-btn:hover {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.section-nav-btn.active {
-  background: #fff;
-  color: #111827;
-  box-shadow: 0 -2px 0 0 #3b82f6 inset;
-  margin-bottom: -1px;
 }
 
 .content-section {

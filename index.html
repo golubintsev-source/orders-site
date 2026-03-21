@@ -11,14 +11,23 @@
     <div class="topbar">
       <nav class="section-nav topbar-section-nav" role="navigation">
         <button type="button" class="section-nav-search-btn" id="ordersSearchOpenBtn" title="Поиск по заказам" aria-label="Поиск по заказам" aria-haspopup="dialog" aria-expanded="false">
-          <img src="./img/search-magnifier.svg" alt="" width="22" height="22" class="section-nav-search-icon" decoding="async" />
+          <svg class="section-nav-search-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/>
+            <path d="M20 20l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
         </button>
-        <div class="section-nav-tabs-inner">
-          <button type="button" class="section-nav-btn active" data-section="all">Заказы</button>
-          <button type="button" class="section-nav-btn" data-section="new">Новый</button>
-          <button type="button" class="section-nav-btn" data-section="calculations">Расчеты</button>
-          <button type="button" class="section-nav-btn" data-section="balance">Баланс</button>
-          <button type="button" class="section-nav-btn" data-section="settings">Настройки</button>
+        <div class="section-nav-dropdown-wrap">
+          <button type="button" class="section-nav-current" id="sectionNavCurrentBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="sectionNavDropdownPanel">
+            <span class="section-nav-current-label" id="sectionNavCurrentLabel">Заказы</span>
+            <svg class="section-nav-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="section-nav-dropdown-panel" id="sectionNavDropdownPanel" role="listbox" aria-label="Разделы" hidden>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="all">Заказы</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="new">Новый</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="calculations">Расчеты</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="balance">Баланс</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="settings">Настройки</button>
+          </div>
         </div>
       </nav>
       <div class="topbar-toolbar">

@@ -8,10 +8,8 @@ import {
   formTitle,
   cancelEditBtn,
   cancelEditBtnTop,
-  sectionNavBtns,
-  contentSections,
-  sectionNewTab,
 } from "./dom.js";
+import { switchSection, refreshSectionNavLabel } from "./section-nav.js";
 import {
   loadFilesCountMap,
   getFilesWord,
@@ -720,9 +718,7 @@ export function resetFormMode() {
 
   setMessage("Режим: новая заявка", "");
 
-  if (sectionNewTab) {
-    sectionNewTab.textContent = "Новый";
-  }
+  refreshSectionNavLabel();
   if (submitBtn) submitBtn.textContent = "Сохранить заказ";
   if (submitBtnTop) submitBtnTop.textContent = "Сохранить заказ";
 
@@ -762,15 +758,7 @@ export async function editOrder(orderId) {
   if (cancelEditBtn) cancelEditBtn.style.display = "inline-block";
   if (cancelEditBtnTop) cancelEditBtnTop.style.display = "inline-block";
 
-  if (sectionNewTab) {
-    sectionNewTab.textContent = "Редактирование";
-  }
-  sectionNavBtns.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.section === "new");
-  });
-  contentSections.forEach((section) => {
-    section.classList.toggle("active", section.id === "section-new");
-  });
+  switchSection("new");
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -963,12 +951,7 @@ export async function submitOrderForm(event) {
   resetFormMode();
   await loadOrders();
 
-  sectionNavBtns.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.section === "all");
-  });
-  contentSections.forEach((section) => {
-    section.classList.toggle("active", section.id === "section-all");
-  });
+  switchSection("all");
 
   setMessage(
     wasEditing
