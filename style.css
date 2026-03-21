@@ -959,7 +959,9 @@ button:active {
 
 #ordersTable thead th {
   background: #f8fafc;
-  box-shadow: 0 1px 0 0 #e7ebf0;
+  vertical-align: middle;
+  box-shadow: none;
+  border-bottom: 1px solid #e7ebf0;
 }
 
 /* Фиксированная копия шапки (показывается скриптом) */
@@ -1003,7 +1005,8 @@ button:active {
   text-align: left;
   background: #f8fafc;
   font-weight: 700;
-  box-shadow: 0 1px 0 0 #e7ebf0;
+  box-shadow: none;
+  border-bottom: 1px solid #e7ebf0;
   vertical-align: middle;
 }
 
@@ -1015,22 +1018,28 @@ button:active {
   text-align: right;
 }
 
-#ordersTableStickyHeadTable .th-order-type-header {
-  white-space: nowrap;
+#ordersTableStickyHeadTable .th-order-type-header-inner {
   display: flex;
   align-items: center;
   gap: 0;
+}
+
+#ordersTableStickyHeadTable .th-order-type-header {
+  white-space: nowrap;
 }
 
 #ordersTableStickyHeadTable .th-order-type-label {
   flex-shrink: 0;
 }
 
-#ordersTableStickyHeadTable .th-status-header {
-  white-space: nowrap;
+#ordersTableStickyHeadTable .th-status-header-inner {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+#ordersTableStickyHeadTable .th-status-header {
+  white-space: nowrap;
 }
 
 #ordersTableStickyHeadTable .th-status-label {
@@ -1362,11 +1371,14 @@ th {
   padding: 4px 0 4px 1px;
 }
 
-#ordersTable .th-order-type-header {
-  white-space: nowrap;
+#ordersTable .th-order-type-header-inner {
   display: flex;
   align-items: center;
   gap: 0;
+}
+
+#ordersTable .th-order-type-header {
+  white-space: nowrap;
 }
 
 #ordersTable .th-order-type-label {
@@ -1405,11 +1417,14 @@ th {
   padding-bottom: 4px;
 }
 
-#ordersTable .th-status-header {
-  white-space: nowrap;
+#ordersTable .th-status-header-inner {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+#ordersTable .th-status-header {
+  white-space: nowrap;
 }
 
 #ordersTable .th-status-label {
