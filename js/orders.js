@@ -79,6 +79,94 @@ const ORDER_FORM_NUMERIC_FIELD_DECIMALS = {
   installer_payment_amount: 2,
 };
 
+/** В полях даты формы заказа год только 2020–2029 (ровно 4 цифры, префикс «202»). */
+const ORDER_FORM_DATE_YEAR_MIN = 2020;
+const ORDER_FORM_DATE_YEAR_MAX = 2029;
+
+/**
+ * Подгоняет год к диапазону 2020–2029, если строка уже в формате value у input.
+ * @param {string} raw
+ * @param {"date" | "datetime-local"} type
+ */
+export function normalizeOrderFormDateInputValue(raw, type) {
+  if (raw == null || typeof raw !== "string") return raw;
+  const trimmed = raw.trim();
+  if (!trimmed) return raw;
+
+  if (type === "datetime-local") {
+    const m = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!m) return raw;
+    let y = parseInt(m[1], 10);
+    if (Number.isNaN(y)) return raw;
+    if (y < ORDER_FORM_DATE_YEAR_MIN) y = ORDER_FORM_DATE_YEAR_MIN;
+    if (y > ORDER_FORM_DATE_YEAR_MAX) y = ORDER_FORM_DATE_YEAR_MAX;
+    const yyyy = String(y);
+    if (m[6] !== undefined) {
+      return `${yyyy}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`;
+    }
+    return `${yyyy}-${m[2]}-${m[3]}T${m[4]}:${m[5]}`;
+  }
+
+  const m2 = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m2) return raw;
+  let y = parseInt(m2[1], 10);
+  if (Number.isNaN(y)) return raw;
+  if (y < ORDER_FORM_DATE_YEAR_MIN) y = ORDER_FORM_DATE_YEAR_MIN;
+  if (y > ORDER_FORM_DATE_YEAR_MAX) y = ORDER_FORM_DATE_YEAR_MAX;
+  return `${y}-${m2[2]}-${m2[3]}`;
+}
+
+/**
+ * Читает value поля даты и подгоняет год к 2020–2029; при необходимости обновляет input.
+ * Вызывать при сохранении формы — подстраховка (в т.ч. Яндекс.Браузер: иногда нет «change»).
+ */
+export function syncOrderFormDateFieldFromDom(id, type) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const v = (el.value || "").trim();
+  if (!v) return null;
+  const next = normalizeOrderFormDateInputValue(v, type);
+  if (next !== v) el.value = next;
+  return next;
+}
+
+/** Вешает правило года на поля даты формы «Новый / Редактирование». */
+export function bindOrderFormDateYear202xInputs() {
+  const specs = [
+    { id: "order_date", type: "datetime-local" },
+    { id: "delivery_date", type: "date" },
+    { id: "installation_date", type: "date" },
+    { id: "reveals_date", type: "date" },
+  ];
+
+  for (const { id, type } of specs) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+
+    // Не вешать «change» на подгонку года: в Яндекс.Браузере и др. при наборе года по цифрам
+    // «change» срабатывает на промежуточных полных датах (2002-xx-xx и т.д.) → год сразу режется до 2020.
+    const tryFix = () => {
+      const v = el.value;
+      if (!v) return;
+      const next = normalizeOrderFormDateInputValue(v, type);
+      if (next !== v) el.value = next;
+    };
+
+    el.addEventListener("focus", () => {
+      el.dataset.orderFormDateSnapshot = el.value || "";
+    });
+    // Подгонка только после ухода с поля; выбор из календаря тоже обычно заканчивается blur.
+    // rAF: значение иногда обновляется чуть позже события blur.
+    el.addEventListener("blur", () => {
+      const snap = el.dataset.orderFormDateSnapshot ?? "";
+      requestAnimationFrame(() => {
+        const v = el.value || "";
+        if (v !== snap) tryFix();
+      });
+    });
+  }
+}
+
 function parseOrderFormNumber(raw) {
   if (raw == null) return null;
   const s0 = String(raw).trim();
@@ -612,7 +700,7 @@ export function getFormData() {
     order_type: document.getElementById("order_type")?.value.trim() || null,
     address: document.getElementById("address").value.trim() || null,
     payment_status: document.getElementById("payment_status").value.trim() || null,
-    order_date: document.getElementById("order_date").value || null,
+    order_date: syncOrderFormDateFieldFromDom("order_date", "datetime-local"),
     order_number: orderNumberEl ? (orderNumberEl.value.trim() || null) : null,
     description: document.getElementById("description").value.trim() || null,
     amount: parseOrderFormNumber(document.getElementById("amount").value),
@@ -624,14 +712,14 @@ export function getFormData() {
     mosquito_nets: parseOrderFormNumber(document.getElementById("mosquito_nets").value),
     construction_count: parseOrderFormNumber(document.getElementById("construction_count").value),
     delivery: document.getElementById("delivery").value.trim() || null,
-    delivery_date: document.getElementById("delivery_date").value || null,
+    delivery_date: syncOrderFormDateFieldFromDom("delivery_date", "date"),
     installation: document.getElementById("installation").checked,
     installation_date: document.getElementById("installation").checked
-      ? (document.getElementById("installation_date").value || null)
+      ? syncOrderFormDateFieldFromDom("installation_date", "date")
       : null,
     reveals: document.getElementById("reveals").checked,
     reveals_date: document.getElementById("reveals").checked
-      ? (document.getElementById("reveals_date").value || null)
+      ? syncOrderFormDateFieldFromDom("reveals_date", "date")
       : null,
     installer_payment_amount: parseOrderFormNumber(document.getElementById("installer_payment_amount")?.value),
     installer_payment_by: document.getElementById("installer_payment_by")?.value?.trim() || null,
@@ -1094,9 +1182,10 @@ export async function submitOrderForm(event) {
   }
 
   resetFormMode();
-  await loadOrders();
-
+  // Сначала показать «Заказы»: при скрытом #section-all scrollWidth таблицы = 0,
+  // и верхняя горизонтальная полоса прокрутки теряет ширину.
   switchSection("all");
+  await loadOrders();
 
   setMessage(
     wasEditing

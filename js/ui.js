@@ -36,6 +36,7 @@ import {
   updateInstallerPaymentAmountFromArea,
   updateInstallerBlockByInstallationDate,
   formatOrderFormNumericInputById,
+  bindOrderFormDateYear202xInputs,
 } from "./orders.js";
 import { renderSelectedFiles } from "./files.js";
 import { saveInstallerRate, updateSettingsSaveButtonState } from "./settings.js";
@@ -195,6 +196,8 @@ function onPhoneInput() {
 
 export function bindUIEvents() {
   initSectionNavDropdown();
+
+  bindOrderFormDateYear202xInputs();
 
   if (phoneInput) {
     phoneInput.addEventListener("input", onPhoneInput);
