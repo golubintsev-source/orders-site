@@ -491,9 +491,9 @@ h2 {
 
 /* «з/п монтаж» — узкая колонка */
 #section-new .installer-payment-one-row > .field:has(#installer_payment_amount) {
-  flex: 0 0 100px;
-  width: 100px;
-  max-width: 100px;
+  flex: 0 0 95px;
+  width: 95px;
+  max-width: 95px;
   min-width: 0;
 }
 
@@ -501,11 +501,11 @@ h2 {
   white-space: normal;
 }
 
-/* «Оплатил» — узкая колонка */
+/* «Оплатил» (монтаж) — узкая колонка */
 #section-new .installer-payment-one-row > .field:has(#installer_payment_by) {
-  flex: 0 0 100px;
-  width: 100px;
-  max-width: 100px;
+  flex: 0 0 95px;
+  width: 95px;
+  max-width: 95px;
   min-width: 0;
 }
 
