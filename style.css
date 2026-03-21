@@ -605,11 +605,63 @@ h2 {
   margin-bottom: 10px;
 }
 
-#section-new button[type="submit"],
-#section-new #cancelEditBtn,
-#section-new #cancelEditBtnTop {
-  padding: 8px 12px;
-  font-size: 16px;
+/* Сохранить / Отмена — как «Загрузить», голубая тема в духе Commit в Cursor */
+#section-new .btn-form-save,
+#section-new .btn-form-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  width: fit-content;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.15s;
+}
+
+#section-new .btn-form-save {
+  background: #0078d4;
+  color: #fff;
+  border: 1px solid transparent;
+}
+
+#section-new .btn-form-save:hover {
+  background: #106ebe;
+  color: #fff;
+  opacity: 1;
+}
+
+#section-new .btn-form-save:active {
+  transform: translateY(1px);
+}
+
+#section-new .btn-form-cancel {
+  background: #fff;
+  color: #0078d4;
+  border: 1px solid #0078d4;
+}
+
+#section-new .btn-form-cancel:hover {
+  background: #e8f4fc;
+  color: #106ebe;
+  border-color: #106ebe;
+  opacity: 1;
+}
+
+#section-new .btn-form-cancel:active {
+  transform: translateY(1px);
+}
+
+#section-new .btn-form-save:focus-visible,
+#section-new .btn-form-cancel:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.35);
 }
 
 #section-new #payment_status {
@@ -1827,9 +1879,15 @@ th {
 }
 
 .existing-order-files-wrap {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.existing-order-files-wrap[hidden] {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .existing-order-files-title {
@@ -1854,6 +1912,10 @@ th {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.selected-files:not(:empty) {
+  margin-bottom: 10px;
 }
 
 /* ===== превью выбранных файлов ===== */

@@ -62,8 +62,8 @@
 
       <form id="orderForm">
         <div class="actions actions-top">
-          <button type="submit" id="submitBtnTop">Сохранить заказ</button>
-          <button type="button" id="cancelEditBtnTop" style="display: none;">Отмена</button>
+          <button type="submit" id="submitBtnTop" class="btn-form-save">Сохранить заказ</button>
+          <button type="button" id="cancelEditBtnTop" class="btn-form-cancel" style="display: none;">Отмена</button>
         </div>
         <p id="messageTop"></p>
         <div class="grid">
@@ -263,27 +263,27 @@
                 hidden
               />
 
-              <div class="upload-area">
-                <button type="button" id="selectFilesBtn" class="upload-btn">
-                  <svg class="upload-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                  Выбрать файлы
-                </button>
-                <span id="fileUploadText" class="file-upload-text" aria-live="polite"></span>
-              </div>
-
               <div id="existingOrderFilesWrap" class="existing-order-files-wrap" hidden>
                 <div class="existing-order-files-title">Уже прикреплено</div>
                 <div id="existingOrderFilesList" class="files-list existing-order-files-list"></div>
               </div>
 
               <div id="selectedFiles" class="selected-files"></div>
+
+              <div class="upload-area">
+                <button type="button" id="selectFilesBtn" class="upload-btn">
+                  <svg class="upload-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                  Загрузить
+                </button>
+                <span id="fileUploadText" class="file-upload-text" aria-live="polite"></span>
+              </div>
             </div>
           </div>
         </div>
 
         <div class="actions">
-          <button type="submit" id="submitBtn">Сохранить заказ</button>
-          <button type="button" id="cancelEditBtn" style="display: none;">Отмена</button>
+          <button type="submit" id="submitBtn" class="btn-form-save">Сохранить заказ</button>
+          <button type="button" id="cancelEditBtn" class="btn-form-cancel" style="display: none;">Отмена</button>
         </div>
       </form>
 
