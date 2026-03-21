@@ -401,6 +401,37 @@ h2 {
   min-height: 72px;
 }
 
+/*
+ * iOS Safari при фокусе в input/select/textarea с font-size < 16px
+ * принудительно увеличивает масштаб страницы (доступность чтения).
+ * На сенсорных экранах задаём 16px и достаточную высоту строки.
+ */
+@media (hover: none) and (pointer: coarse) {
+  #section-new input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]),
+  #section-new select,
+  #section-new textarea {
+    font-size: 16px;
+  }
+
+  #section-new input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]),
+  #section-new select {
+    height: auto;
+    min-height: 44px;
+  }
+
+  #section-new .installer-rate-input-row .installer-rate-input {
+    height: auto;
+    min-height: 44px;
+  }
+
+  #section-new .installer-rate-input-row .installer-calc-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
 #section-new .client-row {
   display: flex;
   flex-direction: row;
