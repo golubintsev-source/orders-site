@@ -1392,18 +1392,19 @@ th {
   margin: 0;
 }
 
-/* Без зазора между столбцами «Номер» и «Дата» */
+/* Небольшой зазор между «Номер», «Дата», «Клиент» */
 #ordersTable thead tr th:first-child,
 #ordersTable tbody td.td-order-id {
-  padding-right: 0;
+  padding-right: 6px;
 }
 
 #ordersTableStickyHeadTable thead tr th:first-child {
-  padding-right: 0;
+  padding-right: 6px;
 }
 
 #ordersTableStickyHeadTable th.th-order-date {
-  padding-left: 0;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 #ordersTable th.th-order-date,
@@ -1411,8 +1412,8 @@ th {
   min-width: 0;
   width: 1%;
   white-space: nowrap;
-  padding-left: 0;
-  padding-right: 3px;
+  padding-left: 6px;
+  padding-right: 6px;
   padding-top: 4px;
   padding-bottom: 4px;
 }
@@ -1510,10 +1511,6 @@ th {
   white-space: nowrap;
 }
 
-#ordersTable td.td-truncate-name {
-  padding-left: 3px;
-}
-
 #ordersTable th.th-delivery,
 #ordersTable td.td-delivery {
   white-space: nowrap;
@@ -1568,6 +1565,11 @@ th {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-left: 6px;
+}
+
+#ordersTableStickyHeadTable .th-truncate-name {
+  padding-left: 6px;
 }
 #ordersTable .th-truncate-address,
 #ordersTable td.td-truncate-address {
@@ -1587,6 +1589,15 @@ th {
 #ordersTable td.td-truncate-address,
 #ordersTable td.td-truncate-description {
   cursor: help;
+}
+
+/* Клиент — серая подложка как у «Статус»; ellipsis на чипе внутри узкой ячейки */
+#ordersTable td.td-truncate-name .status-value {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
 }
 
 .cell-tooltip {
@@ -1925,7 +1936,17 @@ th {
 
   #ordersTable th.th-order-date,
   #ordersTable td.td-order-date {
-    padding: 4px 2px 4px 0;
+    padding: 4px 4px 4px 6px;
+  }
+
+  #ordersTable thead tr th:first-child,
+  #ordersTable tbody td.td-order-id {
+    padding-right: 6px;
+  }
+
+  #ordersTable .th-truncate-name,
+  #ordersTable td.td-truncate-name {
+    padding-left: 6px;
   }
 
   #ordersTable th.th-paid,
