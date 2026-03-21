@@ -1845,17 +1845,8 @@ th {
   color: #6b7280;
 }
 
-.existing-order-file-item .preview-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.existing-order-file-item .preview-meta {
-  font-size: 12px;
-  color: #6b7280;
+.existing-order-files-wrap .files-list {
+  margin-top: 0;
 }
 
 .selected-files {
@@ -1863,10 +1854,6 @@ th {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.existing-order-files-wrap .selected-files {
-  margin-top: 0;
 }
 
 /* ===== превью выбранных файлов ===== */
@@ -2293,6 +2280,24 @@ th {
   }
 
   .files-modal .file-thumb {
+    object-fit: cover;
+  }
+
+  /* Блок «Уже прикреплено» — та же сетка строк, что в модалке файлов */
+  .existing-order-files-wrap .file-row {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 10px;
+    padding: 8px 10px;
+  }
+
+  .existing-order-files-wrap .file-preview,
+  .existing-order-files-wrap .file-thumb,
+  .existing-order-files-wrap .file-icon {
+    width: 64px;
+    height: 64px;
+  }
+
+  .existing-order-files-wrap .file-thumb {
     object-fit: cover;
   }
 

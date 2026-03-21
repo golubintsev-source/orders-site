@@ -38,7 +38,7 @@ import {
   formatOrderFormNumericInputById,
   bindOrderFormDateYear20xxInputs,
 } from "./orders.js";
-import { renderSelectedFiles } from "./files.js";
+import { mergeNewAttachmentsOnChange } from "./files.js";
 import { saveInstallerRate, updateSettingsSaveButtonState } from "./settings.js";
 
 export function toggleOrderRowHighlightById(orderId) {
@@ -394,7 +394,7 @@ export function bindUIEvents() {
   }
 
   if (attachmentsInput) {
-    attachmentsInput.addEventListener("change", renderSelectedFiles);
+    attachmentsInput.addEventListener("change", () => mergeNewAttachmentsOnChange());
   }
 
   if (closeFilesModal) {

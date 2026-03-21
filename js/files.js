@@ -11,8 +11,31 @@ import {
   setMessage,
 } from "./dom.js";
 
+/** Выбранные к загрузке файлы; повторный «Выбрать файлы» добавляет сюда, а не затирает список. */
+const pendingAttachments = [];
+
+function applyPendingToAttachmentsInput() {
+  if (!attachmentsInput) return;
+  const dt = new DataTransfer();
+  pendingAttachments.forEach((f) => dt.items.add(f));
+  attachmentsInput.files = dt.files;
+}
+
+/**
+ * Обработчик change у input[type=file]: новый выбор добавляется к уже выбранным.
+ */
+export function mergeNewAttachmentsOnChange() {
+  if (!attachmentsInput) return;
+  const picked = Array.from(attachmentsInput.files || []);
+  if (picked.length === 0) return;
+  pendingAttachments.push(...picked);
+  applyPendingToAttachmentsInput();
+  attachmentsInput.value = "";
+  renderSelectedFiles();
+}
+
 export function renderSelectedFiles() {
-  const files = Array.from(attachmentsInput.files || []);
+  const files = [...pendingAttachments];
 
   selectedFiles.innerHTML = "";
 
@@ -65,21 +88,15 @@ export function renderSelectedFiles() {
 }
 
 export function removeSelectedFile(indexToRemove) {
-  const currentFiles = Array.from(attachmentsInput.files || []);
-  const dt = new DataTransfer();
-
-  currentFiles.forEach((file, index) => {
-    if (index !== indexToRemove) {
-      dt.items.add(file);
-    }
-  });
-
-  attachmentsInput.files = dt.files;
+  if (indexToRemove < 0 || indexToRemove >= pendingAttachments.length) return;
+  pendingAttachments.splice(indexToRemove, 1);
+  applyPendingToAttachmentsInput();
   renderSelectedFiles();
 }
 
 export function resetFileUpload() {
-  attachmentsInput.value = "";
+  pendingAttachments.length = 0;
+  if (attachmentsInput) attachmentsInput.value = "";
   fileUploadText.textContent = "";
   selectedFiles.innerHTML = "";
 }
@@ -118,65 +135,7 @@ export async function renderExistingOrderFilesInForm(orderId) {
   }
 
   for (const file of files) {
-    const { fullUrl, previewUrl } = await getSignedUrlsForOrderFileRow(file);
-    const isImage = isImageFile(file);
-
-    const row = document.createElement("div");
-    row.className = "preview-item existing-order-file-item";
-
-    let preview;
-    if (isImage && previewUrl) {
-      const link = document.createElement("a");
-      link.href = fullUrl || previewUrl;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.title = "Открыть полное изображение";
-      const img = document.createElement("img");
-      img.className = "preview-thumb";
-      img.src = previewUrl;
-      img.alt = file.file_name || "";
-      img.loading = "lazy";
-      img.decoding = "async";
-      link.appendChild(img);
-      preview = link;
-    } else {
-      const icon = document.createElement("div");
-      icon.className = "preview-icon";
-      icon.textContent = "📄";
-      preview = icon;
-    }
-
-    const info = document.createElement("div");
-    info.className = "preview-info";
-
-    const name = document.createElement("div");
-    name.className = "preview-name";
-    name.textContent = file.file_name || "Файл";
-
-    const meta = document.createElement("div");
-    meta.className = "preview-meta";
-    meta.textContent = [file.mime_type || "тип не указан", formatFileSize(file.file_size)].filter(Boolean).join(" · ");
-
-    info.appendChild(name);
-    info.appendChild(meta);
-
-    row.appendChild(preview);
-    row.appendChild(info);
-
-    if (state.currentRole === "admin") {
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "preview-remove-btn";
-      removeBtn.textContent = "✕";
-      removeBtn.title = "Удалить файл";
-      const fid = file.id;
-      const oid = orderId;
-      removeBtn.addEventListener("click", () => {
-        void removeOrderFileFromEditForm(fid, oid);
-      });
-      row.appendChild(removeBtn);
-    }
-
+    const row = await createOrderFileRowElement(file, orderId, removeOrderFileFromEditForm);
     list.appendChild(row);
   }
 }
@@ -359,12 +318,13 @@ async function compressImageForWebIfNeeded(file) {
 }
 
 export async function uploadFiles(orderId) {
-  const files = attachmentsInput?.files;
-
-  if (!files || files.length === 0) {
+  applyPendingToAttachmentsInput();
+  if (pendingAttachments.length === 0) {
     resetFileUpload();
     return;
   }
+
+  const files = [...pendingAttachments];
 
   for (const file of files) {
     const fileToUpload = await compressImageForWebIfNeeded(file);
@@ -511,6 +471,152 @@ function truncateFileNameForModal(name, maxLen = 20) {
   return `${s.slice(0, maxLen - 1)}…`;
 }
 
+function appendDownloadIconToButton(btn) {
+  const svgDl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svgDl.setAttribute("width", "16");
+  svgDl.setAttribute("height", "16");
+  svgDl.setAttribute("viewBox", "0 0 24 24");
+  svgDl.setAttribute("fill", "none");
+  svgDl.setAttribute("stroke", "currentColor");
+  svgDl.setAttribute("stroke-width", "2");
+  svgDl.setAttribute("stroke-linecap", "round");
+  svgDl.setAttribute("stroke-linejoin", "round");
+  svgDl.setAttribute("aria-hidden", "true");
+  const pathDl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  pathDl.setAttribute("d", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4");
+  const polyDl = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+  polyDl.setAttribute("points", "7 10 12 15 17 10");
+  const lineDl = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  lineDl.setAttribute("x1", "12");
+  lineDl.setAttribute("y1", "15");
+  lineDl.setAttribute("x2", "12");
+  lineDl.setAttribute("y2", "3");
+  svgDl.appendChild(pathDl);
+  svgDl.appendChild(polyDl);
+  svgDl.appendChild(lineDl);
+  btn.appendChild(svgDl);
+}
+
+function appendRemoveIconToButton(delBtn) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "14");
+  svg.setAttribute("height", "14");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2.5");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("aria-hidden", "true");
+  const line1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line1.setAttribute("x1", "18");
+  line1.setAttribute("y1", "6");
+  line1.setAttribute("x2", "6");
+  line1.setAttribute("y2", "18");
+  const line2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line2.setAttribute("x1", "6");
+  line2.setAttribute("y1", "6");
+  line2.setAttribute("x2", "18");
+  line2.setAttribute("y2", "18");
+  svg.appendChild(line1);
+  svg.appendChild(line2);
+  delBtn.appendChild(svg);
+}
+
+/**
+ * Строка файла: как в модалке (превью, имя, мета, Открыть / Скачать / Удалить для админа).
+ * @param {(fileId: number, orderId: number) => void | Promise<void>} onAdminDelete
+ */
+async function createOrderFileRowElement(file, orderId, onAdminDelete) {
+  const { fullUrl, previewUrl } = await getSignedUrlsForOrderFileRow(file);
+  const isImage = isImageFile(file);
+
+  const row = document.createElement("div");
+  row.className = "file-row";
+
+  const preview = document.createElement("div");
+  preview.className = "file-preview";
+
+  if (isImage && previewUrl) {
+    const link = document.createElement("a");
+    link.href = fullUrl || previewUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.title = "Открыть полное изображение";
+    const img = document.createElement("img");
+    img.className = "file-thumb";
+    img.src = previewUrl;
+    img.alt = file.file_name || "";
+    img.loading = "lazy";
+    img.decoding = "async";
+    link.appendChild(img);
+    preview.appendChild(link);
+  } else {
+    const icon = document.createElement("div");
+    icon.className = "file-icon";
+    icon.textContent = "📄";
+    preview.appendChild(icon);
+  }
+
+  const body = document.createElement("div");
+  body.className = "file-row-body";
+
+  const nameEl = document.createElement("div");
+  nameEl.className = "file-name-trunc";
+  const fullName = file.file_name || "Файл";
+  nameEl.textContent = truncateFileNameForModal(fullName, 20);
+  if (fullName.length > 20) nameEl.title = fullName;
+
+  const metaEl = document.createElement("div");
+  metaEl.className = "file-meta-line";
+  metaEl.textContent = `${file.mime_type || "неизвестный тип"} | ${formatFileSize(file.file_size)}`;
+
+  const actions = document.createElement("div");
+  actions.className = "file-actions";
+
+  if (fullUrl) {
+    const openA = document.createElement("a");
+    openA.href = fullUrl;
+    openA.target = "_blank";
+    openA.rel = "noopener noreferrer";
+    openA.className = "file-action-btn";
+    openA.textContent = "Открыть";
+    actions.appendChild(openA);
+
+    const dlA = document.createElement("a");
+    dlA.href = fullUrl;
+    dlA.download = file.file_name || "file";
+    dlA.className = "file-download-btn";
+    dlA.title = "Скачать";
+    dlA.setAttribute("aria-label", "Скачать файл");
+    appendDownloadIconToButton(dlA);
+    actions.appendChild(dlA);
+  }
+
+  if (state.currentRole === "admin") {
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "file-remove-btn";
+    delBtn.title = "Удалить";
+    delBtn.setAttribute("aria-label", "Удалить файл");
+    appendRemoveIconToButton(delBtn);
+    const fid = file.id;
+    const oid = orderId;
+    delBtn.addEventListener("click", () => {
+      void onAdminDelete(fid, oid);
+    });
+    actions.appendChild(delBtn);
+  }
+
+  body.appendChild(nameEl);
+  body.appendChild(metaEl);
+  body.appendChild(actions);
+
+  row.appendChild(preview);
+  row.appendChild(body);
+
+  return row;
+}
+
 export async function openFilesModal(orderId) {
   const order = state.allOrders.find((o) => Number(o.id) === Number(orderId));
   const chip = formatOrderIdTypeChip(
@@ -540,136 +646,7 @@ export async function openFilesModal(orderId) {
   list.className = "files-list";
 
   for (const file of files) {
-    const { fullUrl, previewUrl } = await getSignedUrlsForOrderFileRow(file);
-    const isImage = isImageFile(file);
-
-    const row = document.createElement("div");
-    row.className = "file-row";
-
-    const preview = document.createElement("div");
-    preview.className = "file-preview";
-
-    if (isImage && previewUrl) {
-      const link = document.createElement("a");
-      link.href = fullUrl || previewUrl;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.title = "Открыть полное изображение";
-      const img = document.createElement("img");
-      img.className = "file-thumb";
-      img.src = previewUrl;
-      img.alt = file.file_name || "";
-      img.loading = "lazy";
-      img.decoding = "async";
-      link.appendChild(img);
-      preview.appendChild(link);
-    } else {
-      const icon = document.createElement("div");
-      icon.className = "file-icon";
-      icon.textContent = "📄";
-      preview.appendChild(icon);
-    }
-
-    const body = document.createElement("div");
-    body.className = "file-row-body";
-
-    const nameEl = document.createElement("div");
-    nameEl.className = "file-name-trunc";
-    const fullName = file.file_name || "Файл";
-    nameEl.textContent = truncateFileNameForModal(fullName, 20);
-    if (fullName.length > 20) nameEl.title = fullName;
-
-    const metaEl = document.createElement("div");
-    metaEl.className = "file-meta-line";
-    metaEl.textContent = `${file.mime_type || "неизвестный тип"} | ${formatFileSize(file.file_size)}`;
-
-    const actions = document.createElement("div");
-    actions.className = "file-actions";
-
-    if (fullUrl) {
-      const openA = document.createElement("a");
-      openA.href = fullUrl;
-      openA.target = "_blank";
-      openA.rel = "noopener noreferrer";
-      openA.className = "file-action-btn";
-      openA.textContent = "Открыть";
-      actions.appendChild(openA);
-
-      const dlA = document.createElement("a");
-      dlA.href = fullUrl;
-      dlA.download = file.file_name || "file";
-      dlA.className = "file-download-btn";
-      dlA.title = "Скачать";
-      dlA.setAttribute("aria-label", "Скачать файл");
-      const svgDl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svgDl.setAttribute("width", "16");
-      svgDl.setAttribute("height", "16");
-      svgDl.setAttribute("viewBox", "0 0 24 24");
-      svgDl.setAttribute("fill", "none");
-      svgDl.setAttribute("stroke", "currentColor");
-      svgDl.setAttribute("stroke-width", "2");
-      svgDl.setAttribute("stroke-linecap", "round");
-      svgDl.setAttribute("stroke-linejoin", "round");
-      svgDl.setAttribute("aria-hidden", "true");
-      const pathDl = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      pathDl.setAttribute("d", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4");
-      const polyDl = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-      polyDl.setAttribute("points", "7 10 12 15 17 10");
-      const lineDl = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      lineDl.setAttribute("x1", "12");
-      lineDl.setAttribute("y1", "15");
-      lineDl.setAttribute("x2", "12");
-      lineDl.setAttribute("y2", "3");
-      svgDl.appendChild(pathDl);
-      svgDl.appendChild(polyDl);
-      svgDl.appendChild(lineDl);
-      dlA.appendChild(svgDl);
-      actions.appendChild(dlA);
-    }
-
-    if (state.currentRole === "admin") {
-      const delBtn = document.createElement("button");
-      delBtn.type = "button";
-      delBtn.className = "file-remove-btn";
-      delBtn.title = "Удалить";
-      delBtn.setAttribute("aria-label", "Удалить файл");
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("width", "14");
-      svg.setAttribute("height", "14");
-      svg.setAttribute("viewBox", "0 0 24 24");
-      svg.setAttribute("fill", "none");
-      svg.setAttribute("stroke", "currentColor");
-      svg.setAttribute("stroke-width", "2.5");
-      svg.setAttribute("stroke-linecap", "round");
-      svg.setAttribute("aria-hidden", "true");
-      const line1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      line1.setAttribute("x1", "18");
-      line1.setAttribute("y1", "6");
-      line1.setAttribute("x2", "6");
-      line1.setAttribute("y2", "18");
-      const line2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      line2.setAttribute("x1", "6");
-      line2.setAttribute("y1", "6");
-      line2.setAttribute("x2", "18");
-      line2.setAttribute("y2", "18");
-      svg.appendChild(line1);
-      svg.appendChild(line2);
-      delBtn.appendChild(svg);
-      const fid = file.id;
-      const path = file.storage_path;
-      const oid = orderId;
-      delBtn.addEventListener("click", () => {
-        void removeFile(fid, path, oid);
-      });
-      actions.appendChild(delBtn);
-    }
-
-    body.appendChild(nameEl);
-    body.appendChild(metaEl);
-    body.appendChild(actions);
-
-    row.appendChild(preview);
-    row.appendChild(body);
+    const row = await createOrderFileRowElement(file, orderId, removeFile);
     list.appendChild(row);
   }
 
