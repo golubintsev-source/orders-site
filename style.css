@@ -1185,6 +1185,17 @@ th {
   cursor: pointer;
 }
 
+/* Номер заказа: серая подложка; файлы — синяя полоса слева; телефон — зелёная справа */
+#ordersTable td.td-order-id .order-id-chip.order-id-chip--has-files {
+  border-left: 4px solid #1f6feb;
+  padding-left: 6px;
+}
+
+#ordersTable td.td-order-id .order-id-chip.order-id-chip--has-phone {
+  border-right: 4px solid #059669;
+  padding-right: 6px;
+}
+
 /* Меню под номером заказа (как выпадающее под названием раздела) */
 .order-id-actions-menu.section-nav-dropdown-panel {
   padding: 6px 0;
@@ -1391,7 +1402,8 @@ th {
 }
 
 .status-filter-dropdown {
-  z-index: 100;
+  /* Выше закреплённой шапки таблицы (.orders-sticky-head-wrap 950), иначе список не виден */
+  z-index: 1200;
   min-width: 220px;
   max-height: 320px;
   overflow-y: auto;

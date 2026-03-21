@@ -165,12 +165,16 @@ export function initOrdersTableStickyHeader() {
       const typeBtn = e.target.closest(".order-type-filter-btn");
       if (typeBtn && wrap.contains(typeBtn)) {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         document.getElementById("orderTypeFilterBtn")?.click();
         return;
       }
       const statusBtn = e.target.closest(".status-filter-btn");
       if (statusBtn && wrap.contains(statusBtn)) {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         document.getElementById("statusFilterBtn")?.click();
       }
     },

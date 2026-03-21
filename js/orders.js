@@ -358,10 +358,14 @@ export function renderOrders(orders) {
     const phoneCallIcon = phone
       ? `<a href="${escapeAttr(telHref)}" class="btn-icon btn-phone-call" title="Позвонить"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></a>`
       : "";
+    const hasPhone = Boolean((phone || "").trim());
+    const orderIdChipClasses = ["status-value", "order-id-chip"];
+    if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
+    if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
     const row = `
       <tr>
         <td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}">
-          <span class="status-value">
+          <span class="${orderIdChipClasses.join(" ")}">
             ${order.id != null ? String(order.id).padStart(4, "0") : ""}${orderTypeFirstLetter ? escapeHtml(orderTypeFirstLetter) : ""}
           </span>
         </td>
@@ -521,6 +525,23 @@ function onOrderTypeFilterChange(e) {
   applyFiltersAndRender();
 }
 
+/** Координаты для fixed-выпадашки: при прокрутке настоящая кнопка в thead вне экрана — якорь по клону в закреплённой шапке. */
+function getFilterDropdownAnchorRect(originalBtn, cloneButtonSelector) {
+  const br = originalBtn.getBoundingClientRect();
+  const roughlyVisible =
+    br.width > 0 && br.height > 0 && br.bottom > 4 && br.top < window.innerHeight - 4;
+  if (roughlyVisible) return br;
+
+  const wrap = document.getElementById("ordersTableStickyHeadWrap");
+  if (wrap?.hidden) return br;
+
+  const cloneBtn = document.querySelector(cloneButtonSelector);
+  if (!cloneBtn) return br;
+  const cr = cloneBtn.getBoundingClientRect();
+  if (cr.width > 0 && cr.height > 0) return cr;
+  return br;
+}
+
 export function initStatusFilter() {
   const btn = document.getElementById("statusFilterBtn");
   const dropdown = document.getElementById("statusFilterDropdown");
@@ -534,8 +555,12 @@ export function initStatusFilter() {
     } else {
       closeOrderTypeFilterDropdown();
       renderStatusFilterDropdown();
-      const rect = btn.getBoundingClientRect();
+      const rect = getFilterDropdownAnchorRect(
+        btn,
+        "#ordersTableStickyHeadTable thead button.status-filter-btn:not(.order-type-filter-btn)"
+      );
       dropdown.style.position = "fixed";
+      dropdown.style.zIndex = "1200";
       dropdown.style.top = rect.bottom + 4 + "px";
       dropdown.style.left = rect.left + "px";
       dropdown.style.display = "block";
@@ -561,8 +586,12 @@ export function initOrderTypeFilter() {
     } else {
       closeStatusFilterDropdown();
       renderOrderTypeFilterDropdown();
-      const rect = btn.getBoundingClientRect();
+      const rect = getFilterDropdownAnchorRect(
+        btn,
+        "#ordersTableStickyHeadTable thead button.order-type-filter-btn"
+      );
       dropdown.style.position = "fixed";
+      dropdown.style.zIndex = "1200";
       dropdown.style.top = rect.bottom + 4 + "px";
       dropdown.style.left = rect.left + "px";
       dropdown.style.display = "block";
