@@ -14,6 +14,9 @@ import {
 /** Выбранные к загрузке файлы; повторный выбор через «Загрузить» добавляет к списку, а не заменяет. */
 const pendingAttachments = [];
 
+/** Blob-URL превью в списке «выбранные файлы» — отзываем при следующей отрисовке. */
+let selectedPreviewBlobUrls = [];
+
 function applyPendingToAttachmentsInput() {
   if (!attachmentsInput) return;
   const dt = new DataTransfer();
@@ -200,6 +203,15 @@ export async function mergeNewAttachmentsOnChange() {
 export function renderSelectedFiles() {
   const files = [...pendingAttachments];
 
+  for (const u of selectedPreviewBlobUrls) {
+    try {
+      URL.revokeObjectURL(u);
+    } catch {
+      /* ignore */
+    }
+  }
+  selectedPreviewBlobUrls = [];
+
   selectedFiles.innerHTML = "";
 
   if (files.length === 0) {
@@ -216,11 +228,20 @@ export function renderSelectedFiles() {
     let preview;
 
     if (file.type.startsWith("image/")) {
+      const blobUrl = URL.createObjectURL(file);
+      selectedPreviewBlobUrls.push(blobUrl);
+      const link = document.createElement("a");
+      link.className = "preview-thumb-link";
+      link.href = blobUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.title = "Открыть изображение";
       const img = document.createElement("img");
       img.className = "preview-thumb";
-      img.src = URL.createObjectURL(file);
-      img.onload = () => URL.revokeObjectURL(img.src);
-      preview = img;
+      img.src = blobUrl;
+      img.alt = file.name || "";
+      link.appendChild(img);
+      preview = link;
     } else {
       const icon = document.createElement("div");
       icon.className = "preview-icon";
@@ -259,6 +280,14 @@ export function removeSelectedFile(indexToRemove) {
 
 export function resetFileUpload() {
   pendingAttachments.length = 0;
+  for (const u of selectedPreviewBlobUrls) {
+    try {
+      URL.revokeObjectURL(u);
+    } catch {
+      /* ignore */
+    }
+  }
+  selectedPreviewBlobUrls = [];
   if (attachmentsInput) attachmentsInput.value = "";
   fileUploadText.textContent = "";
   selectedFiles.innerHTML = "";

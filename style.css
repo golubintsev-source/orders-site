@@ -157,8 +157,11 @@ h2 {
 
 .section-nav-dropdown-stat-row {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .section-nav-dropdown-stat--admin .section-nav-dropdown-stat-label,
@@ -1929,6 +1932,21 @@ th {
   background: #fff;
 }
 
+.preview-thumb-link {
+  display: block;
+  flex-shrink: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 0;
+  text-decoration: none;
+  color: inherit;
+  outline-offset: 2px;
+}
+
+.preview-thumb-link:focus-visible {
+  outline: 2px solid #1f6feb;
+}
+
 .preview-thumb {
   width: 70px;
   height: 70px;
@@ -1937,6 +1955,7 @@ th {
   border: 1px solid #ddd;
   display: block;
   flex-shrink: 0;
+  vertical-align: middle;
 }
 
 .preview-icon {
