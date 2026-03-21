@@ -2068,6 +2068,38 @@ th {
   color: #111;
 }
 
+/* Квадратная кнопка скачивания в модалке файлов */
+.file-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  color: #2563eb;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  text-decoration: none;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.file-download-btn:hover {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+.file-download-btn:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
+}
+
 /* Квадратная кнопка удаления файла в модалке */
 .file-remove-btn {
   display: inline-flex;

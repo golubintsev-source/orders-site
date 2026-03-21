@@ -386,8 +386,32 @@ export async function openFilesModal(orderId) {
       const dlA = document.createElement("a");
       dlA.href = signedUrl;
       dlA.download = file.file_name || "file";
-      dlA.className = "file-action-btn";
-      dlA.textContent = "Скачать";
+      dlA.className = "file-download-btn";
+      dlA.title = "Скачать";
+      dlA.setAttribute("aria-label", "Скачать файл");
+      const svgDl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svgDl.setAttribute("width", "16");
+      svgDl.setAttribute("height", "16");
+      svgDl.setAttribute("viewBox", "0 0 24 24");
+      svgDl.setAttribute("fill", "none");
+      svgDl.setAttribute("stroke", "currentColor");
+      svgDl.setAttribute("stroke-width", "2");
+      svgDl.setAttribute("stroke-linecap", "round");
+      svgDl.setAttribute("stroke-linejoin", "round");
+      svgDl.setAttribute("aria-hidden", "true");
+      const pathDl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      pathDl.setAttribute("d", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4");
+      const polyDl = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      polyDl.setAttribute("points", "7 10 12 15 17 10");
+      const lineDl = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      lineDl.setAttribute("x1", "12");
+      lineDl.setAttribute("y1", "15");
+      lineDl.setAttribute("x2", "12");
+      lineDl.setAttribute("y2", "3");
+      svgDl.appendChild(pathDl);
+      svgDl.appendChild(polyDl);
+      svgDl.appendChild(lineDl);
+      dlA.appendChild(svgDl);
       actions.appendChild(dlA);
     }
 
