@@ -327,6 +327,7 @@ function paidBadge(order) {
 }
 
 export function renderOrders(orders) {
+  document.dispatchEvent(new CustomEvent("orders-table-will-render"));
   const table = document.querySelector("#ordersTable tbody");
   table.innerHTML = "";
 
@@ -359,7 +360,7 @@ export function renderOrders(orders) {
       : "";
     const row = `
       <tr>
-        <td class="td-order-id" data-order-id="${order.id ?? ""}">
+        <td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}">
           <span class="status-value">
             ${order.id != null ? String(order.id).padStart(4, "0") : ""}${orderTypeFirstLetter ? escapeHtml(orderTypeFirstLetter) : ""}
           </span>

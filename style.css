@@ -1180,9 +1180,103 @@ th {
   height: 18px;
 }
 
-/* ID в таблице — клик открывает редактирование */
+/* ID в таблице — клик открывает меню действий */
 #ordersTable td.td-order-id {
   cursor: pointer;
+}
+
+/* Меню под номером заказа (как выпадающее под названием раздела) */
+.order-id-actions-menu.section-nav-dropdown-panel {
+  padding: 6px 0;
+}
+
+.order-id-actions-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #374151;
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  line-height: 1.2;
+}
+
+.order-id-actions-menu-item:hover:not(.order-id-actions-menu-item--disabled) {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.order-id-actions-menu-item:focus-visible {
+  outline: none;
+  background: #eff6ff;
+}
+
+.order-id-actions-menu-item--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.order-id-actions-menu-icon {
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.order-id-actions-menu-item:hover:not(.order-id-actions-menu-item--disabled):not(.order-id-actions-menu-item--no-files) .order-id-actions-menu-icon {
+  color: #374151;
+}
+
+.order-id-actions-menu-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.order-id-actions-menu-files-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -5px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
+  line-height: 12px;
+  text-align: center;
+  background: #1f6feb;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* Нет файлов — строка «Файлы» светло-серая */
+.order-id-actions-menu-item--no-files {
+  color: #b6bec9;
+}
+
+.order-id-actions-menu-item--no-files .order-id-actions-menu-icon {
+  color: #b6bec9;
+}
+
+.order-id-actions-menu-item--no-files:hover {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
+.order-id-actions-menu-item--no-files:hover .order-id-actions-menu-icon {
+  color: #9ca3af;
 }
 
 /* Подсветка строки по клику на ID */
