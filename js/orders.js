@@ -202,56 +202,6 @@ function ensureOrdersScrollSync() {
     { passive: true }
   );
 
-  /* iOS: убрать «маятник» у краёв прокрутки (горизонталь и вертикаль) */
-  if (touchUi && ordersScrollBottomEl) {
-    let touchStartX = 0;
-    let touchStartY = 0;
-    const onTouchStart = (e) => {
-      if (e.touches.length !== 1) return;
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-    };
-    const onTouchMove = (e) => {
-      if (e.touches.length !== 1) return;
-      const x = e.touches[0].clientX;
-      const y = e.touches[0].clientY;
-      const el = ordersScrollBottomEl;
-      const totalDx = x - touchStartX;
-      const totalDy = y - touchStartY;
-      const absDx = Math.abs(totalDx);
-      const absDy = Math.abs(totalDy);
-
-      if (absDx > absDy) {
-        const sl = el.scrollLeft;
-        const maxSl = Math.max(0, el.scrollWidth - el.clientWidth);
-        if (sl <= 0.5 && totalDx > 2) {
-          e.preventDefault();
-          return;
-        }
-        if (sl >= maxSl - 0.5 && totalDx < -2) {
-          e.preventDefault();
-        }
-        return;
-      }
-
-      if (absDy > absDx) {
-        const st = el.scrollTop;
-        const maxSt = Math.max(0, el.scrollHeight - el.clientHeight);
-        /* Верх таблицы: смах вниз (палец вниз) — без резинки */
-        if (st <= 0.5 && totalDy > 2) {
-          e.preventDefault();
-          return;
-        }
-        /* Низ области прокрутки: смах вверх — без резинки */
-        if (st >= maxSt - 0.5 && totalDy < -2) {
-          e.preventDefault();
-        }
-      }
-    };
-    ordersScrollBottomEl.addEventListener("touchstart", onTouchStart, { passive: true });
-    ordersScrollBottomEl.addEventListener("touchmove", onTouchMove, { passive: false });
-  }
-
   ordersScrollSyncAttached = true;
 }
 

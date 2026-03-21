@@ -876,6 +876,25 @@ button:active {
   .orders-table-scroll-top {
     display: none;
   }
+
+  /*
+   * iOS Safari: max-height + overflow:auto + sticky thead на <th> даёт обрезание/пропадание
+   * шапки таблицы и ломает вёрстку. На телефоне прокручиваем страницу целиком, шапка — обычная.
+   */
+  #ordersTableScrollBottom.orders-table-scroll {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: auto;
+  }
+
+  #ordersTable thead th {
+    position: static;
+    top: auto;
+    z-index: auto;
+    box-shadow: none;
+  }
 }
 
 .orders-table-scroll-top {
@@ -1682,10 +1701,6 @@ th {
   #ordersTable th.th-paid,
   #ordersTable td.td-paid {
     padding: 4px 2px 4px 0;
-  }
-
-  #ordersTableScrollBottom.orders-table-scroll {
-    max-height: calc(100vh - 15rem);
   }
 
   .topbar {
