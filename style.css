@@ -148,6 +148,36 @@ h2 {
   background: #eff6ff;
 }
 
+/* Итог внизу меню разделов: не пункт навигации */
+.section-nav-dropdown-stat {
+  margin-top: 4px;
+  padding: 10px 14px 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.section-nav-dropdown-stat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.section-nav-dropdown-stat--admin .section-nav-dropdown-stat-label,
+.section-nav-dropdown-stat--admin .section-nav-dropdown-stat-value {
+  color: #1f6feb;
+}
+
+.section-nav-dropdown-stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.section-nav-dropdown-stat-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .section-nav-search-btn {
   display: inline-flex;
   align-items: center;

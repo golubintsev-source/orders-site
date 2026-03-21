@@ -1,6 +1,43 @@
 import { state } from "./state.js";
 import { loadBalance } from "./balance.js";
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
+import { formatAmount } from "./format.js";
+
+/** Статусы: «Товар передан заказчику» или «Монтаж выполнен» */
+const RICHER_STATUSES = new Set(["Товар передан заказчику", "Монтаж выполнен"]);
+
+function orderIsUnpaidByRemainingTo(order) {
+  const raw = (order.remaining_to || "").trim();
+  return raw === "" || raw === "—";
+}
+
+/**
+ * Сумма остатков по заказам: Оплачено = нет (пусто «Кому остаток») и статус
+ * «Товар передан заказчику» или «Монтаж выполнен».
+ */
+export function updateSectionNavRicherStat() {
+  const wrap = document.getElementById("sectionNavRicherStat");
+  const el = document.getElementById("sectionNavRicherSum");
+  if (!wrap || !el) return;
+
+  const isAdmin = state.currentRole === "admin";
+  wrap.hidden = !isAdmin;
+  if (!isAdmin) return;
+
+  let sum = 0;
+  for (const order of state.allOrders || []) {
+    if (!orderIsUnpaidByRemainingTo(order)) continue;
+    const st = (order.payment_status || "").trim();
+    if (!RICHER_STATUSES.has(st)) continue;
+    const rem = order.remaining_amount;
+    if (rem != null && rem !== "") {
+      const n = Number(rem);
+      if (Number.isFinite(n)) sum += n;
+    }
+  }
+
+  el.textContent = `${formatAmount(sum)}\u00A0₽`;
+}
 
 const SECTION_LABELS = {
   all: "Заказы",

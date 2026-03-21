@@ -9,7 +9,7 @@ import {
   cancelEditBtn,
   cancelEditBtnTop,
 } from "./dom.js";
-import { switchSection, refreshSectionNavLabel } from "./section-nav.js";
+import { switchSection, refreshSectionNavLabel, updateSectionNavRicherStat } from "./section-nav.js";
 import {
   loadFilesCountMap,
   getFilesWord,
@@ -35,6 +35,7 @@ export async function loadOrders() {
   state.allOrders = data || [];
   await loadFilesCountMap();
   applyFiltersAndRender();
+  updateSectionNavRicherStat();
 }
 
 const STATUS_OPTIONS = [
@@ -450,11 +451,16 @@ export function renderOrders(orders) {
     const orderIdChipClasses = ["status-value", "order-id-chip"];
     if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
     if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
+    /* Номер в таблице: 4 цифры + «_» + первая буква типа заказа (например 0112_О) */
+    const orderNumberDisplay =
+      order.id != null
+        ? `${String(order.id).padStart(4, "0")}${orderTypeFirstLetter ? `_${escapeHtml(orderTypeFirstLetter)}` : ""}`
+        : "";
     const row = `
       <tr>
         <td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}">
           <span class="${orderIdChipClasses.join(" ")}">
-            ${order.id != null ? String(order.id).padStart(4, "0") : ""}${orderTypeFirstLetter ? escapeHtml(orderTypeFirstLetter) : ""}
+            ${orderNumberDisplay}
           </span>
         </td>
         <td class="td-order-date">${formatDateShortRU(order.order_date)}</td>
