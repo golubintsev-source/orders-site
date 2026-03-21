@@ -31,6 +31,50 @@ function isCroppableImageFile(file) {
 }
 
 /**
+ * EXIF Orientation (снимки с iPhone): раскладываем пиксели в «правильный» вид до Cropper,
+ * иначе на шаге обрезки картинка может оказаться повёрнутой на 90°.
+ * Результат — object URL JPEG; при ошибке — исходный blob URL.
+ */
+function createOrientedImageObjectUrl(file) {
+  return new Promise((resolve) => {
+    const fallback = () => resolve(URL.createObjectURL(file));
+
+    if (typeof window.loadImage !== "function") {
+      fallback();
+      return;
+    }
+
+    window.loadImage(
+      file,
+      (result) => {
+        if (!result || typeof result.getContext !== "function") {
+          fallback();
+          return;
+        }
+        const canvas = result;
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              fallback();
+              return;
+            }
+            resolve(URL.createObjectURL(blob));
+          },
+          "image/jpeg",
+          0.92
+        );
+      },
+      {
+        orientation: true,
+        canvas: true,
+        maxWidth: 8192,
+        maxHeight: 8192,
+      }
+    );
+  });
+}
+
+/**
  * Модалка Cropper.js: обрезка фото перед добавлением в список (в т.ч. после «Снять фото»).
  * @returns {Promise<File | null>} null — отмена; File — результат (JPEG после обрезки или исходный)
  */
@@ -52,7 +96,8 @@ function openCropModalForAttachment(file) {
 
     let cropper = null;
     let keyHandler = null;
-    const url = URL.createObjectURL(file);
+    /** @type {string | null} */
+    let objectUrl = null;
     const backdrop = modal.querySelector(".crop-image-modal-backdrop");
 
     const cleanup = () => {
@@ -69,7 +114,14 @@ function openCropModalForAttachment(file) {
         }
         cropper = null;
       }
-      URL.revokeObjectURL(url);
+      if (objectUrl) {
+        try {
+          URL.revokeObjectURL(objectUrl);
+        } catch {
+          /* ignore */
+        }
+        objectUrl = null;
+      }
       img.removeAttribute("src");
       modal.hidden = true;
       modal.style.display = "none";
@@ -138,36 +190,50 @@ function openCropModalForAttachment(file) {
     skipBtn.onclick = onSkip;
     confirmBtn.onclick = onConfirm;
 
-    img.onload = () => {
-      if (cropper) {
-        try {
-          cropper.destroy();
-        } catch {
-          /* ignore */
+    const initCropper = () => {
+      img.onload = () => {
+        if (cropper) {
+          try {
+            cropper.destroy();
+          } catch {
+            /* ignore */
+          }
+          cropper = null;
         }
-        cropper = null;
-      }
-      cropper = new window.Cropper(img, {
-        viewMode: 1,
-        dragMode: "move",
-        aspectRatio: NaN,
-        autoCropArea: 0.92,
-        responsive: true,
-        background: false,
-        movable: true,
-        zoomable: true,
-        rotatable: false,
+        cropper = new window.Cropper(img, {
+          viewMode: 1,
+          dragMode: "move",
+          aspectRatio: NaN,
+          autoCropArea: 0.92,
+          responsive: true,
+          background: false,
+          movable: true,
+          zoomable: true,
+          rotatable: false,
+          /* Ориентация уже учтена в пикселях (load-image); иначе Cropper + EXIF дают лишний поворот на iPhone */
+          checkOrientation: false,
+        });
+      };
+
+      img.onerror = () => {
+        cleanup();
+        resolve(file);
+      };
+
+      modal.hidden = false;
+      modal.style.display = "flex";
+      img.src = objectUrl;
+    };
+
+    createOrientedImageObjectUrl(file)
+      .then((url) => {
+        objectUrl = url;
+        initCropper();
+      })
+      .catch(() => {
+        objectUrl = URL.createObjectURL(file);
+        initCropper();
       });
-    };
-
-    img.onerror = () => {
-      cleanup();
-      resolve(file);
-    };
-
-    modal.hidden = false;
-    modal.style.display = "flex";
-    img.src = url;
   });
 }
 
