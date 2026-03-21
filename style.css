@@ -79,6 +79,29 @@ h2 {
   text-decoration: underline;
 }
 
+/* Ссылка-иконка в шапке (например «Расчет окон») */
+.topbar-link.topbar-link-icon {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 0;
+  line-height: 0;
+}
+
+.topbar-link.topbar-link-icon:hover {
+  text-decoration: none;
+}
+
+.topbar-link.topbar-link-icon img {
+  display: block;
+  width: 28px;
+  height: 28px;
+  vertical-align: middle;
+}
+
+.topbar-link.topbar-link-icon:hover img {
+  opacity: 0.82;
+}
+
 .logout-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -712,6 +735,21 @@ button:active {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Заказы: таблица прокручивается в своей области, шапка закреплена сверху */
+#ordersTableScrollBottom.orders-table-scroll {
+  max-height: calc(100vh - 12rem);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#ordersTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #f8fafc;
+  box-shadow: 0 1px 0 0 #e7ebf0;
+}
+
 /* На телефоне верхняя полоса только индикатор ширины; жест — по таблице (иначе два overflow-x рядом мешают iOS) */
 @media (hover: none) and (pointer: coarse) {
   .orders-table-scroll-top {
@@ -763,6 +801,11 @@ td {
 /* В таблице «Заказы» заголовки всегда слева (даже денежные) */
 #ordersTable th.th-money {
   text-align: left;
+}
+
+/* Столбец «з/п» — заголовок по правому краю, как числа в ячейках */
+#ordersTable th.th-money.th-money-header-right {
+  text-align: right;
 }
 
 .td-money {
@@ -1418,6 +1461,10 @@ th {
   #ordersTable th.th-paid,
   #ordersTable td.td-paid {
     padding: 4px 2px 4px 0;
+  }
+
+  #ordersTableScrollBottom.orders-table-scroll {
+    max-height: calc(100vh - 15rem);
   }
 
   .topbar {

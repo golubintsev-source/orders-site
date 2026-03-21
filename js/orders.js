@@ -933,7 +933,7 @@ export async function submitOrderForm(event) {
       { key: "amount", label: "Стоимость", oldVal: initialSums.amount, newVal: orderData.amount },
       { key: "prepayment", label: "Предоплата", oldVal: initialSums.prepayment, newVal: orderData.prepayment },
       { key: "remaining_amount", label: "Остаток", oldVal: initialSums.remaining_amount, newVal: orderData.remaining_amount },
-      { key: "installer_payment_amount", label: "Сумма за монтаж", oldVal: initialSums.installer_payment_amount, newVal: orderData.installer_payment_amount },
+      { key: "installer_payment_amount", label: "з/п за монтаж", oldVal: initialSums.installer_payment_amount, newVal: orderData.installer_payment_amount },
     ];
 
     fieldsToCheck.forEach((f) => {
