@@ -853,14 +853,31 @@ button:active {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Заказы: таблица прокручивается в своей области, шапка закреплена сверху */
+/*
+ * Заказы: вертикальная прокрутка — только внешний #ordersTableScrollBottom,
+ * горизонтальная — во внутреннем .orders-table-inner.
+ * Так position:sticky на <th> не ломается (один scrollport по вертикали + WebKit).
+ */
 #ordersTableScrollBottom.orders-table-scroll {
   max-height: calc(100vh - 12rem);
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  /* Без «резинки» у краёв по горизонтали и вертикали (особенно iOS) */
-  overscroll-behavior-x: none;
   overscroll-behavior-y: none;
+}
+
+.orders-table-inner {
+  overflow-x: auto;
+  overflow-y: visible;
+  width: 100%;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: none;
+}
+
+#ordersTable {
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 #ordersTable thead th {
@@ -877,26 +894,15 @@ button:active {
     display: none;
   }
 
-  /*
-   * Телефон: вертикаль — прокрутка страницы (без max-height у блока), горизонталь — у обёртки.
-   * border-collapse: separate нужен WebKit/Safari для корректного position:sticky на <th>
-   * (с collapse шапка часто пропадает или не липнет).
-   */
+  /* Телефон: страница крутится по вертикали; горизонталь — во .orders-table-inner */
   #ordersTableScrollBottom.orders-table-scroll {
     max-height: none;
-    overflow-x: auto;
     overflow-y: visible;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden;
     overscroll-behavior: auto;
   }
 
-  #ordersTable {
-    border-collapse: separate;
-    border-spacing: 0;
-  }
-
   #ordersTable thead th {
-    /* усилить слой при скролле страницы */
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
   }

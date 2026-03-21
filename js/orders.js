@@ -135,18 +135,26 @@ export function formatOrderFormNumericInputById(id) {
 let ordersScrollSyncAttached = false;
 let ordersScrollTopEl = null;
 let ordersScrollBottomEl = null;
+let ordersScrollInnerEl = null;
 let ordersScrollSpacerEl = null;
 
+/** Горизонтальный скролл таблицы — во внутреннем блоке */
+function ordersHorizontalScrollEl() {
+  return ordersScrollInnerEl || ordersScrollBottomEl;
+}
+
 function ordersCopyScrollBottomToTop() {
-  if (!ordersScrollTopEl || !ordersScrollBottomEl) return;
-  const next = ordersScrollBottomEl.scrollLeft;
+  const h = ordersHorizontalScrollEl();
+  if (!ordersScrollTopEl || !h) return;
+  const next = h.scrollLeft;
   if (ordersScrollTopEl.scrollLeft !== next) ordersScrollTopEl.scrollLeft = next;
 }
 
 function ordersCopyScrollTopToBottom() {
-  if (!ordersScrollTopEl || !ordersScrollBottomEl) return;
+  const h = ordersHorizontalScrollEl();
+  if (!ordersScrollTopEl || !h) return;
   const next = ordersScrollTopEl.scrollLeft;
-  if (ordersScrollBottomEl.scrollLeft !== next) ordersScrollBottomEl.scrollLeft = next;
+  if (h.scrollLeft !== next) h.scrollLeft = next;
 }
 
 function ensureOrdersScrollSync() {
@@ -154,9 +162,10 @@ function ensureOrdersScrollSync() {
 
   ordersScrollTopEl = document.getElementById("ordersTableScrollTop");
   ordersScrollBottomEl = document.getElementById("ordersTableScrollBottom");
+  ordersScrollInnerEl = document.getElementById("ordersTableScrollInner");
   ordersScrollSpacerEl = document.getElementById("ordersTableScrollSpacer");
 
-  if (!ordersScrollTopEl || !ordersScrollBottomEl || !ordersScrollSpacerEl) return;
+  if (!ordersScrollTopEl || !ordersScrollBottomEl || !ordersScrollSpacerEl || !ordersScrollInnerEl) return;
 
   const touchUi =
     typeof window.matchMedia === "function" &&
@@ -166,17 +175,15 @@ function ensureOrdersScrollSync() {
      Синхронизируем только после паузы в событиях scroll — в конце жеста и после докрута. */
   const idleMs = 80;
   let bottomIdleTimer = null;
-  ordersScrollBottomEl.addEventListener(
-    "scroll",
-    () => {
-      if (bottomIdleTimer) clearTimeout(bottomIdleTimer);
-      bottomIdleTimer = setTimeout(() => {
-        bottomIdleTimer = null;
-        ordersCopyScrollBottomToTop();
-      }, idleMs);
-    },
-    { passive: true }
-  );
+  const onHorizontalAreaScroll = () => {
+    if (bottomIdleTimer) clearTimeout(bottomIdleTimer);
+    bottomIdleTimer = setTimeout(() => {
+      bottomIdleTimer = null;
+      ordersCopyScrollBottomToTop();
+    }, idleMs);
+  };
+  ordersScrollInnerEl.addEventListener("scroll", onHorizontalAreaScroll, { passive: true });
+  ordersScrollBottomEl.addEventListener("scroll", onHorizontalAreaScroll, { passive: true });
 
   if (!touchUi) {
     let topIdleTimer = null;
@@ -206,9 +213,10 @@ function ensureOrdersScrollSync() {
 }
 
 function updateOrdersScrollSpacerWidth() {
-  if (!ordersScrollSpacerEl || !ordersScrollBottomEl) return;
-  const w = ordersScrollBottomEl.scrollWidth;
-  ordersScrollSpacerEl.style.width = `${w}px`;
+  if (!ordersScrollSpacerEl) return;
+  const h = ordersHorizontalScrollEl();
+  if (!h) return;
+  ordersScrollSpacerEl.style.width = `${h.scrollWidth}px`;
 }
 
 function syncOrdersScrollPositions() {
