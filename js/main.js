@@ -6,6 +6,7 @@ import { initBalanceSection } from "./balance.js";
 import { loadSettings } from "./settings.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { setMessage } from "./dom.js";
+import { initOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
 
 window.editOrder = editOrder;
 window.deleteOrder = deleteOrder;
@@ -15,6 +16,7 @@ window.toggleOrderRowHighlightById = toggleOrderRowHighlightById;
 
 async function init() {
   bindUIEvents();
+  initOrdersTableStickyHeader();
 
   try {
     const user = await checkAuth();

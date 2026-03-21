@@ -17,6 +17,7 @@ import {
   resetFileUpload,
 } from "./files.js";
 import { formatAmount } from "./format.js";
+import { refreshOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
 
 export async function loadOrders() {
   const { data, error } = await supabaseClient
@@ -393,6 +394,7 @@ export function renderOrders(orders) {
   ensureOrdersScrollSync();
   updateOrdersScrollSpacerWidth();
   syncOrdersScrollPositions();
+  refreshOrdersTableStickyHeader();
 }
 
 export function applyClientFilter() {

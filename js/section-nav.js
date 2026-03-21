@@ -1,5 +1,6 @@
 import { state } from "./state.js";
 import { loadBalance } from "./balance.js";
+import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 
 const SECTION_LABELS = {
   all: "Заказы",
@@ -113,6 +114,8 @@ export function switchSection(sectionId) {
   if (sectionId === "balance") {
     loadBalance();
   }
+
+  scheduleOrdersStickyHeaderUpdate();
 }
 
 /** Обновить только текст текущего раздела (например «Новый» ↔ «Редактирование»). */

@@ -451,7 +451,16 @@
     </div>
   </div>
 
+  <!-- Клон шапки таблицы заказов (фиксированный); наполняется из JS -->
+  <div id="ordersTableStickyHeadWrap" class="orders-sticky-head-wrap" hidden>
+    <div id="ordersTableStickyHeadScroll" class="orders-sticky-head-scroll">
+      <table id="ordersTableStickyHeadTable" class="orders-sticky-head-table" role="presentation" aria-hidden="true">
+        <thead id="ordersTableStickyThead"></thead>
+      </table>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=2"></script>
+  <script type="module" src="./js/main.js?v=3"></script>
 </body>
 </html>
