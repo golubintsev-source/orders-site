@@ -43,6 +43,17 @@ export function syncOrdersSearchIconAccent() {
   btn.classList.toggle("section-nav-search-btn--active-query", hasQuery);
 }
 
+/** Закрыть выпадающее меню поиска (лупа). */
+export function closeOrdersSearchPanel() {
+  const panel = document.getElementById("ordersSearchDropdownPanel");
+  const btn = document.getElementById("ordersSearchOpenBtn");
+  if (panel) panel.hidden = true;
+  if (btn) {
+    btn.setAttribute("aria-expanded", "false");
+    btn.classList.remove("section-nav-search-btn--open");
+  }
+}
+
 /** Лупа поиска по заказам — только на странице «Заказы». */
 function updateOrdersSearchBtnVisibility(sectionId) {
   const searchBtn = document.getElementById("ordersSearchOpenBtn");
@@ -50,13 +61,7 @@ function updateOrdersSearchBtnVisibility(sectionId) {
     searchBtn.hidden = sectionId !== "all";
   }
   if (sectionId !== "all") {
-    const modal = document.getElementById("ordersSearchModal");
-    if (modal && modal.style.display === "flex") {
-      modal.style.display = "none";
-    }
-    if (searchBtn) {
-      searchBtn.setAttribute("aria-expanded", "false");
-    }
+    closeOrdersSearchPanel();
   }
   syncOrdersSearchIconAccent();
 }
@@ -74,6 +79,7 @@ export function closeSectionNavDropdown() {
 }
 
 function openSectionNavDropdown() {
+  closeOrdersSearchPanel();
   const panel = document.getElementById("sectionNavDropdownPanel");
   const btn = document.getElementById("sectionNavCurrentBtn");
   if (!panel || !btn) return;
@@ -109,6 +115,7 @@ export function switchSection(sectionId) {
   updateCurrentLabel();
   updateDropdownItemsVisibility(sectionId);
   closeSectionNavDropdown();
+  closeOrdersSearchPanel();
   updateOrdersSearchBtnVisibility(sectionId);
 
   if (sectionId === "balance") {
@@ -156,15 +163,27 @@ export function initSectionNavDropdown() {
     document.addEventListener("click", () => {
       const p = document.getElementById("sectionNavDropdownPanel");
       if (p && !p.hidden) closeSectionNavDropdown();
+      closeOrdersSearchPanel();
     });
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
+      const searchPanel = document.getElementById("ordersSearchDropdownPanel");
+      if (searchPanel && !searchPanel.hidden) {
+        e.preventDefault();
+        closeOrdersSearchPanel();
+        return;
+      }
       const p = document.getElementById("sectionNavDropdownPanel");
       if (p && !p.hidden) {
         e.preventDefault();
         closeSectionNavDropdown();
       }
     });
+  }
+
+  const ordersSearchPanel = document.getElementById("ordersSearchDropdownPanel");
+  if (ordersSearchPanel) {
+    ordersSearchPanel.addEventListener("click", (e) => e.stopPropagation());
   }
 
   updateCurrentLabel();

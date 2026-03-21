@@ -10,12 +10,19 @@
   <div class="container">
     <div class="topbar">
       <nav class="section-nav topbar-section-nav" role="navigation">
-        <button type="button" class="section-nav-search-btn" id="ordersSearchOpenBtn" title="Поиск по заказам" aria-label="Поиск по заказам" aria-haspopup="dialog" aria-expanded="false">
-          <svg class="section-nav-search-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/>
-            <path d="M20 20l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
+        <div class="section-nav-dropdown-wrap section-nav-search-wrap">
+          <button type="button" class="section-nav-search-btn" id="ordersSearchOpenBtn" title="Поиск по заказам" aria-label="Поиск по заказам" aria-haspopup="true" aria-expanded="false" aria-controls="ordersSearchDropdownPanel">
+            <svg class="section-nav-search-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/>
+              <path d="M20 20l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <div id="ordersSearchDropdownPanel" class="section-nav-dropdown-panel orders-search-dropdown-panel" hidden role="dialog" aria-label="Поиск по заказам">
+            <input type="text" id="ordersSearchPopupInput" class="orders-search-dropdown-input" placeholder="Телефон, клиент, адрес, номер…" autocomplete="off" />
+            <button type="button" id="ordersSearchFindBtn" class="orders-search-dropdown-btn orders-search-dropdown-btn-primary">Найти</button>
+            <button type="button" id="ordersSearchCloseBtn" class="orders-search-dropdown-btn orders-search-dropdown-btn-secondary">Отмена</button>
+          </div>
+        </div>
         <div class="section-nav-dropdown-wrap">
           <button type="button" class="section-nav-current" id="sectionNavCurrentBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="sectionNavDropdownPanel">
             <span class="section-nav-current-label" id="sectionNavCurrentLabel">Заказы</span>
@@ -425,21 +432,6 @@
     </section>
   </div>
 
-  <div id="ordersSearchModal" class="orders-search-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="ordersSearchModalTitle">
-    <div class="orders-search-modal-dialog">
-      <h3 id="ordersSearchModalTitle">Поиск по заказам</h3>
-      <p class="orders-search-modal-hint">Телефон, клиент, адрес, номер, описание</p>
-      <input type="text" id="ordersSearchPopupInput" class="orders-search-modal-input" placeholder="Введите запрос" autocomplete="off" />
-      <div class="orders-search-modal-actions">
-        <button type="button" id="ordersSearchResetBtn" class="orders-search-modal-btn orders-search-modal-btn-reset" hidden>Сбросить поиск</button>
-        <div class="orders-search-modal-actions-right">
-          <button type="button" id="ordersSearchFindBtn" class="orders-search-modal-btn orders-search-modal-btn-primary">Найти</button>
-          <button type="button" id="ordersSearchCloseBtn" class="orders-search-modal-btn orders-search-modal-btn-secondary">Отмена</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <div id="filesModal" class="files-modal" style="display:none;">
     <div class="files-modal-content">
       <div class="files-modal-header">
@@ -463,6 +455,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=6"></script>
+  <script type="module" src="./js/main.js?v=7"></script>
 </body>
 </html>

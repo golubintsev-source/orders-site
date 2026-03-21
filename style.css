@@ -191,7 +191,77 @@ h2 {
   pointer-events: none;
 }
 
-/* Скрытая строка поиска под вкладками (значение задаётся из попапа) */
+.section-nav-search-wrap {
+  position: relative;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* Выпадающее меню поиска (как у выбора раздела): один столбец */
+.orders-search-dropdown-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  min-width: min(280px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: 12px 14px;
+}
+
+/* Иначе display:flex из блока выше перебивает атрибут hidden — панель всегда видна */
+.orders-search-dropdown-panel[hidden] {
+  display: none !important;
+}
+
+.orders-search-dropdown-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 8px 10px;
+  margin: 0;
+  font-size: 14px;
+  border: 1px solid #d7dce5;
+  border-radius: 8px;
+}
+
+.orders-search-dropdown-input:focus {
+  outline: none;
+  border-color: #1f6feb;
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
+}
+
+.orders-search-dropdown-btn {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.orders-search-dropdown-btn:hover {
+  opacity: 0.95;
+}
+
+.orders-search-dropdown-btn-primary {
+  background: #1f6feb;
+  color: #fff;
+}
+
+.orders-search-dropdown-btn-secondary {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.section-nav-search-btn.section-nav-search-btn--open {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* Скрытое поле #clientSearch — значение синхронизируется с меню поиска в шапке */
 #section-all .search-box.search-box--hidden {
   display: none;
 }
@@ -1533,106 +1603,6 @@ th {
 .preview-remove-btn:hover {
   background: #fecaca;
   opacity: 1;
-}
-
-/* ===== модалка поиска по заказам ===== */
-.orders-search-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  z-index: 1002;
-}
-
-.orders-search-modal-dialog {
-  width: 100%;
-  max-width: 400px;
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px 22px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-}
-
-.orders-search-modal-dialog h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.orders-search-modal-hint {
-  margin: 0 0 14px 0;
-  font-size: 13px;
-  color: #6b7280;
-  line-height: 1.4;
-}
-
-.orders-search-modal-input {
-  width: 100%;
-  box-sizing: border-box;
-  height: 42px;
-  padding: 10px 12px;
-  margin-bottom: 16px;
-  font-size: 14px;
-  border: 1px solid #d7dce5;
-  border-radius: 10px;
-}
-
-.orders-search-modal-input:focus {
-  outline: none;
-  border-color: #1f6feb;
-  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
-}
-
-.orders-search-modal-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  justify-content: space-between;
-}
-
-.orders-search-modal-actions-right {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-left: auto;
-}
-
-.orders-search-modal-btn-reset {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
-}
-
-.orders-search-modal-btn-reset:hover {
-  background: #fee2e2;
-}
-
-.orders-search-modal-btn {
-  padding: 10px 18px;
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 10px;
-  cursor: pointer;
-  border: none;
-  transition: opacity 0.2s;
-}
-
-.orders-search-modal-btn:hover {
-  opacity: 0.95;
-}
-
-.orders-search-modal-btn-primary {
-  background: #1f6feb;
-  color: #fff;
-}
-
-.orders-search-modal-btn-secondary {
-  background: #e5e7eb;
-  color: #374151;
 }
 
 /* ===== модалка файлов ===== */

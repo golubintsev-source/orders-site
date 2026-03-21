@@ -14,7 +14,13 @@ import {
   setMessage,
 } from "./dom.js";
 
-import { switchSection, initSectionNavDropdown } from "./section-nav.js";
+import {
+  switchSection,
+  initSectionNavDropdown,
+  closeSectionNavDropdown,
+  closeOrdersSearchPanel,
+  syncOrdersSearchIconAccent,
+} from "./section-nav.js";
 
 import { logout } from "./auth.js";
 import { state } from "./state.js";
@@ -209,85 +215,78 @@ export function bindUIEvents() {
     settingsInstallerRateInput.addEventListener("change", updateSettingsSaveButtonState);
   }
 
-  const ordersSearchModal = document.getElementById("ordersSearchModal");
   const ordersSearchOpenBtn = document.getElementById("ordersSearchOpenBtn");
   const ordersSearchPopupInput = document.getElementById("ordersSearchPopupInput");
   const ordersSearchFindBtn = document.getElementById("ordersSearchFindBtn");
   const ordersSearchCloseBtn = document.getElementById("ordersSearchCloseBtn");
-  const ordersSearchResetBtn = document.getElementById("ordersSearchResetBtn");
+  const ordersSearchPanel = document.getElementById("ordersSearchDropdownPanel");
 
-  function updateOrdersSearchResetBtnVisibility() {
-    if (!ordersSearchResetBtn || !ordersSearchPopupInput) return;
-    const hasText = (ordersSearchPopupInput.value || "").trim().length > 0;
-    ordersSearchResetBtn.hidden = !hasText;
-  }
-
-  function openOrdersSearchModal() {
-    if (!ordersSearchModal || !ordersSearchOpenBtn) return;
+  function openOrdersSearchDropdown() {
+    if (!ordersSearchOpenBtn || !ordersSearchPanel) return;
+    closeSectionNavDropdown();
     if (ordersSearchPopupInput && clientSearch) {
       ordersSearchPopupInput.value = clientSearch.value || "";
     }
-    updateOrdersSearchResetBtnVisibility();
-    ordersSearchModal.style.display = "flex";
+    ordersSearchPanel.hidden = false;
     ordersSearchOpenBtn.setAttribute("aria-expanded", "true");
+    ordersSearchOpenBtn.classList.add("section-nav-search-btn--open");
     queueMicrotask(() => ordersSearchPopupInput?.focus());
   }
 
-  function closeOrdersSearchModal() {
-    if (!ordersSearchModal || !ordersSearchOpenBtn) return;
-    ordersSearchModal.style.display = "none";
-    ordersSearchOpenBtn.setAttribute("aria-expanded", "false");
+  function toggleOrdersSearchDropdown() {
+    if (!ordersSearchPanel || !ordersSearchOpenBtn) return;
+    if (ordersSearchPanel.hidden) {
+      openOrdersSearchDropdown();
+    } else {
+      closeOrdersSearchPanel();
+    }
   }
 
-  function applyOrdersSearchFromPopup() {
+  function applyOrdersSearchFromDropdown() {
     if (clientSearch && ordersSearchPopupInput) {
       clientSearch.value = ordersSearchPopupInput.value.trim();
     }
-    closeOrdersSearchModal();
+    closeOrdersSearchPanel();
     applyClientFilter();
+    syncOrdersSearchIconAccent();
     switchSection("all");
   }
 
-  function resetOrdersSearchFromPopup() {
+  /** Отмена: очистить поле и сбросить фильтр, закрыть панель. */
+  function cancelOrdersSearchFromDropdown() {
     if (ordersSearchPopupInput) ordersSearchPopupInput.value = "";
     if (clientSearch) clientSearch.value = "";
-    closeOrdersSearchModal();
+    closeOrdersSearchPanel();
     applyClientFilter();
-    switchSection("all");
+    syncOrdersSearchIconAccent();
   }
 
   if (ordersSearchOpenBtn) {
-    ordersSearchOpenBtn.addEventListener("click", () => openOrdersSearchModal());
+    ordersSearchOpenBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleOrdersSearchDropdown();
+    });
   }
   if (ordersSearchFindBtn) {
-    ordersSearchFindBtn.addEventListener("click", () => applyOrdersSearchFromPopup());
+    ordersSearchFindBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      applyOrdersSearchFromDropdown();
+    });
   }
   if (ordersSearchCloseBtn) {
-    ordersSearchCloseBtn.addEventListener("click", () => closeOrdersSearchModal());
-  }
-  if (ordersSearchResetBtn) {
-    ordersSearchResetBtn.addEventListener("click", () => resetOrdersSearchFromPopup());
-  }
-  if (ordersSearchModal) {
-    ordersSearchModal.addEventListener("click", (e) => {
-      if (e.target === ordersSearchModal) closeOrdersSearchModal();
+    ordersSearchCloseBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      cancelOrdersSearchFromDropdown();
     });
   }
   if (ordersSearchPopupInput) {
-    ordersSearchPopupInput.addEventListener("input", () => updateOrdersSearchResetBtnVisibility());
     ordersSearchPopupInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        applyOrdersSearchFromPopup();
+        applyOrdersSearchFromDropdown();
       }
     });
   }
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (!ordersSearchModal || ordersSearchModal.style.display !== "flex") return;
-    closeOrdersSearchModal();
-  });
 
   initStatusFilter();
 
