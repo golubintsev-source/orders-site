@@ -1445,24 +1445,17 @@ th {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px 24px;
+  padding: 16px;
   z-index: 1002;
-  box-sizing: border-box;
-  touch-action: none;
 }
 
 .orders-search-modal-dialog {
-  box-sizing: border-box;
-  flex: 0 1 auto;
-  /* Не на всю ширину экрана: компактное окно с полями по бокам */
-  width: min(360px, calc(100vw - 48px));
-  max-width: 100%;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 400px;
   background: #fff;
   border-radius: 12px;
   padding: 20px 22px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-  touch-action: auto;
 }
 
 .orders-search-modal-dialog h3 {
@@ -1481,19 +1474,12 @@ th {
 .orders-search-modal-input {
   width: 100%;
   box-sizing: border-box;
-  min-height: 44px;
+  height: 42px;
   padding: 10px 12px;
   margin-bottom: 16px;
   font-size: 14px;
   border: 1px solid #d7dce5;
   border-radius: 10px;
-}
-
-/* iOS Safari: поле < 16px при фокусе вызывает зум всей страницы — отключаем */
-@media (hover: none) and (pointer: coarse) {
-  .orders-search-modal-input {
-    font-size: 16px;
-  }
 }
 
 .orders-search-modal-input:focus {

@@ -222,19 +222,12 @@ export function bindUIEvents() {
     ordersSearchResetBtn.hidden = !hasText;
   }
 
-  let ordersSearchBodyOverflowPrev = "";
-  let ordersSearchHtmlOverflowPrev = "";
-
   function openOrdersSearchModal() {
     if (!ordersSearchModal || !ordersSearchOpenBtn) return;
     if (ordersSearchPopupInput && clientSearch) {
       ordersSearchPopupInput.value = clientSearch.value || "";
     }
     updateOrdersSearchResetBtnVisibility();
-    ordersSearchBodyOverflowPrev = document.body.style.overflow;
-    ordersSearchHtmlOverflowPrev = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
     ordersSearchModal.style.display = "flex";
     ordersSearchOpenBtn.setAttribute("aria-expanded", "true");
     queueMicrotask(() => ordersSearchPopupInput?.focus());
@@ -243,10 +236,6 @@ export function bindUIEvents() {
   function closeOrdersSearchModal() {
     if (!ordersSearchModal || !ordersSearchOpenBtn) return;
     ordersSearchModal.style.display = "none";
-    document.body.style.overflow = ordersSearchBodyOverflowPrev;
-    document.documentElement.style.overflow = ordersSearchHtmlOverflowPrev;
-    ordersSearchBodyOverflowPrev = "";
-    ordersSearchHtmlOverflowPrev = "";
     ordersSearchOpenBtn.setAttribute("aria-expanded", "false");
   }
 
