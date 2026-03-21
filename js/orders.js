@@ -202,7 +202,7 @@ function ensureOrdersScrollSync() {
     { passive: true }
   );
 
-  /* iOS: убрать «маятник» при смахивании вправо, когда уже показан левый край таблицы (и симметрично у правого края) */
+  /* iOS: убрать «маятник» у краёв прокрутки (горизонталь и вертикаль) */
   if (touchUi && ordersScrollBottomEl) {
     let touchStartX = 0;
     let touchStartY = 0;
@@ -216,18 +216,36 @@ function ensureOrdersScrollSync() {
       const x = e.touches[0].clientX;
       const y = e.touches[0].clientY;
       const el = ordersScrollBottomEl;
-      const sl = el.scrollLeft;
-      const maxSl = Math.max(0, el.scrollWidth - el.clientWidth);
       const totalDx = x - touchStartX;
       const totalDy = y - touchStartY;
-      /* Не мешаем вертикальной прокрутке, если жест скорее вертикальный */
-      if (Math.abs(totalDx) <= Math.abs(totalDy)) return;
-      if (sl <= 0.5 && totalDx > 2) {
-        e.preventDefault();
+      const absDx = Math.abs(totalDx);
+      const absDy = Math.abs(totalDy);
+
+      if (absDx > absDy) {
+        const sl = el.scrollLeft;
+        const maxSl = Math.max(0, el.scrollWidth - el.clientWidth);
+        if (sl <= 0.5 && totalDx > 2) {
+          e.preventDefault();
+          return;
+        }
+        if (sl >= maxSl - 0.5 && totalDx < -2) {
+          e.preventDefault();
+        }
         return;
       }
-      if (sl >= maxSl - 0.5 && totalDx < -2) {
-        e.preventDefault();
+
+      if (absDy > absDx) {
+        const st = el.scrollTop;
+        const maxSt = Math.max(0, el.scrollHeight - el.clientHeight);
+        /* Верх таблицы: смах вниз (палец вниз) — без резинки */
+        if (st <= 0.5 && totalDy > 2) {
+          e.preventDefault();
+          return;
+        }
+        /* Низ области прокрутки: смах вверх — без резинки */
+        if (st >= maxSt - 0.5 && totalDy < -2) {
+          e.preventDefault();
+        }
       }
     };
     ordersScrollBottomEl.addEventListener("touchstart", onTouchStart, { passive: true });
