@@ -1019,7 +1019,7 @@ button:active {
   white-space: nowrap;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
 }
 
 #ordersTableStickyHeadTable .th-order-type-label {
@@ -1241,8 +1241,17 @@ th {
   color: #6b7280;
 }
 
-.order-id-actions-menu-item:hover:not(.order-id-actions-menu-item--disabled):not(.order-id-actions-menu-item--no-files) .order-id-actions-menu-icon {
+.order-id-actions-menu-item:hover:not(.order-id-actions-menu-item--disabled):not(.order-id-actions-menu-item--no-files):not(.order-id-actions-menu-item--call) .order-id-actions-menu-icon {
   color: #374151;
+}
+
+/* Позвонить — зелёная трубка (телефон есть) */
+.order-id-actions-menu-item--call .order-id-actions-menu-icon {
+  color: #059669;
+}
+
+.order-id-actions-menu-item--call:hover .order-id-actions-menu-icon {
+  color: #047857;
 }
 
 .order-id-actions-menu-icon-wrap {
@@ -1345,8 +1354,9 @@ th {
   color: #d32f2f;
 }
 
+/* Последний столбец — иконка файлов */
 #ordersTable th:last-child,
-#ordersTable td.td-delete {
+#ordersTable td.td-files {
   width: 1%;
   min-width: 1px;
   padding: 4px 0 4px 1px;
@@ -1356,11 +1366,43 @@ th {
   white-space: nowrap;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
 }
 
 #ordersTable .th-order-type-label {
   flex-shrink: 0;
+}
+
+/* Воронка у «Номер» — плотно к тексту */
+#ordersTable .th-order-type-header .order-type-filter-btn,
+#ordersTableStickyHeadTable .th-order-type-header .order-type-filter-btn {
+  padding: 2px;
+  margin: 0;
+}
+
+/* Без зазора между столбцами «Номер» и «Дата» */
+#ordersTable thead tr th:first-child,
+#ordersTable tbody td.td-order-id {
+  padding-right: 0;
+}
+
+#ordersTableStickyHeadTable thead tr th:first-child {
+  padding-right: 0;
+}
+
+#ordersTableStickyHeadTable th.th-order-date {
+  padding-left: 0;
+}
+
+#ordersTable th.th-order-date,
+#ordersTable td.td-order-date {
+  min-width: 0;
+  width: 1%;
+  white-space: nowrap;
+  padding-left: 0;
+  padding-right: 3px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 #ordersTable .th-status-header {
@@ -1451,17 +1493,6 @@ th {
 
 #ordersTable td.td-remaining {
   white-space: nowrap;
-}
-
-#ordersTable th.th-order-date,
-#ordersTable td.td-order-date {
-  min-width: 0;
-  width: 1%;
-  white-space: nowrap;
-  padding-left: 3px;
-  padding-right: 3px;
-  padding-top: 4px;
-  padding-bottom: 4px;
 }
 
 #ordersTable td.td-truncate-name {
@@ -1879,7 +1910,7 @@ th {
 
   #ordersTable th.th-order-date,
   #ordersTable td.td-order-date {
-    padding: 4px 0 4px 2px;
+    padding: 4px 2px 4px 0;
   }
 
   #ordersTable th.th-paid,

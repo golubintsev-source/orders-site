@@ -107,7 +107,7 @@ function openOrderIdActionsMenu(idTd) {
       : "order-id-actions-menu-item order-id-actions-menu-item--no-files";
 
   const callBlock = phoneRaw
-    ? `<a href="${telHref}" class="order-id-actions-menu-item" role="menuitem">${phone}<span>Позвонить</span></a>`
+    ? `<a href="${telHref}" class="order-id-actions-menu-item order-id-actions-menu-item--call" role="menuitem">${phone}<span>Позвонить</span></a>`
     : `<div class="order-id-actions-menu-item order-id-actions-menu-item--disabled" role="menuitem" aria-disabled="true">${phone}<span>Позвонить</span></div>`;
 
   menu.innerHTML = `
