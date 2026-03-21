@@ -15,6 +15,8 @@ import {
   getFilesWord,
   uploadFiles,
   resetFileUpload,
+  clearExistingOrderFilesInForm,
+  renderExistingOrderFilesInForm,
 } from "./files.js";
 import { formatAmount } from "./format.js";
 import { refreshOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
@@ -920,6 +922,10 @@ export function fillForm(order) {
   updatePaidField();
   updateConditionalRequiredHighlight();
   resetFileUpload();
+  void renderExistingOrderFilesInForm(order.id).catch((err) => {
+    console.error("Список файлов заявки:", err);
+    clearExistingOrderFilesInForm();
+  });
   checkInstallerPaymentDone(order.id);
 }
 
@@ -967,6 +973,7 @@ export function resetFormMode() {
   const phoneEl = document.getElementById("phone");
   if (phoneEl) phoneEl.dispatchEvent(new Event("input", { bubbles: true }));
   resetFileUpload();
+  clearExistingOrderFilesInForm();
 
   setMessage("Режим: новая заявка", "");
 

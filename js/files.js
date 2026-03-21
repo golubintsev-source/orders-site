@@ -83,6 +83,101 @@ export function resetFileUpload() {
   selectedFiles.innerHTML = "";
 }
 
+/** Скрыть блок уже прикреплённых файлов (режим «Новая заявка»). */
+export function clearExistingOrderFilesInForm() {
+  const wrap = document.getElementById("existingOrderFilesWrap");
+  const list = document.getElementById("existingOrderFilesList");
+  if (list) list.innerHTML = "";
+  if (wrap) wrap.hidden = true;
+}
+
+/**
+ * Список файлов заказа в форме редактирования: превью + удаление (как в модалке).
+ */
+export async function renderExistingOrderFilesInForm(orderId) {
+  const wrap = document.getElementById("existingOrderFilesWrap");
+  const list = document.getElementById("existingOrderFilesList");
+  if (!wrap || !list) return;
+
+  if (orderId == null) {
+    clearExistingOrderFilesInForm();
+    return;
+  }
+
+  wrap.hidden = false;
+  list.innerHTML = '<p class="existing-order-files-loading">Загрузка списка…</p>';
+
+  const files = await loadOrderFiles(orderId);
+
+  list.innerHTML = "";
+
+  if (!files.length) {
+    wrap.hidden = true;
+    return;
+  }
+
+  for (const file of files) {
+    const signedUrl = await getSignedFileUrl(file.storage_path);
+    const isImage = isImageFile(file);
+
+    const row = document.createElement("div");
+    row.className = "preview-item existing-order-file-item";
+
+    let preview;
+    if (isImage && signedUrl) {
+      const link = document.createElement("a");
+      link.href = signedUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      const img = document.createElement("img");
+      img.className = "preview-thumb";
+      img.src = signedUrl;
+      img.alt = file.file_name || "";
+      link.appendChild(img);
+      preview = link;
+    } else {
+      const icon = document.createElement("div");
+      icon.className = "preview-icon";
+      icon.textContent = "📄";
+      preview = icon;
+    }
+
+    const info = document.createElement("div");
+    info.className = "preview-info";
+
+    const name = document.createElement("div");
+    name.className = "preview-name";
+    name.textContent = file.file_name || "Файл";
+
+    const meta = document.createElement("div");
+    meta.className = "preview-meta";
+    meta.textContent = [file.mime_type || "тип не указан", formatFileSize(file.file_size)].filter(Boolean).join(" · ");
+
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    row.appendChild(preview);
+    row.appendChild(info);
+
+    if (state.currentRole === "admin") {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "preview-remove-btn";
+      removeBtn.textContent = "✕";
+      removeBtn.title = "Удалить файл";
+      const fid = file.id;
+      const path = file.storage_path;
+      const oid = orderId;
+      removeBtn.addEventListener("click", () => {
+        void removeOrderFileFromEditForm(fid, path, oid);
+      });
+      row.appendChild(removeBtn);
+    }
+
+    list.appendChild(row);
+  }
+}
+
 export async function uploadFiles(orderId) {
   const files = attachmentsInput?.files;
 
@@ -198,78 +293,150 @@ export function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
+/** До maxLen символов; при обрезке — «…» в конце (полное имя в title). */
+function truncateFileNameForModal(name, maxLen = 20) {
+  if (name == null || name === "") return "Файл";
+  const s = String(name);
+  if (s.length <= maxLen) return s;
+  return `${s.slice(0, maxLen - 1)}…`;
+}
+
 export async function openFilesModal(orderId) {
   filesModalTitle.textContent = `Файлы заказа #${orderId}`;
-  filesModalBody.innerHTML = "Загрузка...";
+  filesModalBody.textContent = "";
+  const loading = document.createElement("p");
+  loading.className = "files-modal-loading";
+  loading.textContent = "Загрузка...";
+  filesModalBody.appendChild(loading);
   filesModal.style.display = "flex";
 
   const files = await loadOrderFiles(orderId);
 
+  filesModalBody.textContent = "";
+
   if (!files.length) {
-    filesModalBody.innerHTML = "<p>У этого заказа пока нет файлов.</p>";
+    const empty = document.createElement("p");
+    empty.textContent = "У этого заказа пока нет файлов.";
+    filesModalBody.appendChild(empty);
     return;
   }
 
-  let html = `<div class="files-list">`;
+  const list = document.createElement("div");
+  list.className = "files-list";
 
   for (const file of files) {
     const signedUrl = await getSignedFileUrl(file.storage_path);
     const isImage = isImageFile(file);
 
-    html += `
-      <div class="file-row">
-        <div class="file-preview">
-          ${
-            isImage && signedUrl
-              ? `<a href="${signedUrl}" target="_blank"><img src="${signedUrl}" alt="${file.file_name}" class="file-thumb"></a>`
-              : `<div class="file-icon">📄</div>`
-          }
-        </div>
+    const row = document.createElement("div");
+    row.className = "file-row";
 
-        <div class="file-info">
-          <strong>${file.file_name}</strong><br>
-          <small>${file.mime_type || "неизвестный тип"} | ${formatFileSize(file.file_size)}</small>
-        </div>
+    const preview = document.createElement("div");
+    preview.className = "file-preview";
 
-        <div class="file-actions">
-          ${signedUrl ? `<a href="${signedUrl}" target="_blank">Открыть</a>` : ""}
-          ${signedUrl ? `<a href="${signedUrl}" download="${file.file_name}">Скачать</a>` : ""}
-          ${
-            state.currentRole === "admin"
-              ? `<button type="button" onclick="removeFile(${file.id}, '${file.storage_path}', ${orderId})">Удалить</button>`
-              : ""
-          }
-        </div>
-      </div>
-    `;
+    if (isImage && signedUrl) {
+      const link = document.createElement("a");
+      link.href = signedUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      const img = document.createElement("img");
+      img.className = "file-thumb";
+      img.src = signedUrl;
+      img.alt = file.file_name || "";
+      link.appendChild(img);
+      preview.appendChild(link);
+    } else {
+      const icon = document.createElement("div");
+      icon.className = "file-icon";
+      icon.textContent = "📄";
+      preview.appendChild(icon);
+    }
+
+    const body = document.createElement("div");
+    body.className = "file-row-body";
+
+    const nameEl = document.createElement("div");
+    nameEl.className = "file-name-trunc";
+    const fullName = file.file_name || "Файл";
+    nameEl.textContent = truncateFileNameForModal(fullName, 20);
+    if (fullName.length > 20) nameEl.title = fullName;
+
+    const metaEl = document.createElement("div");
+    metaEl.className = "file-meta-line";
+    metaEl.textContent = `${file.mime_type || "неизвестный тип"} | ${formatFileSize(file.file_size)}`;
+
+    const actions = document.createElement("div");
+    actions.className = "file-actions";
+
+    if (signedUrl) {
+      const openA = document.createElement("a");
+      openA.href = signedUrl;
+      openA.target = "_blank";
+      openA.rel = "noopener noreferrer";
+      openA.className = "file-action-btn";
+      openA.textContent = "Открыть";
+      actions.appendChild(openA);
+
+      const dlA = document.createElement("a");
+      dlA.href = signedUrl;
+      dlA.download = file.file_name || "file";
+      dlA.className = "file-action-btn";
+      dlA.textContent = "Скачать";
+      actions.appendChild(dlA);
+    }
+
+    if (state.currentRole === "admin") {
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "file-action-btn file-action-btn--danger";
+      delBtn.textContent = "Удалить";
+      const fid = file.id;
+      const path = file.storage_path;
+      const oid = orderId;
+      delBtn.addEventListener("click", () => {
+        void removeFile(fid, path, oid);
+      });
+      actions.appendChild(delBtn);
+    }
+
+    body.appendChild(nameEl);
+    body.appendChild(metaEl);
+    body.appendChild(actions);
+
+    row.appendChild(preview);
+    row.appendChild(body);
+    list.appendChild(row);
   }
 
-  html += `</div>`;
-  filesModalBody.innerHTML = html;
+  filesModalBody.appendChild(list);
+}
+
+/** Удаление из Storage и из таблицы order_files. */
+async function deleteOrderFileFromStorageAndDb(fileId, storagePath) {
+  const { error: storageError } = await supabaseClient.storage.from("order-files").remove([storagePath]);
+
+  if (storageError) {
+    console.error("Ошибка удаления файла из Storage:", storageError);
+    return { ok: false, message: "Ошибка удаления файла" };
+  }
+
+  const { error: dbError } = await supabaseClient.from("order_files").delete().eq("id", fileId);
+
+  if (dbError) {
+    console.error("Ошибка удаления записи файла:", dbError);
+    return { ok: false, message: "Файл удалён из Storage, но не удалён из БД" };
+  }
+
+  return { ok: true };
 }
 
 export async function removeFile(fileId, storagePath, orderId) {
   const ok = confirm("Удалить файл?");
   if (!ok) return;
 
-  const { error: storageError } = await supabaseClient.storage
-    .from("order-files")
-    .remove([storagePath]);
-
-  if (storageError) {
-    console.error("Ошибка удаления файла из Storage:", storageError);
-    setMessage("Ошибка удаления файла", "#d32f2f");
-    return;
-  }
-
-  const { error: dbError } = await supabaseClient
-    .from("order_files")
-    .delete()
-    .eq("id", fileId);
-
-  if (dbError) {
-    console.error("Ошибка удаления записи файла:", dbError);
-    setMessage("Файл удалён из Storage, но не удалён из БД", "#d32f2f");
+  const result = await deleteOrderFileFromStorageAndDb(fileId, storagePath);
+  if (!result.ok) {
+    setMessage(result.message, "#d32f2f");
     return;
   }
 
@@ -280,4 +447,26 @@ export async function removeFile(fileId, storagePath, orderId) {
   applyClientFilter();
 
   await openFilesModal(orderId);
+}
+
+/** Удаление из формы редактирования заявки (блок «Фото и документы»). */
+export async function removeOrderFileFromEditForm(fileId, storagePath, orderId) {
+  const ok = confirm("Удалить файл?");
+  if (!ok) return;
+
+  const result = await deleteOrderFileFromStorageAndDb(fileId, storagePath);
+  if (!result.ok) {
+    setMessage(result.message, "#d32f2f");
+    return;
+  }
+
+  setMessage("Файл удалён");
+  await loadFilesCountMap();
+
+  const { applyClientFilter } = await import("./orders.js");
+  applyClientFilter();
+
+  if (state.editingOrderId === orderId) {
+    await renderExistingOrderFilesInForm(orderId);
+  }
 }
