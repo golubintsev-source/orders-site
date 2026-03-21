@@ -179,6 +179,136 @@ export async function renderExistingOrderFilesInForm(orderId) {
   }
 }
 
+/** Целевой размер от исходного (~в ~20 раз меньше для многомегабайтных фото; сильнее чем раньше). */
+function targetCompressedBytes(originalSize) {
+  if (originalSize >= 2 * 1024 * 1024) return Math.floor(originalSize * 0.055);
+  if (originalSize >= 1024 * 1024) return Math.floor(originalSize * 0.065);
+  if (originalSize >= 500 * 1024) return Math.floor(originalSize * 0.09);
+  return Math.floor(originalSize * 0.14);
+}
+
+let _canvasSupportsWebpCached;
+function canvasSupportsWebp() {
+  if (_canvasSupportsWebpCached !== undefined) return _canvasSupportsWebpCached;
+  try {
+    const c = document.createElement("canvas");
+    c.width = 2;
+    c.height = 2;
+    _canvasSupportsWebpCached = /^data:image\/webp/i.test(c.toDataURL("image/webp"));
+  } catch {
+    _canvasSupportsWebpCached = false;
+  }
+  return _canvasSupportsWebpCached;
+}
+
+function scaleToMaxLongEdge(width, height, maxEdge) {
+  const m = Math.max(width, height);
+  if (m <= maxEdge) return { w: width, h: height };
+  const k = maxEdge / m;
+  return { w: Math.max(1, Math.round(width * k)), h: Math.max(1, Math.round(height * k)) };
+}
+
+function canvasToBlob(canvas, mime, quality) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), mime, quality);
+  });
+}
+
+/** Подбор качества: максимальное q при размере ≤ targetBytes (или ближайшее ниже). */
+async function blobAtOrBelowTarget(canvas, mime, targetBytes) {
+  let lo = 0.26;
+  let hi = 0.88;
+  let best = null;
+  for (let i = 0; i < 16; i++) {
+    const q = (lo + hi) / 2;
+    const blob = await canvasToBlob(canvas, mime, q);
+    if (!blob) {
+      hi = q;
+      continue;
+    }
+    if (blob.size <= targetBytes) {
+      best = blob;
+      lo = q;
+    } else {
+      hi = q;
+    }
+  }
+  if (best) return best;
+  const fallback = await canvasToBlob(canvas, mime, 0.4);
+  return fallback;
+}
+
+const COMPRESS_MIN_BYTES = 380 * 1024;
+const COMPRESS_MIN_LONG_EDGE = 2100;
+const COMPRESS_INITIAL_MAX_EDGE = 1600;
+
+/**
+ * Сжимает крупные растровые фото под веб (WebP или JPEG), цель сильного уменьшения (~×20 от исходного для тяжёлых фото).
+ * GIF/SVG не трогаем; при ошибке декодирования — исходный файл.
+ */
+async function compressImageForWebIfNeeded(file) {
+  if (!file?.type?.startsWith("image/")) return file;
+  if (file.type === "image/svg+xml" || file.type === "image/gif") return file;
+
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch (e) {
+    console.warn("Не удалось декодировать изображение, грузим как есть:", file.name, e);
+    return file;
+  }
+
+  const iw = bitmap.width;
+  const ih = bitmap.height;
+  const longEdge = Math.max(iw, ih);
+  const worthCompressing =
+    file.size >= COMPRESS_MIN_BYTES || longEdge >= COMPRESS_MIN_LONG_EDGE;
+  if (!worthCompressing) {
+    bitmap.close();
+    return file;
+  }
+
+  const targetBytes = targetCompressedBytes(file.size);
+  const outMime = canvasSupportsWebp() ? "image/webp" : "image/jpeg";
+
+  let maxEdge = COMPRESS_INITIAL_MAX_EDGE;
+  let bestBlob = null;
+  let bestSize = Infinity;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { w, h } = scaleToMaxLongEdge(iw, ih, maxEdge);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
+    ctx.drawImage(bitmap, 0, 0, w, h);
+
+    const blob = await blobAtOrBelowTarget(canvas, outMime, targetBytes);
+    if (blob && blob.size < file.size && blob.size < bestSize) {
+      bestBlob = blob;
+      bestSize = blob.size;
+      if (blob.size <= targetBytes * 1.2) break;
+    }
+    maxEdge = Math.round(maxEdge * 0.7);
+    if (maxEdge < 600) break;
+  }
+
+  bitmap.close();
+
+  if (!bestBlob || bestBlob.size >= file.size) return file;
+
+  const base = (file.name || "image").replace(/\.[^./\\]+$/i, "") || "image";
+  const ext = outMime === "image/webp" ? ".webp" : ".jpg";
+  return new File([bestBlob], `${base}${ext}`, {
+    type: outMime,
+    lastModified: Date.now(),
+  });
+}
+
 export async function uploadFiles(orderId) {
   const files = attachmentsInput?.files;
 
@@ -188,15 +318,16 @@ export async function uploadFiles(orderId) {
   }
 
   for (const file of files) {
-    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+    const fileToUpload = await compressImageForWebIfNeeded(file);
+    const safeName = fileToUpload.name.replace(/[^\w.\-]+/g, "_");
     const filePath = `${state.currentUser.id}/${orderId}/${Date.now()}_${safeName}`;
 
     const { error: uploadError } = await supabaseClient.storage
       .from("order-files")
-      .upload(filePath, file, {
+      .upload(filePath, fileToUpload, {
         cacheControl: "3600",
         upsert: false,
-        contentType: file.type || "application/octet-stream",
+        contentType: fileToUpload.type || "application/octet-stream",
       });
 
     if (uploadError) {
@@ -212,8 +343,8 @@ export async function uploadFiles(orderId) {
           order_id: orderId,
           file_name: file.name,
           storage_path: filePath,
-          mime_type: file.type || null,
-          file_size: file.size || null,
+          mime_type: fileToUpload.type || null,
+          file_size: fileToUpload.size ?? null,
           uploaded_by: state.currentUser.id,
         },
       ]);
