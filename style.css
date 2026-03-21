@@ -71,16 +71,14 @@ h2 {
   align-items: center;
   gap: 6px;
   max-width: 100%;
-  padding: 8px 10px 10px 10px;
+  padding: 8px 10px;
   font-size: 14px;
   font-weight: 700;
   color: #111827;
   background: #fff;
   border: none;
-  border-radius: 8px 8px 0 0;
+  border-radius: 8px;
   cursor: pointer;
-  box-shadow: 0 -2px 0 0 #3b82f6 inset;
-  margin-bottom: -1px;
   transition: background 0.2s, color 0.2s;
 }
 
@@ -91,7 +89,7 @@ h2 {
 
 .section-nav-current:focus-visible {
   outline: none;
-  box-shadow: 0 -2px 0 0 #3b82f6 inset, 0 0 0 3px rgba(59, 130, 246, 0.25);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
 .section-nav-current-label {
@@ -870,10 +868,10 @@ button:active {
   box-shadow: 0 1px 0 0 #e7ebf0;
 }
 
-/* На телефоне верхняя полоса только индикатор ширины; жест — по таблице (иначе два overflow-x рядом мешают iOS) */
+/* На телефоне: верхнюю «полосу прокрутки» не показываем — на iOS она всё равно не видна, а высота 16px даёт пустой зазор */
 @media (hover: none) and (pointer: coarse) {
   .orders-table-scroll-top {
-    pointer-events: none;
+    display: none;
   }
 }
 
