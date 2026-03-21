@@ -379,7 +379,7 @@ h2 {
 }
 
 #section-new label {
-  font-size: 14px;
+  font-size: 16px;
   margin-bottom: 4px;
   font-weight: 600;
 }
@@ -387,49 +387,18 @@ h2 {
 #section-new input,
 #section-new select,
 #section-new textarea {
-  font-size: 14px;
+  font-size: 16px;
   padding: 6px 8px;
   border-radius: 8px;
 }
 
 #section-new input,
 #section-new select {
-  height: 36px;
+  height: 44px;
 }
 
 #section-new textarea {
   min-height: 72px;
-}
-
-/*
- * iOS Safari при фокусе в input/select/textarea с font-size < 16px
- * принудительно увеличивает масштаб страницы (доступность чтения).
- * На сенсорных экранах задаём 16px и достаточную высоту строки.
- */
-@media (hover: none) and (pointer: coarse) {
-  #section-new input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]),
-  #section-new select,
-  #section-new textarea {
-    font-size: 16px;
-  }
-
-  #section-new input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]),
-  #section-new select {
-    height: auto;
-    min-height: 44px;
-  }
-
-  #section-new .installer-rate-input-row .installer-rate-input {
-    height: auto;
-    min-height: 44px;
-  }
-
-  #section-new .installer-rate-input-row .installer-calc-btn {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
-  }
 }
 
 #section-new .client-row {
@@ -514,7 +483,7 @@ h2 {
   max-width: 70px;
   min-width: 70px;
   box-sizing: border-box;
-  height: 36px; /* как у остальных полей #section-new */
+  height: 44px; /* как у остальных полей #section-new */
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
   border-right-width: 0;
@@ -566,10 +535,10 @@ h2 {
   justify-content: center;
   flex: 0 0 auto;
   box-sizing: border-box;
-  width: 36px;
-  min-width: 36px;
-  height: 36px;
-  min-height: 36px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
   padding: 0;
   margin-left: -1px;
   border: 1px solid #d7dce5;
@@ -610,7 +579,7 @@ h2 {
 #section-new #cancelEditBtn,
 #section-new #cancelEditBtnTop {
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 #section-new #payment_status {
@@ -2074,7 +2043,7 @@ th {
     width: auto;
     flex-shrink: 0;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: 16px;
   }
 
   .upload-btn {
