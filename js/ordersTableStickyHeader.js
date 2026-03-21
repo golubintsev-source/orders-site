@@ -19,6 +19,30 @@ function getTopbarStickyOffset() {
   return Math.max(0, Math.ceil(r.bottom));
 }
 
+/**
+ * Верхняя граница закреплённой шапки: не ниже шапки сайта и ниже полосы
+ * #ordersTableScrollTop (на ПК), иначе клон перекрывает горизонтальный скролл.
+ */
+function getStickyHeaderAnchorTop() {
+  const fromTopbar = getTopbarStickyOffset();
+  const scrollTopEl = document.getElementById("ordersTableScrollTop");
+  if (scrollTopEl) {
+    const cs = getComputedStyle(scrollTopEl);
+    if (cs.display !== "none" && cs.visibility !== "hidden") {
+      const r = scrollTopEl.getBoundingClientRect();
+      if (r.height > 0) {
+        return Math.max(fromTopbar, Math.ceil(r.bottom));
+      }
+    }
+  }
+  const inner = document.getElementById("ordersTableScrollInner");
+  if (inner) {
+    const ir = inner.getBoundingClientRect();
+    return Math.max(fromTopbar, Math.ceil(ir.top));
+  }
+  return fromTopbar;
+}
+
 function positionStickyWrap(wrap) {
   const inner = document.getElementById("ordersTableScrollInner");
   if (!wrap || !inner) return;
@@ -98,8 +122,8 @@ function updateStickyHeaderState() {
     return;
   }
 
-  const stickTop = getTopbarStickyOffset();
-  const shouldShow = theadRect.top < stickTop;
+  const anchorTop = getStickyHeaderAnchorTop();
+  const shouldShow = theadRect.top < anchorTop;
 
   if (!shouldShow) {
     wrap.hidden = true;
@@ -109,7 +133,7 @@ function updateStickyHeaderState() {
   }
 
   wrap.hidden = false;
-  wrap.style.top = `${stickTop}px`;
+  wrap.style.top = `${anchorTop}px`;
   wrap.setAttribute("aria-hidden", "false");
   positionStickyWrap(wrap);
   syncStickyColumnWidths();
