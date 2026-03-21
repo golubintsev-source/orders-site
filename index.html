@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Заявки</title>
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" crossorigin="anonymous" />
 </head>
 <body>
   <div class="container">
@@ -172,21 +173,6 @@
 
           <div class="field compact-fields-row">
             <div class="field">
-              <label>Площадь м²</label>
-              <input type="text" inputmode="decimal" id="area_m2" />
-            </div>
-            <div class="field">
-              <label>Москитки</label>
-              <input type="text" inputmode="numeric" id="mosquito_nets" />
-            </div>
-            <div class="field">
-              <label>Конструкций</label>
-              <input type="text" inputmode="numeric" id="construction_count" />
-            </div>
-          </div>
-
-          <div class="field compact-fields-row">
-            <div class="field">
               <label>Отправка</label>
               <select id="delivery">
                 <option value="">—</option>
@@ -197,6 +183,21 @@
             <div class="field">
               <label>Дата отправки</label>
               <input type="date" id="delivery_date" title="Год: маска 20__ (2000–2099)" />
+            </div>
+          </div>
+
+          <div class="field compact-fields-row">
+            <div class="field">
+              <label>Площадь м²</label>
+              <input type="text" inputmode="decimal" id="area_m2" />
+            </div>
+            <div class="field">
+              <label>Москитки</label>
+              <input type="text" inputmode="numeric" id="mosquito_nets" />
+            </div>
+            <div class="field">
+              <label>Конструкций</label>
+              <input type="text" inputmode="numeric" id="construction_count" />
             </div>
           </div>
 
@@ -264,7 +265,7 @@
               />
 
               <div id="existingOrderFilesWrap" class="existing-order-files-wrap" hidden>
-                <div class="existing-order-files-title">Уже прикреплено</div>
+                <div class="existing-order-files-title">Уже загружено</div>
                 <div id="existingOrderFilesList" class="files-list existing-order-files-list"></div>
               </div>
 
@@ -482,7 +483,25 @@
     </div>
   </div>
 
+  <!-- Обрезка фото перед добавлением в заявку (Cropper.js) -->
+  <div id="cropImageModal" class="crop-image-modal" hidden role="dialog" aria-modal="true" aria-labelledby="cropImageModalTitle">
+    <div class="crop-image-modal-backdrop"></div>
+    <div class="crop-image-modal-panel">
+      <h3 id="cropImageModalTitle" class="crop-image-modal-title">Обрезать фото</h3>
+      <p class="crop-image-modal-hint">Перетащите и измените рамку, затем нажмите «Готово». Или «Без обрезки», чтобы добавить как есть.</p>
+      <div class="crop-image-modal-stage">
+        <img id="cropImageTarget" class="crop-image-target" alt="" />
+      </div>
+      <div class="crop-image-modal-actions">
+        <button type="button" id="cropCancelBtn" class="crop-image-btn crop-image-btn--secondary">Отмена</button>
+        <button type="button" id="cropSkipBtn" class="crop-image-btn crop-image-btn--secondary">Без обрезки</button>
+        <button type="button" id="cropConfirmBtn" class="crop-image-btn crop-image-btn--primary">Готово</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=16"></script>
+  <script type="module" src="./js/main.js?v=17"></script>
 </body>
 </html>

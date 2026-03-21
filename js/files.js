@@ -21,16 +21,179 @@ function applyPendingToAttachmentsInput() {
   attachmentsInput.files = dt.files;
 }
 
+function isCroppableImageFile(file) {
+  if (!file?.type?.startsWith("image/")) return false;
+  if (file.type === "image/svg+xml" || file.type === "image/gif") return false;
+  return true;
+}
+
+/**
+ * Модалка Cropper.js: обрезка фото перед добавлением в список (в т.ч. после «Снять фото»).
+ * @returns {Promise<File | null>} null — отмена; File — результат (JPEG после обрезки или исходный)
+ */
+function openCropModalForAttachment(file) {
+  return new Promise((resolve) => {
+    if (typeof window.Cropper === "undefined") {
+      resolve(file);
+      return;
+    }
+    const modal = document.getElementById("cropImageModal");
+    const img = document.getElementById("cropImageTarget");
+    const cancelBtn = document.getElementById("cropCancelBtn");
+    const skipBtn = document.getElementById("cropSkipBtn");
+    const confirmBtn = document.getElementById("cropConfirmBtn");
+    if (!modal || !img || !cancelBtn || !skipBtn || !confirmBtn) {
+      resolve(file);
+      return;
+    }
+
+    let cropper = null;
+    let keyHandler = null;
+    const url = URL.createObjectURL(file);
+    const backdrop = modal.querySelector(".crop-image-modal-backdrop");
+
+    const cleanup = () => {
+      if (keyHandler) {
+        document.removeEventListener("keydown", keyHandler);
+        keyHandler = null;
+      }
+      if (backdrop) backdrop.onclick = null;
+      if (cropper) {
+        try {
+          cropper.destroy();
+        } catch {
+          /* ignore */
+        }
+        cropper = null;
+      }
+      URL.revokeObjectURL(url);
+      img.removeAttribute("src");
+      modal.hidden = true;
+      modal.style.display = "none";
+    };
+
+    const onCancel = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    keyHandler = (e) => {
+      if (e.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", keyHandler);
+    if (backdrop) backdrop.onclick = onCancel;
+
+    const onSkip = () => {
+      cleanup();
+      resolve(file);
+    };
+
+    const onConfirm = () => {
+      if (!cropper) {
+        cleanup();
+        resolve(file);
+        return;
+      }
+      let canvas;
+      try {
+        canvas = cropper.getCroppedCanvas({
+          maxWidth: 4096,
+          maxHeight: 4096,
+          imageSmoothingQuality: "high",
+        });
+      } catch {
+        cleanup();
+        resolve(file);
+        return;
+      }
+      if (!canvas) {
+        cleanup();
+        resolve(file);
+        return;
+      }
+      canvas.toBlob(
+        (blob) => {
+          cleanup();
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+          const base = (file.name || "photo").replace(/\.[^.]+$/i, "") || "photo";
+          resolve(
+            new File([blob], `${base}.jpg`, {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            })
+          );
+        },
+        "image/jpeg",
+        0.92
+      );
+    };
+
+    cancelBtn.onclick = onCancel;
+    skipBtn.onclick = onSkip;
+    confirmBtn.onclick = onConfirm;
+
+    img.onload = () => {
+      if (cropper) {
+        try {
+          cropper.destroy();
+        } catch {
+          /* ignore */
+        }
+        cropper = null;
+      }
+      cropper = new window.Cropper(img, {
+        viewMode: 1,
+        dragMode: "move",
+        aspectRatio: NaN,
+        autoCropArea: 0.92,
+        responsive: true,
+        background: false,
+        movable: true,
+        zoomable: true,
+        rotatable: false,
+      });
+    };
+
+    img.onerror = () => {
+      cleanup();
+      resolve(file);
+    };
+
+    modal.hidden = false;
+    modal.style.display = "flex";
+    img.src = url;
+  });
+}
+
 /**
  * Обработчик change у input[type=file]: новый выбор добавляется к уже выбранным.
+ * Для фото JPEG/PNG/WebP и т.п. открывается обрезка (если подключён Cropper.js).
  */
-export function mergeNewAttachmentsOnChange() {
+export async function mergeNewAttachmentsOnChange() {
   if (!attachmentsInput) return;
   const picked = Array.from(attachmentsInput.files || []);
   if (picked.length === 0) return;
-  pendingAttachments.push(...picked);
-  applyPendingToAttachmentsInput();
   attachmentsInput.value = "";
+
+  for (const file of picked) {
+    let toAdd = file;
+    if (isCroppableImageFile(file)) {
+      try {
+        const result = await openCropModalForAttachment(file);
+        if (result === null) continue;
+        toAdd = result;
+      } catch (e) {
+        console.warn("Обрезка фото:", e);
+        toAdd = file;
+      }
+    }
+    pendingAttachments.push(toAdd);
+  }
+
+  applyPendingToAttachmentsInput();
   renderSelectedFiles();
 }
 
@@ -101,7 +264,7 @@ export function resetFileUpload() {
   selectedFiles.innerHTML = "";
 }
 
-/** Скрыть блок уже прикреплённых файлов (режим «Новая заявка»). */
+/** Скрыть блок уже загруженных файлов (режим «Новая заявка»). */
 export function clearExistingOrderFilesInForm() {
   const wrap = document.getElementById("existingOrderFilesWrap");
   const list = document.getElementById("existingOrderFilesList");

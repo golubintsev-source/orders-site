@@ -394,7 +394,9 @@ export function bindUIEvents() {
   }
 
   if (attachmentsInput) {
-    attachmentsInput.addEventListener("change", () => mergeNewAttachmentsOnChange());
+    attachmentsInput.addEventListener("change", () => {
+      void mergeNewAttachmentsOnChange();
+    });
   }
 
   if (closeFilesModal) {

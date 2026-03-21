@@ -2345,7 +2345,7 @@ th {
     object-fit: cover;
   }
 
-  /* Блок «Уже прикреплено» — та же сетка строк, что в модалке файлов */
+  /* Блок «Уже загружено» — та же сетка строк, что в модалке файлов */
   .existing-order-files-wrap .file-row {
     grid-template-columns: 64px minmax(0, 1fr);
     gap: 10px;
@@ -2367,6 +2367,104 @@ th {
     width: 100%;
     text-align: center;
   }
+}
+
+/* ===== модалка обрезки фото (перед загрузкой в заявку) ===== */
+.crop-image-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.crop-image-modal[hidden] {
+  display: none !important;
+}
+
+.crop-image-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.crop-image-modal-panel {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 92vh;
+  overflow: auto;
+  padding: 14px 16px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25);
+}
+
+.crop-image-modal-title {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.crop-image-modal-hint {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.4;
+}
+
+.crop-image-modal-stage {
+  max-height: min(58vh, 420px);
+  background: #1f2937;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.crop-image-target {
+  display: block;
+  max-width: 100%;
+  max-height: min(58vh, 420px);
+}
+
+.crop-image-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  justify-content: flex-end;
+}
+
+.crop-image-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  line-height: 1.2;
+}
+
+.crop-image-btn--primary {
+  background: #0078d4;
+  color: #fff;
+}
+
+.crop-image-btn--primary:hover {
+  background: #106ebe;
+}
+
+.crop-image-btn--secondary {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.crop-image-btn--secondary:hover {
+  background: #e5e7eb;
 }
 
 /* iPhone: не даём max-width:768 перезаписать верхний отступ — он в закреплённой .topbar (safe-area) */
