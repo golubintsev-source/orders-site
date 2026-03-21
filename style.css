@@ -897,17 +897,18 @@ button:active {
   border-bottom: 1px solid #e7ebf0;
 }
 
+/* Обрезка по ширине видимой области; горизонталь — только у основной таблицы (иначе на iOS рвётся инерция). */
 .orders-sticky-head-scroll {
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   width: 100%;
   max-width: 100%;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
 }
 
-.orders-sticky-head-scroll::-webkit-scrollbar {
-  height: 0;
+.orders-sticky-head-pan {
+  display: inline-block;
+  width: max-content;
+  max-width: none;
+  transform: translate3d(0, 0, 0);
 }
 
 .orders-sticky-head-table {
