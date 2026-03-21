@@ -462,12 +462,31 @@ h2 {
   min-width: 100px;
 }
 
-/* «Монтаж 1м², руб» — узкая колонка */
-#section-new .installer-payment-one-row > .field:first-child {
-  flex: 0 0 100px;
-  width: 100px;
-  max-width: 100px;
+/* «Монтаж 1м², руб» + кнопка-калькулятор вплотную */
+#section-new .installer-payment-one-row > .field.field-installer-rate-with-calc {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: none;
   min-width: 0;
+}
+
+#section-new .installer-rate-input-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+}
+
+#section-new .installer-rate-input-row .installer-rate-input {
+  width: 70px;
+  flex: 0 0 70px;
+  max-width: 70px;
+  min-width: 70px;
+  box-sizing: border-box;
+  height: 36px; /* как у остальных полей #section-new */
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right-width: 0;
 }
 
 /* «з/п за монтаж» — узкая колонка */
@@ -494,11 +513,6 @@ h2 {
   white-space: normal;
 }
 
-#section-new .installer-payment-one-row > .field.installer-calc-wrap {
-  flex: 0 0 auto;
-  min-width: 0;
-}
-
 #section-new .installer-payment-one-row > .field label {
   white-space: nowrap;
 }
@@ -515,32 +529,40 @@ h2 {
   border-radius: 10px;
 }
 
-#section-new .installer-calc-wrap {
-  flex: 0 0 auto;
-}
-
-#section-new .installer-calc-btn {
+#section-new .installer-rate-input-row .installer-calc-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
   padding: 0;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  margin-left: -1px;
+  border: 1px solid #d7dce5;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
   background: #f9fafb;
-  color: #374151;
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s;
+  align-self: center;
 }
 
-#section-new .installer-calc-btn:hover {
+#section-new .installer-rate-input-row .installer-calc-btn:hover {
   background: #f3f4f6;
   border-color: #9ca3af;
 }
 
-#section-new .installer-calc-icon {
+#section-new .installer-calc-img {
   display: block;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+  object-fit: contain;
 }
 
 #section-new .actions {

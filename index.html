@@ -208,15 +208,14 @@
           </div>
 
           <div class="field compact-fields-row installer-payment-one-row" id="installer_payment_block">
-            <div class="field">
+            <div class="field field-installer-rate-with-calc">
               <label for="installer_rate_per_m2">Монтаж 1м², руб</label>
-              <input type="text" inputmode="decimal" id="installer_rate_per_m2" />
-            </div>
-            <div class="field installer-calc-wrap">
-              <label>&nbsp;</label>
-              <button type="button" id="installer_calc_btn" class="installer-calc-btn" title="Рассчитать сумму (Площадь × Монтаж 1м²)">
-                <svg class="installer-calc-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h4M14 14h2M8 18h2M12 18h2M16 18h2"/></svg>
-              </button>
+              <div class="installer-rate-input-row">
+                <input type="text" inputmode="decimal" id="installer_rate_per_m2" class="installer-rate-input" />
+                <button type="button" id="installer_calc_btn" class="installer-calc-btn" title="Рассчитать сумму (Площадь × Монтаж 1м²)" aria-label="Рассчитать сумму (Площадь × Монтаж 1м²)">
+                  <img src="img/calculator.svg" alt="" class="installer-calc-img" width="20" height="20" decoding="async" />
+                </button>
+              </div>
             </div>
             <div class="field">
               <label for="installer_payment_amount">з/п за монтаж</label>
