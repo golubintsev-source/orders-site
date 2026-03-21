@@ -786,7 +786,8 @@ export function updateInstallerBlockByInstallationDate() {
   if (!block) return;
   block.classList.toggle(INSTALLER_BLOCK_INACTIVE_CLASS, !hasDate);
   if (rateEl) rateEl.disabled = !hasDate;
-  if (calcBtn) calcBtn.disabled = !hasDate;
+  /* Калькулятор всегда кликабелен (кроме блокировки после оплаты), иначе нельзя посчитать Площадь×1м² без даты */
+  if (calcBtn) calcBtn.disabled = !!state.installerPaymentDone;
   const amountDisabled = !hasDate || state.installerPaymentDone;
   if (amountEl) amountEl.disabled = amountDisabled;
   const hasAmount = !!(amountEl && String(amountEl.value || "").trim());
@@ -794,17 +795,29 @@ export function updateInstallerBlockByInstallationDate() {
   if (byEl) byEl.disabled = byDisabled;
 }
 
-/** По умолчанию Сумма (монтаж) = Площадь м² × Монтаж 1м²; вызывается при изменении площади/ставки и при открытии/сбросе формы. */
+/**
+ * з/п за монтаж = Площадь м² × «Монтаж 1м², руб».
+ * Вызывается с кнопки-калькулятора, при blur площади/ставки и т.д.
+ * Значение записывается даже если поле суммы временно disabled (нет даты монтажа).
+ */
 export function updateInstallerPaymentAmountFromArea() {
   const { amountEl } = getInstallerPaymentElements();
-  if (!amountEl || amountEl.disabled) return;
+  if (!amountEl || state.installerPaymentDone) return;
+
   const areaEl = document.getElementById("area_m2");
   const rateEl = document.getElementById("installer_rate_per_m2");
-  const area = parseOrderFormNumber(areaEl?.value) ?? 0;
-  const rate = parseOrderFormNumber(rateEl?.value) ?? (state.defaultInstallerRatePerM2 ?? 1400);
-  amountEl.value = area > 0 && rate > 0
-    ? formatOrderFormNumberValue(area * rate, ORDER_FORM_NUMERIC_FIELD_DECIMALS.installer_payment_amount)
-    : "";
+  const area = parseOrderFormNumber(areaEl?.value);
+  const rate = parseOrderFormNumber(rateEl?.value);
+
+  if (area != null && rate != null && area > 0 && rate > 0) {
+    amountEl.value = formatOrderFormNumberValue(
+      area * rate,
+      ORDER_FORM_NUMERIC_FIELD_DECIMALS.installer_payment_amount
+    );
+  } else {
+    amountEl.value = "";
+  }
+
   updateInstallerBlockByInstallationDate();
 }
 

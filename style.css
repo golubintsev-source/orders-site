@@ -379,7 +379,7 @@ h2 {
 }
 
 #section-new label {
-  font-size: 13px;
+  font-size: 14px;
   margin-bottom: 4px;
   font-weight: 600;
 }
@@ -387,7 +387,7 @@ h2 {
 #section-new input,
 #section-new select,
 #section-new textarea {
-  font-size: 13px;
+  font-size: 14px;
   padding: 6px 8px;
   border-radius: 8px;
 }
@@ -579,7 +579,7 @@ h2 {
 #section-new #cancelEditBtn,
 #section-new #cancelEditBtnTop {
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 #section-new #payment_status {
