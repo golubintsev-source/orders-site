@@ -118,22 +118,25 @@ export async function renderExistingOrderFilesInForm(orderId) {
   }
 
   for (const file of files) {
-    const signedUrl = await getSignedFileUrl(file.storage_path);
+    const { fullUrl, previewUrl } = await getSignedUrlsForOrderFileRow(file);
     const isImage = isImageFile(file);
 
     const row = document.createElement("div");
     row.className = "preview-item existing-order-file-item";
 
     let preview;
-    if (isImage && signedUrl) {
+    if (isImage && previewUrl) {
       const link = document.createElement("a");
-      link.href = signedUrl;
+      link.href = fullUrl || previewUrl;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
+      link.title = "Открыть полное изображение";
       const img = document.createElement("img");
       img.className = "preview-thumb";
-      img.src = signedUrl;
+      img.src = previewUrl;
       img.alt = file.file_name || "";
+      img.loading = "lazy";
+      img.decoding = "async";
       link.appendChild(img);
       preview = link;
     } else {
@@ -167,10 +170,9 @@ export async function renderExistingOrderFilesInForm(orderId) {
       removeBtn.textContent = "✕";
       removeBtn.title = "Удалить файл";
       const fid = file.id;
-      const path = file.storage_path;
       const oid = orderId;
       removeBtn.addEventListener("click", () => {
-        void removeOrderFileFromEditForm(fid, path, oid);
+        void removeOrderFileFromEditForm(fid, oid);
       });
       row.appendChild(removeBtn);
     }
@@ -212,6 +214,53 @@ function canvasToBlob(canvas, mime, quality) {
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob), mime, quality);
   });
+}
+
+const THUMB_MAX_LONG_EDGE = 280;
+
+/**
+ * Миниатюра для списков (редактирование, модалка). Только растр; SVG/GIF — null.
+ */
+async function buildThumbnailBlob(imageFile) {
+  if (!imageFile?.type?.startsWith("image/")) return null;
+  if (imageFile.type === "image/svg+xml" || imageFile.type === "image/gif") return null;
+
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(imageFile);
+  } catch {
+    return null;
+  }
+
+  const { w, h } = scaleToMaxLongEdge(bitmap.width, bitmap.height, THUMB_MAX_LONG_EDGE);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    bitmap.close();
+    return null;
+  }
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+
+  const mime = canvasSupportsWebp() ? "image/webp" : "image/jpeg";
+  const q = mime === "image/webp" ? 0.72 : 0.78;
+  return canvasToBlob(canvas, mime, q);
+}
+
+/** Подписанные URL: полный файл и превью (если есть в БД). */
+async function getSignedUrlsForOrderFileRow(fileRow) {
+  const fullPromise = getSignedFileUrl(fileRow.storage_path);
+  const thumbPromise = fileRow.thumbnail_storage_path
+    ? getSignedFileUrl(fileRow.thumbnail_storage_path)
+    : Promise.resolve(null);
+  const [fullUrl, thumbUrl] = await Promise.all([fullPromise, thumbPromise]);
+  return {
+    fullUrl,
+    /** Для превью: миниатюра или запасной вариант — полный файл (старые записи). */
+    previewUrl: thumbUrl || fullUrl,
+  };
 }
 
 /** Подбор качества: максимальное q при размере ≤ targetBytes (или ближайшее ниже). */
@@ -320,7 +369,8 @@ export async function uploadFiles(orderId) {
   for (const file of files) {
     const fileToUpload = await compressImageForWebIfNeeded(file);
     const safeName = fileToUpload.name.replace(/[^\w.\-]+/g, "_");
-    const filePath = `${state.currentUser.id}/${orderId}/${Date.now()}_${safeName}`;
+    const ts = Date.now();
+    const filePath = `${state.currentUser.id}/${orderId}/${ts}_${safeName}`;
 
     const { error: uploadError } = await supabaseClient.storage
       .from("order-files")
@@ -336,6 +386,29 @@ export async function uploadFiles(orderId) {
       continue;
     }
 
+    let thumbnailStoragePath = null;
+    const isRasterImage =
+      fileToUpload.type.startsWith("image/") &&
+      fileToUpload.type !== "image/svg+xml" &&
+      fileToUpload.type !== "image/gif";
+
+    if (isRasterImage) {
+      const thumbBlob = await buildThumbnailBlob(fileToUpload);
+      if (thumbBlob && thumbBlob.size > 0) {
+        const thumbExt = thumbBlob.type === "image/jpeg" ? "jpg" : "webp";
+        thumbnailStoragePath = `${state.currentUser.id}/${orderId}/${ts}_thumb.${thumbExt}`;
+        const { error: thumbErr } = await supabaseClient.storage.from("order-files").upload(thumbnailStoragePath, thumbBlob, {
+          cacheControl: "86400",
+          upsert: false,
+          contentType: thumbBlob.type || "image/webp",
+        });
+        if (thumbErr) {
+          console.warn("Миниатюра не загружена, превью будет из полного файла:", thumbErr);
+          thumbnailStoragePath = null;
+        }
+      }
+    }
+
     const { error: dbError } = await supabaseClient
       .from("order_files")
       .insert([
@@ -343,6 +416,7 @@ export async function uploadFiles(orderId) {
           order_id: orderId,
           file_name: file.name,
           storage_path: filePath,
+          thumbnail_storage_path: thumbnailStoragePath,
           mime_type: fileToUpload.type || null,
           file_size: fileToUpload.size ?? null,
           uploaded_by: state.currentUser.id,
@@ -352,6 +426,10 @@ export async function uploadFiles(orderId) {
     if (dbError) {
       console.error("Ошибка записи файла в БД:", dbError);
       setMessage(`Файл загружен, но не записан в БД: ${file.name}`, "#d32f2f");
+      if (thumbnailStoragePath) {
+        await supabaseClient.storage.from("order-files").remove([thumbnailStoragePath]).catch(() => {});
+      }
+      await supabaseClient.storage.from("order-files").remove([filePath]).catch(() => {});
     }
   }
 
@@ -462,7 +540,7 @@ export async function openFilesModal(orderId) {
   list.className = "files-list";
 
   for (const file of files) {
-    const signedUrl = await getSignedFileUrl(file.storage_path);
+    const { fullUrl, previewUrl } = await getSignedUrlsForOrderFileRow(file);
     const isImage = isImageFile(file);
 
     const row = document.createElement("div");
@@ -471,15 +549,18 @@ export async function openFilesModal(orderId) {
     const preview = document.createElement("div");
     preview.className = "file-preview";
 
-    if (isImage && signedUrl) {
+    if (isImage && previewUrl) {
       const link = document.createElement("a");
-      link.href = signedUrl;
+      link.href = fullUrl || previewUrl;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
+      link.title = "Открыть полное изображение";
       const img = document.createElement("img");
       img.className = "file-thumb";
-      img.src = signedUrl;
+      img.src = previewUrl;
       img.alt = file.file_name || "";
+      img.loading = "lazy";
+      img.decoding = "async";
       link.appendChild(img);
       preview.appendChild(link);
     } else {
@@ -505,9 +586,9 @@ export async function openFilesModal(orderId) {
     const actions = document.createElement("div");
     actions.className = "file-actions";
 
-    if (signedUrl) {
+    if (fullUrl) {
       const openA = document.createElement("a");
-      openA.href = signedUrl;
+      openA.href = fullUrl;
       openA.target = "_blank";
       openA.rel = "noopener noreferrer";
       openA.className = "file-action-btn";
@@ -515,7 +596,7 @@ export async function openFilesModal(orderId) {
       actions.appendChild(openA);
 
       const dlA = document.createElement("a");
-      dlA.href = signedUrl;
+      dlA.href = fullUrl;
       dlA.download = file.file_name || "file";
       dlA.className = "file-download-btn";
       dlA.title = "Скачать";
@@ -595,9 +676,26 @@ export async function openFilesModal(orderId) {
   filesModalBody.appendChild(list);
 }
 
-/** Удаление из Storage и из таблицы order_files. */
-async function deleteOrderFileFromStorageAndDb(fileId, storagePath) {
-  const { error: storageError } = await supabaseClient.storage.from("order-files").remove([storagePath]);
+/** Удаление из Storage (полный + миниатюра) и из таблицы order_files. */
+async function deleteOrderFileFromStorageAndDb(fileId) {
+  const { data: row, error: fetchError } = await supabaseClient
+    .from("order_files")
+    .select("storage_path, thumbnail_storage_path")
+    .eq("id", fileId)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error("Ошибка чтения файла:", fetchError);
+    return { ok: false, message: "Не удалось найти файл" };
+  }
+  if (!row?.storage_path) {
+    return { ok: false, message: "Запись файла не найдена" };
+  }
+
+  const paths = [row.storage_path];
+  if (row.thumbnail_storage_path) paths.push(row.thumbnail_storage_path);
+
+  const { error: storageError } = await supabaseClient.storage.from("order-files").remove(paths);
 
   if (storageError) {
     console.error("Ошибка удаления файла из Storage:", storageError);
@@ -614,11 +712,11 @@ async function deleteOrderFileFromStorageAndDb(fileId, storagePath) {
   return { ok: true };
 }
 
-export async function removeFile(fileId, storagePath, orderId) {
+export async function removeFile(fileId, orderId) {
   const ok = confirm("Удалить файл?");
   if (!ok) return;
 
-  const result = await deleteOrderFileFromStorageAndDb(fileId, storagePath);
+  const result = await deleteOrderFileFromStorageAndDb(fileId);
   if (!result.ok) {
     setMessage(result.message, "#d32f2f");
     return;
@@ -634,11 +732,11 @@ export async function removeFile(fileId, storagePath, orderId) {
 }
 
 /** Удаление из формы редактирования заявки (блок «Фото и документы»). */
-export async function removeOrderFileFromEditForm(fileId, storagePath, orderId) {
+export async function removeOrderFileFromEditForm(fileId, orderId) {
   const ok = confirm("Удалить файл?");
   if (!ok) return;
 
-  const result = await deleteOrderFileFromStorageAndDb(fileId, storagePath);
+  const result = await deleteOrderFileFromStorageAndDb(fileId);
   if (!result.ok) {
     setMessage(result.message, "#d32f2f");
     return;
