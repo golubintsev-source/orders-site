@@ -162,10 +162,17 @@ export function initOrdersTableStickyHeader() {
   wrap.addEventListener(
     "click",
     (e) => {
-      const btn = e.target.closest(".status-filter-btn");
-      if (!btn || !wrap.contains(btn)) return;
-      e.preventDefault();
-      document.getElementById("statusFilterBtn")?.click();
+      const typeBtn = e.target.closest(".order-type-filter-btn");
+      if (typeBtn && wrap.contains(typeBtn)) {
+        e.preventDefault();
+        document.getElementById("orderTypeFilterBtn")?.click();
+        return;
+      }
+      const statusBtn = e.target.closest(".status-filter-btn");
+      if (statusBtn && wrap.contains(statusBtn)) {
+        e.preventDefault();
+        document.getElementById("statusFilterBtn")?.click();
+      }
     },
     true
   );

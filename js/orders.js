@@ -55,6 +55,19 @@ function normalizeStatus(val) {
   return val;
 }
 
+/** Ключи фильтра у колонки «Номер» (тип заказа); __empty__ — без типа */
+const ORDER_TYPE_FILTER_KEYS = ["__empty__", "Окна", "Подоконники", "Аллюминий", "Магазин", "Сетки/мелочь"];
+
+function orderTypeFilterLabel(key) {
+  return key === "__empty__" ? "Без типа" : key;
+}
+
+function orderMatchesOrderTypeKeys(order, selectedKeys) {
+  if (!selectedKeys || selectedKeys.length === 0) return true;
+  const t = (order.order_type || "").trim();
+  return selectedKeys.some((key) => (key === "__empty__" ? t === "" : t === key));
+}
+
 const ORDER_FORM_NUMERIC_FIELD_DECIMALS = {
   amount: 2,
   prepayment: 2,
@@ -232,6 +245,10 @@ function getFilteredOrders() {
       const norm = normalizeStatus(order.payment_status);
       return state.statusFilterSelected.includes(norm);
     });
+  }
+
+  if (state.orderTypeFilterSelected && state.orderTypeFilterSelected.length > 0) {
+    list = list.filter((order) => orderMatchesOrderTypeKeys(order, state.orderTypeFilterSelected));
   }
 
   const query = clientSearch?.value.trim().toLowerCase() || "";
@@ -437,6 +454,72 @@ function onStatusFilterChange(e) {
   applyFiltersAndRender();
 }
 
+function closeStatusFilterDropdown() {
+  const btn = document.getElementById("statusFilterBtn");
+  const dropdown = document.getElementById("statusFilterDropdown");
+  if (dropdown) dropdown.style.display = "none";
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
+function closeOrderTypeFilterDropdown() {
+  const btn = document.getElementById("orderTypeFilterBtn");
+  const dropdown = document.getElementById("orderTypeFilterDropdown");
+  if (dropdown) dropdown.style.display = "none";
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
+let tableFilterDocClickBound = false;
+
+function bindTableFilterDocClose() {
+  if (tableFilterDocClickBound) return;
+  tableFilterDocClickBound = true;
+  document.addEventListener("click", () => {
+    closeStatusFilterDropdown();
+    closeOrderTypeFilterDropdown();
+  });
+}
+
+function renderOrderTypeFilterDropdown() {
+  const container = document.getElementById("orderTypeFilterCheckboxes");
+  if (!container) return;
+  const allSelected = !state.orderTypeFilterSelected || state.orderTypeFilterSelected.length === 0;
+  const allHtml = `<label class="status-filter-item status-filter-all"><input type="checkbox" data-order-type-all="true" ${allSelected ? "checked" : ""}> Все</label>`;
+  const optionsHtml = ORDER_TYPE_FILTER_KEYS.map((key) => {
+    const checked = allSelected || state.orderTypeFilterSelected.includes(key);
+    return `<label class="status-filter-item"><input type="checkbox" data-order-type="${escapeAttr(key)}" ${checked ? "checked" : ""}> ${escapeHtml(orderTypeFilterLabel(key))}</label>`;
+  }).join("");
+  container.innerHTML = allHtml + optionsHtml;
+  container.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.addEventListener("change", onOrderTypeFilterChange);
+  });
+}
+
+function onOrderTypeFilterChange(e) {
+  const container = document.getElementById("orderTypeFilterCheckboxes");
+  if (!container) return;
+  const target = e.target;
+  const allCb = container.querySelector('input[data-order-type-all="true"]');
+  const typeCbs = container.querySelectorAll("input[type=checkbox][data-order-type]");
+
+  if (target === allCb) {
+    const checked = allCb.checked;
+    typeCbs.forEach((cb) => {
+      cb.checked = checked;
+    });
+    state.orderTypeFilterSelected = checked ? [] : [];
+    applyFiltersAndRender();
+    return;
+  }
+
+  const checkedValues = Array.from(typeCbs)
+    .filter((cb) => cb.checked)
+    .map((el) => el.getAttribute("data-order-type"));
+  state.orderTypeFilterSelected =
+    checkedValues.length === ORDER_TYPE_FILTER_KEYS.length ? [] : checkedValues;
+  if (allCb) allCb.checked = checkedValues.length === ORDER_TYPE_FILTER_KEYS.length;
+  applyFiltersAndRender();
+}
+
 export function initStatusFilter() {
   const btn = document.getElementById("statusFilterBtn");
   const dropdown = document.getElementById("statusFilterDropdown");
@@ -446,9 +529,9 @@ export function initStatusFilter() {
     e.stopPropagation();
     const isOpen = dropdown.style.display === "block";
     if (isOpen) {
-      dropdown.style.display = "none";
-      btn.setAttribute("aria-expanded", "false");
+      closeStatusFilterDropdown();
     } else {
+      closeOrderTypeFilterDropdown();
       renderStatusFilterDropdown();
       const rect = btn.getBoundingClientRect();
       dropdown.style.position = "fixed";
@@ -459,12 +542,34 @@ export function initStatusFilter() {
     }
   });
 
-  document.addEventListener("click", () => {
-    if (dropdown.style.display === "block") {
-      dropdown.style.display = "none";
-      btn.setAttribute("aria-expanded", "false");
+  bindTableFilterDocClose();
+
+  dropdown.addEventListener("click", (e) => e.stopPropagation());
+}
+
+export function initOrderTypeFilter() {
+  const btn = document.getElementById("orderTypeFilterBtn");
+  const dropdown = document.getElementById("orderTypeFilterDropdown");
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = dropdown.style.display === "block";
+    if (isOpen) {
+      closeOrderTypeFilterDropdown();
+    } else {
+      closeStatusFilterDropdown();
+      renderOrderTypeFilterDropdown();
+      const rect = btn.getBoundingClientRect();
+      dropdown.style.position = "fixed";
+      dropdown.style.top = rect.bottom + 4 + "px";
+      dropdown.style.left = rect.left + "px";
+      dropdown.style.display = "block";
+      btn.setAttribute("aria-expanded", "true");
     }
   });
+
+  bindTableFilterDocClose();
 
   dropdown.addEventListener("click", (e) => e.stopPropagation());
 }

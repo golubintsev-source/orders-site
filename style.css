@@ -1015,6 +1015,17 @@ button:active {
   text-align: right;
 }
 
+#ordersTableStickyHeadTable .th-order-type-header {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#ordersTableStickyHeadTable .th-order-type-label {
+  flex-shrink: 0;
+}
+
 #ordersTableStickyHeadTable .th-status-header {
   white-space: nowrap;
   display: flex;
@@ -1234,6 +1245,17 @@ th {
   width: 1%;
   min-width: 1px;
   padding: 4px 0 4px 1px;
+}
+
+#ordersTable .th-order-type-header {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#ordersTable .th-order-type-label {
+  flex-shrink: 0;
 }
 
 #ordersTable .th-status-header {

@@ -27,6 +27,7 @@ import { state } from "./state.js";
 import {
   applyClientFilter,
   initStatusFilter,
+  initOrderTypeFilter,
   resetFormMode,
   submitOrderForm,
   updatePaidField,
@@ -289,6 +290,7 @@ export function bindUIEvents() {
   }
 
   initStatusFilter();
+  initOrderTypeFilter();
 
   if (selectFilesBtn) {
     selectFilesBtn.addEventListener("click", () => {

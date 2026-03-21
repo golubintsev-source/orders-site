@@ -296,6 +296,9 @@
       <div id="statusFilterDropdown" class="status-filter-dropdown" role="dialog" aria-label="Фильтр по статусу" style="display: none;">
         <div class="status-filter-dropdown-inner" id="statusFilterCheckboxes"></div>
       </div>
+      <div id="orderTypeFilterDropdown" class="status-filter-dropdown" role="dialog" aria-label="Фильтр по типу заказа" style="display: none;">
+        <div class="status-filter-dropdown-inner" id="orderTypeFilterCheckboxes"></div>
+      </div>
       <div id="ordersTableScrollTop" class="orders-table-scroll-top" aria-hidden="true">
         <div id="ordersTableScrollSpacer" class="orders-table-scroll-spacer"></div>
       </div>
@@ -304,7 +307,12 @@
         <table id="ordersTable">
           <thead>
             <tr>
-              <th>Номер</th>
+              <th class="th-order-type-header">
+                <span class="th-order-type-label">Номер</span>
+                <button type="button" class="status-filter-btn order-type-filter-btn" id="orderTypeFilterBtn" title="Фильтр по типу заказа" aria-haspopup="true" aria-expanded="false">
+                  <svg class="status-filter-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                </button>
+              </th>
               <th class="th-order-date">Дата</th>
               <th></th>
               <th class="th-truncate-name">Клиент</th>
@@ -455,6 +463,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=7"></script>
+  <script type="module" src="./js/main.js?v=8"></script>
 </body>
 </html>
