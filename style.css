@@ -462,7 +462,7 @@ h2 {
   min-width: 100px;
 }
 
-/* «Монтаж 1м², руб» + кнопка-калькулятор вплотную */
+/* «Монтаж 1м²» + кнопка-калькулятор вплотную */
 #section-new .installer-payment-one-row > .field.field-installer-rate-with-calc {
   flex: 0 0 auto;
   width: auto;
@@ -489,7 +489,7 @@ h2 {
   border-right-width: 0;
 }
 
-/* «з/п за монтаж» — узкая колонка */
+/* «з/п монтаж» — узкая колонка */
 #section-new .installer-payment-one-row > .field:has(#installer_payment_amount) {
   flex: 0 0 100px;
   width: 100px;
