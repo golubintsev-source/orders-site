@@ -1,7 +1,7 @@
 import { state } from "./state.js";
 import { loadBalance } from "./balance.js";
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
-import { formatAmount } from "./format.js";
+import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 
 /** Статусы: «Товар передан заказчику» или «Монтаж выполнен» */
 const RICHER_STATUSES = new Set(["Товар передан заказчику", "Монтаж выполнен"]);
@@ -50,7 +50,10 @@ let currentSectionId = "all";
 
 function labelForSection(sectionId) {
   if (sectionId === "new") {
-    return state.editingOrderId ? "Редактирование" : "Новый";
+    if (!state.editingOrderId) return "Новый";
+    const orderType = document.getElementById("order_type")?.value ?? "";
+    const chip = formatOrderIdTypeChip(state.editingOrderId, orderType);
+    return `Редактирование ${chip}`;
   }
   return SECTION_LABELS[sectionId] || sectionId;
 }

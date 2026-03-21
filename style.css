@@ -1822,6 +1822,10 @@ th {
   color: #6b7280;
 }
 
+.file-upload-text:empty {
+  display: none;
+}
+
 .existing-order-files-wrap {
   margin-top: 12px;
   padding-top: 12px;

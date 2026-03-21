@@ -1001,13 +1001,13 @@ export async function editOrder(orderId) {
   state.editingOrderId = orderId;
   state.editingOrderDescription = data.description || null;
   fillForm(data);
-  setMessage(`Режим: редактирование заявки #${orderId}`, "");
+  setMessage("", "");
 
   if (submitBtn) submitBtn.textContent = "Сохранить изменения";
   if (submitBtnTop) submitBtnTop.textContent = "Сохранить изменения";
 
   if (formTitle) {
-    formTitle.textContent = `Редактирование заявки #${orderId}`;
+    formTitle.textContent = `Редактирование ${formatOrderIdTypeChip(orderId, data.order_type)}`;
   }
 
   if (cancelEditBtn) cancelEditBtn.style.display = "inline-block";

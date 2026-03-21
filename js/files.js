@@ -17,7 +17,7 @@ export function renderSelectedFiles() {
   selectedFiles.innerHTML = "";
 
   if (files.length === 0) {
-    fileUploadText.textContent = "Файлы не выбраны";
+    fileUploadText.textContent = "";
     return;
   }
 
@@ -80,7 +80,7 @@ export function removeSelectedFile(indexToRemove) {
 
 export function resetFileUpload() {
   attachmentsInput.value = "";
-  fileUploadText.textContent = "Файлы не выбраны";
+  fileUploadText.textContent = "";
   selectedFiles.innerHTML = "";
 }
 
