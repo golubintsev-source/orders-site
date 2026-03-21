@@ -230,6 +230,13 @@ h2 {
   box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
 }
 
+/* iPhone/iPad Safari: при font-size < 16px на input при фокусе включается зум страницы */
+@media (hover: none) and (pointer: coarse) {
+  .orders-search-dropdown-input {
+    font-size: 16px;
+  }
+}
+
 .orders-search-dropdown-btn {
   width: 100%;
   box-sizing: border-box;
