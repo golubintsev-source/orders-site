@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
+import { formatOrderIdTypeChip } from "./format.js";
 import {
   attachmentsInput,
   fileUploadText,
@@ -302,7 +303,12 @@ function truncateFileNameForModal(name, maxLen = 20) {
 }
 
 export async function openFilesModal(orderId) {
-  filesModalTitle.textContent = `Файлы заказа #${orderId}`;
+  const order = state.allOrders.find((o) => Number(o.id) === Number(orderId));
+  const chip = formatOrderIdTypeChip(
+    order != null ? order.id : orderId,
+    order != null ? order.order_type : ""
+  );
+  filesModalTitle.textContent = `Заказ ${chip}`;
   filesModalBody.textContent = "";
   const loading = document.createElement("p");
   loading.className = "files-modal-loading";
@@ -388,8 +394,31 @@ export async function openFilesModal(orderId) {
     if (state.currentRole === "admin") {
       const delBtn = document.createElement("button");
       delBtn.type = "button";
-      delBtn.className = "file-action-btn file-action-btn--danger";
-      delBtn.textContent = "Удалить";
+      delBtn.className = "file-remove-btn";
+      delBtn.title = "Удалить";
+      delBtn.setAttribute("aria-label", "Удалить файл");
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("width", "14");
+      svg.setAttribute("height", "14");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke", "currentColor");
+      svg.setAttribute("stroke-width", "2.5");
+      svg.setAttribute("stroke-linecap", "round");
+      svg.setAttribute("aria-hidden", "true");
+      const line1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line1.setAttribute("x1", "18");
+      line1.setAttribute("y1", "6");
+      line1.setAttribute("x2", "6");
+      line1.setAttribute("y2", "18");
+      const line2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line2.setAttribute("x1", "6");
+      line2.setAttribute("y1", "6");
+      line2.setAttribute("x2", "18");
+      line2.setAttribute("y2", "18");
+      svg.appendChild(line1);
+      svg.appendChild(line2);
+      delBtn.appendChild(svg);
       const fid = file.id;
       const path = file.storage_path;
       const oid = orderId;

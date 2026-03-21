@@ -18,7 +18,7 @@ import {
   clearExistingOrderFilesInForm,
   renderExistingOrderFilesInForm,
 } from "./files.js";
-import { formatAmount } from "./format.js";
+import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { refreshOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
 
 export async function loadOrders() {
@@ -441,8 +441,6 @@ export function renderOrders(orders) {
     const phone = order.phone ?? "";
     const telHref = phone ? "tel:" + phone.replace(/[^\d+]/g, "") : "";
     const client = order.client ?? "";
-    const orderType = order.order_type ?? "";
-    const orderTypeFirstLetter = orderType.trim() ? orderType.trim().charAt(0) : "";
     const address = order.address ?? "";
     const description = order.description ?? "";
     const clientCell = client ? `<span class="status-value">${escapeHtml(client)}</span>` : "";
@@ -455,9 +453,7 @@ export function renderOrders(orders) {
     if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
     /* Номер в таблице: 4 цифры + «_» + первая буква типа заказа (например 0112_О) */
     const orderNumberDisplay =
-      order.id != null
-        ? `${String(order.id).padStart(4, "0")}${orderTypeFirstLetter ? `_${escapeHtml(orderTypeFirstLetter)}` : ""}`
-        : "";
+      order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";
     const row = `
       <tr>
         <td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}">

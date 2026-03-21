@@ -1952,7 +1952,19 @@ th {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 0;
+}
+
+.files-modal-header h3 {
+  margin: 0;
+}
+
+#filesModalBody {
+  margin-top: 0;
+}
+
+#filesModalBody > *:first-child {
+  margin-top: 0;
 }
 
 .files-list {
@@ -2056,15 +2068,35 @@ th {
   color: #111;
 }
 
-.file-action-btn--danger {
-  border-color: #c62828;
-  background: #fff5f5;
-  color: #b71c1c;
+/* Квадратная кнопка удаления файла в модалке */
+.file-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  color: #b91c1c;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
-.file-action-btn--danger:hover {
-  background: #ffebee;
-  color: #7f0000;
+.file-remove-btn:hover {
+  background: #fef2f2;
+  border-color: #c62828;
+  color: #991b1b;
+}
+
+.file-remove-btn:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
 }
 
 .files-badge-btn {
