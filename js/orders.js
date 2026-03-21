@@ -202,6 +202,38 @@ function ensureOrdersScrollSync() {
     { passive: true }
   );
 
+  /* iOS: убрать «маятник» при смахивании вправо, когда уже показан левый край таблицы (и симметрично у правого края) */
+  if (touchUi && ordersScrollBottomEl) {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const onTouchStart = (e) => {
+      if (e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    };
+    const onTouchMove = (e) => {
+      if (e.touches.length !== 1) return;
+      const x = e.touches[0].clientX;
+      const y = e.touches[0].clientY;
+      const el = ordersScrollBottomEl;
+      const sl = el.scrollLeft;
+      const maxSl = Math.max(0, el.scrollWidth - el.clientWidth);
+      const totalDx = x - touchStartX;
+      const totalDy = y - touchStartY;
+      /* Не мешаем вертикальной прокрутке, если жест скорее вертикальный */
+      if (Math.abs(totalDx) <= Math.abs(totalDy)) return;
+      if (sl <= 0.5 && totalDx > 2) {
+        e.preventDefault();
+        return;
+      }
+      if (sl >= maxSl - 0.5 && totalDx < -2) {
+        e.preventDefault();
+      }
+    };
+    ordersScrollBottomEl.addEventListener("touchstart", onTouchStart, { passive: true });
+    ordersScrollBottomEl.addEventListener("touchmove", onTouchMove, { passive: false });
+  }
+
   ordersScrollSyncAttached = true;
 }
 

@@ -858,6 +858,9 @@ button:active {
   max-height: calc(100vh - 12rem);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  /* Без горизонтальной «резинки» у краёв (особенно iOS) */
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
 }
 
 #ordersTable thead th {
