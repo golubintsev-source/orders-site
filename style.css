@@ -951,6 +951,17 @@ button:active {
 
 /* На телефоне: верхнюю «полосу прокрутки» не показываем — на iOS она всё равно не видна, а высота 16px даёт пустой зазор */
 @media (hover: none) and (pointer: coarse) {
+  /* Шапка с лупой, разделом и выходом — закреплена при прокрутке страницы (z-index ниже модалок и дропдауна разделов) */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 980;
+    background: #f5f7fb;
+    padding-top: max(6px, env(safe-area-inset-top, 0px));
+    padding-bottom: 6px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+  }
+
   .orders-table-scroll-top {
     display: none;
   }
@@ -1823,5 +1834,12 @@ th {
   .files-badge-btn {
     width: 100%;
     text-align: center;
+  }
+}
+
+/* iPhone: не даём max-width:768 перезаписать верхний отступ — он в закреплённой .topbar (safe-area) */
+@media (max-width: 768px) and (hover: none) and (pointer: coarse) {
+  .container {
+    padding-top: 0;
   }
 }
