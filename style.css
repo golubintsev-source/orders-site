@@ -878,8 +878,9 @@ button:active {
   }
 
   /*
-   * iOS Safari: max-height + overflow:auto + sticky thead на <th> даёт обрезание/пропадание
-   * шапки таблицы и ломает вёрстку. На телефоне прокручиваем страницу целиком, шапка — обычная.
+   * Телефон: вертикаль — прокрутка страницы (без max-height у блока), горизонталь — у обёртки.
+   * border-collapse: separate нужен WebKit/Safari для корректного position:sticky на <th>
+   * (с collapse шапка часто пропадает или не липнет).
    */
   #ordersTableScrollBottom.orders-table-scroll {
     max-height: none;
@@ -889,11 +890,15 @@ button:active {
     overscroll-behavior: auto;
   }
 
+  #ordersTable {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
   #ordersTable thead th {
-    position: static;
-    top: auto;
-    z-index: auto;
-    box-shadow: none;
+    /* усилить слой при скролле страницы */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
   }
 }
 
