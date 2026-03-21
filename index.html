@@ -9,30 +9,31 @@
 <body>
   <div class="container">
     <div class="topbar">
-      <div class="topbar-left">
-        <div class="user-row">
-          <p id="userInfo"></p>
-          <a href="window-calculations.html" class="topbar-link topbar-link-icon" title="Расчет окон">
-            <img src="./img/window-calculations-link.svg" alt="Расчет окон" width="28" height="28" decoding="async" />
-          </a>
-          <button id="logoutBtn" class="logout-icon-btn" type="button" title="Выйти">
-            <svg class="logout-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <path d="M16 17l5-5-5-5"/>
-              <path d="M21 12H9"/>
-            </svg>
-          </button>
+      <nav class="section-nav topbar-section-nav" role="navigation">
+        <button type="button" class="section-nav-search-btn" id="ordersSearchOpenBtn" title="Поиск по заказам" aria-label="Поиск по заказам" aria-haspopup="dialog" aria-expanded="false">
+          <img src="./img/search-magnifier.svg" alt="" width="22" height="22" class="section-nav-search-icon" decoding="async" />
+        </button>
+        <div class="section-nav-tabs-inner">
+          <button type="button" class="section-nav-btn active" data-section="all">Заказы</button>
+          <button type="button" class="section-nav-btn" data-section="new">Новый</button>
+          <button type="button" class="section-nav-btn" data-section="calculations">Расчеты</button>
+          <button type="button" class="section-nav-btn" data-section="balance">Баланс</button>
+          <button type="button" class="section-nav-btn" data-section="settings">Настройки</button>
         </div>
+      </nav>
+      <div class="topbar-toolbar">
+        <a href="window-calculations.html" class="topbar-link topbar-link-icon" title="Расчет окон">
+          <img src="./img/window-calculations-link.svg" alt="Расчет окон" width="28" height="28" decoding="async" />
+        </a>
+        <button id="logoutBtn" class="logout-icon-btn" type="button" title="Выйти">
+          <svg class="logout-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <path d="M16 17l5-5-5-5"/>
+            <path d="M21 12H9"/>
+          </svg>
+        </button>
       </div>
     </div>
-
-    <nav class="section-nav" role="navigation">
-      <button type="button" class="section-nav-btn active" data-section="all">Заказы</button>
-      <button type="button" class="section-nav-btn" data-section="new">Новый</button>
-      <button type="button" class="section-nav-btn" data-section="calculations">Расчеты</button>
-      <button type="button" class="section-nav-btn" data-section="balance">Баланс</button>
-      <button type="button" class="section-nav-btn" data-section="settings">Настройки</button>
-    </nav>
 
     <section id="section-new" class="content-section">
       <div class="card">
@@ -266,11 +267,12 @@
 
     <section id="section-all" class="content-section active">
       <div class="card">
-      <div class="search-box">
+      <div class="search-box search-box--hidden" aria-hidden="true">
         <input
           type="text"
           id="clientSearch"
           placeholder="Поиск по Телефон, Клиент, Адрес, Номер, Описание"
+          tabindex="-1"
         />
       </div>
 
@@ -410,6 +412,21 @@
         </div>
       </div>
     </section>
+  </div>
+
+  <div id="ordersSearchModal" class="orders-search-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="ordersSearchModalTitle">
+    <div class="orders-search-modal-dialog">
+      <h3 id="ordersSearchModalTitle">Поиск по заказам</h3>
+      <p class="orders-search-modal-hint">Телефон, клиент, адрес, номер, описание</p>
+      <input type="text" id="ordersSearchPopupInput" class="orders-search-modal-input" placeholder="Введите запрос" autocomplete="off" />
+      <div class="orders-search-modal-actions">
+        <button type="button" id="ordersSearchResetBtn" class="orders-search-modal-btn orders-search-modal-btn-reset" hidden>Сбросить поиск</button>
+        <div class="orders-search-modal-actions-right">
+          <button type="button" id="ordersSearchFindBtn" class="orders-search-modal-btn orders-search-modal-btn-primary">Найти</button>
+          <button type="button" id="ordersSearchCloseBtn" class="orders-search-modal-btn orders-search-modal-btn-secondary">Отмена</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="filesModal" class="files-modal" style="display:none;">

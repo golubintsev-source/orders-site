@@ -1,6 +1,5 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
-import { userInfo } from "./dom.js";
 
 export async function checkAuth() {
   const { data, error } = await supabaseClient.auth.getUser();
@@ -23,13 +22,11 @@ export async function loadProfile() {
 
   if (error) {
     console.error("Ошибка загрузки профиля:", error);
-    userInfo.textContent = `Вы вошли как: ${state.currentUser.email}`;
     state.currentRole = "user";
     return;
   }
 
   state.currentRole = data.role || "user";
-  userInfo.textContent = `${state.currentUser.email} | ${state.currentRole}`;
 }
 
 export async function logout() {

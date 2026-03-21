@@ -2,7 +2,6 @@ export const form = document.getElementById("orderForm");
 export const message = document.getElementById("message");
 export const messageTop = document.getElementById("messageTop");
 export const logoutBtn = document.getElementById("logoutBtn");
-export const userInfo = document.getElementById("userInfo");
 export const cancelEditBtn = document.getElementById("cancelEditBtn");
 export const submitBtn = document.getElementById("submitBtn");
 export const cancelEditBtnTop = document.getElementById("cancelEditBtnTop");

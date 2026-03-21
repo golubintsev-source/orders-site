@@ -38,32 +38,83 @@ h2 {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
 }
 
-/* ===== верхняя панель ===== */
+/* ===== верхняя панель: вкладки разделов + иконки в одну строку ===== */
 .topbar {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 6px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.topbar-left {
-  width: 100%;
+.topbar-section-nav.section-nav {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  border-bottom: none;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.section-nav-tabs-inner {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  min-width: 0;
+  gap: 0;
 }
 
-.user-row {
-  width: 100%;
+.section-nav-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  flex-shrink: 0;
+  align-self: center;
+  margin-bottom: 0;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.section-nav-search-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.section-nav-search-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.25);
+}
+
+.section-nav-search-icon {
+  display: block;
+  pointer-events: none;
+}
+
+/* Скрытая строка поиска под вкладками (значение задаётся из попапа) */
+#section-all .search-box.search-box--hidden {
+  display: none;
+}
+
+.topbar-toolbar {
   display: flex;
   align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-bottom: 4px;
 }
 
-#userInfo {
-  margin: 0;
-  color: #666;
-  font-size: 14px;
-  flex: 1;
+.topbar-toolbar .logout-icon-btn {
+  margin-left: 0;
 }
 
 .topbar-link {
@@ -71,7 +122,7 @@ h2 {
   font-weight: 600;
   color: #1f6feb;
   text-decoration: none;
-  margin-right: 12px;
+  margin-right: 0;
   padding: 4px 0;
 }
 
@@ -129,19 +180,19 @@ h2 {
   transform: translateY(1px);
 }
 
-/* ===== меню разделов ===== */
+/* ===== меню разделов (в шапке — линия у .topbar) ===== */
 .section-nav {
   display: flex;
   gap: 0;
-  margin-bottom: 6px;
-  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 0;
+  border-bottom: none;
   padding-bottom: 0;
 }
 
 .section-nav-btn {
   padding: 10px 3px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
   border: none;
   background: transparent;
   color: #6b7280;
@@ -1316,6 +1367,106 @@ th {
   opacity: 1;
 }
 
+/* ===== модалка поиска по заказам ===== */
+.orders-search-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1002;
+}
+
+.orders-search-modal-dialog {
+  width: 100%;
+  max-width: 400px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+.orders-search-modal-dialog h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.orders-search-modal-hint {
+  margin: 0 0 14px 0;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.orders-search-modal-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 42px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  border: 1px solid #d7dce5;
+  border-radius: 10px;
+}
+
+.orders-search-modal-input:focus {
+  outline: none;
+  border-color: #1f6feb;
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
+}
+
+.orders-search-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.orders-search-modal-actions-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.orders-search-modal-btn-reset {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.orders-search-modal-btn-reset:hover {
+  background: #fee2e2;
+}
+
+.orders-search-modal-btn {
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s;
+}
+
+.orders-search-modal-btn:hover {
+  opacity: 0.95;
+}
+
+.orders-search-modal-btn-primary {
+  background: #1f6feb;
+  color: #fff;
+}
+
+.orders-search-modal-btn-secondary {
+  background: #e5e7eb;
+  color: #374151;
+}
+
 /* ===== модалка файлов ===== */
 .files-modal {
   position: fixed;
@@ -1468,16 +1619,11 @@ th {
   }
 
   .topbar {
-    flex-direction: column;
-    align-items: stretch;
+    align-items: flex-end;
   }
 
-  .topbar-left {
-    width: 100%;
-  }
-
-  .user-row {
-    width: 100%;
+  .topbar-toolbar {
+    margin-left: auto;
   }
 
   .actions {

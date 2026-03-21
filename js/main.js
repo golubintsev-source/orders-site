@@ -5,7 +5,6 @@ import { initCalculationsSection } from "./calculations.js";
 import { initBalanceSection } from "./balance.js";
 import { loadSettings } from "./settings.js";
 import { openFilesModal, removeFile } from "./files.js";
-import { userInfo } from "./dom.js";
 import { setMessage } from "./dom.js";
 
 window.editOrder = editOrder;
@@ -21,9 +20,6 @@ async function init() {
     const user = await checkAuth();
     if (!user) return;
 
-    if (userInfo && user.email) {
-      userInfo.textContent = user.email;
-    }
     await loadProfile();
     await loadSettings();
     await loadOrders();

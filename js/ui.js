@@ -228,9 +228,85 @@ export function bindUIEvents() {
     settingsInstallerRateInput.addEventListener("change", updateSettingsSaveButtonState);
   }
 
-  if (clientSearch) {
-    clientSearch.addEventListener("input", applyClientFilter);
+  const ordersSearchModal = document.getElementById("ordersSearchModal");
+  const ordersSearchOpenBtn = document.getElementById("ordersSearchOpenBtn");
+  const ordersSearchPopupInput = document.getElementById("ordersSearchPopupInput");
+  const ordersSearchFindBtn = document.getElementById("ordersSearchFindBtn");
+  const ordersSearchCloseBtn = document.getElementById("ordersSearchCloseBtn");
+  const ordersSearchResetBtn = document.getElementById("ordersSearchResetBtn");
+
+  function updateOrdersSearchResetBtnVisibility() {
+    if (!ordersSearchResetBtn || !ordersSearchPopupInput) return;
+    const hasText = (ordersSearchPopupInput.value || "").trim().length > 0;
+    ordersSearchResetBtn.hidden = !hasText;
   }
+
+  function openOrdersSearchModal() {
+    if (!ordersSearchModal || !ordersSearchOpenBtn) return;
+    if (ordersSearchPopupInput && clientSearch) {
+      ordersSearchPopupInput.value = clientSearch.value || "";
+    }
+    updateOrdersSearchResetBtnVisibility();
+    ordersSearchModal.style.display = "flex";
+    ordersSearchOpenBtn.setAttribute("aria-expanded", "true");
+    queueMicrotask(() => ordersSearchPopupInput?.focus());
+  }
+
+  function closeOrdersSearchModal() {
+    if (!ordersSearchModal || !ordersSearchOpenBtn) return;
+    ordersSearchModal.style.display = "none";
+    ordersSearchOpenBtn.setAttribute("aria-expanded", "false");
+  }
+
+  function applyOrdersSearchFromPopup() {
+    if (clientSearch && ordersSearchPopupInput) {
+      clientSearch.value = ordersSearchPopupInput.value.trim();
+    }
+    closeOrdersSearchModal();
+    applyClientFilter();
+    switchSection("all");
+  }
+
+  function resetOrdersSearchFromPopup() {
+    if (ordersSearchPopupInput) ordersSearchPopupInput.value = "";
+    if (clientSearch) clientSearch.value = "";
+    closeOrdersSearchModal();
+    applyClientFilter();
+    switchSection("all");
+  }
+
+  if (ordersSearchOpenBtn) {
+    ordersSearchOpenBtn.addEventListener("click", () => openOrdersSearchModal());
+  }
+  if (ordersSearchFindBtn) {
+    ordersSearchFindBtn.addEventListener("click", () => applyOrdersSearchFromPopup());
+  }
+  if (ordersSearchCloseBtn) {
+    ordersSearchCloseBtn.addEventListener("click", () => closeOrdersSearchModal());
+  }
+  if (ordersSearchResetBtn) {
+    ordersSearchResetBtn.addEventListener("click", () => resetOrdersSearchFromPopup());
+  }
+  if (ordersSearchModal) {
+    ordersSearchModal.addEventListener("click", (e) => {
+      if (e.target === ordersSearchModal) closeOrdersSearchModal();
+    });
+  }
+  if (ordersSearchPopupInput) {
+    ordersSearchPopupInput.addEventListener("input", () => updateOrdersSearchResetBtnVisibility());
+    ordersSearchPopupInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        applyOrdersSearchFromPopup();
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!ordersSearchModal || ordersSearchModal.style.display !== "flex") return;
+    closeOrdersSearchModal();
+  });
 
   initStatusFilter();
 
