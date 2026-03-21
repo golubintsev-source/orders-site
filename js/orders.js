@@ -79,12 +79,12 @@ const ORDER_FORM_NUMERIC_FIELD_DECIMALS = {
   installer_payment_amount: 2,
 };
 
-/** В полях даты формы заказа год только 2020–2029 (ровно 4 цифры, префикс «202»). */
-const ORDER_FORM_DATE_YEAR_MIN = 2020;
-const ORDER_FORM_DATE_YEAR_MAX = 2029;
+/** В полях даты формы заказа год по маске 20** — 2000–2099 (ровно 4 цифры, префикс «20»). */
+const ORDER_FORM_DATE_YEAR_MIN = 2000;
+const ORDER_FORM_DATE_YEAR_MAX = 2099;
 
 /**
- * Подгоняет год к диапазону 2020–2029, если строка уже в формате value у input.
+ * Подгоняет год к диапазону 2000–2099, если строка уже в формате value у input.
  * @param {string} raw
  * @param {"date" | "datetime-local"} type
  */
@@ -117,7 +117,7 @@ export function normalizeOrderFormDateInputValue(raw, type) {
 }
 
 /**
- * Читает value поля даты и подгоняет год к 2020–2029; при необходимости обновляет input.
+ * Читает value поля даты и подгоняет год к 2000–2099; при необходимости обновляет input.
  * Вызывать при сохранении формы — подстраховка (в т.ч. Яндекс.Браузер: иногда нет «change»).
  */
 export function syncOrderFormDateFieldFromDom(id, type) {
@@ -130,8 +130,8 @@ export function syncOrderFormDateFieldFromDom(id, type) {
   return next;
 }
 
-/** Вешает правило года на поля даты формы «Новый / Редактирование». */
-export function bindOrderFormDateYear202xInputs() {
+/** Вешает правило года (маска 20**, 2000–2099) на поля даты формы «Новый / Редактирование». */
+export function bindOrderFormDateYear20xxInputs() {
   const specs = [
     { id: "order_date", type: "datetime-local" },
     { id: "delivery_date", type: "date" },
@@ -144,7 +144,7 @@ export function bindOrderFormDateYear202xInputs() {
     if (!el) continue;
 
     // Не вешать «change» на подгонку года: в Яндекс.Браузере и др. при наборе года по цифрам
-    // «change» срабатывает на промежуточных полных датах (2002-xx-xx и т.д.) → год сразу режется до 2020.
+    // «change» срабатывает на промежуточных полных датах → ломается ввод, пока не ушли с поля (blur).
     const tryFix = () => {
       const v = el.value;
       if (!v) return;

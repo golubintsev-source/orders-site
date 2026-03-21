@@ -462,6 +462,38 @@ h2 {
   min-width: 100px;
 }
 
+/* «Монтаж 1м², руб» — узкая колонка */
+#section-new .installer-payment-one-row > .field:first-child {
+  flex: 0 0 100px;
+  width: 100px;
+  max-width: 100px;
+  min-width: 0;
+}
+
+/* «з/п за монтаж» — узкая колонка */
+#section-new .installer-payment-one-row > .field:has(#installer_payment_amount) {
+  flex: 0 0 100px;
+  width: 100px;
+  max-width: 100px;
+  min-width: 0;
+}
+
+#section-new .installer-payment-one-row > .field:has(#installer_payment_amount) label {
+  white-space: normal;
+}
+
+/* «Оплатил» — узкая колонка */
+#section-new .installer-payment-one-row > .field:has(#installer_payment_by) {
+  flex: 0 0 100px;
+  width: 100px;
+  max-width: 100px;
+  min-width: 0;
+}
+
+#section-new .installer-payment-one-row > .field:has(#installer_payment_by) label {
+  white-space: normal;
+}
+
 #section-new .installer-payment-one-row > .field.installer-calc-wrap {
   flex: 0 0 auto;
   min-width: 0;
@@ -718,6 +750,14 @@ label {
   flex-wrap: nowrap;
   align-items: center;
   gap: 16px;
+}
+
+/* Страница «Новый»: колонка «Монтаж» (чекбокс + подпись) — фиксированная ширина */
+#section-new .installation-row:has(#installation) .installation-checkbox-wrap {
+  flex: 0 0 100px;
+  width: 100px;
+  max-width: 100px;
+  min-width: 0;
 }
 
 .installation-row .installation-date-inline {
