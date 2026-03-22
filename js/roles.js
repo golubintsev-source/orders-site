@@ -4,7 +4,8 @@ import { state } from "./state.js";
 export const ALLOWED_ROLES = ["admin", "user", "user_lite"];
 
 export function normalizeRole(raw) {
-  const r = String(raw ?? "").trim();
+  let r = String(raw ?? "").trim();
+  if (r === "user_lte") r = "user_lite";
   if (ALLOWED_ROLES.includes(r)) return r;
   return "user";
 }

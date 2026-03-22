@@ -3,7 +3,7 @@ import { loadBalance } from "./balance.js";
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
-import { canAccessSection, isAdmin, isSectionHiddenFromNav } from "./roles.js";
+import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite } from "./roles.js";
 
 /** Статусы: «Товар передан заказчику» или «Монтаж выполнен» */
 const RICHER_STATUSES = new Set(["Товар передан заказчику", "Монтаж выполнен"]);
@@ -23,7 +23,7 @@ export function updateSectionNavRicherStat() {
   if (!wrap || !el) return;
 
   wrap.hidden = !isAdmin();
-  if (!isAdmin) return;
+  if (!isAdmin()) return;
 
   let sum = 0;
   for (const order of state.allOrders || []) {
@@ -63,7 +63,14 @@ function getContentSections() {
   return document.querySelectorAll(".content-section");
 }
 
+function syncSectionNavDropdownUserLiteClass() {
+  const panel = document.getElementById("sectionNavDropdownPanel");
+  if (!panel) return;
+  panel.classList.toggle("section-nav-dropdown-panel--user-lite", isUserLite());
+}
+
 function updateDropdownItemsVisibility(activeId) {
+  syncSectionNavDropdownUserLiteClass();
   document.querySelectorAll(".section-nav-dropdown-item").forEach((btn) => {
     const id = btn.dataset.section;
     btn.hidden = id === activeId || isSectionHiddenFromNav(id);

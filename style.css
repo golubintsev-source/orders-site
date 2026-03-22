@@ -148,6 +148,13 @@ h2 {
   background: #eff6ff;
 }
 
+/* user_lite: пункты Баланс, Настройки, Расчёты не показываются (дублирует логику hidden в JS) */
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="balance"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="settings"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="calculations"] {
+  display: none !important;
+}
+
 /* Итог и мотивационная фраза внизу меню разделов */
 .section-nav-dropdown-footer {
   margin-top: 4px;
@@ -1370,10 +1377,10 @@ th {
   padding-right: 6px;
 }
 
-/* Редактирование закрыто для user_lite — подложка номера темнее обычной серой */
+/* Редактирование закрыто для user_lite — подложка чуть темнее обычной (#f3f4f6), но светлее прежнего «тёмно-серого» */
 #ordersTable td.td-order-id .order-id-chip.order-id-chip--lock-user-lite {
-  background: #6b7280;
-  color: #f9fafb;
+  background: #d1d5db;
+  color: #374151;
 }
 
 /* Меню под номером заказа (как выпадающее под названием раздела) */
