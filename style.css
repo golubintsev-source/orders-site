@@ -861,6 +861,14 @@ h2 {
   max-width: 420px;
 }
 
+#allTasksTable tbody tr.all-tasks-row--highlight {
+  background-color: #fca5a5;
+  color: #450a0a;
+}
+#allTasksTable tbody tr.all-tasks-row--highlight:hover {
+  background-color: #f87171;
+}
+
 /* Задачи по заказу */
 .order-tasks-card .order-tasks-subtitle {
   margin: 0 0 12px;

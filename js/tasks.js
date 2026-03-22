@@ -34,26 +34,53 @@ function orderTasksHighlightFromOrder(order) {
   return v === true || v === 1 || v === "1";
 }
 
-function syncOrderTasksHighlightCheckbox() {
+function setHighlightCheckboxNoOrder() {
   const cb = document.getElementById("orderTaskHighlightCheckbox");
   if (!cb) return;
+  cb.checked = false;
+  cb.disabled = true;
+}
+
+async function applyHighlightCheckboxAfterTasksLoad(taskCount) {
+  const cb = document.getElementById("orderTaskHighlightCheckbox");
+  if (!cb) return;
+
   if (state.tasksOrderId == null) {
-    cb.checked = false;
-    cb.disabled = true;
+    setHighlightCheckboxNoOrder();
     return;
   }
+
+  if (taskCount === 0) {
+    cb.disabled = true;
+    cb.checked = false;
+    const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
+    if (o && orderTasksHighlightFromOrder(o)) {
+      const { error } = await supabaseClient
+        .from("orders")
+        .update({ tasks_highlight: false })
+        .eq("id", state.tasksOrderId);
+      if (!error) {
+        o.tasks_highlight = false;
+        applyFiltersAndRender();
+        void loadAllTasks();
+      }
+    }
+    return;
+  }
+
   cb.disabled = false;
   const order = state.allOrders?.find((o) => Number(o.id) === Number(state.tasksOrderId));
   cb.checked = orderTasksHighlightFromOrder(order);
 }
 
 async function saveOrderTasksHighlight(checked) {
-  if (state.tasksOrderId == null) return;
+  const cb = document.getElementById("orderTaskHighlightCheckbox");
+  if (state.tasksOrderId == null || !cb || cb.disabled) return;
   const id = state.tasksOrderId;
   const { error } = await supabaseClient.from("orders").update({ tasks_highlight: checked }).eq("id", id);
   if (error) {
     console.error("Ошибка сохранения выделения:", error);
-    syncOrderTasksHighlightCheckbox();
+    void loadOrderTasks();
     return;
   }
   const o = state.allOrders?.find((x) => Number(x.id) === Number(id));
@@ -105,8 +132,10 @@ export async function loadAllTasks() {
     .map((row) => {
       const order = state.allOrders?.find((o) => Number(o.id) === Number(row.order_id));
       const chip = formatOrderIdTypeChip(row.order_id, order?.order_type);
+      const highlight = orderTasksHighlightFromOrder(order);
+      const trClass = highlight ? ' class="all-tasks-row--highlight"' : "";
       return `
-    <tr>
+    <tr${trClass}>
       <td>${escapeHtml(chip)}</td>
       <td>${escapeHtml(formatTaskDateTime(row.created_at))}</td>
       <td>${escapeHtml(row.author_login || "—")}</td>
@@ -138,7 +167,7 @@ export async function loadOrderTasks() {
       textInput.disabled = true;
       textInput.value = "";
     }
-    syncOrderTasksHighlightCheckbox();
+    setHighlightCheckboxNoOrder();
     if (msg) {
       msg.textContent =
         "Выберите заказ: в таблице нажмите на номер заказа → Задачи.";
@@ -149,7 +178,6 @@ export async function loadOrderTasks() {
 
   if (createBtn) createBtn.disabled = false;
   if (textInput) textInput.disabled = false;
-  syncOrderTasksHighlightCheckbox();
 
   if (msg) msg.textContent = "";
 
@@ -166,6 +194,8 @@ export async function loadOrderTasks() {
       msg.classList.add("order-tasks-message--error");
     }
     tbody.innerHTML = "";
+    const cb = document.getElementById("orderTaskHighlightCheckbox");
+    if (cb) cb.disabled = true;
     return;
   }
 
@@ -187,6 +217,8 @@ export async function loadOrderTasks() {
   if (rows.length === 0 && msg) {
     msg.textContent = "Пока нет задач по этому заказу.";
   }
+
+  await applyHighlightCheckboxAfterTasksLoad(rows.length);
 }
 
 export async function createOrderTask() {
