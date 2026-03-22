@@ -445,9 +445,19 @@ export function bindUIEvents() {
   let tooltipHideClick = null;
   let tooltipHideKey = null;
 
+  /** Текст обрезан ellipsis: для «Клиент» обрезка на внутреннем .status-value, не на td */
+  function isOrdersTableCellTruncated(td) {
+    if (!td) return false;
+    if (td.classList.contains("td-truncate-name")) {
+      const chip = td.querySelector(".status-value");
+      if (chip) return chip.scrollWidth > chip.clientWidth + 0.5;
+    }
+    return td.scrollWidth > td.clientWidth + 0.5;
+  }
+
   function showCellTooltip(td) {
     if (!cellTooltip || !td) return;
-    if (td.scrollWidth <= td.clientWidth) return;
+    if (!isOrdersTableCellTruncated(td)) return;
     const raw = td.getAttribute("data-fulltext") || td.getAttribute("title");
     if (!raw) return;
     const decodeEl = document.createElement("div");

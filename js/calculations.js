@@ -100,7 +100,7 @@ export async function loadCalculations() {
       : `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`;
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(formatDateShort(row.created_at))}</td>
+      <td><span class="status-value">${escapeHtml(formatDateShort(row.created_at))}</span></td>
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
       <td class="td-money"><span class="status-value">${escapeHtml(formatAmount(row.amount))}</span></td>

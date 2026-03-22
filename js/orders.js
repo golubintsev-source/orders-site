@@ -552,9 +552,16 @@ export function renderOrders(orders) {
 
   table.querySelectorAll(".td-truncate-name, .td-truncate-address, .td-truncate-description").forEach((cell) => {
     const full = cell.getAttribute("data-fulltext");
-    if (full && cell.scrollWidth > cell.clientWidth) {
-      cell.setAttribute("title", full);
+    if (!full) return;
+    let truncated = false;
+    if (cell.classList.contains("td-truncate-name")) {
+      const chip = cell.querySelector(".status-value");
+      truncated = chip ? chip.scrollWidth > chip.clientWidth + 0.5 : cell.scrollWidth > cell.clientWidth;
+    } else {
+      truncated = cell.scrollWidth > cell.clientWidth + 0.5;
     }
+    if (truncated) cell.setAttribute("title", full);
+    else cell.removeAttribute("title");
   });
 
   // Синхронизация горизонтальной прокрутки: сверху и снизу
