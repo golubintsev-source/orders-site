@@ -767,8 +767,28 @@ h2 {
   opacity: 0.95;
 }
 
-#calculationsTable { min-width: 500px; }
-#calculationsTable th, #calculationsTable td { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
+/*
+ * Не наследовать width: 100% и min-width: 900px от общего `table`.
+ * Любой min-width больше суммы колонок раздувает таблицу — лишняя ширина уходит в колонки
+ * (между «Куда» и правым краем ячейки «Сумма» огромный зазор из-за text-align: right).
+ */
+#calculationsTable {
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Колонка «Сумма» — по правому краю (как денежные колонки в заказах) */
+#calculationsTable .th-money,
+#calculationsTable .td-money {
+  text-align: right;
+}
+
+#calculationsTable th, #calculationsTable td {
+  padding: 8px 2px;
+  font-size: 13px;
+  white-space: nowrap;
+}
 #calculationsTable td.td-calc-comment {
   max-width: 220px;
   overflow: hidden;
@@ -777,7 +797,7 @@ h2 {
 }
 #calculationsTable .td-actions {
   white-space: nowrap;
-  padding: 4px 2px 4px 0;
+  padding: 4px 2px;
 }
 
 #calculationsTable .td-actions .btn-icon + .btn-icon {

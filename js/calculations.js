@@ -103,7 +103,7 @@ export async function loadCalculations() {
       <td>${escapeHtml(formatDateShort(row.created_at))}</td>
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
-      <td class="td-money">${escapeHtml(formatAmount(row.amount))}</td>
+      <td class="td-money"><span class="status-value">${escapeHtml(formatAmount(row.amount))}</span></td>
       <td class="td-calc-comment" title="${escapedComment}">${escapedComment}</td>
       ${actionsCell}
     `;
