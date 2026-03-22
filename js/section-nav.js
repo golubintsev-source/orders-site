@@ -2,6 +2,7 @@ import { state } from "./state.js";
 import { loadBalance } from "./balance.js";
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
+import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
 
 /** Статусы: «Товар передан заказчику» или «Монтаж выполнен» */
 const RICHER_STATUSES = new Set(["Товар передан заказчику", "Монтаж выполнен"]);
@@ -229,4 +230,9 @@ export function initSectionNavDropdown() {
   updateCurrentLabel();
   updateDropdownItemsVisibility(currentSectionId);
   updateOrdersSearchBtnVisibility(currentSectionId);
+
+  const motivationEl = document.getElementById("sectionNavMotivationText");
+  if (motivationEl) {
+    scheduleHourlyMotivationUpdates(() => applyHourlyMotivationToElement(motivationEl));
+  }
 }

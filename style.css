@@ -148,11 +148,29 @@ h2 {
   background: #eff6ff;
 }
 
-/* Итог внизу меню разделов: не пункт навигации */
-.section-nav-dropdown-stat {
+/* Итог и мотивационная фраза внизу меню разделов */
+.section-nav-dropdown-footer {
   margin-top: 4px;
-  padding: 10px 14px 8px;
   border-top: 1px solid #e5e7eb;
+  padding: 10px 14px 8px;
+}
+
+.section-nav-dropdown-stat {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.section-nav-dropdown-stat:not([hidden]) + .section-nav-dropdown-motivation-text {
+  margin-top: 8px;
+}
+
+.section-nav-dropdown-motivation-text {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: #6b7280;
 }
 
 .section-nav-dropdown-stat-row {
