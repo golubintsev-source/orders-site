@@ -100,21 +100,6 @@ async function saveOrderTasksHighlight(checked) {
   applyFiltersAndRender();
 }
 
-function updateTasksOrderSubtitle() {
-  const el = document.getElementById("tasksSectionSubtitle");
-  if (!el) return;
-  const oid = state.tasksOrderId;
-  if (oid == null) {
-    el.textContent = "";
-    el.hidden = true;
-    return;
-  }
-  const order = state.allOrders?.find((o) => Number(o.id) === Number(oid));
-  const chip = order ? formatOrderIdTypeChip(oid, order.order_type) : String(oid);
-  el.textContent = `Задачи по заказу ${chip}`;
-  el.hidden = false;
-}
-
 export async function loadAllTasks() {
   const tbody = document.querySelector("#allTasksTable tbody");
   const msg = document.getElementById("allTasksMessage");
@@ -166,8 +151,6 @@ export async function loadOrderTasks() {
   const tbody = document.querySelector("#orderTasksTable tbody");
   const msg = document.getElementById("orderTasksMessage");
   if (!tbody) return;
-
-  updateTasksOrderSubtitle();
 
   const createBtn = document.getElementById("orderTaskCreateBtn");
   const textInput = document.getElementById("orderTaskTextInput");

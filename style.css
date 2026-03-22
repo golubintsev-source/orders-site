@@ -863,25 +863,24 @@ h2 {
 }
 
 /* Задачи по заказу */
-.order-tasks-card .order-tasks-subtitle {
-  margin: 0 0 12px;
-  font-size: 14px;
-  color: #374151;
-}
-.order-tasks-form-row {
+.order-tasks-form-stack {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
   margin-bottom: 14px;
   max-width: 640px;
+}
+.order-tasks-form-stack .order-tasks-field {
+  width: 100%;
+  flex: none;
 }
 .order-tasks-highlight-label {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   margin: 0;
-  padding: 0 4px 8px 0;
+  padding: 0;
   font-size: 14px;
   font-weight: 600;
   color: #374151;
@@ -896,7 +895,6 @@ h2 {
   cursor: pointer;
 }
 .order-tasks-field {
-  flex: 1 1 220px;
   min-width: 0;
   margin: 0;
 }

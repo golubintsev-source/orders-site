@@ -453,17 +453,18 @@
 
     <section id="section-order-tasks" class="content-section">
       <div class="card order-tasks-card">
-        <p id="tasksSectionSubtitle" class="order-tasks-subtitle" hidden></p>
-        <div class="order-tasks-form-row">
+        <div class="order-tasks-form-stack">
           <div class="field order-tasks-field">
             <label for="orderTaskTextInput">Задача</label>
-            <input type="text" id="orderTaskTextInput" class="order-tasks-input" placeholder="Текст задачи" autocomplete="off" />
+            <div class="order-tasks-input-row">
+              <input type="text" id="orderTaskTextInput" class="order-tasks-input" placeholder="Текст задачи" autocomplete="off" />
+              <button type="button" id="orderTaskCreateBtn" class="btn-primary order-tasks-create-btn">Создать</button>
+            </div>
           </div>
           <label class="order-tasks-highlight-label">
             <input type="checkbox" id="orderTaskHighlightCheckbox" />
             <span>Выделить</span>
           </label>
-          <button type="button" id="orderTaskCreateBtn" class="btn-primary order-tasks-create-btn">Создать</button>
         </div>
         <div class="table-wrap">
           <table id="orderTasksTable">
