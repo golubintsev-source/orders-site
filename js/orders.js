@@ -50,7 +50,10 @@ export async function loadOrders() {
   await loadFilesCountMap();
   applyFiltersAndRender();
   updateSectionNavRicherStat();
-  if (getCurrentSectionId() === "tasks") {
+  if (getCurrentSectionId() === "tasks-all") {
+    refreshSectionNavLabel();
+    void import("./tasks.js").then((m) => m.loadAllTasks());
+  } else if (getCurrentSectionId() === "order-tasks") {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadOrderTasks());
   }
@@ -390,7 +393,7 @@ function getFilteredOrders() {
   return list;
 }
 
-function applyFiltersAndRender() {
+export function applyFiltersAndRender() {
   renderOrders(getFilteredOrders());
 }
 
@@ -513,6 +516,11 @@ export function renderOrders(orders) {
     if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
     if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
     if (isOrderEditLockedForUserLite(order)) orderIdChipClasses.push("order-id-chip--lock-user-lite");
+    const tasksHighlight =
+      order.tasks_highlight === true ||
+      order.tasks_highlight === 1 ||
+      order.tasks_highlight === "1";
+    if (tasksHighlight) orderIdChipClasses.push("order-id-chip--highlight-tasks");
     /* Номер в таблице: 4 цифры + «_» + первая буква типа заказа (например 0112_О) */
     const orderNumberDisplay =
       order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";

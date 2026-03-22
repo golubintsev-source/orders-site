@@ -33,7 +33,7 @@
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="all">Заказы</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="new">Новый</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="calculations">Расчеты</button>
-            <button type="button" role="option" class="section-nav-dropdown-item" data-section="tasks">Задачи</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="tasks-all">Все задачи</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="balance">Баланс</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="settings">Настройки</button>
             <div class="section-nav-dropdown-footer">
@@ -432,7 +432,27 @@
       </div>
     </section>
 
-    <section id="section-tasks" class="content-section">
+    <section id="section-tasks-all" class="content-section">
+      <div class="card order-tasks-card">
+        <h2 class="all-tasks-page-title">Все задачи</h2>
+        <div class="table-wrap">
+          <table id="allTasksTable">
+            <thead>
+              <tr>
+                <th>Заказ</th>
+                <th>Дата время</th>
+                <th>Автор</th>
+                <th>Текст</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="allTasksMessage" class="order-tasks-hint"></p>
+      </div>
+    </section>
+
+    <section id="section-order-tasks" class="content-section">
       <div class="card order-tasks-card">
         <p id="tasksSectionSubtitle" class="order-tasks-subtitle" hidden></p>
         <div class="order-tasks-form-row">
@@ -440,6 +460,10 @@
             <label for="orderTaskTextInput">Задача</label>
             <input type="text" id="orderTaskTextInput" class="order-tasks-input" placeholder="Текст задачи" autocomplete="off" />
           </div>
+          <label class="order-tasks-highlight-label">
+            <input type="checkbox" id="orderTaskHighlightCheckbox" />
+            <span>Выделить</span>
+          </label>
           <button type="button" id="orderTaskCreateBtn" class="btn-primary order-tasks-create-btn">Создать</button>
         </div>
         <div class="table-wrap">
@@ -555,6 +579,6 @@
   <script src="https://cdn.jsdelivr.net/npm/blueimp-load-image@5.16.0/js/load-image.all.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=19"></script>
+  <script type="module" src="./js/main.js?v=20"></script>
 </body>
 </html>

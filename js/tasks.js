@@ -1,6 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip } from "./format.js";
+import { applyFiltersAndRender } from "./orders.js";
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -27,6 +28,39 @@ function formatTaskDateTime(iso) {
   return d.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
 }
 
+function orderTasksHighlightFromOrder(order) {
+  if (!order) return false;
+  const v = order.tasks_highlight;
+  return v === true || v === 1 || v === "1";
+}
+
+function syncOrderTasksHighlightCheckbox() {
+  const cb = document.getElementById("orderTaskHighlightCheckbox");
+  if (!cb) return;
+  if (state.tasksOrderId == null) {
+    cb.checked = false;
+    cb.disabled = true;
+    return;
+  }
+  cb.disabled = false;
+  const order = state.allOrders?.find((o) => Number(o.id) === Number(state.tasksOrderId));
+  cb.checked = orderTasksHighlightFromOrder(order);
+}
+
+async function saveOrderTasksHighlight(checked) {
+  if (state.tasksOrderId == null) return;
+  const id = state.tasksOrderId;
+  const { error } = await supabaseClient.from("orders").update({ tasks_highlight: checked }).eq("id", id);
+  if (error) {
+    console.error("Ошибка сохранения выделения:", error);
+    syncOrderTasksHighlightCheckbox();
+    return;
+  }
+  const o = state.allOrders?.find((x) => Number(x.id) === Number(id));
+  if (o) o.tasks_highlight = checked;
+  applyFiltersAndRender();
+}
+
 function updateTasksOrderSubtitle() {
   const el = document.getElementById("tasksSectionSubtitle");
   if (!el) return;
@@ -38,8 +72,53 @@ function updateTasksOrderSubtitle() {
   }
   const order = state.allOrders?.find((o) => Number(o.id) === Number(oid));
   const chip = order ? formatOrderIdTypeChip(oid, order.order_type) : String(oid);
-  el.textContent = `Заказ ${chip}`;
+  el.textContent = `Задачи по заказу ${chip}`;
   el.hidden = false;
+}
+
+export async function loadAllTasks() {
+  const tbody = document.querySelector("#allTasksTable tbody");
+  const msg = document.getElementById("allTasksMessage");
+  if (!tbody) return;
+  if (msg) {
+    msg.textContent = "";
+    msg.classList.remove("order-tasks-message--error");
+  }
+
+  const { data, error } = await supabaseClient
+    .from("order_tasks")
+    .select("id, created_at, author_login, body, order_id")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Ошибка загрузки задач:", error);
+    if (msg) {
+      msg.textContent = "Не удалось загрузить задачи.";
+      msg.classList.add("order-tasks-message--error");
+    }
+    tbody.innerHTML = "";
+    return;
+  }
+
+  const rows = data || [];
+  tbody.innerHTML = rows
+    .map((row) => {
+      const order = state.allOrders?.find((o) => Number(o.id) === Number(row.order_id));
+      const chip = formatOrderIdTypeChip(row.order_id, order?.order_type);
+      return `
+    <tr>
+      <td>${escapeHtml(chip)}</td>
+      <td>${escapeHtml(formatTaskDateTime(row.created_at))}</td>
+      <td>${escapeHtml(row.author_login || "—")}</td>
+      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
+    </tr>
+  `;
+    })
+    .join("");
+
+  if (rows.length === 0 && msg) {
+    msg.textContent = "Пока нет задач.";
+  }
 }
 
 export async function loadOrderTasks() {
@@ -59,6 +138,7 @@ export async function loadOrderTasks() {
       textInput.disabled = true;
       textInput.value = "";
     }
+    syncOrderTasksHighlightCheckbox();
     if (msg) {
       msg.textContent =
         "Выберите заказ: в таблице нажмите на номер заказа → Задачи.";
@@ -69,6 +149,7 @@ export async function loadOrderTasks() {
 
   if (createBtn) createBtn.disabled = false;
   if (textInput) textInput.disabled = false;
+  syncOrderTasksHighlightCheckbox();
 
   if (msg) msg.textContent = "";
 
@@ -138,17 +219,34 @@ export async function createOrderTask() {
     return;
   }
 
+  const { error: hlErr } = await supabaseClient
+    .from("orders")
+    .update({ tasks_highlight: true })
+    .eq("id", state.tasksOrderId);
+
+  if (hlErr) {
+    console.error("Ошибка выделения заказа:", hlErr);
+  } else {
+    const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
+    if (o) o.tasks_highlight = true;
+    const cb = document.getElementById("orderTaskHighlightCheckbox");
+    if (cb) cb.checked = true;
+    applyFiltersAndRender();
+  }
+
   input.value = "";
   if (msg) {
     msg.textContent = "";
     msg.classList.remove("order-tasks-message--error");
   }
   await loadOrderTasks();
+  void loadAllTasks();
 }
 
 export function initOrderTasksSection() {
   const createBtn = document.getElementById("orderTaskCreateBtn");
   const input = document.getElementById("orderTaskTextInput");
+  const highlightCb = document.getElementById("orderTaskHighlightCheckbox");
   if (createBtn) {
     createBtn.addEventListener("click", () => void createOrderTask());
   }
@@ -158,6 +256,11 @@ export function initOrderTasksSection() {
         e.preventDefault();
         void createOrderTask();
       }
+    });
+  }
+  if (highlightCb) {
+    highlightCb.addEventListener("change", () => {
+      void saveOrderTasksHighlight(highlightCb.checked);
     });
   }
 }

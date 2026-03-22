@@ -43,7 +43,7 @@ export function updateSectionNavRicherStat() {
 const SECTION_LABELS = {
   all: "Заказы",
   calculations: "Расчеты",
-  tasks: "Задачи",
+  "tasks-all": "Все задачи",
   balance: "Баланс",
   settings: "Настройки",
 };
@@ -57,13 +57,14 @@ function labelForSection(sectionId) {
     const chip = formatOrderIdTypeChip(state.editingOrderId, orderType);
     return `Редактирование ${chip}`;
   }
-  if (sectionId === "tasks" && state.tasksOrderId != null) {
+  if (sectionId === "order-tasks" && state.tasksOrderId != null) {
     const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
     if (o) {
       const chip = formatOrderIdTypeChip(state.tasksOrderId, o.order_type);
-      return `Задачи · ${chip}`;
+      return `Задачи по заказу ${chip}`;
     }
   }
+  if (sectionId === "order-tasks") return "Задачи по заказу";
   return SECTION_LABELS[sectionId] || sectionId;
 }
 
@@ -181,7 +182,10 @@ export function switchSection(sectionId) {
     loadBalance();
   }
 
-  if (sectionId === "tasks") {
+  if (sectionId === "tasks-all") {
+    void import("./tasks.js").then((m) => m.loadAllTasks());
+  }
+  if (sectionId === "order-tasks") {
     void import("./tasks.js").then((m) => m.loadOrderTasks());
   }
 

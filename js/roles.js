@@ -51,6 +51,7 @@ export function canAccessSection(sectionId) {
 }
 
 export function isSectionHiddenFromNav(sectionId) {
+  if (sectionId === "order-tasks") return true;
   if (sectionId === "settings" && !isAdmin()) return true;
   if (!isUserLite()) return false;
   return sectionId === "balance" || sectionId === "settings" || sectionId === "calculations";

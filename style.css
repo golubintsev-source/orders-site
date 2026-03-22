@@ -839,6 +839,28 @@ h2 {
   color: #d32f2f;
 }
 
+.all-tasks-page-title {
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+#allTasksTable {
+  min-width: 320px;
+}
+#allTasksTable th,
+#allTasksTable td {
+  padding: 8px 10px;
+  font-size: 13px;
+  vertical-align: top;
+}
+#allTasksTable .order-tasks-text-cell {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 420px;
+}
+
 /* Задачи по заказу */
 .order-tasks-card .order-tasks-subtitle {
   margin: 0 0 12px;
@@ -852,6 +874,25 @@ h2 {
   gap: 10px;
   margin-bottom: 14px;
   max-width: 640px;
+}
+.order-tasks-highlight-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 4px 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+.order-tasks-highlight-label input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
 }
 .order-tasks-field {
   flex: 1 1 220px;
@@ -1547,7 +1588,7 @@ th {
   cursor: pointer;
 }
 
-/* Номер заказа: серая подложка; файлы — синяя полоса слева; телефон — зелёная справа */
+/* Номер заказа: серая подложка; файлы — синяя полоса слева; телефон — зелёная справа; выделение задач — красная сверху */
 #ordersTable td.td-order-id .order-id-chip.order-id-chip--has-files {
   border-left: 4px solid #1f6feb;
   padding-left: 6px;
@@ -1556,6 +1597,10 @@ th {
 #ordersTable td.td-order-id .order-id-chip.order-id-chip--has-phone {
   border-right: 4px solid #059669;
   padding-right: 6px;
+}
+
+#ordersTable td.td-order-id .order-id-chip.order-id-chip--highlight-tasks {
+  border-top: 4px solid #dc2626;
 }
 
 /* Редактирование закрыто для user_lite — подложка чуть темнее обычной (#f3f4f6), но светлее прежнего «тёмно-серого» */
@@ -1609,8 +1654,16 @@ th {
   color: #6b7280;
 }
 
-.order-id-actions-menu-item:hover:not(.order-id-actions-menu-item--disabled):not(.order-id-actions-menu-item--no-files):not(.order-id-actions-menu-item--call) .order-id-actions-menu-icon {
+.order-id-actions-menu-item:hover:not(.order-id-actions-menu-item--disabled):not(.order-id-actions-menu-item--no-files):not(.order-id-actions-menu-item--call):not(.order-id-actions-menu-item--tasks-highlight) .order-id-actions-menu-icon {
   color: #374151;
+}
+
+/* Задачи: выделение включено — красная иконка (как полоса на номере) */
+.order-id-actions-menu-item--tasks-highlight .order-id-actions-menu-icon {
+  color: #dc2626;
+}
+.order-id-actions-menu-item--tasks-highlight:hover:not(.order-id-actions-menu-item--disabled) .order-id-actions-menu-icon {
+  color: #b91c1c;
 }
 
 /* Позвонить — зелёная трубка (телефон есть) */
