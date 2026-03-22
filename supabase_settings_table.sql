@@ -8,6 +8,14 @@ CREATE TABLE IF NOT EXISTS app_settings (
 INSERT INTO app_settings (key, value) VALUES ('installer_rate_per_m2', '1400')
   ON CONFLICT (key) DO NOTHING;
 
+-- Корректировки баланса по участникам (целые рубли, могут быть отрицательными)
+INSERT INTO app_settings (key, value) VALUES
+  ('balance_adj_dima', '0'),
+  ('balance_adj_vova', '0'),
+  ('balance_adj_kassa', '0'),
+  ('balance_adj_beznal', '0')
+ON CONFLICT (key) DO NOTHING;
+
 -- RLS: разрешить чтение и обновление для анонимных/авторизованных (подстройте под вашу политику)
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 

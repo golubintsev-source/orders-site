@@ -43,6 +43,7 @@ export function updateSectionNavRicherStat() {
 const SECTION_LABELS = {
   all: "Заказы",
   calculations: "Расчеты",
+  tasks: "Задачи",
   balance: "Баланс",
   settings: "Настройки",
 };
@@ -55,6 +56,13 @@ function labelForSection(sectionId) {
     const orderType = document.getElementById("order_type")?.value ?? "";
     const chip = formatOrderIdTypeChip(state.editingOrderId, orderType);
     return `Редактирование ${chip}`;
+  }
+  if (sectionId === "tasks" && state.tasksOrderId != null) {
+    const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
+    if (o) {
+      const chip = formatOrderIdTypeChip(state.tasksOrderId, o.order_type);
+      return `Задачи · ${chip}`;
+    }
   }
   return SECTION_LABELS[sectionId] || sectionId;
 }
@@ -171,6 +179,10 @@ export function switchSection(sectionId) {
 
   if (sectionId === "balance") {
     loadBalance();
+  }
+
+  if (sectionId === "tasks") {
+    void import("./tasks.js").then((m) => m.loadOrderTasks());
   }
 
   scheduleOrdersStickyHeaderUpdate();

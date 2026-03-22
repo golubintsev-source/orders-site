@@ -41,6 +41,7 @@ export function canMutateOrders() {
 
 /** Разделы меню, закрытые для user_lite. */
 export function canAccessSection(sectionId) {
+  if (sectionId === "settings" && !isAdmin()) return false;
   if (!isUserLite()) return true;
   return (
     sectionId !== "balance" &&
@@ -50,6 +51,7 @@ export function canAccessSection(sectionId) {
 }
 
 export function isSectionHiddenFromNav(sectionId) {
+  if (sectionId === "settings" && !isAdmin()) return true;
   if (!isUserLite()) return false;
   return sectionId === "balance" || sectionId === "settings" || sectionId === "calculations";
 }

@@ -839,6 +839,70 @@ h2 {
   color: #d32f2f;
 }
 
+/* Задачи по заказу */
+.order-tasks-card .order-tasks-subtitle {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #374151;
+}
+.order-tasks-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
+  max-width: 640px;
+}
+.order-tasks-field {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: 0;
+}
+.order-tasks-field label {
+  display: block;
+  margin-bottom: 4px;
+}
+.order-tasks-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+.order-tasks-create-btn {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.order-tasks-create-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+#orderTasksTable {
+  min-width: 280px;
+}
+#orderTasksTable th,
+#orderTasksTable td {
+  padding: 8px 10px;
+  font-size: 13px;
+  vertical-align: top;
+}
+#orderTasksTable .order-tasks-text-cell {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 420px;
+}
+.order-tasks-hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+.order-tasks-message--error {
+  color: #b91c1c;
+}
+
 #balanceTable { min-width: 200px; }
 #balanceTable th, #balanceTable td { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
 
@@ -877,6 +941,63 @@ h2 {
 }
 #section-settings #settingsSaveInstallerRateBtn.settings-save-btn-inactive,
 #section-settings #settingsSaveInstallerRateBtn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+
+#section-settings .settings-adjustments-card {
+  margin-top: 16px;
+  max-width: 520px;
+}
+#section-settings .settings-adjustments-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+#section-settings .settings-adjustments-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin-bottom: 14px;
+}
+@media (max-width: 480px) {
+  #section-settings .settings-adjustments-grid {
+    grid-template-columns: 1fr;
+  }
+}
+#section-settings .settings-adjustments-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: #374151;
+}
+#section-settings .settings-adjustments-field input {
+  width: 100%;
+  max-width: 220px;
+  height: 36px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+#section-settings .settings-save-adjustments-btn {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #1f6feb;
+  color: #fff;
+  box-sizing: border-box;
+}
+#section-settings .settings-save-adjustments-btn:hover:not(:disabled) {
+  opacity: 0.95;
+}
+#section-settings .settings-save-adjustments-btn.settings-save-btn-inactive,
+#section-settings .settings-save-adjustments-btn:disabled {
   background: #9ca3af;
   cursor: not-allowed;
   opacity: 0.9;

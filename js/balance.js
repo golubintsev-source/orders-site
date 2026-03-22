@@ -1,6 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { isUserLite } from "./roles.js";
 import { formatAmount } from "./format.js";
+import { state } from "./state.js";
 
 const PARTICIPANTS = ["Дима", "Вова", "Касса", "Безнал"];
 
@@ -69,6 +70,12 @@ export async function loadBalance() {
     addDelta(balances, o.remaining_to, toNumber(o.remaining_amount));
     // Оплатил монтаж => минус (сумма за монтаж)
     addDelta(balances, o.installer_payment_by, -toNumber(o.installer_payment_amount));
+  }
+
+  for (const p of PARTICIPANTS) {
+    const adj = state.balanceAdjustments[p];
+    const n = adj == null || adj === "" ? 0 : Number(adj);
+    balances[p] += Number.isFinite(n) ? Math.trunc(n) : 0;
   }
 
   tbody.innerHTML = PARTICIPANTS.map((p) => {

@@ -9,7 +9,12 @@ import {
   cancelEditBtn,
   cancelEditBtnTop,
 } from "./dom.js";
-import { switchSection, refreshSectionNavLabel, updateSectionNavRicherStat } from "./section-nav.js";
+import {
+  switchSection,
+  refreshSectionNavLabel,
+  updateSectionNavRicherStat,
+  getCurrentSectionId,
+} from "./section-nav.js";
 import {
   loadFilesCountMap,
   getFilesWord,
@@ -45,6 +50,10 @@ export async function loadOrders() {
   await loadFilesCountMap();
   applyFiltersAndRender();
   updateSectionNavRicherStat();
+  if (getCurrentSectionId() === "tasks") {
+    refreshSectionNavLabel();
+    void import("./tasks.js").then((m) => m.loadOrderTasks());
+  }
 }
 
 const STATUS_OPTIONS = [

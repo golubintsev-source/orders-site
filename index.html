@@ -33,6 +33,7 @@
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="all">Заказы</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="new">Новый</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="calculations">Расчеты</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="tasks">Задачи</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="balance">Баланс</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="settings">Настройки</button>
             <div class="section-nav-dropdown-footer">
@@ -431,6 +432,32 @@
       </div>
     </section>
 
+    <section id="section-tasks" class="content-section">
+      <div class="card order-tasks-card">
+        <p id="tasksSectionSubtitle" class="order-tasks-subtitle" hidden></p>
+        <div class="order-tasks-form-row">
+          <div class="field order-tasks-field">
+            <label for="orderTaskTextInput">Задача</label>
+            <input type="text" id="orderTaskTextInput" class="order-tasks-input" placeholder="Текст задачи" autocomplete="off" />
+          </div>
+          <button type="button" id="orderTaskCreateBtn" class="btn-primary order-tasks-create-btn">Создать</button>
+        </div>
+        <div class="table-wrap">
+          <table id="orderTasksTable">
+            <thead>
+              <tr>
+                <th>Дата время</th>
+                <th>Автор</th>
+                <th>Текст</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="orderTasksMessage" class="order-tasks-hint"></p>
+      </div>
+    </section>
+
     <section id="section-balance" class="content-section">
       <div class="card">
         <div class="table-wrap">
@@ -455,6 +482,28 @@
           <input type="number" step="0.01" min="0" id="settings_installer_rate_per_m2" />
           <button type="button" id="settingsSaveInstallerRateBtn" class="btn-primary">Сохранить</button>
         </div>
+      </div>
+      <div class="card settings-adjustments-card">
+        <h3 class="settings-adjustments-title">Корректировки</h3>
+        <div class="settings-adjustments-grid">
+          <div class="settings-adjustments-field">
+            <label for="settings_adj_dima">Дима</label>
+            <input type="number" step="1" id="settings_adj_dima" inputmode="numeric" />
+          </div>
+          <div class="settings-adjustments-field">
+            <label for="settings_adj_vova">Вова</label>
+            <input type="number" step="1" id="settings_adj_vova" inputmode="numeric" />
+          </div>
+          <div class="settings-adjustments-field">
+            <label for="settings_adj_kassa">Касса</label>
+            <input type="number" step="1" id="settings_adj_kassa" inputmode="numeric" />
+          </div>
+          <div class="settings-adjustments-field">
+            <label for="settings_adj_beznal">Безнал</label>
+            <input type="number" step="1" id="settings_adj_beznal" inputmode="numeric" />
+          </div>
+        </div>
+        <button type="button" id="settingsSaveAdjustmentsBtn" class="btn-primary settings-save-adjustments-btn settings-save-btn-inactive" disabled>Сохранить</button>
       </div>
     </section>
   </div>
@@ -506,6 +555,6 @@
   <script src="https://cdn.jsdelivr.net/npm/blueimp-load-image@5.16.0/js/load-image.all.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=18"></script>
+  <script type="module" src="./js/main.js?v=19"></script>
 </body>
 </html>

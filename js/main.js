@@ -4,6 +4,7 @@ import { loadOrders, resetFormMode, editOrder, deleteOrder, applyOrderTypeSelect
 import { initCalculationsSection } from "./calculations.js";
 import { initBalanceSection } from "./balance.js";
 import { loadSettings } from "./settings.js";
+import { initOrderTasksSection } from "./tasks.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { setMessage } from "./dom.js";
 import { initOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
@@ -29,6 +30,7 @@ async function init() {
     applyOrderTypeSelectForRole();
     await loadSettings();
     await loadOrders();
+    initOrderTasksSection();
     resetFormMode();
     if (canAccessSection("calculations")) {
       await initCalculationsSection();

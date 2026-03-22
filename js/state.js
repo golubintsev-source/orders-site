@@ -16,4 +16,8 @@ export const state = {
   installerPaymentDone: false,
   /** стоимость монтажа 1м² по умолчанию (из настроек) */
   defaultInstallerRatePerM2: 1400,
+  /** корректировки баланса по участникам (целые, из app_settings) */
+  balanceAdjustments: { Дима: 0, Вова: 0, Касса: 0, Безнал: 0 },
+  /** заказ, для которого открыт раздел «Задачи» (id из orders) */
+  tasksOrderId: null,
 };
