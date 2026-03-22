@@ -2,50 +2,45 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>История заказа</title>
   <link rel="stylesheet" href="./style.css">
-  <style>
-    .history-page .container { padding: 12px; }
-    .history-page h1 { font-size: 18px; margin-bottom: 12px; }
-    .history-page .back-btn { margin-bottom: 12px; padding: 8px 16px; font-size: 13px; font-weight: 600; color: #1f6feb; background: transparent; border: 1px solid #1f6feb; border-radius: 8px; cursor: pointer; }
-    .history-page .back-btn:hover { background: rgba(31, 111, 235, 0.08); }
-    .history-add { margin-bottom: 12px; }
-    .history-add label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
-    .history-add-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-    .history-add-row textarea { flex: 1; min-width: 200px; max-width: 100%; padding: 8px 10px; font-size: 13px; border-radius: 8px; border: 1px solid #d7dce5; resize: vertical; min-height: 44px; }
-    .history-add-row textarea:focus { outline: none; border-color: #1f6feb; box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15); }
-    .history-add-row button { flex-shrink: 0; padding: 8px 16px; font-size: 13px; font-weight: 600; background: #1f6feb; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
-    .history-add-row button:hover { opacity: 0.95; }
-    #historyTable { min-width: 400px; }
-    #historyTable th, #historyTable td { padding: 6px 8px; font-size: 13px; }
-  </style>
 </head>
 <body class="history-page">
   <div class="container">
-    <button type="button" id="backToOrdersBtn" class="back-btn">← Назад к заказам</button>
-    <h1 id="historyTitle">История заказа</h1>
-    <div class="card">
-      <form id="historyCommentForm" class="history-add" aria-label="Добавить комментарий в историю">
-        <label for="historyComment">Новый комментарий</label>
-        <div class="history-add-row">
-          <textarea id="historyComment" name="comment" rows="2" placeholder="Введите комментарий..." maxlength="2000"></textarea>
-          <button type="submit">Добавить</button>
+    <header class="history-page-toolbar">
+      <button type="button" id="backToOrdersBtn" class="history-back-btn">← Назад к заказам</button>
+      <span id="historyPageTitle" class="history-page-title" role="status" aria-live="polite"></span>
+    </header>
+    <div class="card order-tasks-card">
+      <form id="historyCommentForm" class="order-tasks-form-stack" aria-label="Добавить комментарий в историю">
+        <div class="field order-tasks-field">
+          <label for="historyComment">Новый комментарий</label>
+          <div class="order-tasks-input-row order-tasks-input-row--textarea">
+            <textarea
+              id="historyComment"
+              class="order-tasks-input order-tasks-textarea"
+              rows="2"
+              placeholder="Введите комментарий..."
+              maxlength="2000"
+            ></textarea>
+            <button type="submit" class="btn-primary order-tasks-create-btn">Добавить</button>
+          </div>
         </div>
       </form>
       <div class="table-wrap">
         <table id="historyTable">
           <thead>
             <tr>
-              <th>Дата</th>
-              <th>Пользователь</th>
-              <th>Комментарий</th>
+              <th>Дата время</th>
+              <th>Автор</th>
+              <th>Текст</th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
-      <p id="historyMessage"></p>
+      <p id="historyMessage" class="order-tasks-hint"></p>
     </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

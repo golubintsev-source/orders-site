@@ -972,6 +972,60 @@ h2 {
   color: #b91c1c;
 }
 
+/* history.html — тот же каркас, что у «Задачи по заказу» */
+.history-page-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.history-back-btn {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f6feb;
+  background: transparent;
+  border: 1px solid #1f6feb;
+  border-radius: 8px;
+  cursor: pointer;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+.history-back-btn:hover {
+  background: rgba(31, 111, 235, 0.08);
+}
+.history-page-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+.history-page .order-tasks-input-row--textarea {
+  align-items: flex-end;
+}
+.history-page .order-tasks-textarea.order-tasks-input {
+  height: auto;
+  min-height: 44px;
+  resize: vertical;
+  line-height: 1.4;
+  font-family: inherit;
+}
+#historyTable {
+  min-width: 280px;
+}
+#historyTable th,
+#historyTable td {
+  padding: 8px 10px;
+  font-size: 13px;
+  vertical-align: top;
+}
+#historyTable .order-tasks-text-cell {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 420px;
+}
+
 #balanceTable { min-width: 200px; }
 #balanceTable th, #balanceTable td { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
 

@@ -22,3 +22,22 @@ export function formatOrderIdTypeChip(orderId, orderType) {
   const base = String(orderId).padStart(4, "0");
   return letter ? `${base}_${letter}` : base;
 }
+
+/** Дата и время: «13 апр 11:10», «4 мар 7:45» (локальное время). */
+export function formatTaskDateRu(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const months = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+  const h = d.getHours();
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getDate()} ${months[d.getMonth()]} ${h}:${min}`;
+}
+
+/** Автор в таблицах: не более 5 символов, далее ... */
+export function formatTaskAuthorShort(raw) {
+  if (raw == null || raw === "") return "—";
+  const s = String(raw).trim();
+  if (s.length <= 5) return s;
+  return `${s.slice(0, 5)}...`;
+}

@@ -1,6 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
-import { formatOrderIdTypeChip } from "./format.js";
+import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
 import { applyFiltersAndRender } from "./orders.js";
 import { switchSection } from "./section-nav.js";
 
@@ -20,25 +20,6 @@ function getAuthorLogin() {
   if (meta.preferred_username) return String(meta.preferred_username).trim();
   if (meta.name) return String(meta.name).trim();
   return String(u.id || "—");
-}
-
-/** Дата и время создания задачи: «13 апр 11:10», «4 мар 7:45» (локальное время). */
-function formatTaskDateRu(iso) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const months = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
-  const h = d.getHours();
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${d.getDate()} ${months[d.getMonth()]} ${h}:${min}`;
-}
-
-/** Автор в таблицах задач: не более 5 символов, далее ... */
-function formatTaskAuthorShort(raw) {
-  if (raw == null || raw === "") return "—";
-  const s = String(raw).trim();
-  if (s.length <= 5) return s;
-  return `${s.slice(0, 5)}...`;
 }
 
 function orderTasksHighlightFromOrder(order) {

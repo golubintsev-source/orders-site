@@ -1,11 +1,29 @@
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile } from "./auth.js";
 import { isOrderHiddenFromUserLite } from "./roles.js";
+import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
 
 const params = new URLSearchParams(window.location.search);
 const orderId = params.get("order_id");
 
 let currentUser = null;
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s == null ? "" : String(s);
+  return div.innerHTML;
+}
+
+function setHistoryTitle(orderType) {
+  const el = document.getElementById("historyPageTitle");
+  if (!el) return;
+  if (!orderId) {
+    el.textContent = "";
+    return;
+  }
+  const chip = formatOrderIdTypeChip(orderId, orderType);
+  el.textContent = chip ? `История заказа ${chip}` : `История заказа #${orderId}`;
+}
 
 async function loadHistory() {
   if (!orderId) return;
@@ -33,9 +51,10 @@ async function loadHistory() {
 
   msgEl.textContent = "";
   data.forEach((row) => {
-    const createdAt = row.created_at ? formatDateTime(row.created_at) : "";
+    const createdAt = row.created_at ? formatTaskDateRu(row.created_at) : "—";
+    const author = formatTaskAuthorShort(row.user_email || "");
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${escapeHtml(createdAt)}</td><td>${escapeHtml(row.user_email || "")}</td><td>${escapeHtml(row.comment || "")}</td>`;
+    tr.innerHTML = `<td>${escapeHtml(createdAt)}</td><td>${escapeHtml(author)}</td><td class="order-tasks-text-cell">${escapeHtml(row.comment || "")}</td>`;
     tbody.appendChild(tr);
   });
 }
@@ -68,7 +87,7 @@ async function init() {
   await loadProfile();
 
   if (!orderId) {
-    document.getElementById("historyTitle").textContent = "История заказа";
+    setHistoryTitle(null);
     document.getElementById("historyMessage").textContent = "Не указан номер заказа.";
     return;
   }
@@ -86,14 +105,14 @@ async function init() {
   }
 
   if (isOrderHiddenFromUserLite(orderRow)) {
-    document.getElementById("historyTitle").textContent = `История заказа #${orderId}`;
+    setHistoryTitle(orderRow?.order_type);
     document.getElementById("historyMessage").textContent = "Нет доступа к заказам типа «Магазин».";
     const form = document.getElementById("historyCommentForm");
     if (form) form.hidden = true;
     return;
   }
 
-  document.getElementById("historyTitle").textContent = `История заказа #${orderId}`;
+  setHistoryTitle(orderRow?.order_type);
 
   document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
     window.location.href = "index.html#all";
@@ -105,22 +124,6 @@ async function init() {
   });
 
   await loadHistory();
-}
-
-function formatDateTime(iso) {
-  try {
-    const d = new Date(iso);
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  } catch {
-    return iso;
-  }
-}
-
-function escapeHtml(s) {
-  const div = document.createElement("div");
-  div.textContent = s;
-  return div.innerHTML;
 }
 
 init();
