@@ -1,6 +1,7 @@
 import { supabaseClient } from "./config.js";
-import { checkAuth } from "./auth.js";
+import { checkAuth, loadProfile } from "./auth.js";
 import { formatAmount } from "./format.js";
+import { isAdmin } from "./roles.js";
 
 let editingId = null;
 let editingCreatedAt = null;
@@ -91,6 +92,12 @@ export async function loadCalculations() {
   data.forEach((row) => {
     const comment = row.comment ?? "";
     const escapedComment = escapeHtml(comment);
+    const actionsCell = isAdmin()
+      ? `<td class="td-actions">
+        <button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>
+        <button type="button" class="btn-icon btn-delete" data-id="${row.id}" title="Удалить">${CALC_ICON_DELETE_SVG}</button>
+      </td>`
+      : `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`;
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(formatDateShort(row.created_at))}</td>
@@ -98,20 +105,19 @@ export async function loadCalculations() {
       <td>${escapeHtml(row.to_place)}</td>
       <td class="td-money">${escapeHtml(formatAmount(row.amount))}</td>
       <td class="td-calc-comment" title="${escapedComment}">${escapedComment}</td>
-      <td class="td-actions">
-        <button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>
-        <button type="button" class="btn-icon btn-delete" data-id="${row.id}" title="Удалить">${CALC_ICON_DELETE_SVG}</button>
-      </td>
+      ${actionsCell}
     `;
     tbody.appendChild(tr);
   });
 
-  tbody.querySelectorAll(".btn-edit").forEach((btn) => {
-    btn.addEventListener("click", () => startEdit(Number(btn.dataset.id)));
-  });
-  tbody.querySelectorAll(".btn-delete").forEach((btn) => {
-    btn.addEventListener("click", () => deleteRow(Number(btn.dataset.id)));
-  });
+  if (isAdmin()) {
+    tbody.querySelectorAll(".btn-edit").forEach((btn) => {
+      btn.addEventListener("click", () => startEdit(Number(btn.dataset.id)));
+    });
+    tbody.querySelectorAll(".btn-delete").forEach((btn) => {
+      btn.addEventListener("click", () => deleteRow(Number(btn.dataset.id)));
+    });
+  }
 }
 
 function getFormValues() {
@@ -158,6 +164,7 @@ function resetForm() {
 }
 
 function startEdit(id) {
+  if (!isAdmin()) return;
   editingId = id;
   editingCreatedAt = null;
   document.getElementById("calcSubmitBtn").textContent = "Сохранить";
@@ -181,6 +188,11 @@ async function submitForm(e) {
   const payload = getFormValues();
 
   if (editingId) {
+    if (!isAdmin()) {
+      setMessage("Изменение записей доступно только администратору.", true);
+      resetForm();
+      return;
+    }
     const { error } = await supabaseClient
       .from("calculations")
       .update(payload)
@@ -207,6 +219,7 @@ async function submitForm(e) {
 }
 
 async function deleteRow(id) {
+  if (!isAdmin()) return;
   if (!confirm("Удалить эту запись?")) return;
   const { error } = await supabaseClient.from("calculations").delete().eq("id", id);
   if (error) {
@@ -237,6 +250,7 @@ export async function initCalculationsSection() {
 async function init() {
   const user = await checkAuth();
   if (!user) return;
+  await loadProfile();
 
   document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
     window.location.href = "index.html";
