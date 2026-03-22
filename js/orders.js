@@ -463,6 +463,7 @@ export function renderOrders(orders) {
         </td>
         <td class="td-order-date">${formatDateShortRU(order.order_date)}</td>
         <td class="td-truncate-name" data-fulltext="${escapeAttr(client)}">${clientCell}</td>
+        <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-truncate-address" data-fulltext="${escapeAttr(address)}">${escapeHtml(address)}</td>
         <td class="td-truncate-description" data-fulltext="${escapeAttr(description)}">${escapeHtml(description)}</td>
         <td>
@@ -474,7 +475,6 @@ export function renderOrders(orders) {
         <td class="td-prepayment td-money">${order.prepayment != null && order.prepayment !== "" ? `<span class="status-value">${formatAmount(order.prepayment)}</span>` : ""}</td>
         <td class="td-prepayment-to">${order.prepayment_to ? escapeHtml(order.prepayment_to) : ""}</td>
         <td class="td-remaining td-money">${order.remaining_amount != null && order.remaining_amount !== "" ? `<span class="status-value">${formatAmount(order.remaining_amount)}</span>` : ""}</td>
-        <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-remaining-to">${order.remaining_to ? escapeHtml(order.remaining_to) : ""}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
         <td class="td-delivery-date">${formatDateShortRU(order.delivery_date)}</td>
