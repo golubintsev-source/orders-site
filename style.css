@@ -48,6 +48,34 @@ h2 {
   border-bottom: 1px solid #e5e7eb;
 }
 
+/* «К заказам» — под шапкой, в области страницы (не в .topbar) */
+.page-back-to-orders-bar {
+  margin: 0 0 10px;
+}
+
+.page-back-to-orders-btn {
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.page-back-to-orders-btn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #111827;
+}
+
+.page-back-to-orders-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
 .topbar-section-nav.section-nav {
   flex: 1;
   min-width: 0;
@@ -1000,16 +1028,6 @@ h2 {
   font-size: 16px;
   font-weight: 600;
   color: #111827;
-}
-.history-page .order-tasks-input-row--textarea {
-  align-items: flex-end;
-}
-.history-page .order-tasks-textarea.order-tasks-input {
-  height: auto;
-  min-height: 44px;
-  resize: vertical;
-  line-height: 1.4;
-  font-family: inherit;
 }
 #historyTable {
   min-width: 280px;

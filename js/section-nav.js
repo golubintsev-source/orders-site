@@ -50,6 +50,30 @@ const SECTION_LABELS = {
 
 let currentSectionId = "all";
 
+/** Псевдо-раздел для отдельных страниц (history.html и т.д.): не совпадает с пунктами меню. */
+export const STANDALONE_SECTION_NAV_ID = "__standalone__";
+
+/** Разделы, где под шапкой в области страницы показывается «К заказам». */
+const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
+  "calculations",
+  "tasks-all",
+  "order-tasks",
+  "balance",
+  "settings",
+]);
+
+function updateBackToOrdersBtnVisibility(sectionId) {
+  const show =
+    SECTIONS_WITH_BACK_TO_ORDERS.has(sectionId) || sectionId === STANDALONE_SECTION_NAV_ID;
+  const bar = document.getElementById("backToOrdersBar");
+  if (bar) {
+    bar.hidden = !show;
+    return;
+  }
+  const btn = document.getElementById("backToOrdersBtn");
+  if (btn) btn.hidden = !show;
+}
+
 function labelForSection(sectionId) {
   if (sectionId === "new") {
     if (!state.editingOrderId) return "Новый";
@@ -61,10 +85,10 @@ function labelForSection(sectionId) {
     const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
     if (o) {
       const chip = formatOrderIdTypeChip(state.tasksOrderId, o.order_type);
-      return `Задачи по заказу ${chip}`;
+      return `Задачи ${chip}`;
     }
   }
-  if (sectionId === "order-tasks") return "Задачи по заказу";
+  if (sectionId === "order-tasks") return "Задачи";
   return SECTION_LABELS[sectionId] || sectionId;
 }
 
@@ -111,11 +135,11 @@ export function closeOrdersSearchPanel() {
   }
 }
 
-/** Лупа поиска по заказам — только на странице «Заказы». */
+/** Лупа поиска по заказам — на «Заказы» и на отдельных страницах с шапкой (history.html). */
 function updateOrdersSearchBtnVisibility(sectionId) {
   const searchBtn = document.getElementById("ordersSearchOpenBtn");
   if (searchBtn) {
-    searchBtn.hidden = sectionId !== "all";
+    searchBtn.hidden = sectionId !== "all" && sectionId !== STANDALONE_SECTION_NAV_ID;
   }
   if (sectionId !== "all") {
     closeOrdersSearchPanel();
@@ -189,6 +213,7 @@ export function switchSection(sectionId) {
     void import("./tasks.js").then((m) => m.loadOrderTasks());
   }
 
+  updateBackToOrdersBtnVisibility(sectionId);
   scheduleOrdersStickyHeaderUpdate();
 }
 
@@ -200,6 +225,16 @@ export function refreshSectionNavLabel() {
 
 export function getCurrentSectionId() {
   return currentSectionId;
+}
+
+/** Заголовок в шапке и псевдо-раздел для выпадающего меню (страницы вне index.html). */
+export function setStandaloneSectionNavLabel(text) {
+  const labelEl = document.getElementById("sectionNavCurrentLabel");
+  if (labelEl) labelEl.textContent = text;
+  currentSectionId = STANDALONE_SECTION_NAV_ID;
+  updateDropdownItemsVisibility(currentSectionId);
+  updateOrdersSearchBtnVisibility(currentSectionId);
+  updateBackToOrdersBtnVisibility(currentSectionId);
 }
 
 /** После loadProfile(): скрыть пункты меню по роли и выйти из запрещённого раздела. */
@@ -214,7 +249,9 @@ export function refreshSectionNavAfterProfile() {
 
 let sectionNavDocClickBound = false;
 
-export function initSectionNavDropdown() {
+export function initSectionNavDropdown(options = {}) {
+  const { onSectionItemSelect } = options;
+
   const currentBtn = document.getElementById("sectionNavCurrentBtn");
   const panel = document.getElementById("sectionNavDropdownPanel");
 
@@ -230,7 +267,13 @@ export function initSectionNavDropdown() {
     panel.querySelectorAll(".section-nav-dropdown-item").forEach((item) => {
       item.addEventListener("click", () => {
         const id = item.dataset.section;
-        if (id) switchSection(id);
+        if (!id) return;
+        if (typeof onSectionItemSelect === "function") {
+          onSectionItemSelect(id);
+          closeSectionNavDropdown();
+        } else {
+          switchSection(id);
+        }
       });
     });
   }
@@ -266,6 +309,7 @@ export function initSectionNavDropdown() {
   updateCurrentLabel();
   updateDropdownItemsVisibility(currentSectionId);
   updateOrdersSearchBtnVisibility(currentSectionId);
+  updateBackToOrdersBtnVisibility(currentSectionId);
 
   const motivationEl = document.getElementById("sectionNavMotivationText");
   if (motivationEl) {

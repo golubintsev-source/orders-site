@@ -149,7 +149,7 @@ function openOrderIdActionsMenu(idTd) {
   menu.innerHTML = `
     ${editItem}
     ${tasksItem}
-    <a href="${historyHref}" class="order-id-actions-menu-item" role="menuitem">${history}<span>История заказа</span></a>
+    <a href="${historyHref}" class="order-id-actions-menu-item" role="menuitem">${history}<span>История</span></a>
     <button type="button" class="${filesItemClass}" role="menuitem" data-action="files">${filesIconBlock}<span>Файлы</span></button>
     ${callBlock}
     ${lockBlock}
@@ -477,6 +477,13 @@ export function bindUIEvents() {
     logoutBtn.addEventListener("click", logout);
   }
 
+  const backToOrdersBtn = document.getElementById("backToOrdersBtn");
+  if (backToOrdersBtn) {
+    backToOrdersBtn.addEventListener("click", () => {
+      switchSection("all");
+    });
+  }
+
   let tooltipHideClick = null;
   let tooltipHideKey = null;
 
@@ -615,8 +622,4 @@ export function bindUIEvents() {
   }
 
   document.addEventListener("orders-table-will-render", closeOrderIdActionsMenu);
-
-  if (window.location.hash === "#all") {
-    switchSection("all");
-  }
 }

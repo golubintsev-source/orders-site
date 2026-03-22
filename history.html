@@ -3,31 +3,69 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>История заказа</title>
+  <title>История</title>
   <link rel="stylesheet" href="./style.css">
 </head>
-<body class="history-page">
+<body>
   <div class="container">
-    <header class="history-page-toolbar">
-      <button type="button" id="backToOrdersBtn" class="history-back-btn">← Назад к заказам</button>
-      <span id="historyPageTitle" class="history-page-title" role="status" aria-live="polite"></span>
-    </header>
-    <div class="card order-tasks-card">
-      <form id="historyCommentForm" class="order-tasks-form-stack" aria-label="Добавить комментарий в историю">
-        <div class="field order-tasks-field">
-          <label for="historyComment">Новый комментарий</label>
-          <div class="order-tasks-input-row order-tasks-input-row--textarea">
-            <textarea
-              id="historyComment"
-              class="order-tasks-input order-tasks-textarea"
-              rows="2"
-              placeholder="Введите комментарий..."
-              maxlength="2000"
-            ></textarea>
-            <button type="submit" class="btn-primary order-tasks-create-btn">Добавить</button>
+    <div class="topbar">
+      <nav class="section-nav topbar-section-nav" role="navigation">
+        <div class="section-nav-dropdown-wrap section-nav-search-wrap">
+          <button type="button" class="section-nav-search-btn" id="ordersSearchOpenBtn" title="Поиск по заказам" aria-label="Поиск по заказам" aria-haspopup="true" aria-expanded="false" aria-controls="ordersSearchDropdownPanel">
+            <svg class="section-nav-search-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/>
+              <path d="M20 20l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <div id="ordersSearchDropdownPanel" class="section-nav-dropdown-panel orders-search-dropdown-panel" hidden role="dialog" aria-label="Поиск по заказам">
+            <input type="text" id="ordersSearchPopupInput" class="orders-search-dropdown-input" placeholder="Телефон, клиент, адрес, номер…" autocomplete="off" />
+            <button type="button" id="ordersSearchFindBtn" class="orders-search-dropdown-btn orders-search-dropdown-btn-primary">Найти</button>
+            <button type="button" id="ordersSearchCloseBtn" class="orders-search-dropdown-btn orders-search-dropdown-btn-secondary">Отмена</button>
           </div>
         </div>
-      </form>
+        <div class="section-nav-dropdown-wrap">
+          <button type="button" class="section-nav-current" id="sectionNavCurrentBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="sectionNavDropdownPanel">
+            <span class="section-nav-current-label" id="sectionNavCurrentLabel">Заказы</span>
+            <svg class="section-nav-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="section-nav-dropdown-panel" id="sectionNavDropdownPanel" role="listbox" aria-label="Разделы" hidden>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="all">Заказы</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="new">Новый</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="calculations">Расчеты</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="tasks-all">Все задачи</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="balance">Баланс</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="settings">Настройки</button>
+            <div class="section-nav-dropdown-footer">
+              <div class="section-nav-dropdown-stat section-nav-dropdown-stat--admin" id="sectionNavRicherStat" role="status" aria-live="polite" hidden>
+                <div class="section-nav-dropdown-stat-row">
+                  <span class="section-nav-dropdown-stat-label">Мог быть богаче на</span>
+                  <span class="section-nav-dropdown-stat-value" id="sectionNavRicherSum">—</span>
+                </div>
+              </div>
+              <p class="section-nav-dropdown-motivation-text" id="sectionNavMotivationText" aria-live="polite"></p>
+            </div>
+          </div>
+        </div>
+      </nav>
+      <div class="topbar-toolbar">
+        <a href="window-calculations.html" class="topbar-link topbar-link-icon" title="Расчет окон">
+          <img src="./img/window-calculations-link.svg" alt="Расчет окон" width="28" height="28" decoding="async" />
+        </a>
+        <button id="logoutBtn" class="logout-icon-btn" type="button" title="Выйти">
+          <svg class="logout-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <path d="M16 17l5-5-5-5"/>
+            <path d="M21 12H9"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="backToOrdersBar" class="page-back-to-orders-bar">
+      <button type="button" id="backToOrdersBtn" class="page-back-to-orders-btn">К заказам</button>
+    </div>
+
+    <div class="card order-tasks-card">
       <div class="table-wrap">
         <table id="historyTable">
           <thead>

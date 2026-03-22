@@ -1,12 +1,17 @@
 import { supabaseClient } from "./config.js";
-import { checkAuth, loadProfile } from "./auth.js";
+import { checkAuth, loadProfile, logout } from "./auth.js";
 import { isOrderHiddenFromUserLite } from "./roles.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
+import {
+  initSectionNavDropdown,
+  setStandaloneSectionNavLabel,
+  closeOrdersSearchPanel,
+  closeSectionNavDropdown,
+  refreshSectionNavAfterProfile,
+} from "./section-nav.js";
 
 const params = new URLSearchParams(window.location.search);
 const orderId = params.get("order_id");
-
-let currentUser = null;
 
 function escapeHtml(s) {
   const div = document.createElement("div");
@@ -14,15 +19,82 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
-function setHistoryTitle(orderType) {
-  const el = document.getElementById("historyPageTitle");
-  if (!el) return;
+function setHistorySectionLabel(orderType) {
   if (!orderId) {
-    el.textContent = "";
+    setStandaloneSectionNavLabel("История");
     return;
   }
   const chip = formatOrderIdTypeChip(orderId, orderType);
-  el.textContent = chip ? `История заказа ${chip}` : `История заказа #${orderId}`;
+  const text = chip ? `История ${chip}` : `История #${orderId}`;
+  setStandaloneSectionNavLabel(text);
+}
+
+function wireHistorySearchAndLogout() {
+  const ordersSearchOpenBtn = document.getElementById("ordersSearchOpenBtn");
+  const ordersSearchPopupInput = document.getElementById("ordersSearchPopupInput");
+  const ordersSearchFindBtn = document.getElementById("ordersSearchFindBtn");
+  const ordersSearchCloseBtn = document.getElementById("ordersSearchCloseBtn");
+  const ordersSearchPanel = document.getElementById("ordersSearchDropdownPanel");
+
+  function goToOrdersWithSearch(query) {
+    sessionStorage.setItem("pendingOrdersSearch", query.trim());
+    window.location.href = "index.html#all";
+  }
+
+  function openOrdersSearchDropdown() {
+    if (!ordersSearchOpenBtn || !ordersSearchPanel) return;
+    closeSectionNavDropdown();
+    ordersSearchPanel.hidden = false;
+    ordersSearchOpenBtn.setAttribute("aria-expanded", "true");
+    ordersSearchOpenBtn.classList.add("section-nav-search-btn--open");
+    queueMicrotask(() => ordersSearchPopupInput?.focus());
+  }
+
+  function toggleOrdersSearchDropdown() {
+    if (!ordersSearchPanel || !ordersSearchOpenBtn) return;
+    if (ordersSearchPanel.hidden) openOrdersSearchDropdown();
+    else closeOrdersSearchPanel();
+  }
+
+  if (ordersSearchOpenBtn) {
+    ordersSearchOpenBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleOrdersSearchDropdown();
+    });
+  }
+  if (ordersSearchFindBtn) {
+    ordersSearchFindBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const q = (ordersSearchPopupInput?.value || "").trim();
+      closeOrdersSearchPanel();
+      goToOrdersWithSearch(q);
+    });
+  }
+  if (ordersSearchCloseBtn) {
+    ordersSearchCloseBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (ordersSearchPopupInput) ordersSearchPopupInput.value = "";
+      closeOrdersSearchPanel();
+    });
+  }
+  if (ordersSearchPopupInput) {
+    ordersSearchPopupInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const q = (ordersSearchPopupInput.value || "").trim();
+        closeOrdersSearchPanel();
+        goToOrdersWithSearch(q);
+      }
+    });
+  }
+
+  document.getElementById("logoutBtn")?.addEventListener("click", () => {
+    void logout();
+  });
+
+  document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
+    window.location.href = "index.html#all";
+  });
 }
 
 async function loadHistory() {
@@ -59,35 +131,21 @@ async function loadHistory() {
   });
 }
 
-async function addComment() {
-  const commentEl = document.getElementById("historyComment");
-  const comment = (commentEl?.value || "").trim();
-  if (!comment) return;
-  if (!orderId || !currentUser?.email) return;
-
-  const { error } = await supabaseClient.from("order_history").insert([
-    { order_id: Number(orderId), user_email: currentUser.email, comment },
-  ]);
-
-  if (error) {
-    console.error("Ошибка добавления комментария:", error);
-    document.getElementById("historyMessage").textContent = "Ошибка при добавлении.";
-    return;
-  }
-
-  commentEl.value = "";
-  document.getElementById("historyMessage").textContent = "";
-  await loadHistory();
-}
-
 async function init() {
   const user = await checkAuth();
   if (!user) return;
-  currentUser = user;
   await loadProfile();
+  refreshSectionNavAfterProfile();
+
+  initSectionNavDropdown({
+    onSectionItemSelect: (id) => {
+      window.location.href = `index.html#${id}`;
+    },
+  });
+  setStandaloneSectionNavLabel("История");
+  wireHistorySearchAndLogout();
 
   if (!orderId) {
-    setHistoryTitle(null);
     document.getElementById("historyMessage").textContent = "Не указан номер заказа.";
     return;
   }
@@ -105,23 +163,12 @@ async function init() {
   }
 
   if (isOrderHiddenFromUserLite(orderRow)) {
-    setHistoryTitle(orderRow?.order_type);
+    setHistorySectionLabel(orderRow?.order_type);
     document.getElementById("historyMessage").textContent = "Нет доступа к заказам типа «Магазин».";
-    const form = document.getElementById("historyCommentForm");
-    if (form) form.hidden = true;
     return;
   }
 
-  setHistoryTitle(orderRow?.order_type);
-
-  document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
-    window.location.href = "index.html#all";
-  });
-
-  document.getElementById("historyCommentForm")?.addEventListener("submit", (e) => {
-    e.preventDefault();
-    addComment();
-  });
+  setHistorySectionLabel(orderRow?.order_type);
 
   await loadHistory();
 }
