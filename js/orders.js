@@ -20,7 +20,13 @@ import {
 } from "./files.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { refreshOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
-import { canMutateOrders, isAdmin } from "./roles.js";
+import {
+  canMutateOrders,
+  isAdmin,
+  isOrderEditLockedForUserLite,
+  isOrderHiddenFromUserLite,
+  isUserLite,
+} from "./roles.js";
 
 export async function loadOrders() {
   const { data, error } = await supabaseClient
@@ -61,6 +67,13 @@ function normalizeStatus(val) {
 
 /** Ключи фильтра у колонки «Номер» (тип заказа); __empty__ — без типа */
 const ORDER_TYPE_FILTER_KEYS = ["__empty__", "Окна", "Подоконники", "Аллюминий", "Магазин", "Сетки/мелочь"];
+
+function orderTypeFilterKeysForUi() {
+  if (isUserLite()) {
+    return ORDER_TYPE_FILTER_KEYS.filter((k) => k !== "Магазин");
+  }
+  return ORDER_TYPE_FILTER_KEYS;
+}
 
 function orderTypeFilterLabel(key) {
   return key === "__empty__" ? "Без типа" : key;
@@ -332,6 +345,10 @@ function syncOrdersScrollPositions() {
 function getFilteredOrders() {
   let list = state.allOrders;
 
+  if (isUserLite()) {
+    list = list.filter((order) => !isOrderHiddenFromUserLite(order));
+  }
+
   if (state.statusFilterSelected && state.statusFilterSelected.length > 0) {
     list = list.filter((order) => {
       const norm = normalizeStatus(order.payment_status);
@@ -409,6 +426,38 @@ function isOrderPaid(order) {
   return raw !== "" && raw !== "—";
 }
 
+/** Кнопка «Редактировать» в таблице и в меню по номеру. */
+export function canShowEditButtonForOrder(order) {
+  if (!canMutateOrders()) return false;
+  if (isUserLite() && isOrderEditLockedForUserLite(order)) return false;
+  return true;
+}
+
+export async function setLockEditForUserLite(orderId, locked) {
+  if (isUserLite()) return false;
+  const val = locked ? 1 : 0;
+  const { error } = await supabaseClient
+    .from("orders")
+    .update({ lock_edit_for_user_lite: val })
+    .eq("id", orderId);
+
+  if (error) {
+    console.error(error);
+    setMessage("Не удалось сохранить настройку", "#d32f2f");
+    return false;
+  }
+
+  const o = state.allOrders.find((x) => Number(x.id) === Number(orderId));
+  if (o) o.lock_edit_for_user_lite = val;
+
+  setMessage(
+    locked ? "Для user_lite редактирование закрыто" : "Для user_lite редактирование открыто",
+    ""
+  );
+  applyClientFilter();
+  return true;
+}
+
 function paidBadge(order) {
   if (order.amount == null || order.amount === "") return "";
   const paid = isOrderPaid(order);
@@ -431,7 +480,7 @@ export function renderOrders(orders) {
         ? `<button type="button" class="btn-icon btn-delete" onclick="deleteOrder(${order.id})" title="Удалить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>`
         : "";
 
-    const editIcon = canMutateOrders()
+    const editIcon = canShowEditButtonForOrder(order)
       ? `<button type="button" class="btn-icon btn-edit" onclick="editOrder(${order.id})" title="Редактировать"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>`
       : "";
 
@@ -459,7 +508,7 @@ export function renderOrders(orders) {
       order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";
     const row = `
       <tr>
-        <td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}">
+        <td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}" data-lock-edit-user-lite="${isOrderEditLockedForUserLite(order) ? "1" : "0"}">
           <span class="${orderIdChipClasses.join(" ")}">
             ${orderNumberDisplay}
           </span>
@@ -583,8 +632,9 @@ function renderOrderTypeFilterDropdown() {
   const container = document.getElementById("orderTypeFilterCheckboxes");
   if (!container) return;
   const allSelected = !state.orderTypeFilterSelected || state.orderTypeFilterSelected.length === 0;
+  const keys = orderTypeFilterKeysForUi();
   const allHtml = `<label class="status-filter-item status-filter-all"><input type="checkbox" data-order-type-all="true" ${allSelected ? "checked" : ""}> Все</label>`;
-  const optionsHtml = ORDER_TYPE_FILTER_KEYS.map((key) => {
+  const optionsHtml = keys.map((key) => {
     const checked = allSelected || state.orderTypeFilterSelected.includes(key);
     return `<label class="status-filter-item"><input type="checkbox" data-order-type="${escapeAttr(key)}" ${checked ? "checked" : ""}> ${escapeHtml(orderTypeFilterLabel(key))}</label>`;
   }).join("");
@@ -611,12 +661,13 @@ function onOrderTypeFilterChange(e) {
     return;
   }
 
+  const keys = orderTypeFilterKeysForUi();
   const checkedValues = Array.from(typeCbs)
     .filter((cb) => cb.checked)
     .map((el) => el.getAttribute("data-order-type"));
   state.orderTypeFilterSelected =
-    checkedValues.length === ORDER_TYPE_FILTER_KEYS.length ? [] : checkedValues;
-  if (allCb) allCb.checked = checkedValues.length === ORDER_TYPE_FILTER_KEYS.length;
+    checkedValues.length === keys.length ? [] : checkedValues;
+  if (allCb) allCb.checked = checkedValues.length === keys.length;
   applyFiltersAndRender();
 }
 
@@ -1006,6 +1057,16 @@ export async function editOrder(orderId) {
     return;
   }
 
+  if (isOrderHiddenFromUserLite(data)) {
+    setMessage("Нет доступа к заказам типа «Магазин»", "#d32f2f");
+    return;
+  }
+
+  if (isUserLite() && isOrderEditLockedForUserLite(data)) {
+    setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
+    return;
+  }
+
   state.editingOrderId = orderId;
   state.editingOrderDescription = data.description || null;
   fillForm(data);
@@ -1053,6 +1114,24 @@ export async function submitOrderForm(event) {
   if (!canMutateOrders()) {
     setMessage("Недостаточно прав для сохранения заявок", "#d32f2f");
     return;
+  }
+
+  const orderTypeForSave = (document.getElementById("order_type")?.value || "").trim();
+  if (isUserLite() && orderTypeForSave === "Магазин") {
+    setMessage("Тип заказа «Магазин» недоступен для вашей роли", "#d32f2f");
+    return;
+  }
+
+  if (state.editingOrderId && isUserLite()) {
+    const { data: lockRow, error: lockErr } = await supabaseClient
+      .from("orders")
+      .select("lock_edit_for_user_lite")
+      .eq("id", state.editingOrderId)
+      .single();
+    if (!lockErr && lockRow && isOrderEditLockedForUserLite(lockRow)) {
+      setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
+      return;
+    }
   }
 
   const phoneVal = (document.getElementById("phone")?.value || "").trim();
@@ -1228,4 +1307,20 @@ export async function submitOrderForm(event) {
     : `Заявка #${savedOrderId} сохранена`,
     ""
   );
+}
+
+/** Скрыть в форме тип «Магазин» для роли user_lite и обновить фильтр по типам. */
+export function applyOrderTypeSelectForRole() {
+  const sel = document.getElementById("order_type");
+  if (!sel) return;
+  for (const opt of sel.querySelectorAll("option")) {
+    if (opt.value === "Магазин") {
+      opt.hidden = isUserLite();
+    }
+  }
+  if (isUserLite() && state.orderTypeFilterSelected?.length) {
+    state.orderTypeFilterSelected = state.orderTypeFilterSelected.filter((k) => k !== "Магазин");
+  }
+  renderOrderTypeFilterDropdown();
+  applyFiltersAndRender();
 }

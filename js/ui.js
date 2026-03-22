@@ -37,10 +37,12 @@ import {
   updateInstallerBlockByInstallationDate,
   formatOrderFormNumericInputById,
   bindOrderFormDateYear20xxInputs,
+  canShowEditButtonForOrder,
+  setLockEditForUserLite,
 } from "./orders.js";
 import { mergeNewAttachmentsOnChange } from "./files.js";
 import { saveInstallerRate, updateSettingsSaveButtonState } from "./settings.js";
-import { canMutateOrders } from "./roles.js";
+import { canMutateOrders, isOrderEditLockedForUserLite, isUserLite } from "./roles.js";
 
 export function toggleOrderRowHighlightById(orderId) {
   if (!ordersTable || orderId == null) return;
@@ -112,15 +114,26 @@ function openOrderIdActionsMenu(idTd) {
     ? `<a href="${telHref}" class="order-id-actions-menu-item order-id-actions-menu-item--call" role="menuitem">${phone}<span>Позвонить</span></a>`
     : `<div class="order-id-actions-menu-item order-id-actions-menu-item--disabled" role="menuitem" aria-disabled="true">${phone}<span>Позвонить</span></div>`;
 
-  const editItem = canMutateOrders()
+  const orderRow = state.allOrders.find((o) => Number(o.id) === orderId);
+  const editItem = orderRow && canShowEditButtonForOrder(orderRow)
     ? `<button type="button" class="order-id-actions-menu-item" role="menuitem" data-action="edit">${edit}<span>Редактировать</span></button>`
     : "";
+
+  const lockChecked = orderRow && isOrderEditLockedForUserLite(orderRow);
+  const lockBlock =
+    orderRow && !isUserLite() && canMutateOrders()
+      ? `<label class="order-id-actions-menu-lock" title="Закрыть редактирование заказа для роли user_lite">
+    <input type="checkbox" data-action="toggle-lock-edit-user-lite" ${lockChecked ? "checked" : ""} />
+    <span>Закрыть редактирование</span>
+  </label>`
+      : "";
 
   menu.innerHTML = `
     ${editItem}
     <a href="${historyHref}" class="order-id-actions-menu-item" role="menuitem">${history}<span>История заказа</span></a>
     <button type="button" class="${filesItemClass}" role="menuitem" data-action="files">${filesIconBlock}<span>Файлы</span></button>
     ${callBlock}
+    ${lockBlock}
   `;
 
   menu.dataset.currentOrderId = String(orderId);
@@ -518,8 +531,21 @@ export function bindUIEvents() {
 
   const orderIdActionsMenu = document.getElementById("orderIdActionsMenu");
   if (orderIdActionsMenu) {
+    orderIdActionsMenu.addEventListener("change", (e) => {
+      const t = e.target;
+      if (t?.matches?.('input[data-action="toggle-lock-edit-user-lite"]')) {
+        e.stopPropagation();
+        const id = Number(orderIdActionsMenu.dataset.currentOrderId);
+        if (Number.isNaN(id)) return;
+        void setLockEditForUserLite(id, t.checked);
+      }
+    });
+
     orderIdActionsMenu.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (e.target.closest("label.order-id-actions-menu-lock")) {
+        e.stopPropagation();
+      }
       if (e.target.closest("a.order-id-actions-menu-item")) {
         closeOrderIdActionsMenu();
         return;

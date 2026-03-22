@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
-import { checkAuth } from "./auth.js";
+import { checkAuth, loadProfile } from "./auth.js";
+import { isOrderHiddenFromUserLite } from "./roles.js";
 
 const params = new URLSearchParams(window.location.search);
 const orderId = params.get("order_id");
@@ -64,10 +65,31 @@ async function init() {
   const user = await checkAuth();
   if (!user) return;
   currentUser = user;
+  await loadProfile();
 
   if (!orderId) {
     document.getElementById("historyTitle").textContent = "История заказа";
     document.getElementById("historyMessage").textContent = "Не указан номер заказа.";
+    return;
+  }
+
+  const { data: orderRow, error: orderFetchErr } = await supabaseClient
+    .from("orders")
+    .select("order_type")
+    .eq("id", orderId)
+    .maybeSingle();
+
+  if (orderFetchErr) {
+    console.error("Ошибка загрузки заказа:", orderFetchErr);
+    document.getElementById("historyMessage").textContent = "Не удалось загрузить заказ.";
+    return;
+  }
+
+  if (isOrderHiddenFromUserLite(orderRow)) {
+    document.getElementById("historyTitle").textContent = `История заказа #${orderId}`;
+    document.getElementById("historyMessage").textContent = "Нет доступа к заказам типа «Магазин».";
+    const form = document.getElementById("historyCommentForm");
+    if (form) form.hidden = true;
     return;
   }
 

@@ -1,6 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
-import { isAdmin } from "./roles.js";
+import { isAdmin, isOrderHiddenFromUserLite } from "./roles.js";
 import { formatOrderIdTypeChip } from "./format.js";
 import {
   attachmentsInput,
@@ -878,6 +878,10 @@ async function createOrderFileRowElement(file, orderId, onAdminDelete) {
 
 export async function openFilesModal(orderId) {
   const order = state.allOrders.find((o) => Number(o.id) === Number(orderId));
+  if (order != null && isOrderHiddenFromUserLite(order)) {
+    setMessage("Нет доступа к заказам типа «Магазин»", "#d32f2f");
+    return;
+  }
   const chip = formatOrderIdTypeChip(
     order != null ? order.id : orderId,
     order != null ? order.order_type : ""

@@ -1,6 +1,6 @@
 import { checkAuth, loadProfile } from "./auth.js";
 import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
-import { loadOrders, resetFormMode, editOrder, deleteOrder } from "./orders.js";
+import { loadOrders, resetFormMode, editOrder, deleteOrder, applyOrderTypeSelectForRole } from "./orders.js";
 import { initCalculationsSection } from "./calculations.js";
 import { initBalanceSection } from "./balance.js";
 import { loadSettings } from "./settings.js";
@@ -26,6 +26,7 @@ async function init() {
 
     await loadProfile();
     refreshSectionNavAfterProfile();
+    applyOrderTypeSelectForRole();
     await loadSettings();
     await loadOrders();
     resetFormMode();
