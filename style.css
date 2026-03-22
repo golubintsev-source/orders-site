@@ -1370,6 +1370,12 @@ th {
   padding-right: 6px;
 }
 
+/* Редактирование закрыто для user_lite — подложка номера темнее обычной серой */
+#ordersTable td.td-order-id .order-id-chip.order-id-chip--lock-user-lite {
+  background: #6b7280;
+  color: #f9fafb;
+}
+
 /* Меню под номером заказа (как выпадающее под названием раздела) */
 .order-id-actions-menu.section-nav-dropdown-panel {
   padding: 6px 0;

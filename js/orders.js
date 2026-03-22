@@ -503,6 +503,7 @@ export function renderOrders(orders) {
     const orderIdChipClasses = ["status-value", "order-id-chip"];
     if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
     if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
+    if (isOrderEditLockedForUserLite(order)) orderIdChipClasses.push("order-id-chip--lock-user-lite");
     /* Номер в таблице: 4 цифры + «_» + первая буква типа заказа (например 0112_О) */
     const orderNumberDisplay =
       order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";
