@@ -902,6 +902,18 @@ h2 {
   display: block;
   margin-bottom: 4px;
 }
+.order-tasks-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.order-tasks-input-row .order-tasks-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
 .order-tasks-input {
   width: 100%;
   box-sizing: border-box;
