@@ -842,6 +842,9 @@ h2 {
 #allTasksTable {
   min-width: 320px;
 }
+#allTasksTable tbody tr.all-tasks-row {
+  cursor: pointer;
+}
 #allTasksTable th,
 #allTasksTable td {
   padding: 8px 10px;
@@ -919,7 +922,7 @@ h2 {
   box-sizing: border-box;
   height: 36px;
   padding: 0 10px;
-  font-size: 14px;
+  font-size: 16px;
 }
 .order-tasks-create-btn {
   height: 36px;
@@ -945,6 +948,20 @@ h2 {
   white-space: normal;
   word-break: break-word;
   max-width: 420px;
+}
+
+#section-order-tasks.order-tasks-page--highlight .order-tasks-highlight-label {
+  color: #dc2626;
+}
+#section-order-tasks.order-tasks-page--highlight .order-tasks-highlight-label input[type="checkbox"] {
+  accent-color: #dc2626;
+}
+#section-order-tasks.order-tasks-page--highlight #orderTasksTable tbody tr {
+  background-color: #fca5a5;
+  color: #450a0a;
+}
+#section-order-tasks.order-tasks-page--highlight #orderTasksTable tbody tr:hover {
+  background-color: #f87171;
 }
 .order-tasks-hint {
   margin: 10px 0 0;

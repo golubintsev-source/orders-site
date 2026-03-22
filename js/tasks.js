@@ -2,6 +2,7 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip } from "./format.js";
 import { applyFiltersAndRender } from "./orders.js";
+import { switchSection } from "./section-nav.js";
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -46,43 +47,57 @@ function orderTasksHighlightFromOrder(order) {
   return v === true || v === 1 || v === "1";
 }
 
+/** Красная подсветка чекбокса и строк таблицы на странице «Задачи по заказу». */
+function syncOrderTasksPageHighlightClass() {
+  const section = document.getElementById("section-order-tasks");
+  const cb = document.getElementById("orderTaskHighlightCheckbox");
+  if (!section || !cb) return;
+  const on = cb.checked && !cb.disabled;
+  section.classList.toggle("order-tasks-page--highlight", on);
+}
+
 function setHighlightCheckboxNoOrder() {
   const cb = document.getElementById("orderTaskHighlightCheckbox");
   if (!cb) return;
   cb.checked = false;
   cb.disabled = true;
+  syncOrderTasksPageHighlightClass();
 }
 
 async function applyHighlightCheckboxAfterTasksLoad(taskCount) {
   const cb = document.getElementById("orderTaskHighlightCheckbox");
   if (!cb) return;
 
-  if (state.tasksOrderId == null) {
-    setHighlightCheckboxNoOrder();
-    return;
-  }
-
-  if (taskCount === 0) {
-    cb.disabled = true;
-    cb.checked = false;
-    const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
-    if (o && orderTasksHighlightFromOrder(o)) {
-      const { error } = await supabaseClient
-        .from("orders")
-        .update({ tasks_highlight: false })
-        .eq("id", state.tasksOrderId);
-      if (!error) {
-        o.tasks_highlight = false;
-        applyFiltersAndRender();
-        void loadAllTasks();
-      }
+  try {
+    if (state.tasksOrderId == null) {
+      setHighlightCheckboxNoOrder();
+      return;
     }
-    return;
-  }
 
-  cb.disabled = false;
-  const order = state.allOrders?.find((o) => Number(o.id) === Number(state.tasksOrderId));
-  cb.checked = orderTasksHighlightFromOrder(order);
+    if (taskCount === 0) {
+      cb.disabled = true;
+      cb.checked = false;
+      const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
+      if (o && orderTasksHighlightFromOrder(o)) {
+        const { error } = await supabaseClient
+          .from("orders")
+          .update({ tasks_highlight: false })
+          .eq("id", state.tasksOrderId);
+        if (!error) {
+          o.tasks_highlight = false;
+          applyFiltersAndRender();
+          void loadAllTasks();
+        }
+      }
+      return;
+    }
+
+    cb.disabled = false;
+    const order = state.allOrders?.find((o) => Number(o.id) === Number(state.tasksOrderId));
+    cb.checked = orderTasksHighlightFromOrder(order);
+  } finally {
+    syncOrderTasksPageHighlightClass();
+  }
 }
 
 async function saveOrderTasksHighlight(checked) {
@@ -98,6 +113,7 @@ async function saveOrderTasksHighlight(checked) {
   const o = state.allOrders?.find((x) => Number(x.id) === Number(id));
   if (o) o.tasks_highlight = checked;
   applyFiltersAndRender();
+  syncOrderTasksPageHighlightClass();
 }
 
 export async function loadAllTasks() {
@@ -130,9 +146,10 @@ export async function loadAllTasks() {
       const order = state.allOrders?.find((o) => Number(o.id) === Number(row.order_id));
       const chip = formatOrderIdTypeChip(row.order_id, order?.order_type);
       const highlight = orderTasksHighlightFromOrder(order);
-      const trClass = highlight ? ' class="all-tasks-row--highlight"' : "";
+      const trClass = highlight ? "all-tasks-row all-tasks-row--highlight" : "all-tasks-row";
+      const oid = row.order_id != null ? String(row.order_id) : "";
       return `
-    <tr${trClass}>
+    <tr class="${trClass}" data-order-id="${oid}">
       <td>${escapeHtml(chip)}</td>
       <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
       <td>${escapeHtml(formatTaskAuthorShort(row.author_login))}</td>
@@ -191,6 +208,7 @@ export async function loadOrderTasks() {
     tbody.innerHTML = "";
     const cb = document.getElementById("orderTaskHighlightCheckbox");
     if (cb) cb.disabled = true;
+    syncOrderTasksPageHighlightClass();
     return;
   }
 
@@ -287,7 +305,21 @@ export function initOrderTasksSection() {
   }
   if (highlightCb) {
     highlightCb.addEventListener("change", () => {
+      syncOrderTasksPageHighlightClass();
       void saveOrderTasksHighlight(highlightCb.checked);
+    });
+  }
+
+  const allTasksTable = document.getElementById("allTasksTable");
+  if (allTasksTable) {
+    allTasksTable.addEventListener("click", (e) => {
+      const tr = e.target.closest("tbody tr");
+      if (!tr || !allTasksTable.contains(tr)) return;
+      const raw = tr.getAttribute("data-order-id");
+      const id = raw ? Number(raw) : NaN;
+      if (Number.isNaN(id)) return;
+      state.tasksOrderId = id;
+      switchSection("order-tasks");
     });
   }
 }
