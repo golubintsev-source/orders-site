@@ -21,11 +21,23 @@ function getAuthorLogin() {
   return String(u.id || "—");
 }
 
-function formatTaskDateTime(iso) {
+/** Дата и время создания задачи: «13 апр 11:10», «4 мар 7:45» (локальное время). */
+function formatTaskDateRu(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+  if (Number.isNaN(d.getTime())) return "—";
+  const months = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+  const h = d.getHours();
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getDate()} ${months[d.getMonth()]} ${h}:${min}`;
+}
+
+/** Автор в таблицах задач: не более 5 символов, далее ... */
+function formatTaskAuthorShort(raw) {
+  if (raw == null || raw === "") return "—";
+  const s = String(raw).trim();
+  if (s.length <= 5) return s;
+  return `${s.slice(0, 5)}...`;
 }
 
 function orderTasksHighlightFromOrder(order) {
@@ -137,8 +149,8 @@ export async function loadAllTasks() {
       return `
     <tr${trClass}>
       <td>${escapeHtml(chip)}</td>
-      <td>${escapeHtml(formatTaskDateTime(row.created_at))}</td>
-      <td>${escapeHtml(row.author_login || "—")}</td>
+      <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
+      <td>${escapeHtml(formatTaskAuthorShort(row.author_login))}</td>
       <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
     </tr>
   `;
@@ -206,8 +218,8 @@ export async function loadOrderTasks() {
     .map(
       (row) => `
     <tr>
-      <td>${escapeHtml(formatTaskDateTime(row.created_at))}</td>
-      <td>${escapeHtml(row.author_login || "—")}</td>
+      <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
+      <td>${escapeHtml(formatTaskAuthorShort(row.author_login))}</td>
       <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
     </tr>
   `
