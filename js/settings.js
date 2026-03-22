@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
+import { isUserLite } from "./roles.js";
 
 const KEY_INSTALLER_RATE = "installer_rate_per_m2";
 const DEFAULT_RATE = 1400;
@@ -40,6 +41,8 @@ export function updateSettingsSaveButtonState() {
 
 /** Сохранить стоимость монтажа 1м² в БД и обновить state и поля. */
 export async function saveInstallerRate(value) {
+  if (isUserLite()) return false;
+
   const num = parseFloat(value);
   if (!Number.isFinite(num) || num < 0) return false;
 

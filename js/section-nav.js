@@ -3,6 +3,7 @@ import { loadBalance } from "./balance.js";
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
+import { canAccessSection, isAdmin, isSectionHiddenFromNav } from "./roles.js";
 
 /** Статусы: «Товар передан заказчику» или «Монтаж выполнен» */
 const RICHER_STATUSES = new Set(["Товар передан заказчику", "Монтаж выполнен"]);
@@ -21,8 +22,7 @@ export function updateSectionNavRicherStat() {
   const el = document.getElementById("sectionNavRicherSum");
   if (!wrap || !el) return;
 
-  const isAdmin = state.currentRole === "admin";
-  wrap.hidden = !isAdmin;
+  wrap.hidden = !isAdmin();
   if (!isAdmin) return;
 
   let sum = 0;
@@ -66,7 +66,7 @@ function getContentSections() {
 function updateDropdownItemsVisibility(activeId) {
   document.querySelectorAll(".section-nav-dropdown-item").forEach((btn) => {
     const id = btn.dataset.section;
-    btn.hidden = id === activeId;
+    btn.hidden = id === activeId || isSectionHiddenFromNav(id);
   });
 }
 
@@ -145,6 +145,9 @@ function toggleSectionNavDropdown() {
  */
 export function switchSection(sectionId) {
   if (!sectionId) return;
+  if (!canAccessSection(sectionId)) {
+    sectionId = "all";
+  }
   const contentSections = getContentSections();
   if (!contentSections.length) return;
 
@@ -174,6 +177,16 @@ export function refreshSectionNavLabel() {
 
 export function getCurrentSectionId() {
   return currentSectionId;
+}
+
+/** После loadProfile(): скрыть пункты меню по роли и выйти из запрещённого раздела. */
+export function refreshSectionNavAfterProfile() {
+  if (!canAccessSection(currentSectionId)) {
+    switchSection("all");
+  } else {
+    updateDropdownItemsVisibility(currentSectionId);
+  }
+  updateSectionNavRicherStat();
 }
 
 let sectionNavDocClickBound = false;

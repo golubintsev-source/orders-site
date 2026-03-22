@@ -40,6 +40,7 @@ import {
 } from "./orders.js";
 import { mergeNewAttachmentsOnChange } from "./files.js";
 import { saveInstallerRate, updateSettingsSaveButtonState } from "./settings.js";
+import { canMutateOrders } from "./roles.js";
 
 export function toggleOrderRowHighlightById(orderId) {
   if (!ordersTable || orderId == null) return;
@@ -111,8 +112,12 @@ function openOrderIdActionsMenu(idTd) {
     ? `<a href="${telHref}" class="order-id-actions-menu-item order-id-actions-menu-item--call" role="menuitem">${phone}<span>Позвонить</span></a>`
     : `<div class="order-id-actions-menu-item order-id-actions-menu-item--disabled" role="menuitem" aria-disabled="true">${phone}<span>Позвонить</span></div>`;
 
+  const editItem = canMutateOrders()
+    ? `<button type="button" class="order-id-actions-menu-item" role="menuitem" data-action="edit">${edit}<span>Редактировать</span></button>`
+    : "";
+
   menu.innerHTML = `
-    <button type="button" class="order-id-actions-menu-item" role="menuitem" data-action="edit">${edit}<span>Редактировать</span></button>
+    ${editItem}
     <a href="${historyHref}" class="order-id-actions-menu-item" role="menuitem">${history}<span>История заказа</span></a>
     <button type="button" class="${filesItemClass}" role="menuitem" data-action="files">${filesIconBlock}<span>Файлы</span></button>
     ${callBlock}

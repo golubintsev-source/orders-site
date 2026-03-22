@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
+import { normalizeRole } from "./roles.js";
 
 export async function checkAuth() {
   const { data, error } = await supabaseClient.auth.getUser();
@@ -22,11 +23,11 @@ export async function loadProfile() {
 
   if (error) {
     console.error("Ошибка загрузки профиля:", error);
-    state.currentRole = "user";
+    state.currentRole = normalizeRole(null);
     return;
   }
 
-  state.currentRole = data.role || "user";
+  state.currentRole = normalizeRole(data?.role);
 }
 
 export async function logout() {

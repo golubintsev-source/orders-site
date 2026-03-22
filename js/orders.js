@@ -20,6 +20,7 @@ import {
 } from "./files.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { refreshOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
+import { canMutateOrders, isAdmin } from "./roles.js";
 
 export async function loadOrders() {
   const { data, error } = await supabaseClient
@@ -423,14 +424,16 @@ export function renderOrders(orders) {
   table.innerHTML = "";
 
   orders.forEach((order) => {
-    const editIcon = `<button type="button" class="btn-icon btn-edit" onclick="editOrder(${order.id})" title="Редактировать"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>`;
-
     const historyIcon = `<a href="history.html?order_id=${order.id}" class="btn-icon btn-history" title="История"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></a>`;
 
     const deleteButton =
-      state.currentRole === "admin"
+      isAdmin()
         ? `<button type="button" class="btn-icon btn-delete" onclick="deleteOrder(${order.id})" title="Удалить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>`
         : "";
+
+    const editIcon = canMutateOrders()
+      ? `<button type="button" class="btn-icon btn-edit" onclick="editOrder(${order.id})" title="Редактировать"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>`
+      : "";
 
     const filesCount = state.filesCountMap[order.id] || 0;
 
@@ -986,6 +989,11 @@ export function resetFormMode() {
 }
 
 export async function editOrder(orderId) {
+  if (!canMutateOrders()) {
+    setMessage("Недостаточно прав для редактирования заявок", "#d32f2f");
+    return;
+  }
+
   const { data, error } = await supabaseClient
     .from("orders")
     .select("*")
@@ -1019,7 +1027,7 @@ export async function editOrder(orderId) {
 }
 
 export async function deleteOrder(orderId) {
-  if (state.currentRole !== "admin") return;
+  if (!isAdmin()) return;
 
   const ok = confirm(`Удалить заявку #${orderId}?`);
   if (!ok) return;
@@ -1041,6 +1049,11 @@ export async function deleteOrder(orderId) {
 
 export async function submitOrderForm(event) {
   event.preventDefault();
+
+  if (!canMutateOrders()) {
+    setMessage("Недостаточно прав для сохранения заявок", "#d32f2f");
+    return;
+  }
 
   const phoneVal = (document.getElementById("phone")?.value || "").trim();
   const clientVal = (document.getElementById("client")?.value || "").trim();

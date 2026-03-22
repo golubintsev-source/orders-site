@@ -7,7 +7,8 @@ import { loadSettings } from "./settings.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { setMessage } from "./dom.js";
 import { initOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
-import { updateSectionNavRicherStat } from "./section-nav.js";
+import { refreshSectionNavAfterProfile } from "./section-nav.js";
+import { canAccessSection } from "./roles.js";
 
 window.editOrder = editOrder;
 window.deleteOrder = deleteOrder;
@@ -24,11 +25,13 @@ async function init() {
     if (!user) return;
 
     await loadProfile();
-    updateSectionNavRicherStat();
+    refreshSectionNavAfterProfile();
     await loadSettings();
     await loadOrders();
     resetFormMode();
-    await initCalculationsSection();
+    if (canAccessSection("calculations")) {
+      await initCalculationsSection();
+    }
     await initBalanceSection();
   } catch (err) {
     console.error("Ошибка инициализации:", err);

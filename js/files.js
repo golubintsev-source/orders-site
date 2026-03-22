@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
+import { isAdmin } from "./roles.js";
 import { formatOrderIdTypeChip } from "./format.js";
 import {
   attachmentsInput,
@@ -850,7 +851,7 @@ async function createOrderFileRowElement(file, orderId, onAdminDelete) {
     actions.appendChild(dlA);
   }
 
-  if (state.currentRole === "admin") {
+  if (isAdmin()) {
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "file-remove-btn";

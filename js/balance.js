@@ -1,4 +1,5 @@
 import { supabaseClient } from "./config.js";
+import { isUserLite } from "./roles.js";
 import { formatAmount } from "./format.js";
 
 const PARTICIPANTS = ["Дима", "Вова", "Касса", "Безнал"];
@@ -81,6 +82,7 @@ export async function loadBalance() {
 }
 
 export async function initBalanceSection() {
+  if (isUserLite()) return;
   await loadBalance();
 }
 
