@@ -1325,6 +1325,11 @@ export async function submitOrderForm(event) {
   // и верхняя горизонтальная полоса прокрутки теряет ширину.
   switchSection("all");
   await loadOrders();
+  // После перерисовки таблицы подсветить сохранённый заказ
+  // и сфокусировать экран на левую часть строки.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => highlightAndFocusSavedOrderRow(savedOrderId));
+  });
 
   setMessage(
     wasEditing
@@ -1332,6 +1337,53 @@ export async function submitOrderForm(event) {
     : `Заявка #${savedOrderId} сохранена`,
     ""
   );
+}
+
+function highlightAndFocusSavedOrderRow(orderId) {
+  if (orderId == null) return;
+  const ordersTable = document.getElementById("ordersTable");
+  if (!ordersTable) return;
+  const tbody = ordersTable.querySelector("tbody");
+  if (!tbody) return;
+
+  const idStr = String(orderId);
+  const idTd = tbody
+    .querySelector(`td.td-order-id[data-order-id="${CSS.escape(idStr)}"]`);
+  const tr = idTd?.closest("tr");
+  if (!tr) return;
+
+  // Подсветить (голубая заливка из CSS для tr.row-highlighted td)
+  tbody.querySelectorAll("tr.row-highlighted").forEach((row) => row.classList.remove("row-highlighted"));
+  tr.classList.add("row-highlighted");
+
+  // Вертикальный фокус: прокрутить контейнер так, чтобы строка была в центре.
+  const scrollOuter = document.getElementById("ordersTableScrollBottom");
+  if (scrollOuter && typeof tr.scrollIntoView === "function") {
+    try {
+      tr.scrollIntoView({ block: "center", behavior: "smooth" });
+    } catch {
+      tr.scrollIntoView({ block: "center" });
+    }
+  }
+
+  // Горизонтальный фокус: подвинуть scroll так, чтобы левая ячейка строки была видна слева.
+  const scrollInner = document.getElementById("ordersTableScrollInner");
+  const scrollTop = document.getElementById("ordersTableScrollTop");
+  if (scrollInner && idTd) {
+    const innerRect = scrollInner.getBoundingClientRect();
+    const tdRect = idTd.getBoundingClientRect();
+    const diff = tdRect.left - innerRect.left;
+
+    if (Number.isFinite(diff)) {
+      const target = Math.max(0, scrollInner.scrollLeft + diff);
+      scrollInner.scrollLeft = target;
+      if (scrollTop) scrollTop.scrollLeft = target;
+    } else if (typeof idTd.offsetLeft === "number") {
+      const target = Math.max(0, idTd.offsetLeft);
+      scrollInner.scrollLeft = target;
+      if (scrollTop) scrollTop.scrollLeft = target;
+    }
+  }
 }
 
 /** Скрыть в форме тип «Магазин» для роли user_lite и обновить фильтр по типам. */
