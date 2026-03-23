@@ -415,6 +415,10 @@ export function bindUIEvents() {
   if (ordersSearchOpenBtn) {
     ordersSearchOpenBtn.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (ordersSearchOpenBtn.dataset.navMode === "orders") {
+        switchSection("all");
+        return;
+      }
       toggleOrdersSearchDropdown();
     });
   }

@@ -59,6 +59,10 @@ function wireHistorySearchAndLogout() {
   if (ordersSearchOpenBtn) {
     ordersSearchOpenBtn.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (ordersSearchOpenBtn.dataset.navMode === "orders") {
+        window.location.href = "index.html#all";
+        return;
+      }
       toggleOrdersSearchDropdown();
     });
   }

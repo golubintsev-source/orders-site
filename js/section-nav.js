@@ -159,12 +159,39 @@ export function closeOrdersSearchPanel() {
 function updateOrdersSearchBtnVisibility(sectionId) {
   const searchBtn = document.getElementById("ordersSearchOpenBtn");
   if (searchBtn) {
-    searchBtn.hidden = sectionId !== "all" && sectionId !== STANDALONE_SECTION_NAV_ID;
+    const isOrdersPage = sectionId === "all";
+    searchBtn.hidden = false;
+    searchBtn.dataset.navMode = isOrdersPage ? "search" : "orders";
+
+    // Иконки: на странице «Заказы» показываем лупу, иначе показываем картинку «Заказы».
+    if (isOrdersPage) {
+      searchBtn.setAttribute("title", "Поиск по заказам");
+      searchBtn.setAttribute("aria-label", "Поиск по заказам");
+      searchBtn.innerHTML = `
+        <svg class="section-nav-search-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle>
+          <path d="M20 20l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+        </svg>
+      `;
+      searchBtn.classList.remove("section-nav-search-btn--active-orders");
+    } else {
+      searchBtn.setAttribute("title", "Заказы");
+      searchBtn.setAttribute("aria-label", "Заказы");
+      // Простой "документ/список" как иконка «Заказы».
+      searchBtn.innerHTML = `
+        <svg class="section-nav-orders-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 2h9l3 3v17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+          <path d="M15 2v5h5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+          <path d="M7 13h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+          <path d="M7 17h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+        </svg>
+      `;
+      searchBtn.classList.remove("section-nav-search-btn--active-query");
+    }
   }
-  if (sectionId !== "all") {
-    closeOrdersSearchPanel();
-  }
-  syncOrdersSearchIconAccent();
+
+  if (sectionId !== "all") closeOrdersSearchPanel();
+  if (sectionId === "all") syncOrdersSearchIconAccent();
 }
 
 export function closeSectionNavDropdown() {
