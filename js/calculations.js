@@ -260,6 +260,4 @@ async function init() {
   await loadCalculations();
 }
 
-if (document.getElementById("backToOrdersBtn")) {
-  init();
-}
+init();
