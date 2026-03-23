@@ -110,6 +110,44 @@ h2 {
   transition: background 0.2s, color 0.2s;
 }
 
+.orders-type-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #d1d5db;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 800;
+  user-select: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.orders-type-toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 6px;
+  margin-bottom: 2px;
+}
+
+.orders-type-toggle-wrap[hidden] {
+  display: none;
+}
+
+.orders-type-toggle--active {
+  background: #fb923c;
+  color: #ffffff;
+}
+
+.orders-type-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.35);
+}
+
 .section-nav-current:hover {
   background: #f9fafb;
   color: #111827;

@@ -442,6 +442,135 @@ export function bindUIEvents() {
   initStatusFilter();
   initOrderTypeFilter();
 
+  // "О" и "М" переключатели справа от заголовка "Заказы".
+  // Они управляют фильтром по типу заказов в таблице.
+  const ordersTypeToggleO = document.getElementById("ordersTypeToggleO");
+  const ordersTypeToggleM = document.getElementById("ordersTypeToggleM");
+  if (ordersTypeToggleO && ordersTypeToggleM) {
+    const ORDERS_TYPE_TOGGLE_STORAGE_KEY = "ordersTypeToggles";
+    const ORDER_TYPE_KEYS_O = ["__empty__", "Окна", "Подоконники", "Аллюминий", "Сетки/мелочь"];
+    const ORDER_TYPE_KEYS_M = ["Магазин"];
+    const ALL_KEYS = isUserLite() ? ORDER_TYPE_KEYS_O : [...ORDER_TYPE_KEYS_O, ...ORDER_TYPE_KEYS_M];
+
+    // Для user_lite фильтр "Магазин" скрыт в старом выпадающем меню, поэтому и этот переключатель скрываем.
+    if (isUserLite()) ordersTypeToggleM.hidden = true;
+
+    function readSavedToggles() {
+      try {
+        const raw = window.localStorage.getItem(ORDERS_TYPE_TOGGLE_STORAGE_KEY);
+        if (!raw) return { oOn: true, mOn: false };
+        const parsed = JSON.parse(raw);
+        return {
+          oOn: parsed?.oOn !== false,
+          mOn: parsed?.mOn === true,
+        };
+      } catch {
+        return { oOn: true, mOn: false };
+      }
+    }
+
+    function saveToggles() {
+      try {
+        window.localStorage.setItem(ORDERS_TYPE_TOGGLE_STORAGE_KEY, JSON.stringify({ oOn, mOn }));
+      } catch {
+        // ignore localStorage failures
+      }
+    }
+
+    let { oOn, mOn } = readSavedToggles();
+    if (isUserLite()) mOn = false;
+
+    function setTogglesFromState() {
+      if (!state.orderTypeFilterSelected || state.orderTypeFilterSelected.length === 0) {
+        return;
+      }
+      oOn = state.orderTypeFilterSelected.some((k) => ORDER_TYPE_KEYS_O.includes(k));
+      mOn = state.orderTypeFilterSelected.includes("Магазин");
+      if (isUserLite()) mOn = false;
+    }
+
+    function syncUI() {
+      const setActive = (el, on) => {
+        if (!el) return;
+        el.classList.toggle("orders-type-toggle--active", !!on);
+        el.setAttribute("aria-checked", String(!!on));
+      };
+      setActive(ordersTypeToggleO, oOn);
+      setActive(ordersTypeToggleM, mOn);
+    }
+
+    function applyFromToggles() {
+      const selected = [];
+      if (oOn) selected.push(...ORDER_TYPE_KEYS_O);
+      if (mOn) selected.push(...ORDER_TYPE_KEYS_M);
+
+      // Если выключили оба — намеренно показать "ничего".
+      state.orderTypeFilterSelected = selected.length === 0 ? ["__none__"] : selected;
+
+      // Если выбрали все доступные типы — фильтр пустой (показывать всё).
+      if (state.orderTypeFilterSelected.length === ALL_KEYS.length) {
+        const setAll = new Set(ALL_KEYS);
+        const isAll =
+          state.orderTypeFilterSelected.every((k) => setAll.has(k)) &&
+          state.orderTypeFilterSelected.every((k) => setAll.has(k));
+        if (isAll) state.orderTypeFilterSelected = [];
+      }
+
+      saveToggles();
+      applyClientFilter();
+      syncUI();
+    }
+
+    function onToggle(kind) {
+      // Переключатели актуальны только на странице "Заказы".
+      const sectionAll = document.getElementById("section-all");
+      if (!sectionAll || !sectionAll.classList.contains("active")) return;
+
+      if (kind === "O") {
+        oOn = !oOn;
+      } else if (kind === "M") {
+        if (isUserLite()) return;
+        mOn = !mOn;
+      }
+      applyFromToggles();
+    }
+
+    ordersTypeToggleO.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      onToggle("O");
+    });
+    ordersTypeToggleM.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      onToggle("M");
+    });
+
+    ordersTypeToggleO.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggle("O");
+      }
+    });
+    ordersTypeToggleM.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggle("M");
+      }
+    });
+
+    applyFromToggles();
+
+    document.addEventListener("orders-filters-updated", () => {
+      // Пересинхронизируем переключатели с тем, что выбрал пользователь в dropdown.
+      setTogglesFromState();
+      saveToggles();
+      syncUI();
+    });
+  }
+
   if (selectFilesBtn) {
     selectFilesBtn.addEventListener("click", () => {
       attachmentsInput.click();

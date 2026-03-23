@@ -395,6 +395,9 @@ function getFilteredOrders() {
 
 export function applyFiltersAndRender() {
   renderOrders(getFilteredOrders());
+  // Сигнал UI-коду: фильтры (статусы/типы) изменились и таблица перерисована.
+  // Это нужно, чтобы синхронизировать внешние быстрые переключатели.
+  document.dispatchEvent(new CustomEvent("orders-filters-updated"));
 }
 
 function escapeHtml(s) {
@@ -1217,6 +1220,14 @@ export async function submitOrderForm(event) {
   if (conditionalMissing.length > 0) {
     setMessage("Заполните поля: " + conditionalMissing.join(", "), "#d32f2f");
     updateConditionalRequiredHighlight();
+    return;
+  }
+
+  // Правило: Предоплата не может быть больше стоимости.
+  const amountNum = parseOrderFormNumber(document.getElementById("amount")?.value);
+  const prepaymentNum = parseOrderFormNumber(document.getElementById("prepayment")?.value);
+  if (amountNum != null && prepaymentNum != null && prepaymentNum > amountNum) {
+    setMessage("Предоплата не может быть больше суммы заказа", "#d32f2f");
     return;
   }
 
