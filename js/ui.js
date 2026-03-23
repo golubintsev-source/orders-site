@@ -260,6 +260,7 @@ export function bindUIEvents() {
     if (el) {
       el.addEventListener("input", () => {
         if (id === "amount" || id === "prepayment") updateRemainingFromCostAndPrepayment();
+        if (id === "remaining_amount") updatePaidField();
         updateConditionalRequiredHighlight();
       });
     }
@@ -285,6 +286,7 @@ export function bindUIEvents() {
       if (id === "area_m2" || id === "installer_rate_per_m2") updateInstallerPaymentAmountFromArea();
       if (id === "installer_payment_amount") updateInstallerBlockByInstallationDate();
       if (id === "amount" || id === "prepayment" || id === "remaining_amount") updateConditionalRequiredHighlight();
+      if (id === "amount" || id === "prepayment" || id === "remaining_amount") updatePaidField();
     });
   });
   ["prepayment_to", "remaining_to", "delivery", "delivery_date"].forEach((id) => {

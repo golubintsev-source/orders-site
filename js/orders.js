@@ -432,10 +432,15 @@ function formatDateShortRU(dateStr) {
   }
 }
 
-/** Оплачено в таблице только по полю "Кому остаток", без проверки суммы. */
+/** Оплачено = "да", если заполнено "Кому остаток" ИЛИ Остаток = 0. */
 function isOrderPaid(order) {
-  const raw = (order.remaining_to || "").trim();
-  return raw !== "" && raw !== "—";
+  const remainingToRaw = (order.remaining_to || "").trim();
+  const paidByRemainingTo = remainingToRaw !== "" && remainingToRaw !== "—";
+
+  const remainingAmount = parseOrderFormNumber(order.remaining_amount);
+  const paidByRemainingAmountZero = remainingAmount != null && Math.abs(remainingAmount) < 1e-9;
+
+  return paidByRemainingTo || paidByRemainingAmountZero;
 }
 
 /** Кнопка «Редактировать» в таблице и в меню по номеру. */
@@ -822,14 +827,20 @@ export function updateRemainingFromCostAndPrepayment() {
   remainingEl.value = formatOrderFormNumberValue(remaining, ORDER_FORM_NUMERIC_FIELD_DECIMALS.remaining_amount);
 }
 
-/** Оплачено = "да" только если заполнено "Кому остаток" (select). Правило по сумме не используется. */
+/** Оплачено = "да", если заполнено "Кому остаток" (select) ИЛИ Остаток = 0. */
 export function updatePaidField() {
   const remainingToEl = document.getElementById("remaining_to");
   const paidEl = document.getElementById("paid");
+  const remainingAmountEl = document.getElementById("remaining_amount");
   if (!paidEl || !remainingToEl || remainingToEl.tagName !== "SELECT") return;
-  const raw = (remainingToEl.value || "").trim();
-  const remainingToFilled = raw !== "" && raw !== "—";
-  paidEl.value = remainingToFilled ? "да" : "нет";
+
+  const remainingToRaw = (remainingToEl.value || "").trim();
+  const remainingToFilled = remainingToRaw !== "" && remainingToRaw !== "—";
+
+  const remainingAmount = remainingAmountEl ? parseOrderFormNumber(remainingAmountEl.value) : null;
+  const remainingAmountZero = remainingAmount != null && Math.abs(remainingAmount) < 1e-9;
+
+  paidEl.value = remainingToFilled || remainingAmountZero ? "да" : "нет";
 }
 
 export function updateConditionalRequiredHighlight() {

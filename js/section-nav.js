@@ -8,13 +8,27 @@ import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite } from ".
 /** Статусы: «Товар передан заказчику» или «Монтаж выполнен» */
 const RICHER_STATUSES = new Set(["Товар передан заказчику", "Монтаж выполнен"]);
 
-function orderIsUnpaidByRemainingTo(order) {
-  const raw = (order.remaining_to || "").trim();
-  return raw === "" || raw === "—";
+function parseLooseNumber(raw) {
+  if (raw == null) return null;
+  const s0 = String(raw).trim();
+  if (!s0) return null;
+  const s = s0.replace(/[\s\u00A0\u202F]/g, "").replace(",", ".");
+  const n = Number(s);
+  return Number.isNaN(n) ? null : n;
+}
+
+function orderIsPaid(order) {
+  const remainingToRaw = (order.remaining_to || "").trim();
+  const paidByRemainingTo = remainingToRaw !== "" && remainingToRaw !== "—";
+
+  const remainingAmount = parseLooseNumber(order.remaining_amount);
+  const paidByRemainingAmountZero = remainingAmount != null && Math.abs(remainingAmount) < 1e-9;
+
+  return paidByRemainingTo || paidByRemainingAmountZero;
 }
 
 /**
- * Сумма остатков по заказам: Оплачено = нет (пусто «Кому остаток») и статус
+ * Сумма остатков по заказам: Оплачено = нет и статус
  * «Товар передан заказчику» или «Монтаж выполнен».
  */
 export function updateSectionNavRicherStat() {
@@ -27,7 +41,7 @@ export function updateSectionNavRicherStat() {
 
   let sum = 0;
   for (const order of state.allOrders || []) {
-    if (!orderIsUnpaidByRemainingTo(order)) continue;
+    if (orderIsPaid(order)) continue;
     const st = (order.payment_status || "").trim();
     if (!RICHER_STATUSES.has(st)) continue;
     const rem = order.remaining_amount;
