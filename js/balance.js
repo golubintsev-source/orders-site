@@ -72,27 +72,15 @@ export async function loadBalance() {
     ])
   );
 
-  const [calcRes, ordersRes] = await Promise.all([
-    supabaseClient
-      .from("calculations")
-      .select("from_place,to_place,amount,created_at"),
-    supabaseClient
-      .from("orders")
-      .select("order_date,prepayment,prepayment_to,remaining_amount,remaining_to,installer_payment_amount,installer_payment_by,deleted_at")
-      .is("deleted_at", null),
-  ]);
+  const calcRes = await supabaseClient
+    .from("calculations")
+    .select("from_place,to_place,amount,created_at");
 
   if (calcRes.error) {
     console.error("Ошибка загрузки расчётов для баланса:", calcRes.error);
     if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса";
     return;
   }
-  if (ordersRes.error) {
-    console.error("Ошибка загрузки заказов для баланса:", ordersRes.error);
-    if (messageEl) messageEl.textContent = "Ошибка загрузки заказов для баланса";
-    return;
-  }
-
   const calcRows = calcRes.data || [];
   for (const row of calcRows) {
     const amount = toNumber(row.amount);
@@ -114,41 +102,6 @@ export async function loadBalance() {
     }
     if (row.to_place && Object.prototype.hasOwnProperty.call(turnover, row.to_place)) {
       turnover[row.to_place][bucket] += amount;
-    }
-  }
-
-  const orders = ordersRes.data || [];
-  for (const o of orders) {
-    // Предоплата => плюс
-    addDelta(balances, o.prepayment_to, toNumber(o.prepayment));
-    // Остаток => плюс
-    addDelta(balances, o.remaining_to, toNumber(o.remaining_amount));
-    // Оплатил монтаж => минус (сумма за монтаж)
-    addDelta(balances, o.installer_payment_by, -toNumber(o.installer_payment_amount));
-
-    // Дневные обороты по заказам (МСК), по дате заказа.
-    const dayKey = o.order_date ? mskDayKeyFromDate(new Date(o.order_date)) : "";
-    const bucket =
-      dayKey === todayKey ? "today"
-        : dayKey === dayM1Key ? "m1"
-          : dayKey === dayM2Key ? "m2"
-            : dayKey === dayM3Key ? "m3"
-              : null;
-    if (!bucket) continue;
-
-    const prepayment = toNumber(o.prepayment);
-    if (o.prepayment_to && prepayment !== 0 && Object.prototype.hasOwnProperty.call(turnover, o.prepayment_to)) {
-      turnover[o.prepayment_to][bucket] += prepayment;
-    }
-
-    const remaining = toNumber(o.remaining_amount);
-    if (o.remaining_to && remaining !== 0 && Object.prototype.hasOwnProperty.call(turnover, o.remaining_to)) {
-      turnover[o.remaining_to][bucket] += remaining;
-    }
-
-    const installer = toNumber(o.installer_payment_amount);
-    if (o.installer_payment_by && installer !== 0 && Object.prototype.hasOwnProperty.call(turnover, o.installer_payment_by)) {
-      turnover[o.installer_payment_by][bucket] -= installer;
     }
   }
 
