@@ -26,13 +26,18 @@ function toNumber(val) {
 }
 
 function mskDayKeyFromDate(date) {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
+  const fmt = new Intl.DateTimeFormat("ru-RU", {
     timeZone: MSK_TZ,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  return fmt.format(date); // YYYY-MM-DD
+  const parts = fmt.formatToParts(date);
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  const d = parts.find((p) => p.type === "day")?.value;
+  if (!y || !m || !d) return "";
+  return `${y}-${m}-${d}`;
 }
 
 function getRecentMskDayKeys(daysCount) {
@@ -73,7 +78,7 @@ export async function loadBalance() {
       .select("from_place,to_place,amount,created_at"),
     supabaseClient
       .from("orders")
-      .select("prepayment,prepayment_to,remaining_amount,remaining_to,installer_payment_amount,installer_payment_by,deleted_at")
+      .select("order_date,prepayment,prepayment_to,remaining_amount,remaining_to,installer_payment_amount,installer_payment_by,deleted_at")
       .is("deleted_at", null),
   ]);
 
@@ -121,6 +126,31 @@ export async function loadBalance() {
     addDelta(balances, o.remaining_to, toNumber(o.remaining_amount));
     // Оплатил монтаж => минус (сумма за монтаж)
     addDelta(balances, o.installer_payment_by, -toNumber(o.installer_payment_amount));
+
+    // Дневные обороты по заказам (МСК), по дате заказа.
+    const dayKey = o.order_date ? mskDayKeyFromDate(new Date(o.order_date)) : "";
+    const bucket =
+      dayKey === todayKey ? "today"
+        : dayKey === dayM1Key ? "m1"
+          : dayKey === dayM2Key ? "m2"
+            : dayKey === dayM3Key ? "m3"
+              : null;
+    if (!bucket) continue;
+
+    const prepayment = Math.abs(toNumber(o.prepayment));
+    if (o.prepayment_to && prepayment > 0 && Object.prototype.hasOwnProperty.call(turnover, o.prepayment_to)) {
+      turnover[o.prepayment_to][bucket] += prepayment;
+    }
+
+    const remaining = Math.abs(toNumber(o.remaining_amount));
+    if (o.remaining_to && remaining > 0 && Object.prototype.hasOwnProperty.call(turnover, o.remaining_to)) {
+      turnover[o.remaining_to][bucket] += remaining;
+    }
+
+    const installer = Math.abs(toNumber(o.installer_payment_amount));
+    if (o.installer_payment_by && installer > 0 && Object.prototype.hasOwnProperty.call(turnover, o.installer_payment_by)) {
+      turnover[o.installer_payment_by][bucket] += installer;
+    }
   }
 
   for (const p of PARTICIPANTS) {

@@ -861,6 +861,10 @@ h2 {
   text-overflow: ellipsis;
   cursor: help;
 }
+#calculationsTable tr.calc-row-system td {
+  background: #eeeeee;
+  color: #4b5563;
+}
 #calculationsTable .td-actions {
   white-space: nowrap;
   padding: 4px 2px;

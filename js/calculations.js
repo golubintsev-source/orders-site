@@ -5,6 +5,7 @@ import { isAdmin } from "./roles.js";
 
 let editingId = null;
 let editingCreatedAt = null;
+const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 
 function formatDateShort(iso) {
   if (!iso) return "";
@@ -91,14 +92,19 @@ export async function loadCalculations() {
 
   data.forEach((row) => {
     const comment = row.comment ?? "";
-    const escapedComment = escapeHtml(comment);
-    const actionsCell = isAdmin()
+    const isOrderDeltaRow = typeof comment === "string" && comment.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
+    const displayComment = isOrderDeltaRow
+      ? comment.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim()
+      : comment;
+    const escapedComment = escapeHtml(displayComment);
+    const actionsCell = isAdmin() && !isOrderDeltaRow
       ? `<td class="td-actions">
         <button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>
         <button type="button" class="btn-icon btn-delete" data-id="${row.id}" title="Удалить">${CALC_ICON_DELETE_SVG}</button>
       </td>`
       : `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`;
     const tr = document.createElement("tr");
+    if (isOrderDeltaRow) tr.classList.add("calc-row-system");
     tr.innerHTML = `
       <td><span class="status-value">${escapeHtml(formatDateShort(row.created_at))}</span></td>
       <td>${escapeHtml(row.from_place)}</td>

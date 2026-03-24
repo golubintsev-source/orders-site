@@ -6,6 +6,8 @@ export const state = {
   initialPaymentStatus: null,
   /** снапшот числовых полей (сумм) при открытии заказа на редактирование */
   initialOrderSums: null,
+  /** снапшот "кому/кто" полей для фиксации дельт в расчетах */
+  initialOrderParticipants: null,
   allOrders: [],
   filesCountMap: {},
   /** выбранные статусы для фильтра; пустой массив = показывать все */

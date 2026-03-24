@@ -108,6 +108,108 @@ const ORDER_FORM_NUMERIC_FIELD_DECIMALS = {
   installer_payment_amount: 2,
 };
 
+const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
+
+function formatDateTimeRu(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${dd}.${mm}.${yyyy} ${hh}:${mi}`;
+  } catch {
+    return "";
+  }
+}
+
+function toComparableNumber(v) {
+  if (v == null || v === "") return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+async function writeOrderDeltaCalculations({
+  orderId,
+  wasEditing,
+  initialSums,
+  initialParticipants,
+  orderData,
+}) {
+  if (!orderId) return;
+
+  const nowIso = new Date().toISOString();
+  const nowText = formatDateTimeRu(nowIso);
+  const old = {
+    prepayment: wasEditing ? toComparableNumber(initialSums?.prepayment) : 0,
+    remaining_amount: wasEditing ? toComparableNumber(initialSums?.remaining_amount) : 0,
+    installer_payment_amount: wasEditing ? toComparableNumber(initialSums?.installer_payment_amount) : 0,
+  };
+  const next = {
+    prepayment: toComparableNumber(orderData?.prepayment),
+    remaining_amount: toComparableNumber(orderData?.remaining_amount),
+    installer_payment_amount: toComparableNumber(orderData?.installer_payment_amount),
+  };
+
+  const rows = [];
+  const pushRow = ({ key, label, from_place, to_place, oldVal, newVal }) => {
+    const delta = newVal - oldVal;
+    if (Math.abs(delta) < 0.000001) return;
+    rows.push({
+      created_at: nowIso,
+      from_place: from_place || "—",
+      to_place: to_place || "—",
+      amount: delta,
+      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${label}; заказ #${orderId}; дельта ${formatAmount(delta)}; ${formatAmount(oldVal)} → ${formatAmount(newVal)}; ${nowText}`,
+      order_id: orderId,
+      delta_key: key,
+    });
+  };
+
+  pushRow({
+    key: "prepayment",
+    label: "Предоплата",
+    from_place: "Клиент",
+    to_place: orderData?.prepayment_to || (wasEditing ? initialParticipants?.prepayment_to : "") || "—",
+    oldVal: old.prepayment,
+    newVal: next.prepayment,
+  });
+
+  pushRow({
+    key: "remaining_amount",
+    label: "Остаток",
+    from_place: "Клиент",
+    to_place: orderData?.remaining_to || (wasEditing ? initialParticipants?.remaining_to : "") || "—",
+    oldVal: old.remaining_amount,
+    newVal: next.remaining_amount,
+  });
+
+  pushRow({
+    key: "installer_payment_amount",
+    label: "Оплата монтажа",
+    from_place: orderData?.installer_payment_by || (wasEditing ? initialParticipants?.installer_payment_by : "") || "—",
+    to_place: "Монтаж",
+    oldVal: old.installer_payment_amount,
+    newVal: next.installer_payment_amount,
+  });
+
+  if (rows.length === 0) return;
+
+  const payload = rows.map((r) => ({
+    created_at: r.created_at,
+    from_place: r.from_place,
+    to_place: r.to_place,
+    amount: r.amount,
+    comment: r.comment,
+  }));
+  const { error } = await supabaseClient.from("calculations").insert(payload);
+  if (error) {
+    console.error("Автозапись дельт в calculations:", error);
+  }
+}
+
 /** В полях даты формы заказа год по маске 20** — 2000–2099 (ровно 4 цифры, префикс «20»). */
 const ORDER_FORM_DATE_YEAR_MIN = 2000;
 const ORDER_FORM_DATE_YEAR_MAX = 2099;
@@ -945,6 +1047,11 @@ export function fillForm(order) {
     remaining_amount: order.remaining_amount != null ? Number(order.remaining_amount) : null,
     installer_payment_amount: order.installer_payment_amount != null ? Number(order.installer_payment_amount) : null,
   };
+  state.initialOrderParticipants = {
+    prepayment_to: order.prepayment_to || "",
+    remaining_to: order.remaining_to || "",
+    installer_payment_by: order.installer_payment_by || "",
+  };
   document.getElementById("phone").value = order.phone || "";
   document.getElementById("phone").dispatchEvent(new Event("input", { bubbles: true }));
   document.getElementById("client").value = order.client || "";
@@ -1029,6 +1136,7 @@ export function resetFormMode() {
   state.editingOrderDescription = null;
   state.initialPaymentStatus = null;
   state.initialOrderSums = null;
+  state.initialOrderParticipants = null;
   state.installerPaymentDone = false;
   document.getElementById("orderForm").reset();
   updatePaidField();
@@ -1274,6 +1382,14 @@ export async function submitOrderForm(event) {
   }
 
   await uploadFiles(savedOrderId);
+
+  await writeOrderDeltaCalculations({
+    orderId: savedOrderId,
+    wasEditing,
+    initialSums: state.initialOrderSums,
+    initialParticipants: state.initialOrderParticipants,
+    orderData,
+  });
 
   const addCommentText = (document.getElementById("description")?.value || "").trim();
   const newStatus = orderData.payment_status || "";
