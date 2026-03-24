@@ -100,7 +100,7 @@ export async function loadBalance() {
     addDelta(balances, row.from_place, -amount);
     addDelta(balances, row.to_place, amount);
 
-    // Оборот по дням (МСК): учитываем абсолютную сумму операции для каждого участника стороны перевода.
+    // Сальдо по дням (МСК): те же знаки, что и в основном балансе.
     const dayKey = row.created_at ? mskDayKeyFromDate(new Date(row.created_at)) : "";
     const bucket =
       dayKey === todayKey ? "today"
@@ -109,12 +109,11 @@ export async function loadBalance() {
             : dayKey === dayM3Key ? "m3"
               : null;
     if (!bucket) continue;
-    const absAmount = Math.abs(amount);
     if (row.from_place && Object.prototype.hasOwnProperty.call(turnover, row.from_place)) {
-      turnover[row.from_place][bucket] += absAmount;
+      turnover[row.from_place][bucket] -= amount;
     }
     if (row.to_place && Object.prototype.hasOwnProperty.call(turnover, row.to_place)) {
-      turnover[row.to_place][bucket] += absAmount;
+      turnover[row.to_place][bucket] += amount;
     }
   }
 
@@ -137,19 +136,19 @@ export async function loadBalance() {
               : null;
     if (!bucket) continue;
 
-    const prepayment = Math.abs(toNumber(o.prepayment));
-    if (o.prepayment_to && prepayment > 0 && Object.prototype.hasOwnProperty.call(turnover, o.prepayment_to)) {
+    const prepayment = toNumber(o.prepayment);
+    if (o.prepayment_to && prepayment !== 0 && Object.prototype.hasOwnProperty.call(turnover, o.prepayment_to)) {
       turnover[o.prepayment_to][bucket] += prepayment;
     }
 
-    const remaining = Math.abs(toNumber(o.remaining_amount));
-    if (o.remaining_to && remaining > 0 && Object.prototype.hasOwnProperty.call(turnover, o.remaining_to)) {
+    const remaining = toNumber(o.remaining_amount);
+    if (o.remaining_to && remaining !== 0 && Object.prototype.hasOwnProperty.call(turnover, o.remaining_to)) {
       turnover[o.remaining_to][bucket] += remaining;
     }
 
-    const installer = Math.abs(toNumber(o.installer_payment_amount));
-    if (o.installer_payment_by && installer > 0 && Object.prototype.hasOwnProperty.call(turnover, o.installer_payment_by)) {
-      turnover[o.installer_payment_by][bucket] += installer;
+    const installer = toNumber(o.installer_payment_amount);
+    if (o.installer_payment_by && installer !== 0 && Object.prototype.hasOwnProperty.call(turnover, o.installer_payment_by)) {
+      turnover[o.installer_payment_by][bucket] -= installer;
     }
   }
 

@@ -131,6 +131,13 @@ function toComparableNumber(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function shortLoginByEmail(email) {
+  const raw = String(email || "").trim();
+  if (!raw) return "неизв..";
+  const login = raw.split("@")[0] || raw;
+  return `${login.slice(0, 5)}..`;
+}
+
 async function writeOrderDeltaCalculations({
   orderId,
   wasEditing,
@@ -142,6 +149,7 @@ async function writeOrderDeltaCalculations({
 
   const nowIso = new Date().toISOString();
   const nowText = formatDateTimeRu(nowIso);
+  const actorShort = shortLoginByEmail(state.currentUser?.email);
   const old = {
     prepayment: wasEditing ? toComparableNumber(initialSums?.prepayment) : 0,
     remaining_amount: wasEditing ? toComparableNumber(initialSums?.remaining_amount) : 0,
@@ -162,7 +170,7 @@ async function writeOrderDeltaCalculations({
       from_place: from_place || "—",
       to_place: to_place || "—",
       amount: delta,
-      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${label}; заказ #${orderId}; дельта ${formatAmount(delta)}; ${formatAmount(oldVal)} → ${formatAmount(newVal)}; ${nowText}`,
+      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${label}; заказ #${orderId}; дельта ${formatAmount(delta)}; ${formatAmount(oldVal)} → ${formatAmount(newVal)}; ${nowText}; ${actorShort}`,
       order_id: orderId,
       delta_key: key,
     });

@@ -6,6 +6,7 @@ import { isAdmin } from "./roles.js";
 let editingId = null;
 let editingCreatedAt = null;
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
+let currentUserEmail = "";
 
 function formatDateShort(iso) {
   if (!iso) return "";
@@ -49,6 +50,19 @@ function parseCalcAmountInput(raw) {
   const s = s0.replace(/[\s\u00A0\u202F]/g, "").replace(",", ".");
   const n = Number(s);
   return Number.isNaN(n) ? null : n;
+}
+
+function shortLoginByEmail(email) {
+  const raw = String(email || "").trim();
+  if (!raw) return "неизв..";
+  const login = raw.split("@")[0] || raw;
+  return `${login.slice(0, 5)}..`;
+}
+
+function appendActorToComment(comment) {
+  const actor = shortLoginByEmail(currentUserEmail);
+  const base = (comment || "").trim();
+  return base ? `${base}; ${actor}` : actor;
 }
 
 function formatCalcAmountInput() {
@@ -135,7 +149,7 @@ function getFormValues() {
     from_place: fromEl?.value?.trim() || null,
     to_place: toEl?.value?.trim() || null,
     amount: amountEl?.value !== "" ? parseCalcAmountInput(amountEl.value) : null,
-    comment: commentEl?.value?.trim() || null,
+    comment: appendActorToComment(commentEl?.value?.trim() || ""),
   };
   if (editingId && editingCreatedAt) {
     payload.created_at = editingCreatedAt;
@@ -257,6 +271,7 @@ async function init() {
   const user = await checkAuth();
   if (!user) return;
   await loadProfile();
+  currentUserEmail = user.email || "";
 
   document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
     window.location.href = "index.html";
