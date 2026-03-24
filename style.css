@@ -1084,6 +1084,14 @@ h2 {
 
 #balanceTable { min-width: 200px; }
 #balanceTable th, #balanceTable td { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
+#balanceTable th:first-child,
+#balanceTable td:first-child {
+  padding-right: 0;
+}
+#balanceTable th:nth-child(2),
+#balanceTable td:nth-child(2) {
+  padding-left: 0;
+}
 
 #section-settings .settings-rate-row {
   display: flex;
