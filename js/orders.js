@@ -177,23 +177,33 @@ async function writeOrderDeltaCalculations({
     newVal: next.prepayment,
   });
 
-  pushRow({
-    key: "remaining_amount",
-    label: "Остаток",
-    from_place: "Клиент",
-    to_place: orderData?.remaining_to || (wasEditing ? initialParticipants?.remaining_to : "") || "—",
-    oldVal: old.remaining_amount,
-    newVal: next.remaining_amount,
-  });
+  const remainingToBefore = (wasEditing ? initialParticipants?.remaining_to : "") || "";
+  const remainingToAfter = orderData?.remaining_to || "";
+  const remainingToMissingBoth = !remainingToBefore.trim() && !remainingToAfter.trim();
+  if (!remainingToMissingBoth) {
+    pushRow({
+      key: "remaining_amount",
+      label: "Остаток",
+      from_place: "Клиент",
+      to_place: remainingToAfter || remainingToBefore || "—",
+      oldVal: old.remaining_amount,
+      newVal: next.remaining_amount,
+    });
+  }
 
-  pushRow({
-    key: "installer_payment_amount",
-    label: "Оплата монтажа",
-    from_place: orderData?.installer_payment_by || (wasEditing ? initialParticipants?.installer_payment_by : "") || "—",
-    to_place: "Монтаж",
-    oldVal: old.installer_payment_amount,
-    newVal: next.installer_payment_amount,
-  });
+  const installerByBefore = (wasEditing ? initialParticipants?.installer_payment_by : "") || "";
+  const installerByAfter = orderData?.installer_payment_by || "";
+  const installerByMissingBoth = !installerByBefore.trim() && !installerByAfter.trim();
+  if (!installerByMissingBoth) {
+    pushRow({
+      key: "installer_payment_amount",
+      label: "Оплата монтажа",
+      from_place: installerByAfter || installerByBefore || "—",
+      to_place: "Монтаж",
+      oldVal: old.installer_payment_amount,
+      newVal: next.installer_payment_amount,
+    });
+  }
 
   if (rows.length === 0) return;
 

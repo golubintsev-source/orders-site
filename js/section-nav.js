@@ -252,6 +252,9 @@ export function switchSection(sectionId) {
   if (sectionId === "balance") {
     loadBalance();
   }
+  if (sectionId === "calculations") {
+    void import("./calculations.js").then((m) => m.loadCalculations());
+  }
 
   if (sectionId === "tasks-all") {
     void import("./tasks.js").then((m) => m.loadAllTasks());
