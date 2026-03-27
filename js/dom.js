@@ -20,6 +20,19 @@ export const closeFilesModal = document.getElementById("closeFilesModal");
 export const cellTooltip = document.getElementById("cellTooltip");
 export const ordersTable = document.getElementById("ordersTable");
 
+const ORDER_FORM_DATE_INVALID_TEXT = "Дата указана некорректно";
+
+/** Красное сообщение только под обеими кнопками «Сохранить» (#messageTop и #message). */
+export function setOrderFormInvalidDateMessage(show) {
+  const text = show ? ORDER_FORM_DATE_INVALID_TEXT : "";
+  const color = show ? "#d32f2f" : "";
+  [messageTop, message].forEach((el) => {
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = color;
+  });
+}
+
 export function setMessage(text, color) {
   if (message) {
     if (text !== undefined) message.textContent = text;

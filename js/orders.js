@@ -3,6 +3,7 @@ import { state } from "./state.js";
 import {
   clientSearch,
   setMessage,
+  setOrderFormInvalidDateMessage,
   submitBtn,
   submitBtnTop,
   formTitle,
@@ -264,6 +265,20 @@ export function parseOrderFormDdMmYyyyToIso(raw) {
   if (dt.getFullYear() !== yyyy || dt.getMonth() !== mm - 1 || dt.getDate() !== dd) return null;
   const pad = (n) => String(n).padStart(2, "0");
   return `${yyyy}-${pad(mm)}-${pad(dd)}`;
+}
+
+/** В поле непусто, но строка не является полной корректной дд.мм.гггг. */
+function hasInvalidOrderFormDateInput() {
+  const nonEmptyInvalid = (id) => {
+    const raw = (document.getElementById(id)?.value || "").trim();
+    if (!raw) return false;
+    return !parseOrderFormDdMmYyyyToIso(raw);
+  };
+  if (nonEmptyInvalid("order_date")) return true;
+  if (nonEmptyInvalid("delivery_date")) return true;
+  if (document.getElementById("installation")?.checked && nonEmptyInvalid("installation_date")) return true;
+  if (document.getElementById("reveals")?.checked && nonEmptyInvalid("reveals_date")) return true;
+  return false;
 }
 
 /**
@@ -1447,6 +1462,7 @@ export async function deleteOrder(orderId) {
 
 export async function submitOrderForm(event) {
   event.preventDefault();
+  setOrderFormInvalidDateMessage(false);
 
   if (!canMutateOrders()) {
     setMessage("Недостаточно прав для сохранения заявок", "#d32f2f");
@@ -1506,6 +1522,11 @@ export async function submitOrderForm(event) {
       document.getElementById("phone")?.classList.add("phone-invalid");
       return;
     }
+  }
+
+  if (hasInvalidOrderFormDateInput()) {
+    setOrderFormInvalidDateMessage(true);
+    return;
   }
 
   const prepaymentVal = (document.getElementById("prepayment")?.value || "").trim();
