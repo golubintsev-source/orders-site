@@ -232,6 +232,40 @@ async function writeOrderDeltaCalculations({
 const ORDER_FORM_DATE_YEAR_MIN = 2000;
 const ORDER_FORM_DATE_YEAR_MAX = 2099;
 
+/** Только цифры из строки дд.мм.гггг (до 8 шт.). */
+function orderFormDateDigitsOnly(raw) {
+  return String(raw || "").replace(/\D/g, "").slice(0, 8);
+}
+
+/** Форматирует до 8 цифр в дд.мм.гггг с точками. */
+function formatOrderFormDdMmYyyyFromDigits(digits) {
+  const d = orderFormDateDigitsOnly(digits);
+  if (d.length === 0) return "";
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}.${d.slice(2)}`;
+  return `${d.slice(0, 2)}.${d.slice(2, 4)}.${d.slice(4)}`;
+}
+
+/**
+ * Полная дата дд.мм.гггг → yyyy-mm-dd или null (календарная проверка; год 2000–2099).
+ */
+export function parseOrderFormDdMmYyyyToIso(raw) {
+  const s = String(raw || "").trim();
+  const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!m) return null;
+  const dd = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  let yyyy = parseInt(m[3], 10);
+  if (Number.isNaN(dd) || Number.isNaN(mm) || Number.isNaN(yyyy)) return null;
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+  if (yyyy < ORDER_FORM_DATE_YEAR_MIN) yyyy = ORDER_FORM_DATE_YEAR_MIN;
+  if (yyyy > ORDER_FORM_DATE_YEAR_MAX) yyyy = ORDER_FORM_DATE_YEAR_MAX;
+  const dt = new Date(yyyy, mm - 1, dd);
+  if (dt.getFullYear() !== yyyy || dt.getMonth() !== mm - 1 || dt.getDate() !== dd) return null;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${yyyy}-${pad(mm)}-${pad(dd)}`;
+}
+
 /**
  * Подгоняет год к диапазону 2000–2099, если строка уже в формате value у input.
  * @param {string} raw
@@ -266,54 +300,76 @@ export function normalizeOrderFormDateInputValue(raw, type) {
 }
 
 /**
- * Читает value поля даты и подгоняет год к 2000–2099; при необходимости обновляет input.
- * Вызывать при сохранении формы — подстраховка (в т.ч. Яндекс.Браузер: иногда нет «change»).
+ * Читает поле даты (дд.мм.гггг или legacy yyyy-mm-dd), подгоняет год; при необходимости обновляет отображение.
  */
 export function syncOrderFormDateFieldFromDom(id, type) {
   const el = document.getElementById(id);
   if (!el) return null;
   const v = (el.value || "").trim();
   if (!v) return null;
+  if (type === "date") {
+    const fromDots = parseOrderFormDdMmYyyyToIso(v);
+    if (fromDots) {
+      const next = normalizeOrderFormDateInputValue(fromDots, "date");
+      const display = formatDateDDMMYYYY(next);
+      if ((el.value || "").trim() !== display) el.value = display;
+      return next;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      const next = normalizeOrderFormDateInputValue(v, "date");
+      const display = formatDateDDMMYYYY(next);
+      if ((el.value || "").trim() !== display) el.value = display;
+      return next;
+    }
+    return null;
+  }
   const next = normalizeOrderFormDateInputValue(v, type);
   if (next !== v) el.value = next;
   return next;
 }
 
-/** Вешает правило года (маска 20**, 2000–2099) на поля даты формы «Новый / Редактирование». */
-export function bindOrderFormDateYear20xxInputs() {
-  const specs = [
-    { id: "order_date", type: "datetime-local" },
-    { id: "delivery_date", type: "date" },
-    { id: "installation_date", type: "date" },
-    { id: "reveals_date", type: "date" },
-  ];
+/** Собирает order_date + order_time в строку для БД (datetime-local по смыслу). */
+export function syncOrderFormDateTimeFromDom() {
+  const dateIso = syncOrderFormDateFieldFromDom("order_date", "date");
+  const timeEl = document.getElementById("order_time");
+  if (!dateIso) return null;
+  const t = (timeEl?.value || "00:00").trim();
+  const tm = t.match(/^(\d{2}):(\d{2})/);
+  const hh = tm ? tm[1] : "00";
+  const mi = tm ? tm[2] : "00";
+  return normalizeOrderFormDateInputValue(`${dateIso}T${hh}:${mi}`, "datetime-local");
+}
 
-  for (const { id, type } of specs) {
+function orderFormDdMmYyyyInputHandler(el) {
+  const prev = el.value;
+  const selStart = el.selectionStart ?? 0;
+  const digitsBefore = orderFormDateDigitsOnly(prev.slice(0, selStart)).length;
+  const formatted = formatOrderFormDdMmYyyyFromDigits(prev);
+  if (formatted !== prev) {
+    el.value = formatted;
+    let pos = 0;
+    let d = 0;
+    for (let i = 0; i < formatted.length && d < digitsBefore; i++) {
+      if (/\d/.test(formatted[i])) d++;
+      pos = i + 1;
+    }
+    el.setSelectionRange(pos, pos);
+  }
+}
+
+/** Маска дд.мм.гггг: только 8 цифр, точки ставятся автоматически. */
+export function bindOrderFormDdMmYyyyInputs() {
+  const ids = ["order_date", "delivery_date", "installation_date", "reveals_date"];
+  for (const id of ids) {
     const el = document.getElementById(id);
     if (!el) continue;
-
-    // Не вешать «change» на подгонку года: в Яндекс.Браузере и др. при наборе года по цифрам
-    // «change» срабатывает на промежуточных полных датах → ломается ввод, пока не ушли с поля (blur).
-    const tryFix = () => {
-      const v = el.value;
-      if (!v) return;
-      const next = normalizeOrderFormDateInputValue(v, type);
-      if (next !== v) el.value = next;
-    };
-
-    el.addEventListener("focus", () => {
-      el.dataset.orderFormDateSnapshot = el.value || "";
-    });
-    // Подгонка только после ухода с поля; выбор из календаря тоже обычно заканчивается blur.
-    // rAF: значение иногда обновляется чуть позже события blur.
-    el.addEventListener("blur", () => {
-      const snap = el.dataset.orderFormDateSnapshot ?? "";
-      requestAnimationFrame(() => {
-        const v = el.value || "";
-        if (v !== snap) tryFix();
-      });
-    });
+    el.addEventListener("input", () => orderFormDdMmYyyyInputHandler(el));
   }
+}
+
+/** @deprecated используйте bindOrderFormDdMmYyyyInputs */
+export function bindOrderFormDateYear20xxInputs() {
+  bindOrderFormDdMmYyyyInputs();
 }
 
 function parseOrderFormNumber(raw) {
@@ -911,7 +967,7 @@ export function getFormData() {
     order_type: document.getElementById("order_type")?.value.trim() || null,
     address: document.getElementById("address").value.trim() || null,
     payment_status: document.getElementById("payment_status").value.trim() || null,
-    order_date: syncOrderFormDateFieldFromDom("order_date", "datetime-local"),
+    order_date: syncOrderFormDateTimeFromDom(),
     order_number: orderNumberEl ? (orderNumberEl.value.trim() || null) : null,
     description: document.getElementById("description").value.trim() || null,
     amount: parseOrderFormNumber(document.getElementById("amount").value),
@@ -971,10 +1027,11 @@ export function updateConditionalRequiredHighlight() {
   const prepaymentToVal = (document.getElementById("prepayment_to")?.value || "").trim();
   const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
   const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
+  const deliveryDateComplete = !!parseOrderFormDdMmYyyyToIso(deliveryDateVal);
   const prepaymentToEl = document.getElementById("prepayment_to");
   const deliveryDateEl = document.getElementById("delivery_date");
   if (prepaymentToEl) prepaymentToEl.classList.toggle("conditional-invalid", !!prepaymentVal && !prepaymentToVal);
-  if (deliveryDateEl) deliveryDateEl.classList.toggle("conditional-invalid", !!deliveryVal && !deliveryDateVal);
+  if (deliveryDateEl) deliveryDateEl.classList.toggle("conditional-invalid", !!deliveryVal && !deliveryDateComplete);
 }
 
 function getInstallerPaymentElements() {
@@ -998,7 +1055,8 @@ const INSTALLER_BLOCK_INACTIVE_CLASS = "installer-block-inactive";
 /** Блок оплаты монтажа неактивен (серый, disabled), пока не заполнена дата монтажа. */
 export function updateInstallerBlockByInstallationDate() {
   const installationDateInput = document.getElementById("installation_date");
-  const hasDate = !!(installationDateInput && installationDateInput.value && installationDateInput.value.trim());
+  const raw = (installationDateInput?.value || "").trim();
+  const hasDate = !!parseOrderFormDdMmYyyyToIso(raw);
   const { block, amountEl, byEl, rateEl, calcBtn } = getInstallerPaymentElements();
   if (!block) return;
   block.classList.toggle(INSTALLER_BLOCK_INACTIVE_CLASS, !hasDate);
@@ -1087,7 +1145,22 @@ export function fillForm(order) {
   }
   state.initialPaymentStatus = displayStatus;
   const orderDateVal = order.order_date || "";
-  document.getElementById("order_date").value = orderDateVal.includes("T") ? orderDateVal.slice(0, 16) : (orderDateVal ? orderDateVal + "T00:00" : "");
+  const orderDateEl = document.getElementById("order_date");
+  const orderTimeEl = document.getElementById("order_time");
+  if (orderDateEl && orderTimeEl) {
+    if (orderDateVal.includes("T")) {
+      const datePart = orderDateVal.slice(0, 10);
+      orderDateEl.value = /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? formatDateDDMMYYYY(datePart) : "";
+      const tm = orderDateVal.match(/T(\d{2}):(\d{2})/);
+      orderTimeEl.value = tm ? `${tm[1]}:${tm[2]}` : "00:00";
+    } else if (orderDateVal && /^\d{4}-\d{2}-\d{2}$/.test(orderDateVal.slice(0, 10))) {
+      orderDateEl.value = formatDateDDMMYYYY(orderDateVal.slice(0, 10));
+      orderTimeEl.value = "00:00";
+    } else {
+      orderDateEl.value = "";
+      orderTimeEl.value = "00:00";
+    }
+  }
   const orderNumberEl = document.getElementById("order_number");
   if (orderNumberEl) orderNumberEl.value = order.order_number || "";
   document.getElementById("description").value = order.description ?? "";
@@ -1118,20 +1191,39 @@ export function fillForm(order) {
     ? formatOrderFormNumberValue(order.construction_count, ORDER_FORM_NUMERIC_FIELD_DECIMALS.construction_count)
     : "";
   document.getElementById("delivery").value = order.delivery || "";
-  document.getElementById("delivery_date").value = order.delivery_date || "";
+  const deliveryDateEl = document.getElementById("delivery_date");
+  if (deliveryDateEl) {
+    const dd = order.delivery_date;
+    deliveryDateEl.value =
+      dd && typeof dd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dd.slice(0, 10))
+        ? formatDateDDMMYYYY(dd.slice(0, 10))
+        : "";
+  }
   const installationCb = document.getElementById("installation");
   const installationDateWrap = document.getElementById("installationDateWrap");
   const installationDateInput = document.getElementById("installation_date");
   if (installationCb) installationCb.checked = !!order.installation;
   if (installationDateWrap) installationDateWrap.style.display = order.installation ? "" : "none";
-  if (installationDateInput) installationDateInput.value = order.installation_date || "";
+  if (installationDateInput) {
+    const id = order.installation_date;
+    installationDateInput.value =
+      id && typeof id === "string" && /^\d{4}-\d{2}-\d{2}$/.test(id.slice(0, 10))
+        ? formatDateDDMMYYYY(id.slice(0, 10))
+        : "";
+  }
   updateInstallerBlockByInstallationDate();
   const revealsCb = document.getElementById("reveals");
   const revealsDateWrap = document.getElementById("revealsDateWrap");
   const revealsDateInput = document.getElementById("reveals_date");
   if (revealsCb) revealsCb.checked = !!order.reveals;
   if (revealsDateWrap) revealsDateWrap.style.display = order.reveals ? "" : "none";
-  if (revealsDateInput) revealsDateInput.value = order.reveals_date || "";
+  if (revealsDateInput) {
+    const rd = order.reveals_date;
+    revealsDateInput.value =
+      rd && typeof rd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rd.slice(0, 10))
+        ? formatDateDDMMYYYY(rd.slice(0, 10))
+        : "";
+  }
 
   updatePaidField();
   updateConditionalRequiredHighlight();
@@ -1141,12 +1233,6 @@ export function fillForm(order) {
     clearExistingOrderFilesInForm();
   });
   checkInstallerPaymentDone(order.id);
-}
-
-function getNowForDateTimeLocal() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function resetFormMode() {
@@ -1171,7 +1257,13 @@ export function resetFormMode() {
     );
   }
   const orderDateInput = document.getElementById("order_date");
-  if (orderDateInput) orderDateInput.value = getNowForDateTimeLocal();
+  const orderTimeInput = document.getElementById("order_time");
+  if (orderDateInput && orderTimeInput) {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    orderDateInput.value = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()}`;
+    orderTimeInput.value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
   const installationCb = document.getElementById("installation");
   const installationDateWrap = document.getElementById("installationDateWrap");
   const installationDateInput = document.getElementById("installation_date");
@@ -1342,7 +1434,7 @@ export async function submitOrderForm(event) {
   if (prepaymentVal && !prepaymentToVal) conditionalMissing.push("Кому предоплата");
   const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
   const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
-  if (deliveryVal && !deliveryDateVal) conditionalMissing.push("Дата");
+  if (deliveryVal && !parseOrderFormDdMmYyyyToIso(deliveryDateVal)) conditionalMissing.push("Дата");
   if (conditionalMissing.length > 0) {
     setMessage("Заполните поля: " + conditionalMissing.join(", "), "#d32f2f");
     updateConditionalRequiredHighlight();

@@ -36,7 +36,7 @@ import {
   updateInstallerPaymentAmountFromArea,
   updateInstallerBlockByInstallationDate,
   formatOrderFormNumericInputById,
-  bindOrderFormDateYear20xxInputs,
+  bindOrderFormDdMmYyyyInputs,
   canShowEditButtonForOrder,
   setLockEditForUserLite,
 } from "./orders.js";
@@ -234,7 +234,7 @@ function onPhoneInput() {
 export function bindUIEvents() {
   initSectionNavDropdown();
 
-  bindOrderFormDateYear20xxInputs();
+  bindOrderFormDdMmYyyyInputs();
 
   if (phoneInput) {
     phoneInput.addEventListener("input", onPhoneInput);

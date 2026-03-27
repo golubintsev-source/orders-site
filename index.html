@@ -148,7 +148,19 @@
 
           <div class="field field-order-date-hidden">
             <label>Дата заказа</label>
-            <input type="datetime-local" id="order_date" step="60" title="Год: маска 20__ (2000–2099)" />
+            <div class="order-datetime-row">
+              <input
+                type="text"
+                id="order_date"
+                class="order-form-date-ddmmyyyy"
+                inputmode="numeric"
+                autocomplete="off"
+                placeholder="дд.мм.гггг"
+                maxlength="10"
+                title="8 цифр: дд.мм.гггг (год 2000–2099)"
+              />
+              <input type="time" id="order_time" step="60" title="Время" />
+            </div>
           </div>
 
           <div class="field compact-fields-row">
@@ -210,7 +222,16 @@
             </div>
             <div class="field">
               <label>Дата отправки</label>
-              <input type="date" id="delivery_date" title="Год: маска 20__ (2000–2099)" />
+              <input
+                type="text"
+                id="delivery_date"
+                class="order-form-date-ddmmyyyy"
+                inputmode="numeric"
+                autocomplete="off"
+                placeholder="дд.мм.гггг"
+                maxlength="10"
+                title="8 цифр: дд.мм.гггг (год 2000–2099)"
+              />
             </div>
           </div>
 
@@ -238,7 +259,16 @@
             </div>
             <div class="installation-date-inline" id="installationDateWrap" style="display: none;">
               <label for="installation_date">Дата</label>
-              <input type="date" id="installation_date" title="Год: маска 20__ (2000–2099)" />
+              <input
+                type="text"
+                id="installation_date"
+                class="order-form-date-ddmmyyyy"
+                inputmode="numeric"
+                autocomplete="off"
+                placeholder="дд.мм.гггг"
+                maxlength="10"
+                title="8 цифр: дд.мм.гггг (год 2000–2099)"
+              />
             </div>
           </div>
 
@@ -276,7 +306,16 @@
             </div>
             <div class="installation-date-inline" id="revealsDateWrap" style="display: none;">
               <label for="reveals_date">Дата</label>
-              <input type="date" id="reveals_date" title="Год: маска 20__ (2000–2099)" />
+              <input
+                type="text"
+                id="reveals_date"
+                class="order-form-date-ddmmyyyy"
+                inputmode="numeric"
+                autocomplete="off"
+                placeholder="дд.мм.гггг"
+                maxlength="10"
+                title="8 цифр: дд.мм.гггг (год 2000–2099)"
+              />
             </div>
           </div>
 
