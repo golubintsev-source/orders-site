@@ -111,18 +111,16 @@ const ORDER_FORM_NUMERIC_FIELD_DECIMALS = {
 
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 
-function formatDateTimeRu(iso) {
-  if (!iso) return "";
+/** Время чч:мм (локальное) для автокомментария в «Расчеты». */
+function formatTimeHHmmFromIso(iso) {
+  if (!iso) return "--:--";
   try {
     const d = new Date(iso);
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = d.getFullYear();
     const hh = String(d.getHours()).padStart(2, "0");
     const mi = String(d.getMinutes()).padStart(2, "0");
-    return `${dd}.${mm}.${yyyy} ${hh}:${mi}`;
+    return `${hh}:${mi}`;
   } catch {
-    return "";
+    return "--:--";
   }
 }
 
@@ -149,8 +147,10 @@ async function writeOrderDeltaCalculations({
   if (!orderId) return;
 
   const nowIso = new Date().toISOString();
-  const nowText = formatDateTimeRu(nowIso);
+  const timeHHmm = formatTimeHHmmFromIso(nowIso);
   const actorShort = shortLoginByEmail(state.currentUser?.email);
+  const orderNumberStr = formatOrderIdTypeChip(orderId, orderData?.order_type) || `#${orderId}`;
+  const clientStr = (orderData?.client && String(orderData.client).trim()) || "—";
   const old = {
     prepayment: wasEditing ? toComparableNumber(initialSums?.prepayment) : 0,
     remaining_amount: wasEditing ? toComparableNumber(initialSums?.remaining_amount) : 0,
@@ -163,7 +163,7 @@ async function writeOrderDeltaCalculations({
   };
 
   const rows = [];
-  const pushRow = ({ key, label, from_place, to_place, oldVal, newVal }) => {
+  const pushRow = ({ key, kindLabel, from_place, to_place, oldVal, newVal }) => {
     const delta = newVal - oldVal;
     if (Math.abs(delta) < 0.000001) return;
     rows.push({
@@ -171,7 +171,7 @@ async function writeOrderDeltaCalculations({
       from_place: from_place || "—",
       to_place: to_place || "—",
       amount: delta,
-      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${label}; заказ #${orderId}; дельта ${formatAmount(delta)}; ${formatAmount(oldVal)} → ${formatAmount(newVal)}; ${nowText}; ${actorShort}`,
+      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${kindLabel}; ${orderNumberStr}; ${clientStr}; ${formatAmount(oldVal)} → ${formatAmount(newVal)}; ${timeHHmm}; ${actorShort}`,
       order_id: orderId,
       delta_key: key,
     });
@@ -179,7 +179,7 @@ async function writeOrderDeltaCalculations({
 
   pushRow({
     key: "prepayment",
-    label: "Предоплата",
+    kindLabel: "Предоплата",
     from_place: "Клиент",
     to_place: orderData?.prepayment_to || (wasEditing ? initialParticipants?.prepayment_to : "") || "—",
     oldVal: old.prepayment,
@@ -192,7 +192,7 @@ async function writeOrderDeltaCalculations({
   if (!remainingToMissingBoth) {
     pushRow({
       key: "remaining_amount",
-      label: "Остаток",
+      kindLabel: "Остаток",
       from_place: "Клиент",
       to_place: remainingToAfter || remainingToBefore || "—",
       oldVal: old.remaining_amount,
@@ -206,7 +206,7 @@ async function writeOrderDeltaCalculations({
   if (!installerByMissingBoth) {
     pushRow({
       key: "installer_payment_amount",
-      label: "Оплата монтажа",
+      kindLabel: "Монтаж",
       from_place: installerByAfter || installerByBefore || "—",
       to_place: "Монтаж",
       oldVal: old.installer_payment_amount,

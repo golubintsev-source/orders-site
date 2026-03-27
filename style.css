@@ -856,7 +856,7 @@ h2 {
   white-space: nowrap;
 }
 #calculationsTable td.td-calc-comment {
-  max-width: 220px;
+  max-width: 440px;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: help;
