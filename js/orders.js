@@ -357,7 +357,77 @@ function orderFormDdMmYyyyInputHandler(el) {
   }
 }
 
-/** Маска дд.мм.гггг: только 8 цифр, точки ставятся автоматически. */
+function orderFormNativePickerId(textFieldId) {
+  return `${textFieldId}_picker`;
+}
+
+/** Скрытый input[type=date] синхронизировать с дд.мм.гггг */
+export function syncOrderFormTextFieldToNativePicker(textFieldId) {
+  const textEl = document.getElementById(textFieldId);
+  const picker = document.getElementById(orderFormNativePickerId(textFieldId));
+  if (!textEl || !picker) return;
+  const iso = parseOrderFormDdMmYyyyToIso((textEl.value || "").trim());
+  picker.value = iso || "";
+}
+
+function applyNativePickerToOrderFormTextField(textFieldId) {
+  const textEl = document.getElementById(textFieldId);
+  const picker = document.getElementById(orderFormNativePickerId(textFieldId));
+  if (!textEl || !picker) return;
+  const v = (picker.value || "").trim();
+  if (!v) return;
+  const next = normalizeOrderFormDateInputValue(v, "date");
+  textEl.value = formatDateDDMMYYYY(next);
+  textEl.dispatchEvent(new Event("input", { bubbles: true }));
+  updateConditionalRequiredHighlight();
+  if (textFieldId === "installation_date") updateInstallerBlockByInstallationDate();
+}
+
+function openOrderFormNativeDatePicker(textFieldId) {
+  const picker = document.getElementById(orderFormNativePickerId(textFieldId));
+  if (!picker) return;
+  const textEl = document.getElementById(textFieldId);
+  const existing = parseOrderFormDdMmYyyyToIso((textEl?.value || "").trim());
+  if (existing) {
+    picker.value = existing;
+  } else {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    let y = d.getFullYear();
+    if (y < ORDER_FORM_DATE_YEAR_MIN) y = ORDER_FORM_DATE_YEAR_MIN;
+    if (y > ORDER_FORM_DATE_YEAR_MAX) y = ORDER_FORM_DATE_YEAR_MAX;
+    picker.value = `${y}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  if (typeof picker.showPicker === "function") {
+    try {
+      picker.showPicker();
+      return;
+    } catch {
+      /* не все контексты / браузеры */
+    }
+  }
+  picker.click();
+}
+
+function bindOrderFormDateCalendarPickers() {
+  document.querySelectorAll(".order-form-date-calendar-btn[data-date-field]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute("data-date-field");
+      if (id) openOrderFormNativeDatePicker(id);
+    });
+  });
+  const ids = ["order_date", "delivery_date", "installation_date", "reveals_date"];
+  for (const id of ids) {
+    const picker = document.getElementById(orderFormNativePickerId(id));
+    if (!picker) continue;
+    picker.addEventListener("change", () => applyNativePickerToOrderFormTextField(id));
+    const textEl = document.getElementById(id);
+    if (textEl) textEl.addEventListener("blur", () => syncOrderFormTextFieldToNativePicker(id));
+  }
+}
+
+/** Маска дд.мм.гггг: только 8 цифр, точки ставятся автоматически; календарь через нативный date. */
 export function bindOrderFormDdMmYyyyInputs() {
   const ids = ["order_date", "delivery_date", "installation_date", "reveals_date"];
   for (const id of ids) {
@@ -365,6 +435,7 @@ export function bindOrderFormDdMmYyyyInputs() {
     if (!el) continue;
     el.addEventListener("input", () => orderFormDdMmYyyyInputHandler(el));
   }
+  bindOrderFormDateCalendarPickers();
 }
 
 /** @deprecated используйте bindOrderFormDdMmYyyyInputs */
@@ -1225,6 +1296,10 @@ export function fillForm(order) {
         : "";
   }
 
+  ["order_date", "delivery_date", "installation_date", "reveals_date"].forEach((id) => {
+    syncOrderFormTextFieldToNativePicker(id);
+  });
+
   updatePaidField();
   updateConditionalRequiredHighlight();
   resetFileUpload();
@@ -1277,6 +1352,11 @@ export function resetFormMode() {
   if (revealsCb) revealsCb.checked = false;
   if (revealsDateWrap) revealsDateWrap.style.display = "none";
   if (revealsDateInput) revealsDateInput.value = "";
+  const deliveryDateReset = document.getElementById("delivery_date");
+  if (deliveryDateReset) deliveryDateReset.value = "";
+  ["order_date", "delivery_date", "installation_date", "reveals_date"].forEach((id) => {
+    syncOrderFormTextFieldToNativePicker(id);
+  });
   const phoneEl = document.getElementById("phone");
   if (phoneEl) phoneEl.dispatchEvent(new Event("input", { bubbles: true }));
   resetFileUpload();

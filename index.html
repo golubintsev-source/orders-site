@@ -149,16 +149,41 @@
           <div class="field field-order-date-hidden">
             <label>Дата заказа</label>
             <div class="order-datetime-row">
-              <input
-                type="text"
-                id="order_date"
-                class="order-form-date-ddmmyyyy"
-                inputmode="numeric"
-                autocomplete="off"
-                placeholder="дд.мм.гггг"
-                maxlength="10"
-                title="8 цифр: дд.мм.гггг (год 2000–2099)"
-              />
+              <div class="order-form-date-with-picker">
+                <input
+                  type="text"
+                  id="order_date"
+                  class="order-form-date-ddmmyyyy"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  placeholder="дд.мм.гггг"
+                  maxlength="10"
+                  title="8 цифр: дд.мм.гггг (год 2000–2099)"
+                />
+                <input
+                  type="date"
+                  id="order_date_picker"
+                  class="order-form-date-native"
+                  min="2000-01-01"
+                  max="2099-12-31"
+                  tabindex="-1"
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  class="order-form-date-calendar-btn"
+                  data-date-field="order_date"
+                  aria-label="Открыть календарь"
+                  title="Календарь"
+                >
+                  <svg class="order-form-date-calendar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </button>
+              </div>
               <input type="time" id="order_time" step="60" title="Время" />
             </div>
           </div>
@@ -222,16 +247,41 @@
             </div>
             <div class="field">
               <label>Дата отправки</label>
-              <input
-                type="text"
-                id="delivery_date"
-                class="order-form-date-ddmmyyyy"
-                inputmode="numeric"
-                autocomplete="off"
-                placeholder="дд.мм.гггг"
-                maxlength="10"
-                title="8 цифр: дд.мм.гггг (год 2000–2099)"
-              />
+              <div class="order-form-date-with-picker">
+                <input
+                  type="text"
+                  id="delivery_date"
+                  class="order-form-date-ddmmyyyy"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  placeholder="дд.мм.гггг"
+                  maxlength="10"
+                  title="8 цифр: дд.мм.гггг (год 2000–2099)"
+                />
+                <input
+                  type="date"
+                  id="delivery_date_picker"
+                  class="order-form-date-native"
+                  min="2000-01-01"
+                  max="2099-12-31"
+                  tabindex="-1"
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  class="order-form-date-calendar-btn"
+                  data-date-field="delivery_date"
+                  aria-label="Открыть календарь"
+                  title="Календарь"
+                >
+                  <svg class="order-form-date-calendar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -259,16 +309,41 @@
             </div>
             <div class="installation-date-inline" id="installationDateWrap" style="display: none;">
               <label for="installation_date">Дата</label>
-              <input
-                type="text"
-                id="installation_date"
-                class="order-form-date-ddmmyyyy"
-                inputmode="numeric"
-                autocomplete="off"
-                placeholder="дд.мм.гггг"
-                maxlength="10"
-                title="8 цифр: дд.мм.гггг (год 2000–2099)"
-              />
+              <div class="order-form-date-with-picker">
+                <input
+                  type="text"
+                  id="installation_date"
+                  class="order-form-date-ddmmyyyy"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  placeholder="дд.мм.гггг"
+                  maxlength="10"
+                  title="8 цифр: дд.мм.гггг (год 2000–2099)"
+                />
+                <input
+                  type="date"
+                  id="installation_date_picker"
+                  class="order-form-date-native"
+                  min="2000-01-01"
+                  max="2099-12-31"
+                  tabindex="-1"
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  class="order-form-date-calendar-btn"
+                  data-date-field="installation_date"
+                  aria-label="Открыть календарь"
+                  title="Календарь"
+                >
+                  <svg class="order-form-date-calendar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -306,16 +381,41 @@
             </div>
             <div class="installation-date-inline" id="revealsDateWrap" style="display: none;">
               <label for="reveals_date">Дата</label>
-              <input
-                type="text"
-                id="reveals_date"
-                class="order-form-date-ddmmyyyy"
-                inputmode="numeric"
-                autocomplete="off"
-                placeholder="дд.мм.гггг"
-                maxlength="10"
-                title="8 цифр: дд.мм.гггг (год 2000–2099)"
-              />
+              <div class="order-form-date-with-picker">
+                <input
+                  type="text"
+                  id="reveals_date"
+                  class="order-form-date-ddmmyyyy"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  placeholder="дд.мм.гггг"
+                  maxlength="10"
+                  title="8 цифр: дд.мм.гггг (год 2000–2099)"
+                />
+                <input
+                  type="date"
+                  id="reveals_date_picker"
+                  class="order-form-date-native"
+                  min="2000-01-01"
+                  max="2099-12-31"
+                  tabindex="-1"
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  class="order-form-date-calendar-btn"
+                  data-date-field="reveals_date"
+                  aria-label="Открыть календарь"
+                  title="Календарь"
+                >
+                  <svg class="order-form-date-calendar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
