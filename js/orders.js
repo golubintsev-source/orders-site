@@ -259,8 +259,7 @@ export function parseOrderFormDdMmYyyyToIso(raw) {
   let yyyy = parseInt(m[3], 10);
   if (Number.isNaN(dd) || Number.isNaN(mm) || Number.isNaN(yyyy)) return null;
   if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
-  if (yyyy < ORDER_FORM_DATE_YEAR_MIN) yyyy = ORDER_FORM_DATE_YEAR_MIN;
-  if (yyyy > ORDER_FORM_DATE_YEAR_MAX) yyyy = ORDER_FORM_DATE_YEAR_MAX;
+  if (yyyy < ORDER_FORM_DATE_YEAR_MIN || yyyy > ORDER_FORM_DATE_YEAR_MAX) return null;
   const dt = new Date(yyyy, mm - 1, dd);
   if (dt.getFullYear() !== yyyy || dt.getMonth() !== mm - 1 || dt.getDate() !== dd) return null;
   const pad = (n) => String(n).padStart(2, "0");
@@ -331,6 +330,8 @@ export function syncOrderFormDateFieldFromDom(id, type) {
       return next;
     }
     if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      const y = parseInt(v.slice(0, 4), 10);
+      if (Number.isNaN(y) || y < ORDER_FORM_DATE_YEAR_MIN || y > ORDER_FORM_DATE_YEAR_MAX) return null;
       const next = normalizeOrderFormDateInputValue(v, "date");
       const display = formatDateDDMMYYYY(next);
       if ((el.value || "").trim() !== display) el.value = display;
@@ -398,11 +399,15 @@ function applyNativePickerToOrderFormTextField(textFieldId) {
   if (textFieldId === "installation_date") updateInstallerBlockByInstallationDate();
 }
 
-function openOrderFormNativeDatePicker(textFieldId) {
-  const picker = document.getElementById(orderFormNativePickerId(textFieldId));
-  if (!picker) return;
+/**
+ * Перед открытием нативного календаря (в т.ч. на iOS — только прямой тап по input type=date).
+ * Подставляет в picker текущую дату из поля или сегодняшнюю в допустимом диапазоне.
+ */
+function primeOrderFormNativePickerFromText(textFieldId) {
   const textEl = document.getElementById(textFieldId);
-  const existing = parseOrderFormDdMmYyyyToIso((textEl?.value || "").trim());
+  const picker = document.getElementById(orderFormNativePickerId(textFieldId));
+  if (!textEl || !picker) return;
+  const existing = parseOrderFormDdMmYyyyToIso((textEl.value || "").trim());
   if (existing) {
     picker.value = existing;
   } else {
@@ -413,29 +418,17 @@ function openOrderFormNativeDatePicker(textFieldId) {
     if (y > ORDER_FORM_DATE_YEAR_MAX) y = ORDER_FORM_DATE_YEAR_MAX;
     picker.value = `${y}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
-  if (typeof picker.showPicker === "function") {
-    try {
-      picker.showPicker();
-      return;
-    } catch {
-      /* не все контексты / браузеры */
-    }
-  }
-  picker.click();
 }
 
 function bindOrderFormDateCalendarPickers() {
-  document.querySelectorAll(".order-form-date-calendar-btn[data-date-field]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      const id = btn.getAttribute("data-date-field");
-      if (id) openOrderFormNativeDatePicker(id);
-    });
-  });
   const ids = ["order_date", "delivery_date", "installation_date", "reveals_date"];
   for (const id of ids) {
     const picker = document.getElementById(orderFormNativePickerId(id));
     if (!picker) continue;
+    const prime = () => primeOrderFormNativePickerFromText(id);
+    picker.addEventListener("focus", prime);
+    picker.addEventListener("touchstart", prime, { passive: true });
+    picker.addEventListener("pointerdown", prime);
     picker.addEventListener("change", () => applyNativePickerToOrderFormTextField(id));
     const textEl = document.getElementById(id);
     if (textEl) textEl.addEventListener("blur", () => syncOrderFormTextFieldToNativePicker(id));
