@@ -842,6 +842,9 @@ h2 {
   width: max-content;
   max-width: 100%;
   min-width: 0;
+  /* iOS Safari: не раздувать отдельные ячейки с длинным текстом */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* Колонка «Сумма» — по правому краю (как денежные колонки в заказах) */
@@ -857,9 +860,23 @@ h2 {
 }
 #calculationsTable td.td-calc-comment {
   max-width: 440px;
+  cursor: help;
+  font-size: 13px;
+  line-height: 1.35;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* Как у .status-value в «Дата» / «Сумма»: тот же кегль, без серой подложки */
+#calculationsTable td.td-calc-comment .calc-table-cell-text {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
-  cursor: help;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 400;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 #calculationsTable tr.calc-row-system td {
   background: #e3f2fd;

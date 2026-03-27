@@ -124,7 +124,7 @@ export async function loadCalculations() {
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
       <td class="td-money"><span class="status-value">${escapeHtml(formatAmount(row.amount))}</span></td>
-      <td class="td-calc-comment" title="${escapedComment}">${escapedComment}</td>
+      <td class="td-calc-comment" title="${escapedComment}"><span class="calc-table-cell-text">${escapedComment}</span></td>
       ${actionsCell}
     `;
     tbody.appendChild(tr);
