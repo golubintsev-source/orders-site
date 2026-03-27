@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS calculations (
   from_place text,
   to_place text,
   amount numeric,
-  comment text
+  comment text,
+  deleted_at timestamptz NULL
 );
 
 -- Включить RLS и разрешить доступ по текущей политике (если у вас уже есть политики для orders — добавьте аналогичные для calculations)

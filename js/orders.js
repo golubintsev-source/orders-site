@@ -1248,6 +1248,7 @@ export async function checkInstallerPaymentDone(orderId) {
   const { data } = await supabaseClient
     .from("calculations")
     .select("from_place, amount")
+    .is("deleted_at", null)
     .ilike("comment", `%монтажнику за заказ -${orderId}-%`)
     .limit(1);
   const row = data?.[0];

@@ -82,7 +82,8 @@ export async function loadBalance() {
 
   const calcRes = await supabaseClient
     .from("calculations")
-    .select("from_place,to_place,amount,created_at");
+    .select("from_place,to_place,amount,created_at")
+    .is("deleted_at", null);
 
   if (calcRes.error) {
     console.error("Ошибка загрузки расчётов для баланса:", calcRes.error);

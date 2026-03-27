@@ -98,7 +98,8 @@ export async function loadCalculations() {
 
   const { data, error } = await supabaseClient
     .from("calculations")
-    .select("id, created_at, from_place, to_place, amount, comment")
+    .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   tbody.innerHTML = "";
@@ -126,12 +127,17 @@ export async function loadCalculations() {
       ? comment.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim()
       : comment;
     const escapedComment = escapeHtml(displayComment);
-    const actionsCell = isAdmin() && !isOrderDeltaRow
-      ? `<td class="td-actions">
+    const actionsCell =
+      isAdmin() && !isOrderDeltaRow
+        ? `<td class="td-actions">
         <button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>
-        <button type="button" class="btn-icon btn-delete" data-id="${row.id}" title="Удалить">${CALC_ICON_DELETE_SVG}</button>
+        <button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>
       </td>`
-      : `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`;
+        : isAdmin() && isOrderDeltaRow
+          ? `<td class="td-actions">
+        <button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>
+      </td>`
+          : `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`;
     const tr = document.createElement("tr");
     if (isOrderDeltaRow) tr.classList.add("calc-row-system");
     tr.innerHTML = `
@@ -149,8 +155,8 @@ export async function loadCalculations() {
     tbody.querySelectorAll(".btn-edit").forEach((btn) => {
       btn.addEventListener("click", () => startEdit(Number(btn.dataset.id)));
     });
-    tbody.querySelectorAll(".btn-delete").forEach((btn) => {
-      btn.addEventListener("click", () => deleteRow(Number(btn.dataset.id)));
+    tbody.querySelectorAll(".btn-delete-calc").forEach((btn) => {
+      btn.addEventListener("click", () => softDeleteCalculationRow(Number(btn.dataset.id)));
     });
   }
 }
@@ -207,6 +213,7 @@ function startEdit(id) {
     .from("calculations")
     .select("id, created_at, from_place, to_place, amount, comment")
     .eq("id", id)
+    .is("deleted_at", null)
     .single()
     .then(({ data, error }) => {
       if (error || !data) {
@@ -231,7 +238,8 @@ async function submitForm(e) {
     const { error } = await supabaseClient
       .from("calculations")
       .update(payload)
-      .eq("id", editingId);
+      .eq("id", editingId)
+      .is("deleted_at", null);
     if (error) {
       console.error("Ошибка обновления:", error);
       setMessage("Ошибка при сохранении.", true);
@@ -253,17 +261,28 @@ async function submitForm(e) {
   await loadCalculations();
 }
 
-async function deleteRow(id) {
+/** Запись не удаляется из БД — только выставляется deleted_at. */
+async function softDeleteCalculationRow(id) {
   if (!isAdmin()) return;
-  if (!confirm("Удалить эту запись?")) return;
-  const { error } = await supabaseClient.from("calculations").delete().eq("id", id);
+  if (
+    !confirm(
+      "Скрыть эту запись из списка? В базе останется пометка удаления, строка не удаляется физически."
+    )
+  ) {
+    return;
+  }
+  const { error } = await supabaseClient
+    .from("calculations")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("deleted_at", null);
   if (error) {
-    console.error("Ошибка удаления:", error);
-    setMessage("Ошибка при удалении.", true);
+    console.error("Ошибка пометки удаления:", error);
+    setMessage("Не удалось пометить запись. Проверьте колонку deleted_at в таблице calculations.", true);
     return;
   }
   if (editingId === id) resetForm();
-  setMessage("");
+  setMessage("Запись скрыта из списка.");
   await loadCalculations();
 }
 
