@@ -33,6 +33,7 @@ import {
   updatePaidField,
   updateRemainingFromCostAndPrepayment,
   updateConditionalRequiredHighlight,
+  updateOrderFormDateFieldHighlights,
   updateInstallerPaymentAmountFromArea,
   updateInstallerBlockByInstallationDate,
   formatOrderFormNumericInputById,
@@ -310,6 +311,7 @@ export function bindUIEvents() {
       installationDateWrap.style.display = installationCb.checked ? "" : "none";
       if (!installationCb.checked && installationDateInput) installationDateInput.value = "";
       updateInstallerBlockByInstallationDate();
+      updateOrderFormDateFieldHighlights(false);
     });
   }
   if (installationDateInput) {
@@ -324,6 +326,7 @@ export function bindUIEvents() {
     revealsCb.addEventListener("change", () => {
       revealsDateWrap.style.display = revealsCb.checked ? "" : "none";
       if (!revealsCb.checked && revealsDateInput) revealsDateInput.value = "";
+      updateOrderFormDateFieldHighlights(false);
     });
   }
 

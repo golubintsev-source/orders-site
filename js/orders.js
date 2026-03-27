@@ -280,6 +280,49 @@ function hasInvalidOrderFormDateInput() {
   return false;
 }
 
+function dateFieldShouldValidate(textFieldId) {
+  if (textFieldId === "installation_date") return Boolean(document.getElementById("installation")?.checked);
+  if (textFieldId === "reveals_date") return Boolean(document.getElementById("reveals")?.checked);
+  return true;
+}
+
+/**
+ * Подсвечивает неверные даты красным.
+ * @param {boolean} showAllInvalid если true — подсвечиваем любой непустой некорректный ввод,
+ *                                  если false — подсвечиваем только когда введены все 8 цифр.
+ */
+export function updateOrderFormDateFieldHighlights(showAllInvalid = false) {
+  const ids = ["order_date", "delivery_date", "installation_date", "reveals_date"];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+
+    const raw = (el.value || "").trim();
+    const shouldValidate = dateFieldShouldValidate(id);
+
+    if (!shouldValidate) {
+      el.classList.remove("date-invalid");
+      continue;
+    }
+
+    if (!raw) {
+      el.classList.remove("date-invalid");
+      continue;
+    }
+
+    if (!showAllInvalid) {
+      const digitsCount = raw.replace(/\D/g, "").length;
+      if (digitsCount < 8) {
+        el.classList.remove("date-invalid");
+        continue;
+      }
+    }
+
+    const invalid = !parseOrderFormDdMmYyyyToIso(raw);
+    el.classList.toggle("date-invalid", invalid);
+  }
+}
+
 /**
  * Подгоняет год к диапазону 2000–2099, если строка уже в формате value у input.
  * @param {string} raw
@@ -441,7 +484,11 @@ export function bindOrderFormDdMmYyyyInputs() {
   for (const id of ids) {
     const el = document.getElementById(id);
     if (!el) continue;
-    el.addEventListener("input", () => orderFormDdMmYyyyInputHandler(el));
+    el.addEventListener("input", () => {
+      orderFormDdMmYyyyInputHandler(el);
+      updateOrderFormDateFieldHighlights(false);
+    });
+    el.addEventListener("blur", () => updateOrderFormDateFieldHighlights(false));
   }
   bindOrderFormDateCalendarPickers();
 }
@@ -1310,6 +1357,7 @@ export function fillForm(order) {
 
   updatePaidField();
   updateConditionalRequiredHighlight();
+  updateOrderFormDateFieldHighlights(false);
   resetFileUpload();
   void renderExistingOrderFilesInForm(order.id).catch((err) => {
     console.error("Список файлов заявки:", err);
@@ -1365,6 +1413,7 @@ export function resetFormMode() {
   ["order_date", "delivery_date", "installation_date", "reveals_date"].forEach((id) => {
     syncOrderFormTextFieldToNativePicker(id);
   });
+  updateOrderFormDateFieldHighlights(false);
   const phoneEl = document.getElementById("phone");
   if (phoneEl) phoneEl.dispatchEvent(new Event("input", { bubbles: true }));
   resetFileUpload();
@@ -1518,6 +1567,7 @@ export async function submitOrderForm(event) {
   }
 
   if (hasInvalidOrderFormDateInput()) {
+    updateOrderFormDateFieldHighlights(true);
     setOrderFormInvalidDateMessage(true);
     return;
   }

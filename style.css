@@ -1529,6 +1529,12 @@ select:required:valid {
   background-color: #ffebee;
 }
 
+/* Неверные даты дд.мм.гггг */
+.date-invalid {
+  background-color: #ffebee;
+  border-color: #d32f2f;
+}
+
 /* ===== кнопки ===== */
 button {
   border: none;
