@@ -42,6 +42,7 @@ import {
   setLockEditForUserLite,
 } from "./orders.js";
 import { mergeNewAttachmentsOnChange } from "./files.js";
+import { initClientAutocomplete } from "./clientAutocomplete.js";
 import {
   saveInstallerRate,
   saveBalanceAdjustments,
@@ -246,6 +247,7 @@ export function bindUIEvents() {
   if (clientInput) {
     clientInput.addEventListener("input", () => clientInput.classList.remove("client-invalid"));
   }
+  initClientAutocomplete();
 
   const paymentStatusEl = document.getElementById("payment_status");
   if (paymentStatusEl) {

@@ -569,6 +569,58 @@ h2 {
   box-sizing: border-box;
 }
 
+#section-new .client-input-wrap {
+  position: relative;
+  width: 100%;
+}
+
+#section-new .client-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 60;
+  margin: 4px 0 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+#section-new .client-suggestions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #111827;
+}
+
+#section-new .client-suggestions li[aria-selected="true"],
+#section-new .client-suggestions li:hover {
+  background: #f3f4f6;
+}
+
+#section-new .client-suggestions .client-suggestion-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#section-new .client-suggestions .client-suggestion-count {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
 /* Визуально "склеиваем" поля Клиент + Тип заказа (убираем внутренние скругления) */
 #section-new .client-row .client-field input {
   border-top-right-radius: 0;
@@ -800,7 +852,9 @@ h2 {
 /* ===== секция Расчеты (как страница Новый) ===== */
 #section-calculations .card,
 .calculations-page .card {
-  max-width: 600px;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
   padding: 12px;
 }
 
@@ -859,17 +913,42 @@ h2 {
 }
 
 /*
- * Не наследовать width: 100% и min-width: 900px от общего `table`.
- * Любой min-width больше суммы колонок раздувает таблицу — лишняя ширина уходит в колонки
- * (между «Куда» и правым краем ячейки «Сумма» огромный зазор из-за text-align: right).
+ * Таблица на всю ширину карточки — без горизонтального скролла в .table-wrap.
+ * Глобальный `table { min-width: 900px }` отменяем через min-width: 0 ниже.
  */
+#section-calculations .table-wrap,
+.calculations-page .table-wrap {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 #calculationsTable {
-  width: max-content;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
+  table-layout: fixed;
   /* iOS Safari: не раздувать отдельные ячейки с длинным текстом */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
+
+#calculationsTable thead th:nth-child(1) {
+  width: 9%;
+}
+#calculationsTable thead th:nth-child(2) {
+  width: 12%;
+}
+#calculationsTable thead th:nth-child(3) {
+  width: 12%;
+}
+#calculationsTable thead th:nth-child(4) {
+  width: 11%;
+}
+#calculationsTable thead th:nth-child(5) {
+  width: 44%;
+}
+#calculationsTable thead th:nth-child(6) {
+  width: 12%;
 }
 
 /* Колонка «Сумма» — по правому краю (как денежные колонки в заказах) */
@@ -884,7 +963,8 @@ h2 {
   white-space: nowrap;
 }
 #calculationsTable td.td-calc-comment {
-  max-width: 440px;
+  max-width: 100%;
+  min-width: 0;
   cursor: help;
   font-size: 13px;
   line-height: 1.35;

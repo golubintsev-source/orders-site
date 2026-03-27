@@ -117,7 +117,10 @@
           <div class="client-row">
             <div class="field client-field">
               <label>Клиент</label>
-              <input type="text" id="client" />
+              <div class="client-input-wrap">
+                <input type="text" id="client" autocomplete="off" />
+                <ul id="clientSuggestions" class="client-suggestions" hidden role="listbox" aria-label="Подсказки: клиенты из заказов"></ul>
+              </div>
             </div>
             <div class="field">
               <label>Тип заказа</label>
