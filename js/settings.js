@@ -1,6 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { isAdmin } from "./roles.js";
+import { checkDatabaseAvailable, setDbUnavailableBannerVisible } from "./dbHealth.js";
 
 const KEY_INSTALLER_RATE = "installer_rate_per_m2";
 const DEFAULT_RATE = 1400;
@@ -23,7 +24,19 @@ export function parseAdjustmentInt(raw) {
 /** Загрузить настройки из БД и обновить state и поля на странице. */
 export async function loadSettings() {
   const keys = [KEY_INSTALLER_RATE, ...BALANCE_ADJ_FIELDS.map((f) => f.settingKey)];
-  const { data: rows, error } = await supabaseClient.from("app_settings").select("key, value").in("key", keys);
+  let rows;
+  let error;
+  if (await checkDatabaseAvailable()) {
+    const res = await supabaseClient.from("app_settings").select("key, value").in("key", keys);
+    rows = res.data;
+    error = res.error;
+    if (error) setDbUnavailableBannerVisible(true);
+    else setDbUnavailableBannerVisible(false);
+  } else {
+    setDbUnavailableBannerVisible(true);
+    rows = null;
+    error = { message: "unreachable" };
+  }
 
   const byKey = Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
 

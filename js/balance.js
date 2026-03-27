@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { isUserLite } from "./roles.js";
+import { checkDatabaseAvailable, setDbUnavailableBannerVisible } from "./dbHealth.js";
 import { formatAmount } from "./format.js";
 import { state } from "./state.js";
 
@@ -63,6 +64,13 @@ export async function loadBalance() {
 
   if (messageEl) messageEl.textContent = "";
 
+  if (!(await checkDatabaseAvailable())) {
+    setDbUnavailableBannerVisible(true);
+    if (messageEl) messageEl.textContent = "Не удалось загрузить баланс.";
+    tbody.innerHTML = "";
+    return;
+  }
+
   const balances = Object.fromEntries(PARTICIPANTS.map((p) => [p, 0]));
   const [todayKey, dayM1Key, dayM2Key, dayM3Key] = getRecentMskDayKeys(4);
   const turnover = Object.fromEntries(
@@ -78,9 +86,11 @@ export async function loadBalance() {
 
   if (calcRes.error) {
     console.error("Ошибка загрузки расчётов для баланса:", calcRes.error);
+    setDbUnavailableBannerVisible(true);
     if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса";
     return;
   }
+  setDbUnavailableBannerVisible(false);
   const calcRows = calcRes.data || [];
   for (const row of calcRows) {
     const amount = toNumber(row.amount);

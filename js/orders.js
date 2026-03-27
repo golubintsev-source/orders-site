@@ -1,4 +1,5 @@
 import { supabaseClient } from "./config.js";
+import { checkDatabaseAvailable, setDbUnavailableBannerVisible } from "./dbHealth.js";
 import { state } from "./state.js";
 import {
   clientSearch,
@@ -35,6 +36,23 @@ import {
 } from "./roles.js";
 
 export async function loadOrders() {
+  if (!(await checkDatabaseAvailable())) {
+    setDbUnavailableBannerVisible(true);
+    state.allOrders = [];
+    state.filesCountMap = {};
+    applyFiltersAndRender();
+    updateSectionNavRicherStat();
+    if (getCurrentSectionId() === "tasks-all") {
+      refreshSectionNavLabel();
+      void import("./tasks.js").then((m) => m.loadAllTasks());
+    } else if (getCurrentSectionId() === "order-tasks") {
+      refreshSectionNavLabel();
+      void import("./tasks.js").then((m) => m.loadOrderTasks());
+    }
+    setMessage("Ошибка загрузки заявок", "#d32f2f");
+    return;
+  }
+
   const { data, error } = await supabaseClient
     .from("orders")
     .select("*")
@@ -43,10 +61,12 @@ export async function loadOrders() {
 
   if (error) {
     console.error("Ошибка загрузки:", error);
+    setDbUnavailableBannerVisible(true);
     setMessage("Ошибка загрузки заявок", "#d32f2f");
     return;
   }
 
+  setDbUnavailableBannerVisible(false);
   state.allOrders = data || [];
   await loadFilesCountMap();
   applyFiltersAndRender();
