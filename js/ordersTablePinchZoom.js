@@ -1,185 +1,45 @@
 /**
- * Тач: щипок двумя пальцами — CSS zoom на #ordersTablePinchWrap (обёртка вокруг таблицы).
- * Zoom не на scroll-контейнере и не на голом <table>, чтобы колонки не пересчитывались лишний раз.
+ * Масштаб таблицы: только системный зум страницы (viewport в Safari/Chrome).
+ * Кастомный щипок с CSS zoom отключён — он перехватывал жесты и мешал нативному масштабу.
+ * При перерисовке таблицы снимаем возможные остаточные inline-стили и старый ключ sessionStorage.
  */
 
 const STORAGE_KEY = "ordersTablePinchZoom";
-const MIN_SCALE = 0.03;
-const MAX_SCALE = 1.5;
 
-const TOUCH_UI = "(hover: none) and (pointer: coarse)";
-
-function isTouchUi() {
-  return typeof window.matchMedia === "function" && window.matchMedia(TOUCH_UI).matches;
-}
-
-function isOrdersSectionActive() {
-  return document.getElementById("section-all")?.classList.contains("active") ?? false;
-}
-
-function touchDistance(touches) {
-  if (touches.length < 2) return 0;
-  const a = touches[0];
-  const b = touches[1];
-  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-}
-
-let pinchScale = 1;
-let pinchGesture = null;
-
-function loadStoredScale() {
-  try {
-    const s = parseFloat(sessionStorage.getItem(STORAGE_KEY), 10);
-    if (Number.isFinite(s) && s >= MIN_SCALE && s <= MAX_SCALE) {
-      pinchScale = s;
-    }
-  } catch {
-    /* ignore */
-  }
-}
-
-function clearPinchZoomStyles(inner) {
+function clearPinchZoomStyles() {
+  const inner = document.getElementById("ordersTableScrollInner");
   const table = document.getElementById("ordersTable");
   const wrap = document.getElementById("ordersTablePinchWrap");
-  if (!inner) return;
-  inner.style.removeProperty("zoom");
+  if (inner) {
+    inner.style.removeProperty("zoom");
+    inner.classList.remove("orders-table-inner--pinch-zoom");
+  }
   table?.style.removeProperty("zoom");
   wrap?.style.removeProperty("zoom");
-  inner.classList.remove("orders-table-inner--pinch-zoom");
   wrap?.classList.remove("orders-table--pinch-zoomed");
   table?.classList.remove("orders-table--pinch-zoomed");
 }
 
-function applyZoomToInner(inner) {
-  const table = document.getElementById("ordersTable");
-  const wrap = document.getElementById("ordersTablePinchWrap");
-  if (!inner || !table) return;
-
-  if (!isOrdersSectionActive()) {
-    clearPinchZoomStyles(inner);
-    return;
-  }
-  if (pinchScale === 1) {
-    clearPinchZoomStyles(inner);
-  } else {
-    inner.style.removeProperty("zoom");
-    table.style.removeProperty("zoom");
-    table.classList.remove("orders-table--pinch-zoomed");
-    if (wrap) {
-      wrap.style.zoom = String(pinchScale);
-      wrap.classList.add("orders-table--pinch-zoomed");
-    } else {
-      table.style.zoom = String(pinchScale);
-      table.classList.add("orders-table--pinch-zoomed");
-    }
-    inner.classList.add("orders-table-inner--pinch-zoom");
-  }
-}
-
-/** После перерисовки таблицы — снова применить сохранённый масштаб */
-export function reapplyOrdersTablePinchZoom() {
-  const inner = document.getElementById("ordersTableScrollInner");
-  applyZoomToInner(inner);
-}
-
-export function resetOrdersTablePinchZoom() {
-  pinchScale = 1;
+function clearLegacySessionStorage() {
   try {
     sessionStorage.removeItem(STORAGE_KEY);
   } catch {
     /* ignore */
   }
+}
+
+/** После перерисовки tbody — убрать остатки zoom, если были до обновления. */
+export function reapplyOrdersTablePinchZoom() {
+  clearPinchZoomStyles();
+}
+
+export function resetOrdersTablePinchZoom() {
+  clearLegacySessionStorage();
   reapplyOrdersTablePinchZoom();
 }
 
-let inited = false;
-
+/** Один раз при загрузке: очистить старый сохранённый масштаб и стили. */
 export function initOrdersTablePinchZoom() {
-  if (inited) return;
-  inited = true;
-
-  if (!isTouchUi()) return;
-
-  const inner = document.getElementById("ordersTableScrollInner");
-  if (!inner) return;
-
-  loadStoredScale();
-  applyZoomToInner(inner);
-
-  inner.addEventListener(
-    "touchstart",
-    (e) => {
-      if (!isOrdersSectionActive()) return;
-      if (e.touches.length === 2) {
-        const d = touchDistance(e.touches);
-        if (d > 8) {
-          pinchGesture = { startDist: Math.max(d, 1), startScale: pinchScale };
-        }
-      }
-    },
-    { passive: true }
-  );
-
-  inner.addEventListener(
-    "touchmove",
-    (e) => {
-      if (!isOrdersSectionActive() || !pinchGesture || e.touches.length !== 2) return;
-      e.preventDefault();
-      const d = touchDistance(e.touches);
-      if (d < 4) return;
-      const table = document.getElementById("ordersTable");
-      const wrap = document.getElementById("ordersTablePinchWrap");
-      if (!table) return;
-      const next = pinchGesture.startScale * (d / pinchGesture.startDist);
-      pinchScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
-      inner.style.removeProperty("zoom");
-      table.style.removeProperty("zoom");
-      if (wrap) {
-        table.classList.remove("orders-table--pinch-zoomed");
-        wrap.style.zoom = String(pinchScale);
-        wrap.classList.add("orders-table--pinch-zoomed");
-      } else {
-        table.style.zoom = String(pinchScale);
-        table.classList.add("orders-table--pinch-zoomed");
-      }
-      inner.classList.add("orders-table-inner--pinch-zoom");
-    },
-    { passive: false }
-  );
-
-  function onPinchEnd(e) {
-    if (e.touches.length < 2) {
-      pinchGesture = null;
-      try {
-        sessionStorage.setItem(STORAGE_KEY, String(pinchScale));
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  inner.addEventListener("touchend", onPinchEnd, { passive: true });
-  inner.addEventListener("touchcancel", onPinchEnd, { passive: true });
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") applyZoomToInner(inner);
-  });
-
-  if (typeof window.matchMedia === "function") {
-    window.matchMedia(TOUCH_UI).addEventListener("change", () => {
-      const table = document.getElementById("ordersTable");
-      const wrap = document.getElementById("ordersTablePinchWrap");
-      if (!isTouchUi()) {
-        inner.style.removeProperty("zoom");
-        table?.style.removeProperty("zoom");
-        wrap?.style.removeProperty("zoom");
-        inner.classList.remove("orders-table-inner--pinch-zoom");
-        wrap?.classList.remove("orders-table--pinch-zoomed");
-        table?.classList.remove("orders-table--pinch-zoomed");
-      } else {
-        loadStoredScale();
-        applyZoomToInner(inner);
-      }
-    });
-  }
+  clearLegacySessionStorage();
+  clearPinchZoomStyles();
 }

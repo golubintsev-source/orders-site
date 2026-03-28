@@ -1,6 +1,6 @@
 /**
  * Тач: очистка legacy inline-стилей таблицы, обновление клона шапки.
- * Масштаб двумя пальцами — ordersTablePinchZoom.js (zoom на #ordersTablePinchWrap; inner не трогаем).
+ * Масштаб — только системный зум страницы; ordersTablePinchZoom лишь снимает старый CSS zoom.
  */
 
 import { refreshOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
