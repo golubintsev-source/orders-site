@@ -809,14 +809,6 @@ function paidBadge(order) {
   return '<span class="status-value">нет</span>';
 }
 
-/** Клиент / Адрес / Описание в таблице: меньше 10 символов — как есть; иначе первые 10 + «**». */
-function formatOrdersTableShortText(raw) {
-  const s = String(raw ?? "").trim();
-  if (!s) return "";
-  if (s.length < 10) return s;
-  return s.slice(0, 10) + "**";
-}
-
 export function renderOrders(orders) {
   document.dispatchEvent(new CustomEvent("orders-table-will-render"));
   const table = document.querySelector("#ordersTable tbody");
@@ -843,9 +835,8 @@ export function renderOrders(orders) {
     const phone = order.phone ?? "";
     const telHref = phone ? "tel:" + phone.replace(/[^\d+]/g, "") : "";
     const client = order.client ?? "";
-    const clientTableText = formatOrdersTableShortText(client);
-    const addressTableText = formatOrdersTableShortText(order.address ?? "");
-    const descriptionTableText = formatOrdersTableShortText(order.description ?? "");
+    const address = order.address ?? "";
+    const description = order.description ?? "";
     const phoneCallIcon = phone
       ? `<a href="${escapeAttr(telHref)}" class="btn-icon btn-phone-call" title="Позвонить"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></a>`
       : "";
@@ -870,16 +861,10 @@ export function renderOrders(orders) {
           </span>
         </td>
         <td class="td-order-date">${formatDateShortRU(order.order_date)}</td>
-        <td>
-          ${clientTableText ? `<span class="status-value">${escapeHtml(clientTableText)}</span>` : ""}
-        </td>
+        <td class="td-order-client" data-fulltext="${escapeAttr(client)}">${client ? `<span class="status-value">${escapeHtml(client)}</span>` : ""}</td>
         <td class="td-paid">${paidBadge(order)}</td>
-        <td>
-          ${addressTableText ? `<span class="status-value">${escapeHtml(addressTableText)}</span>` : ""}
-        </td>
-        <td>
-          ${descriptionTableText ? `<span class="status-value">${escapeHtml(descriptionTableText)}</span>` : ""}
-        </td>
+        <td class="td-order-address" data-fulltext="${escapeAttr(address)}">${address ? `<span class="status-value">${escapeHtml(address)}</span>` : ""}</td>
+        <td class="td-order-description" data-fulltext="${escapeAttr(description)}">${description ? `<span class="status-value">${escapeHtml(description)}</span>` : ""}</td>
         <td>
           <span class="status-value">
             ${order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом")}
@@ -909,6 +894,15 @@ export function renderOrders(orders) {
     `;
 
     table.innerHTML += row;
+  });
+
+  table.querySelectorAll(".td-order-client, .td-order-address, .td-order-description").forEach((cell) => {
+    const full = cell.getAttribute("data-fulltext");
+    if (!full) return;
+    const chip = cell.querySelector(".status-value");
+    const truncated = chip ? chip.scrollWidth > chip.clientWidth + 0.5 : cell.scrollWidth > cell.clientWidth + 0.5;
+    if (truncated) cell.setAttribute("title", full);
+    else cell.removeAttribute("title");
   });
 
   // Синхронизация горизонтальной прокрутки: сверху и снизу

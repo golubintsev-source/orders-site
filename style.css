@@ -1825,6 +1825,52 @@ button:active {
 #ordersTable {
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: fixed;
+}
+
+#ordersTable col.orders-col-150 {
+  width: 150px;
+  min-width: 150px;
+}
+
+#ordersTable th.th-orders-col-150,
+#ordersTableStickyHeadTable th.th-orders-col-150 {
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#ordersTable td.td-order-client,
+#ordersTable td.td-order-address,
+#ordersTable td.td-order-description {
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+#ordersTable td.td-order-client[data-fulltext]:not([data-fulltext=""]),
+#ordersTable td.td-order-address[data-fulltext]:not([data-fulltext=""]),
+#ordersTable td.td-order-description[data-fulltext]:not([data-fulltext=""]) {
+  cursor: pointer;
+}
+
+#ordersTable td.td-order-client .status-value,
+#ordersTable td.td-order-address .status-value,
+#ordersTable td.td-order-description .status-value {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 #ordersTable thead th {
