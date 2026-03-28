@@ -1787,8 +1787,14 @@ button:active {
  * Заказы: вертикальная прокрутка — только внешний #ordersTableScrollBottom,
  * горизонтальная — во внутреннем .orders-table-inner.
  * Шапка «закрепляется» через JS-клон (ordersTableStickyHeader.js) — стабильно в Safari/iOS.
+ * inline-block + inner width:max-content — область по ширине таблицы (ПК и тач), без пустоты справа от последнего столбца.
  */
 #ordersTableScrollBottom.orders-table-scroll {
+  display: inline-block;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: top;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -1814,6 +1820,14 @@ button:active {
   max-width: 100%;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: none;
+}
+
+/* Только таблица заказов: ширина по контенту, не на всю карточку (см. #ordersTableScrollBottom). */
+#ordersTableScrollInner.orders-table-inner {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
 }
 
 /* Zoom щипка вешается на эту обёртку, не на <table> — таблица считается при scale 1, iOS не перераспределяет колонки. */
@@ -2027,16 +2041,14 @@ button:active {
   }
 
   /*
-   * Вертикаль — в этом блоке. Горизонталь — во .orders-table-inner.
-   * Не overflow-x:hidden — ломает sticky в Safari.
-   * inline-block + max-width: иначе при узкой таблице блок тянется на 100% ширины карточки — справа пустое поле, скроллбар у края экрана.
+   * Вертикаль — в этом блоке. overflow-x не hidden — иначе WebKit ломает sticky (если включат обратно).
+   * display:block + max-content: надёжнее inline-block на iOS; точную ширину дублирует syncOrdersTableOuterWidthForTouch() в orders.js.
    */
   #ordersTableScrollBottom.orders-table-scroll {
-    display: inline-block;
-    width: auto;
+    display: block;
+    width: -webkit-max-content;
+    width: max-content;
     max-width: 100%;
-    min-width: 0;
-    vertical-align: top;
     max-height: calc(100dvh - 10rem);
     overflow-y: auto;
     overflow-x: visible;
@@ -2056,15 +2068,12 @@ button:active {
     text-size-adjust: 100%;
   }
 
-  /* Ширина по таблице, не на весь экран — иначе справа от последнего столбца пустота на всю ширину карточки */
   #ordersTableScrollInner.orders-table-inner {
-    display: block;
+    width: -webkit-max-content;
     width: max-content;
-    max-width: 100%;
+    max-width: 100% !important;
     overflow-x: auto !important;
-    overflow-y: visible;
     -webkit-overflow-scrolling: touch;
-    min-width: 0;
     overscroll-behavior-x: contain;
   }
 

@@ -596,6 +596,38 @@ function ordersHorizontalScrollEl() {
   return ordersScrollInnerEl || ordersScrollBottomEl;
 }
 
+function isOrdersCoarseTouchUi() {
+  return (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(hover: none) and (pointer: coarse)").matches
+  );
+}
+
+/**
+ * В iOS Safari shrink-to-fit (inline-block / width:max-content) часто даёт полную ширину карточки —
+ * справа пусто, вертикальный скролл у края экрана. Ставим ширину внешнего блока по контенту.
+ */
+function syncOrdersTableOuterWidthForTouch() {
+  const bottom = document.getElementById("ordersTableScrollBottom");
+  const inner = document.getElementById("ordersTableScrollInner");
+  if (!bottom || !inner) return;
+  if (!isOrdersCoarseTouchUi()) {
+    bottom.style.removeProperty("width");
+    return;
+  }
+  const apply = () => {
+    const parent = bottom.parentElement;
+    const avail = parent ? parent.clientWidth : window.innerWidth;
+    const sw = inner.scrollWidth;
+    if (!(avail > 0 && sw > 0)) return;
+    bottom.style.width = `${Math.min(sw, avail)}px`;
+  };
+  requestAnimationFrame(() => {
+    apply();
+    requestAnimationFrame(apply);
+  });
+}
+
 function ordersCopyScrollBottomToTop() {
   const h = ordersHorizontalScrollEl();
   if (!ordersScrollTopEl || !h) return;
@@ -658,9 +690,21 @@ function ensureOrdersScrollSync() {
     () => {
       updateOrdersScrollSpacerWidth();
       syncOrdersScrollPositions();
+      syncOrdersTableOuterWidthForTouch();
     },
     { passive: true }
   );
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener(
+      "resize",
+      () => {
+        updateOrdersScrollSpacerWidth();
+        syncOrdersTableOuterWidthForTouch();
+      },
+      { passive: true }
+    );
+  }
 
   ordersScrollSyncAttached = true;
 }
@@ -917,6 +961,7 @@ export function renderOrders(orders) {
   updateOrdersScrollSpacerWidth();
   syncOrdersScrollPositions();
   applyOrdersTableMobileFit();
+  syncOrdersTableOuterWidthForTouch();
 }
 
 export function applyClientFilter() {
