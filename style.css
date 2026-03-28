@@ -1725,11 +1725,57 @@ button:active {
  * Шапка «закрепляется» через JS-клон (ordersTableStickyHeader.js) — стабильно в Safari/iOS.
  */
 #ordersTableScrollBottom.orders-table-scroll {
-  max-height: calc(100vh - 12rem);
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: none;
+}
+
+/* ПК: таблица заказов — на всю оставшуюся высоту окна (без фикс. max-height) */
+@media (hover: hover) and (pointer: fine) {
+  html {
+    height: 100%;
+  }
+
+  body {
+    min-height: 100%;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body > .container {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+  }
+
+  .container > .topbar {
+    flex-shrink: 0;
+  }
+
+  #section-all.content-section.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  #section-all > .card {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-bottom: 0;
+  }
+
+  #ordersTableScrollBottom.orders-table-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
 }
 
 .orders-table-inner {
