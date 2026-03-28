@@ -40,10 +40,10 @@ body {
   padding: 6px 16px 16px 16px;
 }
 
-/* ПК: раздел «Заказы» — таблица на всю ширину окна (остальные разделы остаются в 1200px) */
+/* ПК: раздел «Заказы» — контейнер до 1550px (остальные разделы — 1200px) */
 @media (hover: hover) and (pointer: fine) {
   .container:has(#section-all.content-section.active) {
-    max-width: none;
+    max-width: 1550px;
   }
 }
 
