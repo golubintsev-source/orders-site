@@ -1,6 +1,7 @@
 /**
- * iPhone: щипок двумя пальцами по области таблицы заказов — масштаб только таблицы (CSS zoom),
- * без масштаба всей страницы и без конфликта с жестами Safari (preventDefault на touchmove при 2 касаниях).
+ * iPhone: щипок двумя пальцами по области таблицы заказов — масштаб только таблицы (CSS zoom).
+ * Zoom задаём на #ordersTable, не на #ordersTableScrollInner: на iOS Safari zoom на scroll-контейнере
+ * ломает распределение ширины колонок (Клиент/Адрес/Описание схлопываются).
  */
 
 const STORAGE_KEY = "ordersTablePinchZoom";
@@ -39,18 +40,25 @@ function loadStoredScale() {
 }
 
 function applyZoomToInner(inner) {
-  if (!inner) return;
+  const table = document.getElementById("ordersTable");
+  if (!inner || !table) return;
   if (!isOrdersSectionActive()) {
     inner.style.removeProperty("zoom");
+    table.style.removeProperty("zoom");
     inner.classList.remove("orders-table-inner--pinch-zoom");
+    table.classList.remove("orders-table--pinch-zoomed");
     return;
   }
   if (pinchScale === 1) {
     inner.style.removeProperty("zoom");
+    table.style.removeProperty("zoom");
     inner.classList.remove("orders-table-inner--pinch-zoom");
+    table.classList.remove("orders-table--pinch-zoomed");
   } else {
-    inner.style.zoom = String(pinchScale);
+    inner.style.removeProperty("zoom");
+    table.style.zoom = String(pinchScale);
     inner.classList.add("orders-table-inner--pinch-zoom");
+    table.classList.add("orders-table--pinch-zoomed");
   }
 }
 
@@ -106,10 +114,14 @@ export function initOrdersTablePinchZoom() {
       e.preventDefault();
       const d = touchDistance(e.touches);
       if (d < 4) return;
+      const table = document.getElementById("ordersTable");
+      if (!table) return;
       const next = pinchGesture.startScale * (d / pinchGesture.startDist);
       pinchScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
-      inner.style.zoom = String(pinchScale);
+      inner.style.removeProperty("zoom");
+      table.style.zoom = String(pinchScale);
       inner.classList.add("orders-table-inner--pinch-zoom");
+      table.classList.add("orders-table--pinch-zoomed");
     },
     { passive: false }
   );
@@ -134,9 +146,12 @@ export function initOrdersTablePinchZoom() {
 
   if (typeof window.matchMedia === "function") {
     window.matchMedia(TOUCH_UI).addEventListener("change", () => {
+      const table = document.getElementById("ordersTable");
       if (!isTouchUi()) {
         inner.style.removeProperty("zoom");
+        table?.style.removeProperty("zoom");
         inner.classList.remove("orders-table-inner--pinch-zoom");
+        table?.classList.remove("orders-table--pinch-zoomed");
       } else {
         loadStoredScale();
         applyZoomToInner(inner);

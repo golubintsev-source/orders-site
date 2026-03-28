@@ -15,6 +15,7 @@ export function clearOrdersTableMobileFit() {
     table.style.removeProperty("zoom");
     table.style.removeProperty("width");
     table.style.removeProperty("max-width");
+    table.classList.remove("orders-table--pinch-zoomed");
   }
   if (inner) {
     /* zoom для щипка задаёт ordersTablePinchZoom — не трогаем inner.style.zoom */

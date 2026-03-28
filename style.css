@@ -1958,10 +1958,47 @@ button:active {
   /*
    * Глобально `table { width: 100% }` сжимает колонки под экран — scrollWidth ≈ экрану, свайп не нужен.
    * !important — перекрывает порядок объявлений с `table { width: 100% }` ниже по файлу.
+   * table-layout: auto — на iOS fixed+zoom на предке давал схлопывание «Клиент/Адрес/Описание».
+   * text-size-adjust — уменьшает дёрганье шрифтов при масштабе.
    */
   #ordersTable {
     width: max-content !important;
     max-width: none !important;
+    table-layout: auto !important;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Три текстовые колонки: жёсткий минимум поверх любых пересчётов WebKit при zoom */
+  #ordersTable col.orders-col-client {
+    width: 140px !important;
+    min-width: 140px !important;
+  }
+  #ordersTable col.orders-col-address,
+  #ordersTable col.orders-col-description {
+    width: 180px !important;
+    min-width: 180px !important;
+  }
+
+  #ordersTable .th-truncate-name,
+  #ordersTable td.td-truncate-name {
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+  }
+
+  #ordersTable .th-truncate-address,
+  #ordersTable td.td-truncate-address {
+    width: 180px !important;
+    min-width: 180px !important;
+    max-width: 180px !important;
+  }
+
+  #ordersTable .th-truncate-description,
+  #ordersTable td.td-truncate-description {
+    width: 180px !important;
+    min-width: 180px !important;
+    max-width: 180px !important;
   }
 
   #ordersTableScrollInner.orders-table-inner {
