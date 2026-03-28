@@ -1,11 +1,24 @@
 /**
- * iPhone / тач: подогнать ширину таблицы заказов под экран (CSS transform),
- * чтобы все колонки были видны без горизонтального скролла и без pinch-zoom всей страницы.
+ * iPhone / тач: подогнать ширину таблицы заказов под экран.
+ * Важно: `transform: scale()` не меняет ширину в потоке — при `overflow: hidden` на родителе
+ * остаётся видна только левая часть таблицы. Используем CSS `zoom` (уменьшает и раскладку в WebKit/Blink).
  */
 
 import { refreshOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
 
 const TOUCH_UI = "(hover: none) and (pointer: coarse)";
+
+/** В Firefox до недавнего времени `zoom` не влиял на раскладку; проверяем поддержку. */
+function zoomLayoutSupported() {
+  if (typeof document === "undefined") return false;
+  const el = document.createElement("div");
+  try {
+    el.style.zoom = "0.5";
+    return el.style.zoom === "0.5";
+  } catch {
+    return false;
+  }
+}
 
 function isTouchUi() {
   return typeof window.matchMedia === "function" && window.matchMedia(TOUCH_UI).matches;
@@ -15,6 +28,7 @@ export function clearOrdersTableMobileFit() {
   const bottom = document.getElementById("ordersTableScrollBottom");
   const inner = document.getElementById("ordersTableScrollInner");
   if (inner) {
+    inner.style.removeProperty("zoom");
     inner.style.removeProperty("transform");
     inner.style.removeProperty("transform-origin");
     inner.style.removeProperty("width");
@@ -48,6 +62,11 @@ export function applyOrdersTableMobileFit() {
   clearOrdersTableMobileFit();
   void inner.offsetWidth;
 
+  if (!zoomLayoutSupported()) {
+    refreshOrdersTableStickyHeader();
+    return;
+  }
+
   const availW = bottom.clientWidth;
   const contentW = inner.scrollWidth;
   if (!availW || !contentW) {
@@ -61,15 +80,8 @@ export function applyOrdersTableMobileFit() {
     return;
   }
 
-  inner.style.transformOrigin = "top left";
-  inner.style.transform = `scale(${scale})`;
-  inner.style.width = `${contentW}px`;
+  inner.style.zoom = String(scale);
   inner.classList.add("orders-table-inner--mobile-fit");
-
-  const naturalH = inner.offsetHeight;
-  bottom.style.height = `${Math.ceil(naturalH * scale)}px`;
-  bottom.style.overflow = "hidden";
-  bottom.classList.add("orders-table-scroll--mobile-fit");
   inner.scrollLeft = 0;
 
   refreshOrdersTableStickyHeader();
