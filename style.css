@@ -1817,25 +1817,6 @@ button:active {
 #ordersTable {
   border-collapse: separate;
   border-spacing: 0;
-  /* Вместе с <colgroup> фиксирует доли столбцов; иначе auto-layout отдаёт «лишнюю» ширину другим колонкам и сжимает Клиент/Адрес/Описание при zoom */
-  table-layout: fixed;
-}
-
-/* Ширины колонок Клиент / Адрес / Описание — через <col>, стабильно при CSS zoom на iOS */
-#ordersTable col.orders-col-client,
-#ordersTableStickyHeadTable col.orders-col-client {
-  width: 140px;
-  min-width: 140px;
-}
-#ordersTable col.orders-col-address,
-#ordersTableStickyHeadTable col.orders-col-address {
-  width: 180px;
-  min-width: 180px;
-}
-#ordersTable col.orders-col-description,
-#ordersTableStickyHeadTable col.orders-col-description {
-  width: 180px;
-  min-width: 180px;
 }
 
 #ordersTable thead th {
@@ -1913,17 +1894,26 @@ button:active {
   flex-shrink: 0;
 }
 
-#ordersTableStickyHeadTable .th-status-header-inner {
+#ordersTableStickyHeadTable .th-status-header-inner,
+#ordersTableStickyHeadTable .th-client-header-inner,
+#ordersTableStickyHeadTable .th-address-header-inner,
+#ordersTableStickyHeadTable .th-description-header-inner {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-#ordersTableStickyHeadTable .th-status-header {
+#ordersTableStickyHeadTable .th-status-header,
+#ordersTableStickyHeadTable .th-client-header,
+#ordersTableStickyHeadTable .th-address-header,
+#ordersTableStickyHeadTable .th-description-header {
   white-space: nowrap;
 }
 
-#ordersTableStickyHeadTable .th-status-label {
+#ordersTableStickyHeadTable .th-status-label,
+#ordersTableStickyHeadTable .th-client-label,
+#ordersTableStickyHeadTable .th-address-label,
+#ordersTableStickyHeadTable .th-description-label {
   flex-shrink: 0;
 }
 
@@ -1958,47 +1948,12 @@ button:active {
   /*
    * Глобально `table { width: 100% }` сжимает колонки под экран — scrollWidth ≈ экрану, свайп не нужен.
    * !important — перекрывает порядок объявлений с `table { width: 100% }` ниже по файлу.
-   * table-layout: auto — на iOS fixed+zoom на предке давал схлопывание «Клиент/Адрес/Описание».
-   * text-size-adjust — уменьшает дёрганье шрифтов при масштабе.
    */
   #ordersTable {
     width: max-content !important;
     max-width: none !important;
-    table-layout: auto !important;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
-  }
-
-  /* Три текстовые колонки: жёсткий минимум поверх любых пересчётов WebKit при zoom */
-  #ordersTable col.orders-col-client {
-    width: 140px !important;
-    min-width: 140px !important;
-  }
-  #ordersTable col.orders-col-address,
-  #ordersTable col.orders-col-description {
-    width: 180px !important;
-    min-width: 180px !important;
-  }
-
-  #ordersTable .th-truncate-name,
-  #ordersTable td.td-truncate-name {
-    width: 140px !important;
-    min-width: 140px !important;
-    max-width: 140px !important;
-  }
-
-  #ordersTable .th-truncate-address,
-  #ordersTable td.td-truncate-address {
-    width: 180px !important;
-    min-width: 180px !important;
-    max-width: 180px !important;
-  }
-
-  #ordersTable .th-truncate-description,
-  #ordersTable td.td-truncate-description {
-    width: 180px !important;
-    min-width: 180px !important;
-    max-width: 180px !important;
   }
 
   #ordersTableScrollInner.orders-table-inner {
@@ -2408,17 +2363,26 @@ th {
   padding-bottom: 4px;
 }
 
-#ordersTable .th-status-header-inner {
+#ordersTable .th-status-header-inner,
+#ordersTable .th-client-header-inner,
+#ordersTable .th-address-header-inner,
+#ordersTable .th-description-header-inner {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-#ordersTable .th-status-header {
+#ordersTable .th-status-header,
+#ordersTable .th-client-header,
+#ordersTable .th-address-header,
+#ordersTable .th-description-header {
   white-space: nowrap;
 }
 
-#ordersTable .th-status-label {
+#ordersTable .th-status-label,
+#ordersTable .th-client-label,
+#ordersTable .th-address-label,
+#ordersTable .th-description-label {
   flex-shrink: 0;
 }
 
@@ -2548,55 +2512,11 @@ th {
   color: #047857;
 }
 
-/* Клиент / Адрес / Описание — <colgroup> + те же px на ячейках (WebKit + zoom) */
-#ordersTable .th-truncate-name,
-#ordersTable td.td-truncate-name,
-#ordersTableStickyHeadTable .th-truncate-name {
-  width: 140px;
-  min-width: 140px;
-  max-width: 140px;
-  box-sizing: border-box;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-left: 6px;
-}
-
-#ordersTable .th-truncate-address,
-#ordersTable td.td-truncate-address,
-#ordersTableStickyHeadTable .th-truncate-address {
-  width: 180px;
-  min-width: 180px;
-  max-width: 180px;
-  box-sizing: border-box;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#ordersTable .th-truncate-description,
-#ordersTable td.td-truncate-description,
-#ordersTableStickyHeadTable .th-truncate-description {
-  width: 180px;
-  min-width: 180px;
-  max-width: 180px;
-  box-sizing: border-box;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#ordersTable td.td-truncate-name,
-#ordersTable td.td-truncate-address,
-#ordersTable td.td-truncate-description {
+/* Клиент / Адрес / Описание — как «Статус»: шапка с inner+label, в td один .status-value; ширина по контенту (max-content у таблицы на таче). */
+#ordersTable td.td-order-client,
+#ordersTable td.td-order-address,
+#ordersTable td.td-order-description {
   cursor: help;
-}
-
-/* Клиент — серая подложка как у «Статус»; ellipsis на чипе внутри узкой ячейки */
-#ordersTable td.td-truncate-name .status-value {
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: middle;
 }
 
 .cell-tooltip {
@@ -3151,11 +3071,6 @@ th {
   #ordersTable thead tr th:first-child,
   #ordersTable tbody td.td-order-id {
     padding-right: 6px;
-  }
-
-  #ordersTable .th-truncate-name,
-  #ordersTable td.td-truncate-name {
-    padding-left: 6px;
   }
 
   #ordersTable th.th-paid,

@@ -627,13 +627,11 @@ export function bindUIEvents() {
   let tooltipHideClick = null;
   let tooltipHideKey = null;
 
-  /** Текст обрезан ellipsis: для «Клиент» обрезка на внутреннем .status-value, не на td */
+  /** Как у колонки «Статус»: текст в .status-value; обрезка только если ячейка уже не влезает (редко при max-content). */
   function isOrdersTableCellTruncated(td) {
     if (!td) return false;
-    if (td.classList.contains("td-truncate-name")) {
-      const chip = td.querySelector(".status-value");
-      if (chip) return chip.scrollWidth > chip.clientWidth + 0.5;
-    }
+    const chip = td.querySelector(".status-value");
+    if (chip) return chip.scrollWidth > chip.clientWidth + 0.5;
     return td.scrollWidth > td.clientWidth + 0.5;
   }
 
@@ -705,7 +703,7 @@ export function bindUIEvents() {
 
       if (e.target.closest("a.tel-link")) return;
 
-      const td = e.target.closest("td.td-truncate-name, td.td-truncate-address, td.td-truncate-description");
+      const td = e.target.closest("td.td-order-client, td.td-order-address, td.td-order-description");
       if (td) {
         showCellTooltip(td);
         return;
