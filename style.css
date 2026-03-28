@@ -920,19 +920,21 @@ h2 {
 }
 
 /*
- * Таблица на всю ширину карточки — без горизонтального скролла в .table-wrap.
- * Глобальный `table { min-width: 900px }` отменяем через min-width: 0 ниже.
+ * Глобальный `table { min-width: 900px }` для расчётов не подходит.
+ * На узком экране (iPhone) нужен min-width таблицы + горизонтальный скролл — иначе
+ * при table-layout:fixed и nowrap колонки визуально наезжают друг на друга.
  */
 #section-calculations .table-wrap,
 .calculations-page .table-wrap {
-  overflow-x: hidden;
+  overflow-x: auto;
   max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 #calculationsTable {
   width: 100%;
   max-width: 100%;
-  min-width: 0;
+  min-width: 520px;
   table-layout: fixed;
   /* iOS Safari: не раздувать отдельные ячейки с длинным текстом */
   -webkit-text-size-adjust: 100%;
