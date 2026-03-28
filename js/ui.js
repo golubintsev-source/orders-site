@@ -9,7 +9,6 @@ import {
   closeFilesModal,
   filesModal,
   phoneInput,
-  cellTooltip,
   ordersTable,
   setMessage,
 } from "./dom.js";
@@ -624,55 +623,7 @@ export function bindUIEvents() {
     });
   }
 
-  let tooltipHideClick = null;
-  let tooltipHideKey = null;
-
-  /** Как у колонки «Статус»: текст в .status-value; обрезка только если ячейка уже не влезает (редко при max-content). */
-  function isOrdersTableCellTruncated(td) {
-    if (!td) return false;
-    const chip = td.querySelector(".status-value");
-    if (chip) return chip.scrollWidth > chip.clientWidth + 0.5;
-    return td.scrollWidth > td.clientWidth + 0.5;
-  }
-
-  function showCellTooltip(td) {
-    if (!cellTooltip || !td) return;
-    if (!isOrdersTableCellTruncated(td)) return;
-    const raw = td.getAttribute("data-fulltext") || td.getAttribute("title");
-    if (!raw) return;
-    const decodeEl = document.createElement("div");
-    decodeEl.innerHTML = raw;
-    const text = decodeEl.textContent || raw;
-    if (tooltipHideClick) {
-      document.removeEventListener("click", tooltipHideClick);
-      document.removeEventListener("touchend", tooltipHideClick);
-      document.removeEventListener("keydown", tooltipHideKey);
-    }
-    cellTooltip.textContent = text;
-    cellTooltip.classList.add("visible");
-    cellTooltip.setAttribute("aria-hidden", "false");
-    const rect = td.getBoundingClientRect();
-    cellTooltip.style.left = Math.min(rect.left, window.innerWidth - 330) + "px";
-    cellTooltip.style.top = rect.top - 8 + "px";
-    cellTooltip.style.transform = "translateY(-100%)";
-    function hide() {
-      cellTooltip.classList.remove("visible");
-      cellTooltip.setAttribute("aria-hidden", "true");
-      document.removeEventListener("click", tooltipHideClick);
-      document.removeEventListener("touchend", tooltipHideClick);
-      document.removeEventListener("keydown", tooltipHideKey);
-      tooltipHideClick = tooltipHideKey = null;
-    }
-    tooltipHideClick = hide;
-    tooltipHideKey = (ev) => { if (ev.key === "Escape") hide(); };
-    setTimeout(() => {
-      document.addEventListener("click", tooltipHideClick);
-      document.addEventListener("touchend", tooltipHideClick);
-      document.addEventListener("keydown", tooltipHideKey);
-    }, 150);
-  }
-
-  if (ordersTable && cellTooltip) {
+  if (ordersTable) {
     const toggleRowHighlight = (tr) => {
       if (!tr) return;
       const tbody = ordersTable.querySelector("tbody");
@@ -683,11 +634,6 @@ export function bindUIEvents() {
     };
 
     const handleRowClick = (e) => {
-      if (cellTooltip.classList.contains("visible") && tooltipHideClick) {
-        tooltipHideClick();
-        return;
-      }
-
       const tr = e.target.closest("tbody tr");
 
       const idTd = e.target.closest("td.td-order-id");
@@ -702,12 +648,6 @@ export function bindUIEvents() {
       if (e.target.closest("button, a, .btn-icon, input, select, textarea, label")) return;
 
       if (e.target.closest("a.tel-link")) return;
-
-      const td = e.target.closest("td.td-order-address, td.td-order-description");
-      if (td) {
-        showCellTooltip(td);
-        return;
-      }
 
       if (tr) {
         toggleRowHighlight(tr);

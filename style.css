@@ -1902,23 +1902,17 @@ button:active {
   flex-shrink: 0;
 }
 
-#ordersTableStickyHeadTable .th-status-header-inner,
-#ordersTableStickyHeadTable .th-address-header-inner,
-#ordersTableStickyHeadTable .th-description-header-inner {
+#ordersTableStickyHeadTable .th-status-header-inner {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-#ordersTableStickyHeadTable .th-status-header,
-#ordersTableStickyHeadTable .th-address-header,
-#ordersTableStickyHeadTable .th-description-header {
+#ordersTableStickyHeadTable .th-status-header {
   white-space: nowrap;
 }
 
-#ordersTableStickyHeadTable .th-status-label,
-#ordersTableStickyHeadTable .th-address-label,
-#ordersTableStickyHeadTable .th-description-label {
+#ordersTableStickyHeadTable .th-status-label {
   flex-shrink: 0;
 }
 
@@ -2368,23 +2362,17 @@ th {
   padding-bottom: 4px;
 }
 
-#ordersTable .th-status-header-inner,
-#ordersTable .th-address-header-inner,
-#ordersTable .th-description-header-inner {
+#ordersTable .th-status-header-inner {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-#ordersTable .th-status-header,
-#ordersTable .th-address-header,
-#ordersTable .th-description-header {
+#ordersTable .th-status-header {
   white-space: nowrap;
 }
 
-#ordersTable .th-status-label,
-#ordersTable .th-address-label,
-#ordersTable .th-description-label {
+#ordersTable .th-status-label {
   flex-shrink: 0;
 }
 
@@ -2512,12 +2500,6 @@ th {
 #ordersTable .btn-phone-call:hover {
   background: #d1fae5;
   color: #047857;
-}
-
-/* Адрес / Описание — подсказка по тапу при обрезке */
-#ordersTable td.td-order-address,
-#ordersTable td.td-order-description {
-  cursor: help;
 }
 
 .cell-tooltip {
