@@ -1955,10 +1955,10 @@ button:active {
     text-size-adjust: 100%;
   }
 
+  /* touch-action: pan-x pan-y отключён — в iOS Safari он мешает системному pinch-zoom страницы на области таблицы */
   #ordersTableScrollInner.orders-table-inner {
     overflow-x: auto !important;
     overflow-y: visible;
-    touch-action: pan-x pan-y;
     -webkit-overflow-scrolling: touch;
   }
 
