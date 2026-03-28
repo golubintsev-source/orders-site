@@ -2023,14 +2023,24 @@ button:active {
   }
 
   /*
-   * Горизонтальный скролл — во .orders-table-inner.
-   * overflow-x:hidden на #ordersTableScrollBottom ломал жесты на iOS (видна только левая часть таблицы).
+   * Вертикальная прокрутка внутри блока — иначе при скролле страницы нет scrollport для position:sticky у thead.
+   * Горизонталь — по-прежнему во .orders-table-inner.
    */
   #ordersTableScrollBottom.orders-table-scroll {
-    max-height: none;
-    overflow-y: visible;
-    overflow-x: visible;
-    overscroll-behavior: auto;
+    max-height: calc(100dvh - 10rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Закрепление шапки (на ПК — JS-клон; на iPhone — CSS sticky на ячейках — так стабильнее в WebKit). */
+  #ordersTable thead th {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: #f8fafc;
   }
 
   /*
@@ -2051,9 +2061,7 @@ button:active {
     -webkit-overflow-scrolling: touch;
   }
 
-  /*
-   * Фиксированный клон thead на таче отключён (неверные координаты + zoom).
-   */
+  /* JS-клон шапки на таче не используем — работает #ordersTable thead { position: sticky }. */
   .orders-sticky-head-wrap {
     display: none !important;
     pointer-events: none !important;
