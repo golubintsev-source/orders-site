@@ -1925,42 +1925,40 @@ button:active {
     display: none;
   }
 
-  /* Телефон: страница крутится по вертикали; горизонталь — во .orders-table-inner */
+  /*
+   * Горизонтальный скролл — во .orders-table-inner.
+   * overflow-x:hidden на #ordersTableScrollBottom ломал жесты на iOS (видна только левая часть таблицы).
+   */
   #ordersTableScrollBottom.orders-table-scroll {
     max-height: none;
     overflow-y: visible;
-    overflow-x: hidden;
+    overflow-x: visible;
     overscroll-behavior: auto;
   }
 
-  /* При zoom таблицы иначе overflow-x:hidden на родителе обрезает содержимое слева */
-  #ordersTableScrollBottom.orders-table-scroll.orders-table-scroll--mobile-fit {
-    overflow-x: visible !important;
-  }
-
   /*
-   * Глобально `table { width: 100% }` растягивает таблицу на ширину экрана — все колонки
-   * сжимаются в viewport, scrollWidth ≈ clientWidth, JS ordersTableMobileFit не масштабирует.
-   * max-content — реальная ширина по колонкам; дальше zoom подгоняет под экран.
+   * Глобально `table { width: 100% }` сжимает колонки под экран — scrollWidth ≈ экрану, свайп не нужен.
+   * !important — перекрывает порядок объявлений с `table { width: 100% }` ниже по файлу.
    */
   #ordersTable {
-    width: max-content;
-    max-width: none;
+    width: max-content !important;
+    max-width: none !important;
+  }
+
+  #ordersTableScrollInner.orders-table-inner {
+    overflow-x: auto !important;
+    overflow-y: visible;
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
   }
 
   /*
-   * Фиксированный клон thead (JS) + zoom на области таблицы даёт неверные getBoundingClientRect —
-   * дублирующиеся заголовки «зависают» посередине экрана. На таче не используем клон.
+   * Фиксированный клон thead на таче отключён (неверные координаты + zoom).
    */
   .orders-sticky-head-wrap {
     display: none !important;
     pointer-events: none !important;
     visibility: hidden !important;
-  }
-
-  /* JS ordersTableMobileFit: таблица масштабируется под ширину — горизонтальный скролл не нужен */
-  #ordersTableScrollInner.orders-table-inner--mobile-fit {
-    overflow-x: hidden;
   }
 
 }
