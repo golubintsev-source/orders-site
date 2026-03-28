@@ -2037,9 +2037,26 @@ button:active {
     overflow-x: hidden;
   }
 
-  /* Раздел «Заказы» — та же верхняя граница ширины, что и на ПК (1550px) */
+  /* Раздел «Заказы»: ширина как на ПК; колонка таблицы — на всю высоту под topbar (flex, без урезания max-height). */
   .container:has(#section-all.content-section.active) {
     max-width: 1550px;
+    min-height: 100dvh;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+  }
+
+  .container:has(#section-all.content-section.active) > .topbar {
+    flex-shrink: 0;
+  }
+
+  #section-all.content-section.active {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .content-section.active {
@@ -2051,7 +2068,12 @@ button:active {
   #section-all > .card {
     max-width: 100%;
     min-width: 0;
-    overflow-x: hidden;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
   /* Шапка с лупой, разделом и выходом — закреплена при прокрутке страницы (z-index ниже модалок и дропдауна разделов) */
@@ -2078,7 +2100,9 @@ button:active {
     width: -webkit-max-content;
     width: max-content;
     max-width: 100%;
-    max-height: calc(100dvh - 10rem);
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
     overflow-y: auto;
     overflow-x: clip;
     -webkit-overflow-scrolling: touch;
