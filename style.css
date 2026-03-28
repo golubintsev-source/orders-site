@@ -1814,6 +1814,14 @@ button:active {
   overscroll-behavior-x: none;
 }
 
+/* Zoom щипка вешается на эту обёртку, не на <table> — таблица считается при scale 1, iOS не перераспределяет колонки. */
+.orders-table-pinch-wrap {
+  display: inline-block;
+  vertical-align: top;
+  width: max-content;
+  max-width: none;
+}
+
 #ordersTable {
   border-collapse: separate;
   border-spacing: 0;
@@ -2540,11 +2548,14 @@ th {
   box-sizing: border-box;
 }
 
-/* Щипок масштаба таблицы: повторно фиксируем колонку «Клиент» поверх пересчёта zoom в WebKit */
+/* Fallback, если zoom снова на самой таблице */
+#ordersTablePinchWrap.orders-table--pinch-zoomed #ordersTable col.orders-col-client,
 #ordersTable.orders-table--pinch-zoomed col.orders-col-client {
   width: 150px !important;
   min-width: 150px !important;
 }
+#ordersTablePinchWrap.orders-table--pinch-zoomed #ordersTable .th-client-header,
+#ordersTablePinchWrap.orders-table--pinch-zoomed #ordersTable td.td-order-client,
 #ordersTable.orders-table--pinch-zoomed .th-client-header,
 #ordersTable.orders-table--pinch-zoomed td.td-order-client {
   width: 150px !important;

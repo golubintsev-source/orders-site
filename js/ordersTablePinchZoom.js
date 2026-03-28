@@ -1,7 +1,7 @@
 /**
- * iPhone: щипок двумя пальцами по области таблицы заказов — масштаб только таблицы (CSS zoom).
- * Zoom задаём на #ordersTable, не на #ordersTableScrollInner: на iOS Safari zoom на scroll-контейнере
- * ломает распределение ширины колонок (Клиент/Адрес/Описание схлопываются).
+ * iPhone: щипок двумя пальцами — CSS zoom на #ordersTablePinchWrap (обёртка вокруг таблицы).
+ * Zoom на самом <table> на iOS даёт «плывущую» ширину колонки «Клиент»; обёртка масштабирует уже
+ * свёрстанную таблицу целиком.
  */
 
 const STORAGE_KEY = "ordersTablePinchZoom";
@@ -41,24 +41,36 @@ function loadStoredScale() {
 
 function applyZoomToInner(inner) {
   const table = document.getElementById("ordersTable");
+  const wrap = document.getElementById("ordersTablePinchWrap");
   if (!inner || !table) return;
   if (!isOrdersSectionActive()) {
     inner.style.removeProperty("zoom");
     table.style.removeProperty("zoom");
+    wrap?.style.removeProperty("zoom");
     inner.classList.remove("orders-table-inner--pinch-zoom");
+    wrap?.classList.remove("orders-table--pinch-zoomed");
     table.classList.remove("orders-table--pinch-zoomed");
     return;
   }
   if (pinchScale === 1) {
     inner.style.removeProperty("zoom");
     table.style.removeProperty("zoom");
+    wrap?.style.removeProperty("zoom");
     inner.classList.remove("orders-table-inner--pinch-zoom");
+    wrap?.classList.remove("orders-table--pinch-zoomed");
     table.classList.remove("orders-table--pinch-zoomed");
   } else {
     inner.style.removeProperty("zoom");
-    table.style.zoom = String(pinchScale);
+    table.style.removeProperty("zoom");
+    table.classList.remove("orders-table--pinch-zoomed");
+    if (wrap) {
+      wrap.style.zoom = String(pinchScale);
+      wrap.classList.add("orders-table--pinch-zoomed");
+    } else {
+      table.style.zoom = String(pinchScale);
+      table.classList.add("orders-table--pinch-zoomed");
+    }
     inner.classList.add("orders-table-inner--pinch-zoom");
-    table.classList.add("orders-table--pinch-zoomed");
   }
 }
 
@@ -115,13 +127,21 @@ export function initOrdersTablePinchZoom() {
       const d = touchDistance(e.touches);
       if (d < 4) return;
       const table = document.getElementById("ordersTable");
+      const wrap = document.getElementById("ordersTablePinchWrap");
       if (!table) return;
       const next = pinchGesture.startScale * (d / pinchGesture.startDist);
       pinchScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
       inner.style.removeProperty("zoom");
-      table.style.zoom = String(pinchScale);
+      table.style.removeProperty("zoom");
+      if (wrap) {
+        table.classList.remove("orders-table--pinch-zoomed");
+        wrap.style.zoom = String(pinchScale);
+        wrap.classList.add("orders-table--pinch-zoomed");
+      } else {
+        table.style.zoom = String(pinchScale);
+        table.classList.add("orders-table--pinch-zoomed");
+      }
       inner.classList.add("orders-table-inner--pinch-zoom");
-      table.classList.add("orders-table--pinch-zoomed");
     },
     { passive: false }
   );
@@ -147,10 +167,13 @@ export function initOrdersTablePinchZoom() {
   if (typeof window.matchMedia === "function") {
     window.matchMedia(TOUCH_UI).addEventListener("change", () => {
       const table = document.getElementById("ordersTable");
+      const wrap = document.getElementById("ordersTablePinchWrap");
       if (!isTouchUi()) {
         inner.style.removeProperty("zoom");
         table?.style.removeProperty("zoom");
+        wrap?.style.removeProperty("zoom");
         inner.classList.remove("orders-table-inner--pinch-zoom");
+        wrap?.classList.remove("orders-table--pinch-zoomed");
         table?.classList.remove("orders-table--pinch-zoomed");
       } else {
         loadStoredScale();

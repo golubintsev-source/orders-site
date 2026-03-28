@@ -1,6 +1,6 @@
 /**
  * Тач: очистка legacy inline-стилей таблицы, обновление клона шапки.
- * Масштаб двумя пальцами — ordersTablePinchZoom.js (zoom на #ordersTableScrollInner не сбрасываем здесь).
+ * Масштаб двумя пальцами — ordersTablePinchZoom.js (zoom на #ordersTablePinchWrap; inner не трогаем).
  */
 
 import { refreshOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
@@ -11,6 +11,11 @@ export function clearOrdersTableMobileFit() {
   const inner = document.getElementById("ordersTableScrollInner");
   const table = document.getElementById("ordersTable");
 
+  const pinchWrap = document.getElementById("ordersTablePinchWrap");
+  if (pinchWrap) {
+    pinchWrap.style.removeProperty("zoom");
+    pinchWrap.classList.remove("orders-table--pinch-zoomed");
+  }
   if (table) {
     table.style.removeProperty("zoom");
     table.style.removeProperty("width");
