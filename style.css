@@ -1868,11 +1868,12 @@ button:active {
 #ordersTable td.td-order-client .status-value,
 #ordersTable td.td-order-address .status-value,
 #ordersTable td.td-order-description .status-value {
-  display: block;
+  display: inline-block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+  vertical-align: middle;
 }
 
 #ordersTable thead th {
