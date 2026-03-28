@@ -1819,6 +1819,11 @@ button:active {
   border-spacing: 0;
 }
 
+#ordersTable col.orders-col-client {
+  width: 150px;
+  min-width: 150px;
+}
+
 #ordersTable thead th {
   background: #f8fafc;
   vertical-align: middle;
@@ -1954,6 +1959,19 @@ button:active {
     max-width: none !important;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+  }
+
+  /* Клиент: при zoom на iOS WebKit съедает ширину — col + !important фиксируют 150px */
+  #ordersTable col.orders-col-client {
+    width: 150px !important;
+    min-width: 150px !important;
+  }
+  #ordersTable .th-client-header,
+  #ordersTable td.td-order-client {
+    width: 150px !important;
+    min-width: 150px !important;
+    max-width: 150px !important;
+    box-sizing: border-box !important;
   }
 
   #ordersTableScrollInner.orders-table-inner {
@@ -2512,7 +2530,7 @@ th {
   color: #047857;
 }
 
-/* Клиент — фиксированная ширина */
+/* Клиент — фиксированная ширина (на десктопе; на iPhone см. также col + блок @media тача и .orders-table--pinch-zoomed) */
 #ordersTable .th-client-header,
 #ordersTable td.td-order-client,
 #ordersTableStickyHeadTable .th-client-header {
@@ -2520,6 +2538,19 @@ th {
   min-width: 150px;
   max-width: 150px;
   box-sizing: border-box;
+}
+
+/* Щипок масштаба таблицы: повторно фиксируем колонку «Клиент» поверх пересчёта zoom в WebKit */
+#ordersTable.orders-table--pinch-zoomed col.orders-col-client {
+  width: 150px !important;
+  min-width: 150px !important;
+}
+#ordersTable.orders-table--pinch-zoomed .th-client-header,
+#ordersTable.orders-table--pinch-zoomed td.td-order-client {
+  width: 150px !important;
+  min-width: 150px !important;
+  max-width: 150px !important;
+  box-sizing: border-box !important;
 }
 
 #ordersTable td.td-order-client {
