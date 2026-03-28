@@ -71,8 +71,22 @@ export function applyOrdersTableMobileFit() {
   void table?.offsetWidth;
 
   const availW = bottom.clientWidth;
-  /* iOS: иногда inner.scrollWidth совпадает с clientWidth до полной отрисовки — берём максимум с таблицей */
-  const contentW = Math.max(inner.scrollWidth, table?.scrollWidth ?? 0, table?.offsetWidth ?? 0);
+  /* Ширина по строке заголовков (сумма ячеек) — надёжнее scrollWidth, если движок сжимал таблицу под 100% */
+  let theadSumW = 0;
+  const headRow = table?.querySelector("thead tr");
+  if (headRow) {
+    headRow.querySelectorAll("th").forEach((th) => {
+      const w = th.getBoundingClientRect().width;
+      if (w > 0) theadSumW += w;
+    });
+  }
+
+  const contentW = Math.max(
+    inner.scrollWidth,
+    table?.scrollWidth ?? 0,
+    table?.offsetWidth ?? 0,
+    theadSumW
+  );
   if (!availW || !contentW) {
     refreshOrdersTableStickyHeader();
     return;

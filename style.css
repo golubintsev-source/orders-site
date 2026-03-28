@@ -1934,6 +1934,16 @@ button:active {
   }
 
   /*
+   * Глобально `table { width: 100% }` растягивает таблицу на ширину экрана — все колонки
+   * сжимаются в viewport, scrollWidth ≈ clientWidth, JS ordersTableMobileFit не масштабирует.
+   * max-content — реальная ширина по колонкам; дальше zoom подгоняет под экран.
+   */
+  #ordersTable {
+    width: max-content;
+    max-width: none;
+  }
+
+  /*
    * Фиксированный клон thead (JS) + zoom на области таблицы даёт неверные getBoundingClientRect —
    * дублирующиеся заголовки «зависают» посередине экрана. На таче не используем клон.
    */
