@@ -2534,6 +2534,30 @@ th {
   vertical-align: middle;
 }
 
+/*
+ * Щипок масштаба (zoom на #ordersTableScrollInner): убрать фиксированные max-width у Клиент/Адрес/Описание —
+ * иначе эти колонки остаются «узкими в px», а остальные масштабируются, относительная ширина плывёт.
+ * min-width в em масштабируется вместе с текстом и zoom.
+ */
+#ordersTableScrollInner.orders-table-inner--pinch-zoom #ordersTable .th-truncate-name,
+#ordersTableScrollInner.orders-table-inner--pinch-zoom #ordersTable td.td-truncate-name {
+  max-width: none;
+  min-width: 9em;
+}
+#ordersTableScrollInner.orders-table-inner--pinch-zoom #ordersTable .th-truncate-address,
+#ordersTableScrollInner.orders-table-inner--pinch-zoom #ordersTable td.td-truncate-address {
+  max-width: none;
+  min-width: 11em;
+}
+#ordersTableScrollInner.orders-table-inner--pinch-zoom #ordersTable .th-truncate-description,
+#ordersTableScrollInner.orders-table-inner--pinch-zoom #ordersTable td.td-truncate-description {
+  max-width: none;
+  min-width: 11em;
+}
+#ordersTableScrollInner.orders-table-inner--pinch-zoom #ordersTable td.td-truncate-name .status-value {
+  max-width: none;
+}
+
 .cell-tooltip {
   position: fixed;
   z-index: 1000;
