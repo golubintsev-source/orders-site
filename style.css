@@ -2037,6 +2037,11 @@ button:active {
     overflow-x: hidden;
   }
 
+  /* Раздел «Заказы» — та же верхняя граница ширины, что и на ПК (1550px) */
+  .container:has(#section-all.content-section.active) {
+    max-width: 1550px;
+  }
+
   .content-section.active {
     max-width: 100%;
     min-width: 0;
