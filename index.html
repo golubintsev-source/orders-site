@@ -484,6 +484,15 @@
       <div id="ordersTableScrollBottom" class="table-wrap orders-table-scroll">
         <div id="ordersTableScrollInner" class="orders-table-inner">
         <table id="ordersTable">
+          <!-- Явные ширины колонок: иначе при zoom на iOS «Клиент/Адрес/Описание» схлопываются -->
+          <colgroup>
+            <col span="2" />
+            <col class="orders-col-client" />
+            <col />
+            <col class="orders-col-address" />
+            <col class="orders-col-description" />
+            <col span="21" />
+          </colgroup>
           <thead>
             <tr>
               <th class="th-order-type-header">
@@ -720,6 +729,14 @@
     <div id="ordersTableStickyHeadScroll" class="orders-sticky-head-scroll">
       <div id="ordersTableStickyHeadPan" class="orders-sticky-head-pan">
         <table id="ordersTableStickyHeadTable" class="orders-sticky-head-table" role="presentation" aria-hidden="true">
+          <colgroup>
+            <col span="2" />
+            <col class="orders-col-client" />
+            <col />
+            <col class="orders-col-address" />
+            <col class="orders-col-description" />
+            <col span="21" />
+          </colgroup>
           <thead id="ordersTableStickyThead"></thead>
         </table>
       </div>

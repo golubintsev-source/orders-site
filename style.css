@@ -1817,6 +1817,25 @@ button:active {
 #ordersTable {
   border-collapse: separate;
   border-spacing: 0;
+  /* Вместе с <colgroup> фиксирует доли столбцов; иначе auto-layout отдаёт «лишнюю» ширину другим колонкам и сжимает Клиент/Адрес/Описание при zoom */
+  table-layout: fixed;
+}
+
+/* Ширины колонок Клиент / Адрес / Описание — через <col>, стабильно при CSS zoom на iOS */
+#ordersTable col.orders-col-client,
+#ordersTableStickyHeadTable col.orders-col-client {
+  width: 140px;
+  min-width: 140px;
+}
+#ordersTable col.orders-col-address,
+#ordersTableStickyHeadTable col.orders-col-address {
+  width: 180px;
+  min-width: 180px;
+}
+#ordersTable col.orders-col-description,
+#ordersTableStickyHeadTable col.orders-col-description {
+  width: 180px;
+  min-width: 180px;
 }
 
 #ordersTable thead th {
@@ -2492,10 +2511,7 @@ th {
   color: #047857;
 }
 
-/*
- * Клиент / Адрес / Описание — фиксированная ширина столбца (width = min = max),
- * иначе при CSS zoom на обёртке движок пересчитывает доли колонок.
- */
+/* Клиент / Адрес / Описание — <colgroup> + те же px на ячейках (WebKit + zoom) */
 #ordersTable .th-truncate-name,
 #ordersTable td.td-truncate-name,
 #ordersTableStickyHeadTable .th-truncate-name {
@@ -2544,11 +2560,6 @@ th {
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: middle;
-}
-
-/* Щипок zoom: фиксированная вёрстка строки шапки, чтобы ширины колонок не «плыли» */
-#ordersTableScrollInner.orders-table-inner--pinch-zoom #ordersTable {
-  table-layout: fixed;
 }
 
 .cell-tooltip {
