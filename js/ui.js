@@ -694,7 +694,9 @@ export function bindUIEvents() {
         return;
       }
 
-      const tdTip = e.target.closest("td.td-order-client, td.td-order-address, td.td-order-description");
+      const tdTip = e.target.closest(
+        "td.td-order-client, td.td-order-address, td.td-order-description, td.td-order-status"
+      );
       if (tdTip && tdTip.getAttribute("data-fulltext") && isOrdersTableCellTruncated(tdTip)) {
         showCellTooltip(tdTip);
         return;

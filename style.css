@@ -1802,6 +1802,18 @@ button:active {
 @media (hover: hover) and (pointer: fine) {
   #ordersTableScrollBottom.orders-table-scroll {
     max-height: calc(100dvh - 6rem);
+    /* Резервируем место под вертикальный скролл — иначе последний столбец уезжает под полосу. */
+    scrollbar-gutter: stable;
+  }
+
+  /*
+   * Горизонтальный скролл заканчивается ровно по краю ячейки — последние цифры и текст
+   * оказываются под вертикальным скроллом родителя или обрезаются по subpixel.
+   * Отступ увеличивает scrollWidth и даёт «воздух» справа.
+   */
+  .orders-table-pinch-wrap {
+    padding-right: 16px;
+    box-sizing: border-box;
   }
 }
 
@@ -1824,22 +1836,37 @@ button:active {
 
 /* width:100% у глобального table растягивает колонки; max-content — ширина по содержимому, столбцы плотнее. */
 #ordersTable {
-  border-collapse: separate;
-  border-spacing: 0;
+  border-collapse: collapse;
   width: max-content;
   max-width: none;
 }
 
 #ordersTable col.orders-col-150 {
-  width: 150px;
-  min-width: 150px;
+  width: 100px;
+  min-width: 100px;
+}
+
+#ordersTable col.orders-col-status {
+  width: 100px;
+  min-width: 100px;
 }
 
 #ordersTable th.th-orders-col-150,
 #ordersTableStickyHeadTable th.th-orders-col-150 {
-  width: 150px;
-  min-width: 150px;
-  max-width: 150px;
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#ordersTable th.th-status-header,
+#ordersTableStickyHeadTable th.th-status-header {
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1849,9 +1876,9 @@ button:active {
 #ordersTable td.td-order-client,
 #ordersTable td.td-order-address,
 #ordersTable td.td-order-description {
-  width: 150px;
-  min-width: 150px;
-  max-width: 150px;
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1861,13 +1888,26 @@ button:active {
 
 #ordersTable td.td-order-client[data-fulltext]:not([data-fulltext=""]),
 #ordersTable td.td-order-address[data-fulltext]:not([data-fulltext=""]),
-#ordersTable td.td-order-description[data-fulltext]:not([data-fulltext=""]) {
+#ordersTable td.td-order-description[data-fulltext]:not([data-fulltext=""]),
+#ordersTable td.td-order-status[data-fulltext]:not([data-fulltext=""]) {
   cursor: pointer;
+}
+
+#ordersTable td.td-order-status {
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 #ordersTable td.td-order-client .status-value,
 #ordersTable td.td-order-address .status-value,
-#ordersTable td.td-order-description .status-value {
+#ordersTable td.td-order-description .status-value,
+#ordersTable td.td-order-status .status-value {
   display: inline-block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1890,6 +1930,7 @@ button:active {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  overflow: hidden;
   background: #f8fafc;
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
   border-bottom: 1px solid #e7ebf0;
@@ -1910,8 +1951,7 @@ button:active {
 }
 
 .orders-sticky-head-table {
-  border-collapse: separate;
-  border-spacing: 0;
+  border-collapse: collapse;
   min-width: 900px;
   width: max-content;
   table-layout: fixed;
@@ -2070,6 +2110,12 @@ td {
 
 /* Столбец «з/п» — заголовок по правому краю, как числа в ячейках */
 #ordersTable th.th-money.th-money-header-right {
+  text-align: right;
+}
+
+#ordersTable th.th-area-m2,
+#ordersTable td.td-area-m2,
+#ordersTableStickyHeadTable th.th-area-m2 {
   text-align: right;
 }
 
@@ -2532,10 +2578,28 @@ th {
   padding: 3px 6px;
 }
 
-/* В колонке Остаток делаем сиреневую заливку */
-#ordersTable td.td-remaining .status-value {
+/* з/п (без «Оплатил») — сиреневая заливка; остаток — серая, как .status-value */
+#ordersTable td.td-installer-payment .status-value {
   background: #f3e8ff;
   color: #4b0082;
+}
+
+/* Остаток — тот же алый, что «Оплачено» paid-no-alert */
+#ordersTable td.td-remaining .paid-no-alert {
+  padding: 3px 6px;
+  font-size: 13px;
+}
+
+/* Остаток при «Кому остаток», з/п при «Оплатил» — зелёная подложка */
+#ordersTable td.td-remaining .installer-paid-value,
+#ordersTable td.td-installer-payment .installer-paid-value {
+  display: inline-block;
+  white-space: nowrap;
+  background: #e8f5e9;
+  color: #1b5e20;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 13px;
 }
 
 /* В колонке Стоимость (основная сумма заказа) тоже сиреневая заливка */
@@ -2553,17 +2617,6 @@ th {
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
-}
-
-/* Сумма (монтаж) — как status-value (ID), но зелёный фон когда «Оплатил» заполнен */
-.installer-paid-value {
-  display: inline-block;
-  white-space: nowrap;
-  background: #e8f5e9;
-  color: #1b5e20;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 13px;
 }
 
 .paid-no-alert {

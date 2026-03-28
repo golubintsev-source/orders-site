@@ -77,6 +77,21 @@ function clearStickyHeaderPan() {
   if (pan) pan.style.transform = "";
 }
 
+function hideStickyWrap(wrap) {
+  if (!wrap) return;
+  wrap.hidden = true;
+  wrap.setAttribute("aria-hidden", "true");
+  wrap.style.height = "";
+  clearStickyHeaderPan();
+}
+
+/** Высота клона = у оригинального thead, иначе блок с фоном #f8fafc перекрывает первую строку tbody. */
+function syncStickyHeaderHeight(wrap, thead) {
+  if (!wrap || wrap.hidden || !thead) return;
+  const h = thead.offsetHeight;
+  if (h > 0) wrap.style.height = `${h}px`;
+}
+
 function syncStickyColumnWidths() {
   const wrap = document.getElementById(WRAP_ID);
   if (!wrap || wrap.hidden) return;
@@ -110,16 +125,12 @@ function updateStickyHeaderState() {
   if (!wrap || !table) return;
 
   if (isCoarseTouchUi()) {
-    wrap.hidden = true;
-    wrap.setAttribute("aria-hidden", "true");
-    clearStickyHeaderPan();
+    hideStickyWrap(wrap);
     return;
   }
 
   if (!section?.classList.contains("active")) {
-    wrap.hidden = true;
-    wrap.setAttribute("aria-hidden", "true");
-    clearStickyHeaderPan();
+    hideStickyWrap(wrap);
     return;
   }
 
@@ -131,9 +142,7 @@ function updateStickyHeaderState() {
   const vh = window.innerHeight;
 
   if (tableRect.bottom <= 0 || tableRect.top >= vh) {
-    wrap.hidden = true;
-    wrap.setAttribute("aria-hidden", "true");
-    clearStickyHeaderPan();
+    hideStickyWrap(wrap);
     return;
   }
 
@@ -141,9 +150,7 @@ function updateStickyHeaderState() {
   const shouldShow = theadRect.top < anchorTop;
 
   if (!shouldShow) {
-    wrap.hidden = true;
-    wrap.setAttribute("aria-hidden", "true");
-    clearStickyHeaderPan();
+    hideStickyWrap(wrap);
     return;
   }
 
@@ -152,6 +159,7 @@ function updateStickyHeaderState() {
   wrap.setAttribute("aria-hidden", "false");
   positionStickyWrap(wrap);
   syncStickyColumnWidths();
+  syncStickyHeaderHeight(wrap, thead);
   applyStickyHeaderPan();
 }
 

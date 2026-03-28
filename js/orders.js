@@ -768,6 +768,11 @@ function isOrderPaid(order) {
   return paidByRemainingTo || paidByRemainingAmountZero;
 }
 
+function isRemainingAmountZero(order) {
+  const remainingAmount = parseOrderFormNumber(order.remaining_amount);
+  return remainingAmount != null && Math.abs(remainingAmount) < 1e-9;
+}
+
 /** Кнопка «Редактировать» в таблице и в меню по номеру. */
 export function canShowEditButtonForOrder(order) {
   if (!canMutateOrders()) return false;
@@ -800,12 +805,20 @@ export async function setLockEditForUserLite(orderId, locked) {
   return true;
 }
 
+/** Красный «нет» в колонке «Оплачено» — см. paidBadge */
+function isOplahenoPaidNoAlert(order) {
+  if (order.amount == null || order.amount === "") return false;
+  if (isOrderPaid(order)) return false;
+  const status = order.payment_status || "";
+  return status === "Производство" || status === "Товар передан заказчику" || status === "Монтаж выполнен";
+}
+
 function paidBadge(order) {
   if (order.amount == null || order.amount === "") return "";
   const paid = isOrderPaid(order);
   const status = order.payment_status || "";
   if (paid) return '<span class="status-paid">да</span>';
-  if (status === "Производство" || status === "Товар передан заказчику" || status === "Монтаж выполнен") return '<span class="paid-no-alert">нет</span>';
+  if (isOplahenoPaidNoAlert(order)) return '<span class="paid-no-alert">нет</span>';
   return '<span class="status-value">нет</span>';
 }
 
@@ -839,6 +852,8 @@ export function renderOrders(orders) {
     /* Номер в таблице: 4 цифры + «_» + первая буква типа заказа (например 0112_О) */
     const orderNumberDisplay =
       order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";
+    const statusDisplayText =
+      order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом");
     const row = `
       <tr>
         <td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}" data-lock-edit-user-lite="${isOrderEditLockedForUserLite(order) ? "1" : "0"}">
@@ -851,21 +866,31 @@ export function renderOrders(orders) {
         <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-order-address" data-fulltext="${escapeAttr(address)}">${address ? `<span class="status-value">${escapeHtml(address)}</span>` : ""}</td>
         <td class="td-order-description" data-fulltext="${escapeAttr(description)}">${description ? `<span class="status-value">${escapeHtml(description)}</span>` : ""}</td>
-        <td>
-          <span class="status-value">
-            ${order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом")}
-          </span>
-        </td>
+        <td class="td-order-status" data-fulltext="${escapeAttr(statusDisplayText)}"><span class="status-value">${escapeHtml(statusDisplayText)}</span></td>
         <td class="td-money td-main-amount">${order.amount != null && order.amount !== "" ? `<span class="status-value">${formatAmount(order.amount)}</span>` : ""}</td>
         <td class="td-prepayment td-money">${order.prepayment != null && order.prepayment !== "" ? `<span class="status-value">${formatAmount(order.prepayment)}</span>` : ""}</td>
         <td class="td-prepayment-to">${order.prepayment_to ? escapeHtml(order.prepayment_to) : ""}</td>
-        <td class="td-remaining td-money">${order.remaining_amount != null && order.remaining_amount !== "" ? `<span class="status-value">${formatAmount(order.remaining_amount)}</span>` : ""}</td>
+        <td class="td-remaining td-money">${
+          order.remaining_amount != null && order.remaining_amount !== ""
+            ? order.remaining_to || isRemainingAmountZero(order)
+              ? `<span class="installer-paid-value">${formatAmount(order.remaining_amount)}</span>`
+              : isOplahenoPaidNoAlert(order)
+                ? `<span class="paid-no-alert">${formatAmount(order.remaining_amount)}</span>`
+                : `<span class="status-value">${formatAmount(order.remaining_amount)}</span>`
+            : ""
+        }</td>
         <td class="td-remaining-to">${order.remaining_to ? escapeHtml(order.remaining_to) : ""}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
         <td class="td-delivery-date">${formatDateShortRU(order.delivery_date)}</td>
         <td class="td-installation-date">${formatDateShortRU(order.installation_date)}</td>
         <td class="td-area-m2">${order.area_m2 != null && order.area_m2 !== "" ? escapeHtml(String(order.area_m2)) : ""}</td>
-        <td class="td-money">${order.installer_payment_by && order.installer_payment_amount != null && order.installer_payment_amount !== "" ? `<span class="installer-paid-value">${formatAmount(order.installer_payment_amount)}</span>` : (order.installer_payment_amount != null && order.installer_payment_amount !== "" ? formatAmount(order.installer_payment_amount) : "")}</td>
+        <td class="td-money td-installer-payment">${
+          order.installer_payment_amount != null && order.installer_payment_amount !== ""
+            ? order.installer_payment_by
+              ? `<span class="installer-paid-value">${formatAmount(order.installer_payment_amount)}</span>`
+              : `<span class="status-value">${formatAmount(order.installer_payment_amount)}</span>`
+            : ""
+        }</td>
         <td>${order.installer_payment_by ? escapeHtml(order.installer_payment_by) : ""}</td>
         <td>${formatDateShortRU(order.reveals_date)}</td>
         <td class="td-mosquito-nets">${order.mosquito_nets != null && order.mosquito_nets !== "" ? escapeHtml(String(order.mosquito_nets)) : ""}</td>
@@ -878,7 +903,7 @@ export function renderOrders(orders) {
     table.innerHTML += row;
   });
 
-  table.querySelectorAll(".td-order-client, .td-order-address, .td-order-description").forEach((cell) => {
+  table.querySelectorAll(".td-order-client, .td-order-address, .td-order-description, .td-order-status").forEach((cell) => {
     const full = cell.getAttribute("data-fulltext");
     if (!full) return;
     const chip = cell.querySelector(".status-value");
