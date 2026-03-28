@@ -1933,6 +1933,16 @@ button:active {
     overscroll-behavior: auto;
   }
 
+  /*
+   * Фиксированный клон thead (JS) + zoom на области таблицы даёт неверные getBoundingClientRect —
+   * дублирующиеся заголовки «зависают» посередине экрана. На таче не используем клон.
+   */
+  .orders-sticky-head-wrap {
+    display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+  }
+
   /* JS ordersTableMobileFit: таблица масштабируется под ширину — горизонтальный скролл не нужен */
   #ordersTableScrollInner.orders-table-inner--mobile-fit {
     overflow-x: hidden;

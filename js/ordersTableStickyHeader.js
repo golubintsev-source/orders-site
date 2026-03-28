@@ -11,6 +11,14 @@ const THEAD_ID = "ordersTableStickyThead";
 let inited = false;
 let rafPending = false;
 
+/** iPhone: клон шапки (position:fixed) ломается при CSS zoom на области таблицы — заголовки «плывут» по экрану. */
+function isCoarseTouchUi() {
+  return (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(hover: none) and (pointer: coarse)").matches
+  );
+}
+
 function getTopbarStickyOffset() {
   const topbar = document.querySelector(".container .topbar");
   if (!topbar) return 0;
@@ -100,6 +108,13 @@ function updateStickyHeaderState() {
   const section = document.getElementById("section-all");
   const table = document.getElementById("ordersTable");
   if (!wrap || !table) return;
+
+  if (isCoarseTouchUi()) {
+    wrap.hidden = true;
+    wrap.setAttribute("aria-hidden", "true");
+    clearStickyHeaderPan();
+    return;
+  }
 
   if (!section?.classList.contains("active")) {
     wrap.hidden = true;
