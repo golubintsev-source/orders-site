@@ -8,6 +8,7 @@ import { initOrderTasksSection } from "./tasks.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { setMessage } from "./dom.js";
 import { initOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
+import { initOrdersTableMobileFit } from "./ordersTableMobileFit.js";
 import {
   refreshSectionNavAfterProfile,
   switchSection,
@@ -26,6 +27,7 @@ window.toggleOrderRowHighlightById = toggleOrderRowHighlightById;
 async function init() {
   bindUIEvents();
   initOrdersTableStickyHeader();
+  initOrdersTableMobileFit();
 
   try {
     const user = await checkAuth();

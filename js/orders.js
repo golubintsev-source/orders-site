@@ -26,7 +26,7 @@ import {
   renderExistingOrderFilesInForm,
 } from "./files.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
-import { refreshOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
+import { applyOrdersTableMobileFit } from "./ordersTableMobileFit.js";
 import {
   canMutateOrders,
   isAdmin,
@@ -915,7 +915,7 @@ export function renderOrders(orders) {
   ensureOrdersScrollSync();
   updateOrdersScrollSpacerWidth();
   syncOrdersScrollPositions();
-  refreshOrdersTableStickyHeader();
+  applyOrdersTableMobileFit();
 }
 
 export function applyClientFilter() {

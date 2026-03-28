@@ -265,7 +265,14 @@ export function switchSection(sectionId) {
 
   updateBackToOrdersBtnVisibility(sectionId);
   updateOrdersTypeToggleVisibility(sectionId);
-  scheduleOrdersStickyHeaderUpdate();
+  if (sectionId === "all") {
+    void import("./ordersTableMobileFit.js").then((m) => m.scheduleApplyOrdersTableMobileFit());
+  } else {
+    void import("./ordersTableMobileFit.js").then((m) => {
+      m.clearOrdersTableMobileFit();
+      scheduleOrdersStickyHeaderUpdate();
+    });
+  }
 }
 
 /** Обновить только текст текущего раздела (например «Новый» ↔ «Редактирование»). */
