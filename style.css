@@ -2070,8 +2070,8 @@ button:active {
   }
 
   /*
-   * Вертикаль — в этом блоке. Горизонталь таблицы — во внутреннем .orders-table-inner.
-   * Шапка — JS-клон (ordersTableStickyHeader.js). У страницы overflow-x скрыт на html/body — здесь overflow-x:visible не раздувает документ.
+   * Вертикаль — в этом блоке. Горизонталь — во .orders-table-inner.
+   * overflow-x: clip — без вылета и «резинового» горизонтального скролла за таблицу (шапка — JS-клон).
    */
   #ordersTableScrollBottom.orders-table-scroll {
     display: block;
@@ -2080,7 +2080,7 @@ button:active {
     max-width: 100%;
     max-height: calc(100dvh - 10rem);
     overflow-y: auto;
-    overflow-x: visible;
+    overflow-x: clip;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
     overscroll-behavior-x: none;
@@ -2102,8 +2102,9 @@ button:active {
     width: max-content;
     max-width: 100% !important;
     overflow-x: auto !important;
+    overflow-y: visible;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
+    overscroll-behavior-x: none;
   }
 
   /* Шапка заказов — тот же JS-клон, что и на ПК (CSS sticky в WebKit на вложенном overflow ломается). */

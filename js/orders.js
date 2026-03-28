@@ -604,23 +604,41 @@ function isOrdersCoarseTouchUi() {
 }
 
 /**
- * В iOS Safari shrink-to-fit (inline-block / width:max-content) часто даёт полную ширину карточки —
- * справа пусто, вертикальный скролл у края экрана. Ставим ширину внешнего блока по контенту.
+ * Тач: ширина блока = ширине таблицы (не шире карточки), без лишнего scrollWidth справа.
+ * Берём table.scrollWidth — inner.scrollWidth на iOS иногда раздувается.
  */
+function clampOrdersHorizontalScroll() {
+  const el = document.getElementById("ordersTableScrollInner");
+  if (!el || !isOrdersCoarseTouchUi()) return;
+  const max = el.scrollWidth - el.clientWidth;
+  if (max <= 0) return;
+  if (el.scrollLeft > max) el.scrollLeft = max;
+}
+
 function syncOrdersTableOuterWidthForTouch() {
   const bottom = document.getElementById("ordersTableScrollBottom");
   const inner = document.getElementById("ordersTableScrollInner");
+  const table = document.getElementById("ordersTable");
   if (!bottom || !inner) return;
   if (!isOrdersCoarseTouchUi()) {
     bottom.style.removeProperty("width");
+    inner.style.removeProperty("width");
     return;
   }
   const apply = () => {
     const parent = bottom.parentElement;
     const avail = parent ? parent.clientWidth : window.innerWidth;
-    const sw = inner.scrollWidth;
-    if (!(avail > 0 && sw > 0)) return;
-    bottom.style.width = `${Math.min(sw, avail)}px`;
+    if (!(avail > 0)) return;
+    const tw = table ? table.scrollWidth : inner.scrollWidth;
+    if (!(tw > 0)) return;
+    const outerW = Math.min(tw, avail);
+    bottom.style.width = `${outerW}px`;
+    if (tw <= avail) {
+      inner.style.width = `${tw}px`;
+    } else {
+      inner.style.width = "100%";
+    }
+    clampOrdersHorizontalScroll();
   };
   requestAnimationFrame(() => {
     apply();
@@ -661,6 +679,7 @@ function ensureOrdersScrollSync() {
   const idleMs = 80;
   let bottomIdleTimer = null;
   const onHorizontalAreaScroll = () => {
+    clampOrdersHorizontalScroll();
     if (bottomIdleTimer) clearTimeout(bottomIdleTimer);
     bottomIdleTimer = setTimeout(() => {
       bottomIdleTimer = null;
