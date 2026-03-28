@@ -1,9 +1,10 @@
 /**
- * Тач-устройства: раньше здесь был zoom таблицы — на iOS 18 он давал обрезку и отключал горизонтальный скролл.
- * Сейчас только снимаем возможные inline-стили со старых сессий и обновляем клон шапки (на таче клон отключён в CSS).
+ * Тач: очистка legacy inline-стилей таблицы, обновление клона шапки.
+ * Масштаб двумя пальцами — ordersTablePinchZoom.js (zoom на #ordersTableScrollInner не сбрасываем здесь).
  */
 
 import { refreshOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
+import { reapplyOrdersTablePinchZoom } from "./ordersTablePinchZoom.js";
 
 export function clearOrdersTableMobileFit() {
   const bottom = document.getElementById("ordersTableScrollBottom");
@@ -16,7 +17,7 @@ export function clearOrdersTableMobileFit() {
     table.style.removeProperty("max-width");
   }
   if (inner) {
-    inner.style.removeProperty("zoom");
+    /* zoom для щипка задаёт ordersTablePinchZoom — не трогаем inner.style.zoom */
     inner.style.removeProperty("transform");
     inner.style.removeProperty("transform-origin");
     inner.style.removeProperty("width");
@@ -31,6 +32,7 @@ export function clearOrdersTableMobileFit() {
 
 export function applyOrdersTableMobileFit() {
   clearOrdersTableMobileFit();
+  reapplyOrdersTablePinchZoom();
   refreshOrdersTableStickyHeader();
 }
 

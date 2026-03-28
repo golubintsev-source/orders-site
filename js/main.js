@@ -9,6 +9,7 @@ import { openFilesModal, removeFile } from "./files.js";
 import { setMessage } from "./dom.js";
 import { initOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
 import { initOrdersTableMobileFit } from "./ordersTableMobileFit.js";
+import { initOrdersTablePinchZoom } from "./ordersTablePinchZoom.js";
 import {
   refreshSectionNavAfterProfile,
   switchSection,
@@ -28,6 +29,7 @@ async function init() {
   bindUIEvents();
   initOrdersTableStickyHeader();
   initOrdersTableMobileFit();
+  initOrdersTablePinchZoom();
 
   try {
     const user = await checkAuth();
