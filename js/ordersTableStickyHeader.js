@@ -11,14 +11,6 @@ const THEAD_ID = "ordersTableStickyThead";
 let inited = false;
 let rafPending = false;
 
-/** iPhone: клон шапки (position:fixed) ломается при CSS zoom на области таблицы — заголовки «плывут» по экрану. */
-function isCoarseTouchUi() {
-  return (
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(hover: none) and (pointer: coarse)").matches
-  );
-}
-
 function getTopbarStickyOffset() {
   const topbar = document.querySelector(".container .topbar");
   if (!topbar) return 0;
@@ -124,11 +116,6 @@ function updateStickyHeaderState() {
   const table = document.getElementById("ordersTable");
   if (!wrap || !table) return;
 
-  if (isCoarseTouchUi()) {
-    hideStickyWrap(wrap);
-    return;
-  }
-
   if (!section?.classList.contains("active")) {
     hideStickyWrap(wrap);
     return;
@@ -139,7 +126,8 @@ function updateStickyHeaderState() {
 
   const tableRect = table.getBoundingClientRect();
   const theadRect = thead.getBoundingClientRect();
-  const vh = window.innerHeight;
+  const vv = window.visualViewport;
+  const vh = vv ? vv.height : window.innerHeight;
 
   if (tableRect.bottom <= 0 || tableRect.top >= vh) {
     hideStickyWrap(wrap);
@@ -239,6 +227,12 @@ export function initOrdersTableStickyHeader() {
       },
       { passive: true }
     );
+  }
+
+  const vv = window.visualViewport;
+  if (vv) {
+    vv.addEventListener("scroll", scheduleOrdersStickyHeaderUpdate, { passive: true });
+    vv.addEventListener("resize", scheduleOrdersStickyHeaderUpdate, { passive: true });
   }
 
   scheduleOrdersStickyHeaderUpdate();

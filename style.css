@@ -2052,18 +2052,6 @@ button:active {
     overscroll-behavior-x: none;
   }
 
-  /* Закрепление шапки (на ПК — JS-клон; на iPhone — CSS sticky). */
-  #ordersTable thead th {
-    position: -webkit-sticky;
-    position: sticky;
-    top: 0;
-    z-index: 60;
-    background: #f8fafc;
-    box-shadow: inset 0 -1px 0 #e7ebf0;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-  }
-
   /*
    * Глобально `table { width: 100% }` сжимает колонки под экран — scrollWidth ≈ экрану, свайп не нужен.
    * !important — перекрывает порядок объявлений с `table { width: 100% }` ниже по файлу.
@@ -2085,14 +2073,9 @@ button:active {
     overscroll-behavior-x: contain;
   }
 
-  /* JS-клон шапки на таче не используем — работает #ordersTable thead { position: sticky }. */
-  .orders-sticky-head-wrap {
-    display: none !important;
-    pointer-events: none !important;
-    visibility: hidden !important;
-  }
-
+  /* Шапка заказов — тот же JS-клон, что и на ПК (CSS sticky в WebKit на вложенном overflow ломается). */
 }
+
 
 .orders-table-scroll-top {
   overflow-x: auto;
