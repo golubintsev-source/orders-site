@@ -2012,17 +2012,41 @@ button:active {
 /* На телефоне: верхнюю «полосу прокрутки» не показываем — на iOS она всё равно не видна, а высота 16px даёт пустой зазор */
 @media (hover: none) and (pointer: coarse) {
   /*
-   * Без overflow-x:hidden на предках таблицы — иначе WebKit ломает position:sticky у thead.
-   * Горизонталь — только во .orders-table-inner (ширина max-content у #ordersTable не должна раздувать layout при min-width:0 на карточке).
+   * Жёстко ограничить ширину страницы (iOS/Safari: лишняя ширина layout, белое поле справа, скролл у края).
+   * Горизонталь таблицы заказов — только внутри #ordersTableScrollInner (overflow-x: auto).
    */
-  body:has(#section-all.content-section.active),
-  body:has(#section-all.content-section.active) .container {
+  html {
+    width: 100%;
     max-width: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
+
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    position: relative;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .content-section.active {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
   }
 
   #section-all > .card {
     max-width: 100%;
     min-width: 0;
+    overflow-x: hidden;
   }
 
   /* Шапка с лупой, разделом и выходом — закреплена при прокрутке страницы (z-index ниже модалок и дропдауна разделов) */
@@ -2041,8 +2065,8 @@ button:active {
   }
 
   /*
-   * Вертикаль — в этом блоке. overflow-x не hidden — иначе WebKit ломает sticky (если включат обратно).
-   * display:block + max-content: надёжнее inline-block на iOS; точную ширину дублирует syncOrdersTableOuterWidthForTouch() в orders.js.
+   * Вертикаль — в этом блоке. Горизонталь таблицы — во внутреннем .orders-table-inner.
+   * Шапка — JS-клон (ordersTableStickyHeader.js). У страницы overflow-x скрыт на html/body — здесь overflow-x:visible не раздувает документ.
    */
   #ordersTableScrollBottom.orders-table-scroll {
     display: block;
