@@ -1933,6 +1933,11 @@ button:active {
     overscroll-behavior: auto;
   }
 
+  /* При zoom таблицы иначе overflow-x:hidden на родителе обрезает содержимое слева */
+  #ordersTableScrollBottom.orders-table-scroll.orders-table-scroll--mobile-fit {
+    overflow-x: visible !important;
+  }
+
   /*
    * Глобально `table { width: 100% }` растягивает таблицу на ширину экрана — все колонки
    * сжимаются в viewport, scrollWidth ≈ clientWidth, JS ordersTableMobileFit не масштабирует.

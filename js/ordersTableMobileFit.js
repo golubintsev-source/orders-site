@@ -1,14 +1,16 @@
 /**
- * iPhone / тач: подогнать ширину таблицы заказов под экран.
- * Важно: `transform: scale()` не меняет ширину в потоке — при `overflow: hidden` на родителе
- * остаётся видна только левая часть таблицы. Используем CSS `zoom` (уменьшает и раскладку в WebKit/Blink).
+ * iPhone / тач: уменьшить таблицу заказов так, чтобы все колонки попали в ширину экрана (CSS zoom).
+ *
+ * Важно:
+ * - zoom на обёртке + overflow-x:hidden на #ordersTableScrollBottom обрезал таблицу слева (видно ~8 колонок).
+ * - zoom и измерение ширины — на самой #ordersTable; перед измерением задаём width:max-content (!important),
+ *   иначе таблица сжата под экран и scrollWidth ≈ экрану.
  */
 
 import { refreshOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
 
 const TOUCH_UI = "(hover: none) and (pointer: coarse)";
 
-/** В Firefox до недавнего времени `zoom` не влиял на раскладку; проверяем поддержку. */
 function zoomLayoutSupported() {
   if (typeof document === "undefined") return false;
   const el = document.createElement("div");
@@ -24,9 +26,20 @@ function isTouchUi() {
   return typeof window.matchMedia === "function" && window.matchMedia(TOUCH_UI).matches;
 }
 
+function getOrdersTableEl() {
+  return document.getElementById("ordersTable");
+}
+
 export function clearOrdersTableMobileFit() {
   const bottom = document.getElementById("ordersTableScrollBottom");
   const inner = document.getElementById("ordersTableScrollInner");
+  const table = getOrdersTableEl();
+
+  if (table) {
+    table.style.removeProperty("zoom");
+    table.style.removeProperty("width");
+    table.style.removeProperty("max-width");
+  }
   if (inner) {
     inner.style.removeProperty("zoom");
     inner.style.removeProperty("transform");
@@ -48,7 +61,9 @@ export function applyOrdersTableMobileFit() {
   const section = document.getElementById("section-all");
   const bottom = document.getElementById("ordersTableScrollBottom");
   const inner = document.getElementById("ordersTableScrollInner");
-  if (!bottom || !inner) {
+  const table = getOrdersTableEl();
+
+  if (!bottom || !inner || !table) {
     refreshOrdersTableStickyHeader();
     return;
   }
@@ -67,39 +82,50 @@ export function applyOrdersTableMobileFit() {
     return;
   }
 
-  const table = document.getElementById("ordersTable");
-  void table?.offsetWidth;
+  /* Реальная ширина всех колонок (не сжатая под 100% экрана) */
+  table.style.setProperty("width", "max-content", "important");
+  table.style.setProperty("max-width", "none", "important");
+  void table.offsetWidth;
+  void table.getBoundingClientRect();
 
   const availW = bottom.clientWidth;
-  /* Ширина по строке заголовков (сумма ячеек) — надёжнее scrollWidth, если движок сжимал таблицу под 100% */
-  let theadSumW = 0;
-  const headRow = table?.querySelector("thead tr");
+  let contentW = Math.max(table.scrollWidth, table.offsetWidth, inner.scrollWidth);
+
+  const headRow = table.querySelector("thead tr");
   if (headRow) {
+    let sum = 0;
     headRow.querySelectorAll("th").forEach((th) => {
-      const w = th.getBoundingClientRect().width;
-      if (w > 0) theadSumW += w;
+      sum += th.getBoundingClientRect().width;
     });
+    contentW = Math.max(contentW, Math.ceil(sum));
   }
 
-  const contentW = Math.max(
-    inner.scrollWidth,
-    table?.scrollWidth ?? 0,
-    table?.offsetWidth ?? 0,
-    theadSumW
-  );
+  const bodyRow = table.querySelector("tbody tr");
+  if (bodyRow) {
+    let sum = 0;
+    bodyRow.querySelectorAll("td").forEach((td) => {
+      sum += td.getBoundingClientRect().width;
+    });
+    contentW = Math.max(contentW, Math.ceil(sum));
+  }
+
   if (!availW || !contentW) {
+    clearOrdersTableMobileFit();
     refreshOrdersTableStickyHeader();
     return;
   }
 
   const scale = Math.min(1, availW / contentW);
+
   if (scale >= 0.998) {
+    clearOrdersTableMobileFit();
     refreshOrdersTableStickyHeader();
     return;
   }
 
-  inner.style.zoom = String(scale);
+  table.style.zoom = String(scale);
   inner.classList.add("orders-table-inner--mobile-fit");
+  bottom.classList.add("orders-table-scroll--mobile-fit");
   inner.scrollLeft = 0;
 
   refreshOrdersTableStickyHeader();
