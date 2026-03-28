@@ -2008,21 +2008,15 @@ button:active {
 /* На телефоне: верхнюю «полосу прокрутки» не показываем — на iOS она всё равно не видна, а высота 16px даёт пустой зазор */
 @media (hover: none) and (pointer: coarse) {
   /*
-   * Широкая таблица (width: max-content) раздвигает layout; без обрезки справа белое поле и горизонтальный свайп страницы.
-   * Горизонтальный скролл таблицы — только во .orders-table-inner.
+   * Без overflow-x:hidden на предках таблицы — иначе WebKit ломает position:sticky у thead.
+   * Горизонталь — только во .orders-table-inner (ширина max-content у #ordersTable не должна раздувать layout при min-width:0 на карточке).
    */
-  body:has(#section-all.content-section.active) {
-    overflow-x: hidden;
-    max-width: 100%;
-  }
-
+  body:has(#section-all.content-section.active),
   body:has(#section-all.content-section.active) .container {
-    overflow-x: hidden;
     max-width: 100%;
   }
 
   #section-all > .card {
-    overflow-x: hidden;
     max-width: 100%;
     min-width: 0;
   }
@@ -2043,8 +2037,8 @@ button:active {
   }
 
   /*
-   * Вертикальная прокрутка внутри блока — иначе при скролле страницы нет scrollport для position:sticky у thead.
-   * Горизонталь — по-прежнему во .orders-table-inner.
+   * Вертикаль — в этом блоке (scrollport для sticky thead). Горизонталь таблицы — во .orders-table-inner.
+   * Не ставить overflow-x:hidden здесь — в Safari это ломает sticky у thead при overflow-y:auto.
    */
   #ordersTableScrollBottom.orders-table-scroll {
     width: 100%;
@@ -2052,19 +2046,22 @@ button:active {
     min-width: 0;
     max-height: calc(100dvh - 10rem);
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: visible;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
     overscroll-behavior-x: none;
   }
 
-  /* Закрепление шапки (на ПК — JS-клон; на iPhone — CSS sticky на ячейках — так стабильнее в WebKit). */
+  /* Закрепление шапки (на ПК — JS-клон; на iPhone — CSS sticky). */
   #ordersTable thead th {
     position: -webkit-sticky;
     position: sticky;
     top: 0;
     z-index: 60;
     background: #f8fafc;
+    box-shadow: inset 0 -1px 0 #e7ebf0;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
   }
 
   /*
