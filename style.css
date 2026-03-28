@@ -1822,10 +1822,12 @@ button:active {
   max-width: none;
 }
 
+/* width:100% у глобального table растягивает колонки; max-content — ширина по содержимому, столбцы плотнее. */
 #ordersTable {
   border-collapse: separate;
   border-spacing: 0;
-  table-layout: fixed;
+  width: max-content;
+  max-width: none;
 }
 
 #ordersTable col.orders-col-150 {
@@ -1915,7 +1917,7 @@ button:active {
 }
 
 #ordersTableStickyHeadTable thead th {
-  padding: 4px 3px;
+  padding: 3px 2px;
   font-size: 13px;
   white-space: nowrap;
   text-align: left;
@@ -1951,7 +1953,7 @@ button:active {
 #ordersTableStickyHeadTable .th-status-header-inner {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 #ordersTableStickyHeadTable .th-status-header {
@@ -2075,14 +2077,14 @@ td {
 }
 
 #ordersTable th {
-  padding: 4px 3px;
+  padding: 3px 2px;
   font-size: 13px;
   white-space: nowrap;
   text-align: left;
 }
 
 #ordersTable td {
-  padding: 4px 3px;
+  padding: 3px 2px;
   font-size: 13px;
 }
 
@@ -2100,18 +2102,11 @@ th {
   text-decoration: underline;
 }
 
-#ordersTable td.td-phone-call {
-  white-space: nowrap;
-  width: 1%;
-  min-width: 1px;
-  padding: 4px 2px 4px 0;
-}
-
 #ordersTable td.td-actions {
   white-space: nowrap;
   width: 1%;
   min-width: 1px;
-  padding: 4px 2px 4px 0;
+  padding: 3px 1px 3px 0;
 }
 
 #ordersTable .btn-icon {
@@ -2316,49 +2311,16 @@ th {
   color: #111827;
 }
 
-#ordersTable .btn-edit:hover {
-  color: #1f6feb;
-}
-
-#ordersTable .btn-history:hover {
-  color: #059669;
-}
-
-#ordersTable .btn-files {
-  position: relative;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-#ordersTable .btn-files .btn-files-count {
-  position: absolute;
-  bottom: -1px;
-  right: -1px;
-  min-width: 12px;
-  height: 12px;
-  padding: 0 2px;
-  line-height: 12px;
-  text-align: center;
-  background: #1f6feb;
-  color: #fff;
-  border-radius: 6px;
-  font-size: 9px;
-}
-
-#ordersTable .btn-files:hover {
-  color: #1f6feb;
-}
-
 #ordersTable .btn-delete:hover {
   color: #d32f2f;
 }
 
-/* Последний столбец — иконка файлов */
+/* Последний столбец — удалить */
 #ordersTable th:last-child,
-#ordersTable td.td-files {
+#ordersTable td.td-delete {
   width: 1%;
   min-width: 1px;
-  padding: 4px 0 4px 1px;
+  padding: 3px 0 3px 1px;
 }
 
 #ordersTable .th-order-type-header-inner {
@@ -2382,19 +2344,25 @@ th {
   margin: 0;
 }
 
-/* Небольшой зазор между «Номер», «Дата», «Клиент» */
+/* Первый столбец без width: растягивается на весь «лишний» запас при table width:100%. */
 #ordersTable thead tr th:first-child,
 #ordersTable tbody td.td-order-id {
-  padding-right: 6px;
+  width: 0.01%;
+  min-width: 0;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 #ordersTableStickyHeadTable thead tr th:first-child {
-  padding-right: 6px;
+  width: 0.01%;
+  min-width: 0;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 #ordersTableStickyHeadTable th.th-order-date {
-  padding-left: 6px;
-  padding-right: 6px;
+  padding-left: 2px;
+  padding-right: 2px;
 }
 
 #ordersTable th.th-order-date,
@@ -2402,16 +2370,13 @@ th {
   min-width: 0;
   width: 1%;
   white-space: nowrap;
-  padding-left: 6px;
-  padding-right: 6px;
-  padding-top: 4px;
-  padding-bottom: 4px;
+  padding: 3px 2px;
 }
 
 #ordersTable .th-status-header-inner {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 #ordersTable .th-status-header {
@@ -2420,6 +2385,11 @@ th {
 
 #ordersTable .th-status-label {
   flex-shrink: 0;
+}
+
+#ordersTable .status-filter-btn,
+#ordersTableStickyHeadTable .status-filter-btn {
+  padding: 2px;
 }
 
 .status-filter-btn {
@@ -2515,37 +2485,13 @@ th {
 
 #ordersTable th.th-phone,
 #ordersTable td.td-phone {
-  min-width: 110px;
+  min-width: 0;
   white-space: nowrap;
 }
 
-/* Узкий столбец с иконкой звонка */
-#ordersTable td.td-phone-call {
+#ordersTable td.td-delete {
   text-align: center;
   vertical-align: middle;
-}
-
-#ordersTable td.td-files {
-  text-align: center;
-  vertical-align: middle;
-}
-
-#ordersTable td.td-history {
-  width: 1%;
-  min-width: 1px;
-  padding: 4px 2px 4px 0;
-}
-#ordersTable .btn-phone-call {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #059669;
-  padding: 4px;
-  border-radius: 6px;
-}
-#ordersTable .btn-phone-call:hover {
-  background: #d1fae5;
-  color: #047857;
 }
 
 .cell-tooltip {
@@ -2575,6 +2521,14 @@ th {
   padding: 4px 8px;
   border-radius: 6px;
   font-size: 13px;
+}
+
+#ordersTable .status-value {
+  padding: 3px 6px;
+}
+
+#ordersTable .status-paid {
+  padding: 3px 6px;
 }
 
 /* В колонке Остаток делаем сиреневую заливку */
@@ -3083,28 +3037,23 @@ th {
   }
 
   #ordersTable th {
-    padding: 4px 2px;
+    padding: 3px 2px;
     font-size: 13px;
   }
 
   #ordersTable td {
-    padding: 4px 2px;
+    padding: 3px 2px;
     font-size: 13px;
   }
 
   #ordersTable th.th-order-date,
   #ordersTable td.td-order-date {
-    padding: 4px 4px 4px 6px;
-  }
-
-  #ordersTable thead tr th:first-child,
-  #ordersTable tbody td.td-order-id {
-    padding-right: 6px;
+    padding: 3px 2px;
   }
 
   #ordersTable th.th-paid,
   #ordersTable td.td-paid {
-    padding: 4px 2px 4px 0;
+    padding: 3px 2px 3px 0;
   }
 
   .topbar {
