@@ -2512,7 +2512,31 @@ th {
   color: #047857;
 }
 
-/* Клиент / Адрес / Описание — как «Статус»: шапка с inner+label, в td один .status-value; ширина по контенту (max-content у таблицы на таче). */
+/* Клиент — фиксированная ширина */
+#ordersTable .th-client-header,
+#ordersTable td.td-order-client,
+#ordersTableStickyHeadTable .th-client-header {
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+  box-sizing: border-box;
+}
+
+#ordersTable td.td-order-client {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#ordersTable td.td-order-client .status-value {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+/* Адрес / Описание — как «Статус»: ширина по контенту (max-content у таблицы на таче). */
 #ordersTable td.td-order-client,
 #ordersTable td.td-order-address,
 #ordersTable td.td-order-description {
