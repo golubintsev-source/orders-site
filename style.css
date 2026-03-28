@@ -960,6 +960,61 @@ h2 {
   width: 12%;
 }
 
+/*
+ * iPhone / узкий экран: fixed + % ширин в WebKit даёт схлопывание и наложение
+ * «Дата» / «Откуда». auto-layout + min-width по колонкам + горизонтальный скролл.
+ */
+@media (max-width: 768px) {
+  #calculationsTable {
+    table-layout: auto;
+    min-width: 680px;
+  }
+
+  #calculationsTable thead th:nth-child(1),
+  #calculationsTable thead th:nth-child(2),
+  #calculationsTable thead th:nth-child(3),
+  #calculationsTable thead th:nth-child(4),
+  #calculationsTable thead th:nth-child(5),
+  #calculationsTable thead th:nth-child(6) {
+    width: auto;
+  }
+
+  #calculationsTable th:nth-child(1),
+  #calculationsTable td:nth-child(1) {
+    min-width: 96px;
+  }
+
+  #calculationsTable th:nth-child(2),
+  #calculationsTable td:nth-child(2),
+  #calculationsTable th:nth-child(3),
+  #calculationsTable td:nth-child(3) {
+    min-width: 80px;
+  }
+
+  #calculationsTable th:nth-child(4),
+  #calculationsTable td:nth-child(4) {
+    min-width: 76px;
+  }
+
+  #calculationsTable th:nth-child(6),
+  #calculationsTable td:nth-child(6) {
+    min-width: 56px;
+  }
+
+  /* дата в «пилюле» — меньше отступы, чтобы не выталкивала соседнюю ячейку */
+  #calculationsTable td:nth-child(1) .status-value {
+    padding: 3px 6px;
+    font-size: 12px;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  #calculationsTable td:nth-child(4) .status-value {
+    padding: 3px 6px;
+    font-size: 12px;
+  }
+}
+
 /* Колонка «Сумма» — по правому краю (как денежные колонки в заказах) */
 #calculationsTable .th-money,
 #calculationsTable .td-money {
