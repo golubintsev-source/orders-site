@@ -4,8 +4,8 @@
  */
 
 const STORAGE_KEY = "ordersTablePinchZoom";
-const MIN_SCALE = 0.35;
-const MAX_SCALE = 2.75;
+const MIN_SCALE = 0.2;
+const MAX_SCALE = 1.5;
 
 const TOUCH_UI = "(hover: none) and (pointer: coarse)";
 
