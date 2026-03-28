@@ -1,7 +1,6 @@
 /**
- * iPhone: щипок двумя пальцами — CSS zoom на #ordersTablePinchWrap (обёртка вокруг таблицы).
- * Zoom на самом <table> на iOS даёт «плывущую» ширину колонки «Клиент»; обёртка масштабирует уже
- * свёрстанную таблицу целиком.
+ * Тач: щипок двумя пальцами — CSS zoom на #ordersTablePinchWrap (обёртка вокруг таблицы).
+ * Zoom не на scroll-контейнере и не на голом <table>, чтобы колонки не пересчитывались лишний раз.
  */
 
 const STORAGE_KEY = "ordersTablePinchZoom";
@@ -39,26 +38,29 @@ function loadStoredScale() {
   }
 }
 
+function clearPinchZoomStyles(inner) {
+  const table = document.getElementById("ordersTable");
+  const wrap = document.getElementById("ordersTablePinchWrap");
+  if (!inner) return;
+  inner.style.removeProperty("zoom");
+  table?.style.removeProperty("zoom");
+  wrap?.style.removeProperty("zoom");
+  inner.classList.remove("orders-table-inner--pinch-zoom");
+  wrap?.classList.remove("orders-table--pinch-zoomed");
+  table?.classList.remove("orders-table--pinch-zoomed");
+}
+
 function applyZoomToInner(inner) {
   const table = document.getElementById("ordersTable");
   const wrap = document.getElementById("ordersTablePinchWrap");
   if (!inner || !table) return;
+
   if (!isOrdersSectionActive()) {
-    inner.style.removeProperty("zoom");
-    table.style.removeProperty("zoom");
-    wrap?.style.removeProperty("zoom");
-    inner.classList.remove("orders-table-inner--pinch-zoom");
-    wrap?.classList.remove("orders-table--pinch-zoomed");
-    table.classList.remove("orders-table--pinch-zoomed");
+    clearPinchZoomStyles(inner);
     return;
   }
   if (pinchScale === 1) {
-    inner.style.removeProperty("zoom");
-    table.style.removeProperty("zoom");
-    wrap?.style.removeProperty("zoom");
-    inner.classList.remove("orders-table-inner--pinch-zoom");
-    wrap?.classList.remove("orders-table--pinch-zoomed");
-    table.classList.remove("orders-table--pinch-zoomed");
+    clearPinchZoomStyles(inner);
   } else {
     inner.style.removeProperty("zoom");
     table.style.removeProperty("zoom");
@@ -98,11 +100,10 @@ export function initOrdersTablePinchZoom() {
 
   if (!isTouchUi()) return;
 
-  loadStoredScale();
-
   const inner = document.getElementById("ordersTableScrollInner");
   if (!inner) return;
 
+  loadStoredScale();
   applyZoomToInner(inner);
 
   inner.addEventListener(

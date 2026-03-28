@@ -1827,11 +1827,6 @@ button:active {
   border-spacing: 0;
 }
 
-#ordersTable col.orders-col-client {
-  width: 150px;
-  min-width: 150px;
-}
-
 #ordersTable thead th {
   background: #f8fafc;
   vertical-align: middle;
@@ -1908,7 +1903,6 @@ button:active {
 }
 
 #ordersTableStickyHeadTable .th-status-header-inner,
-#ordersTableStickyHeadTable .th-client-header-inner,
 #ordersTableStickyHeadTable .th-address-header-inner,
 #ordersTableStickyHeadTable .th-description-header-inner {
   display: flex;
@@ -1917,14 +1911,12 @@ button:active {
 }
 
 #ordersTableStickyHeadTable .th-status-header,
-#ordersTableStickyHeadTable .th-client-header,
 #ordersTableStickyHeadTable .th-address-header,
 #ordersTableStickyHeadTable .th-description-header {
   white-space: nowrap;
 }
 
 #ordersTableStickyHeadTable .th-status-label,
-#ordersTableStickyHeadTable .th-client-label,
 #ordersTableStickyHeadTable .th-address-label,
 #ordersTableStickyHeadTable .th-description-label {
   flex-shrink: 0;
@@ -1967,19 +1959,6 @@ button:active {
     max-width: none !important;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
-  }
-
-  /* Клиент: при zoom на iOS WebKit съедает ширину — col + !important фиксируют 150px */
-  #ordersTable col.orders-col-client {
-    width: 150px !important;
-    min-width: 150px !important;
-  }
-  #ordersTable .th-client-header,
-  #ordersTable td.td-order-client {
-    width: 150px !important;
-    min-width: 150px !important;
-    max-width: 150px !important;
-    box-sizing: border-box !important;
   }
 
   #ordersTableScrollInner.orders-table-inner {
@@ -2390,7 +2369,6 @@ th {
 }
 
 #ordersTable .th-status-header-inner,
-#ordersTable .th-client-header-inner,
 #ordersTable .th-address-header-inner,
 #ordersTable .th-description-header-inner {
   display: flex;
@@ -2399,14 +2377,12 @@ th {
 }
 
 #ordersTable .th-status-header,
-#ordersTable .th-client-header,
 #ordersTable .th-address-header,
 #ordersTable .th-description-header {
   white-space: nowrap;
 }
 
 #ordersTable .th-status-label,
-#ordersTable .th-client-label,
 #ordersTable .th-address-label,
 #ordersTable .th-description-label {
   flex-shrink: 0;
@@ -2538,48 +2514,7 @@ th {
   color: #047857;
 }
 
-/* Клиент — фиксированная ширина (на десктопе; на iPhone см. также col + блок @media тача и .orders-table--pinch-zoomed) */
-#ordersTable .th-client-header,
-#ordersTable td.td-order-client,
-#ordersTableStickyHeadTable .th-client-header {
-  width: 150px;
-  min-width: 150px;
-  max-width: 150px;
-  box-sizing: border-box;
-}
-
-/* Fallback, если zoom снова на самой таблице */
-#ordersTablePinchWrap.orders-table--pinch-zoomed #ordersTable col.orders-col-client,
-#ordersTable.orders-table--pinch-zoomed col.orders-col-client {
-  width: 150px !important;
-  min-width: 150px !important;
-}
-#ordersTablePinchWrap.orders-table--pinch-zoomed #ordersTable .th-client-header,
-#ordersTablePinchWrap.orders-table--pinch-zoomed #ordersTable td.td-order-client,
-#ordersTable.orders-table--pinch-zoomed .th-client-header,
-#ordersTable.orders-table--pinch-zoomed td.td-order-client {
-  width: 150px !important;
-  min-width: 150px !important;
-  max-width: 150px !important;
-  box-sizing: border-box !important;
-}
-
-#ordersTable td.td-order-client {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#ordersTable td.td-order-client .status-value {
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: middle;
-}
-
-/* Адрес / Описание — как «Статус»: ширина по контенту (max-content у таблицы на таче). */
-#ordersTable td.td-order-client,
+/* Адрес / Описание — подсказка по тапу при обрезке */
 #ordersTable td.td-order-address,
 #ordersTable td.td-order-description {
   cursor: help;

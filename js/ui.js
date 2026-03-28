@@ -703,7 +703,7 @@ export function bindUIEvents() {
 
       if (e.target.closest("a.tel-link")) return;
 
-      const td = e.target.closest("td.td-order-client, td.td-order-address, td.td-order-description");
+      const td = e.target.closest("td.td-order-address, td.td-order-description");
       if (td) {
         showCellTooltip(td);
         return;

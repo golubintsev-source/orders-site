@@ -809,6 +809,13 @@ function paidBadge(order) {
   return '<span class="status-value">нет</span>';
 }
 
+/** В таблице: первые 10 символов из БД + «**» — короткая строка, ведёт себя как колонка «Статус» при zoom. */
+function formatClientForOrdersTable(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  return s.slice(0, 10) + "**";
+}
+
 export function renderOrders(orders) {
   document.dispatchEvent(new CustomEvent("orders-table-will-render"));
   const table = document.querySelector("#ordersTable tbody");
@@ -835,6 +842,7 @@ export function renderOrders(orders) {
     const phone = order.phone ?? "";
     const telHref = phone ? "tel:" + phone.replace(/[^\d+]/g, "") : "";
     const client = order.client ?? "";
+    const clientTableText = formatClientForOrdersTable(client);
     const address = order.address ?? "";
     const description = order.description ?? "";
     const phoneCallIcon = phone
@@ -861,7 +869,9 @@ export function renderOrders(orders) {
           </span>
         </td>
         <td class="td-order-date">${formatDateShortRU(order.order_date)}</td>
-        <td class="td-order-client" data-fulltext="${escapeAttr(client)}">${client ? `<span class="status-value">${escapeHtml(client)}</span>` : ""}</td>
+        <td>
+          ${clientTableText ? `<span class="status-value">${escapeHtml(clientTableText)}</span>` : ""}
+        </td>
         <td class="td-paid">${paidBadge(order)}</td>
         <td class="td-order-address" data-fulltext="${escapeAttr(address)}">${address ? `<span class="status-value">${escapeHtml(address)}</span>` : ""}</td>
         <td class="td-order-description" data-fulltext="${escapeAttr(description)}">${description ? `<span class="status-value">${escapeHtml(description)}</span>` : ""}</td>
@@ -896,7 +906,7 @@ export function renderOrders(orders) {
     table.innerHTML += row;
   });
 
-  table.querySelectorAll(".td-order-client, .td-order-address, .td-order-description").forEach((cell) => {
+  table.querySelectorAll(".td-order-address, .td-order-description").forEach((cell) => {
     const full = cell.getAttribute("data-fulltext");
     if (!full) return;
     const chip = cell.querySelector(".status-value");
