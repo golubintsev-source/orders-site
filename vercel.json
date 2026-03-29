@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/supabase-proxy.js": {
+      "maxDuration": 60
+    }
+  }
+}
