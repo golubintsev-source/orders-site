@@ -969,9 +969,8 @@ h2 {
     min-width: 0;
     max-width: none;
     table-layout: auto;
-    /* iOS Safari: padding между ячейками при collapse часто не даёт зазор — зазор только так */
-    border-collapse: separate;
-    border-spacing: 4px 0;
+    /* collapse: заливка строк/шапки без разрывов; зазор между колонками — padding в блоке ниже */
+    border-collapse: collapse;
   }
 
   /* Перекрываем width:1% — колонки ровно по содержимому + padding */
@@ -1059,14 +1058,37 @@ h2 {
     max-width: min(60vw, 320px);
   }
 
-  /* Горизонтальный зазор даёт border-spacing у таблицы; padding у ячеек сбрасываем, чтобы не дублировать */
   #calculationsTable th,
   #calculationsTable td {
-    padding: 8px 0 !important;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  /* ~4px между колонками без border-spacing (он даёт разрывы заливки) */
+  #calculationsTable th:nth-child(1),
+  #calculationsTable td:nth-child(1) {
+    padding-left: 0;
+    padding-right: 4px;
+  }
+  #calculationsTable th:nth-child(2),
+  #calculationsTable td:nth-child(2),
+  #calculationsTable th:nth-child(3),
+  #calculationsTable td:nth-child(3) {
+    padding-left: 0;
+    padding-right: 4px;
+  }
+  #calculationsTable th:nth-child(4),
+  #calculationsTable td:nth-child(4) {
+    padding-left: 0;
+    padding-right: 4px;
+  }
+  #calculationsTable th:nth-child(5),
+  #calculationsTable td:nth-child(5) {
+    padding-left: 0;
   }
 
   #calculationsTable td.td-actions {
-    padding: 4px 0 !important;
+    padding: 4px 0;
   }
 }
 
