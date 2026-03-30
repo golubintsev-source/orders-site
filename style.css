@@ -1055,6 +1055,22 @@ h2 {
   #calculationsTable td.td-calc-comment {
     max-width: min(60vw, 320px);
   }
+
+  /* iPhone: нулевые горизонтальные отступы между столбцами (перебивает 3px у nth-child и 2px у th,td) */
+  #calculationsTable th,
+  #calculationsTable td {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  #calculationsTable .td-actions {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
 }
 
 /* Как у .status-value в «Дата» / «Сумма»: тот же кегль, без серой подложки */

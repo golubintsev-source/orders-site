@@ -1,5 +1,5 @@
 # Local static HTTP server (no Node.js). Stop: Ctrl+C
-$port = 8080
+$port = 5500
 $root = $PSScriptRoot
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add("http://127.0.0.1:$port/")
