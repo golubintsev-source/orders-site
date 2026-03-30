@@ -958,46 +958,38 @@ h2 {
 }
 
 /*
- * Узкий экран: горизонтальный скролл.
- * iOS Safari: width:1% + table-layout:auto раздувает зазоры между «узкими» колонками;
- * fixed + явные ширины — остаток у «Комментарий», между колонками только padding (3px).
+ * Узкий экран: горизонтальный скролл (.table-wrap).
+ * iPhone: не задавать min-width таблице и не растягивать «узкие» колонки до 96/80px —
+ * иначе между текстами огромные пустые поля (кажется «зазором между столбцами»).
+ * Таблица по ширине = сумма колонок (max-content); 3px — только padding между ячейками.
  */
 @media (max-width: 768px) {
   #calculationsTable {
-    min-width: 680px;
-    table-layout: fixed;
+    width: max-content;
+    min-width: 0;
+    max-width: none;
+    table-layout: auto;
   }
 
+  /* Перекрываем width:1% — колонки ровно по содержимому + padding */
   #calculationsTable th:nth-child(1),
-  #calculationsTable td:nth-child(1) {
-    width: 96px;
-    min-width: 96px;
-  }
-
+  #calculationsTable td:nth-child(1),
   #calculationsTable th:nth-child(2),
   #calculationsTable td:nth-child(2),
   #calculationsTable th:nth-child(3),
-  #calculationsTable td:nth-child(3) {
-    width: 80px;
-    min-width: 80px;
-  }
-
+  #calculationsTable td:nth-child(3),
   #calculationsTable th:nth-child(4),
-  #calculationsTable td:nth-child(4) {
-    width: 76px;
-    min-width: 76px;
+  #calculationsTable td:nth-child(4),
+  #calculationsTable th:nth-child(6),
+  #calculationsTable td:nth-child(6) {
+    width: max-content;
+    min-width: 0;
   }
 
   #calculationsTable th:nth-child(5),
   #calculationsTable td:nth-child(5) {
     width: auto;
     min-width: 0;
-  }
-
-  #calculationsTable th:nth-child(6),
-  #calculationsTable td:nth-child(6) {
-    width: 56px;
-    min-width: 56px;
   }
 
   /* дата в «пилюле» — меньше отступы, чтобы не выталкивала соседнюю ячейку */
@@ -1057,6 +1049,14 @@ h2 {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+
+@media (max-width: 768px) {
+  /* После базового max-width:100% — иначе колонка «Комментарий» растягивает таблицу на весь min-width */
+  #calculationsTable td.td-calc-comment {
+    max-width: min(60vw, 320px);
+  }
+}
+
 /* Как у .status-value в «Дата» / «Сумма»: тот же кегль, без серой подложки */
 #calculationsTable td.td-calc-comment .calc-table-cell-text {
   display: block;
