@@ -971,7 +971,7 @@ h2 {
     table-layout: auto;
     /* iOS Safari: padding между ячейками при collapse часто не даёт зазор — зазор только так */
     border-collapse: separate;
-    border-spacing: 8px 0;
+    border-spacing: 4px 0;
   }
 
   /* Перекрываем width:1% — колонки ровно по содержимому + padding */
