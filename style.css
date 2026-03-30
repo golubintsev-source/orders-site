@@ -1013,23 +1013,27 @@ h2 {
   white-space: nowrap;
 }
 
-/* Плотная группа: Дата, Откуда, Куда, Сумма — минимум зазора между столбцами */
+/* Дата, Откуда, Куда, Сумма, Комментарий — 3px между соседними столбцами */
 #calculationsTable th:nth-child(1),
 #calculationsTable td:nth-child(1) {
-  padding-right: 0;
   padding-left: 0;
+  padding-right: 3px;
 }
 #calculationsTable th:nth-child(2),
 #calculationsTable td:nth-child(2),
 #calculationsTable th:nth-child(3),
 #calculationsTable td:nth-child(3) {
   padding-left: 0;
-  padding-right: 0;
+  padding-right: 3px;
 }
 #calculationsTable th:nth-child(4),
 #calculationsTable td:nth-child(4) {
   padding-left: 0;
-  padding-right: 4px;
+  padding-right: 3px;
+}
+#calculationsTable th:nth-child(5),
+#calculationsTable td:nth-child(5) {
+  padding-left: 0;
 }
 #calculationsTable td.td-calc-comment {
   max-width: 100%;
