@@ -935,28 +935,30 @@ h2 {
   width: 100%;
   max-width: 100%;
   min-width: 520px;
-  /* fixed + col: первая четвёрка по содержимому (col width:0 → min-content), комментарий — остаток */
-  table-layout: fixed;
+  /* auto + width:1% на «узких» колонках: по содержимому без дыр; «Комментарий» забирает остаток (без col width:0 — он даёт наложение в части браузеров) */
+  table-layout: auto;
   border-spacing: 0;
   /* iOS Safari: не раздувать отдельные ячейки с длинным текстом */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-#calculationsTable col.col-calc-tight {
-  width: 0;
-}
-
-#calculationsTable col.col-calc-comment {
-  width: auto;
-}
-
-#calculationsTable col.col-calc-actions {
-  width: 4.5rem;
+/* «Узкие» колонки: 1% от таблицы как нижняя граница, фактически — max(1%, min-content) — без растягивания пустотой */
+#calculationsTable th:nth-child(1),
+#calculationsTable td:nth-child(1),
+#calculationsTable th:nth-child(2),
+#calculationsTable td:nth-child(2),
+#calculationsTable th:nth-child(3),
+#calculationsTable td:nth-child(3),
+#calculationsTable th:nth-child(4),
+#calculationsTable td:nth-child(4),
+#calculationsTable th:nth-child(6),
+#calculationsTable td:nth-child(6) {
+  width: 1%;
 }
 
 /*
- * Узкий экран: горизонтальный скролл; colgroup + fixed остаются — первая четвёрка по содержимому.
+ * Узкий экран: горизонтальный скролл.
  */
 @media (max-width: 768px) {
   #calculationsTable {
