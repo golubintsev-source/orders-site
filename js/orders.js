@@ -820,6 +820,20 @@ function formatDateShortRU(dateStr) {
   }
 }
 
+/** Колонка «Монтаж»: при включённом монтаже без даты показываем «есть». */
+function formatInstallationDateCell(order) {
+  const installationOn =
+    order.installation === true ||
+    order.installation === 1 ||
+    order.installation === "1";
+  const raw = order.installation_date;
+  const emptyDate = raw == null || String(raw).trim() === "";
+  if (installationOn && emptyDate) {
+    return '<span class="status-value">есть</span>';
+  }
+  return formatDateShortRU(order.installation_date);
+}
+
 /** Оплачено = "да", если заполнено "Кому остаток" ИЛИ Остаток = 0. */
 function isOrderPaid(order) {
   const remainingToRaw = (order.remaining_to || "").trim();
@@ -945,7 +959,7 @@ export function renderOrders(orders) {
         <td class="td-remaining-to">${order.remaining_to ? escapeHtml(order.remaining_to) : ""}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
         <td class="td-delivery-date">${formatDateShortRU(order.delivery_date)}</td>
-        <td class="td-installation-date">${formatDateShortRU(order.installation_date)}</td>
+        <td class="td-installation-date">${formatInstallationDateCell(order)}</td>
         <td class="td-area-m2">${order.area_m2 != null && order.area_m2 !== "" ? escapeHtml(String(order.area_m2)) : ""}</td>
         <td class="td-money td-installer-payment">${
           order.installer_payment_amount != null && order.installer_payment_amount !== ""
