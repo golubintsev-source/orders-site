@@ -834,6 +834,20 @@ function formatInstallationDateCell(order) {
   return formatDateShortRU(order.installation_date);
 }
 
+/** Колонка «Откосы»: при включённой галке без даты откосов показываем «есть». */
+function formatRevealsDateCell(order) {
+  const revealsOn =
+    order.reveals === true ||
+    order.reveals === 1 ||
+    order.reveals === "1";
+  const raw = order.reveals_date;
+  const emptyDate = raw == null || String(raw).trim() === "";
+  if (revealsOn && emptyDate) {
+    return '<span class="status-value">есть</span>';
+  }
+  return formatDateShortRU(order.reveals_date);
+}
+
 /** Оплачено = "да", если заполнено "Кому остаток" ИЛИ Остаток = 0. */
 function isOrderPaid(order) {
   const remainingToRaw = (order.remaining_to || "").trim();
@@ -969,7 +983,7 @@ export function renderOrders(orders) {
             : ""
         }</td>
         <td>${order.installer_payment_by ? escapeHtml(order.installer_payment_by) : ""}</td>
-        <td>${formatDateShortRU(order.reveals_date)}</td>
+        <td>${formatRevealsDateCell(order)}</td>
         <td class="td-mosquito-nets">${order.mosquito_nets != null && order.mosquito_nets !== "" ? escapeHtml(String(order.mosquito_nets)) : ""}</td>
         <td class="td-construction-count">${order.construction_count != null && order.construction_count !== "" ? escapeHtml(String(order.construction_count)) : ""}</td>
         <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
