@@ -1045,9 +1045,33 @@ h2 {
 #calculationsTable td.td-calc-comment {
   max-width: 100%;
   min-width: 0;
-  cursor: help;
+  cursor: pointer;
   font-size: 13px;
   line-height: 1.35;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+#calculationsTable td.td-calc-comment:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 1px;
+}
+
+.calc-comment-popover {
+  position: fixed;
+  z-index: 10050;
+  max-width: min(400px, calc(100vw - 16px));
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #111827;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: auto;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }

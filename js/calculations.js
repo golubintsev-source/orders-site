@@ -38,6 +38,122 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+function escapeHtmlAttr(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+let calcCommentPopoverEl = null;
+let calcCommentPopoverTd = null;
+
+function ensureCalcCommentPopover() {
+  if (calcCommentPopoverEl) return calcCommentPopoverEl;
+  const el = document.createElement("div");
+  el.id = "calcCommentPopover";
+  el.className = "calc-comment-popover";
+  el.setAttribute("role", "tooltip");
+  el.hidden = true;
+  el.setAttribute("aria-hidden", "true");
+  document.body.appendChild(el);
+  calcCommentPopoverEl = el;
+  return el;
+}
+
+function hideCalcCommentPopover() {
+  const el = calcCommentPopoverEl;
+  if (!el) return;
+  el.hidden = true;
+  el.textContent = "";
+  el.removeAttribute("style");
+  el.setAttribute("aria-hidden", "true");
+  calcCommentPopoverTd = null;
+  document.removeEventListener("keydown", onCalcCommentPopoverKeydown);
+}
+
+function onCalcCommentPopoverKeydown(e) {
+  if (e.key === "Escape") hideCalcCommentPopover();
+}
+
+function positionCalcCommentPopover(td, popover) {
+  const rect = td.getBoundingClientRect();
+  const margin = 8;
+  const maxW = Math.min(400, window.innerWidth - 2 * margin);
+  popover.style.cssText = [
+    "position:fixed",
+    "z-index:10050",
+    `max-width:${maxW}px`,
+    `left:${margin}px`,
+    `top:${rect.bottom + margin}px`,
+    "visibility:hidden",
+  ].join(";");
+  requestAnimationFrame(() => {
+    const ph = popover.offsetHeight;
+    const pw = popover.offsetWidth;
+    let left = rect.left;
+    if (left + pw > window.innerWidth - margin) left = window.innerWidth - margin - pw;
+    if (left < margin) left = margin;
+    let top = rect.bottom + margin;
+    if (top + ph > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - ph - margin);
+    }
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+    popover.style.visibility = "visible";
+  });
+}
+
+function showCalcCommentPopover(td) {
+  const full = td.dataset.commentFull ?? "";
+  if (calcCommentPopoverTd === td && calcCommentPopoverEl && !calcCommentPopoverEl.hidden) {
+    hideCalcCommentPopover();
+    return;
+  }
+  calcCommentPopoverTd = td;
+  const popover = ensureCalcCommentPopover();
+  popover.textContent = full.trim() ? full : "(пусто)";
+  popover.hidden = false;
+  popover.setAttribute("aria-hidden", "false");
+  document.removeEventListener("keydown", onCalcCommentPopoverKeydown);
+  document.addEventListener("keydown", onCalcCommentPopoverKeydown);
+  positionCalcCommentPopover(td, popover);
+  setTimeout(() => {
+    document.addEventListener(
+      "click",
+      function onDocClick(e) {
+        if (calcCommentPopoverEl && calcCommentPopoverEl.contains(e.target)) return;
+        if (e.target.closest?.("td.td-calc-comment")) return;
+        hideCalcCommentPopover();
+      },
+      { once: true }
+    );
+  }, 0);
+}
+
+function setupCalcCommentPopover() {
+  const table = document.getElementById("calculationsTable");
+  if (!table || table.dataset.commentPopoverBound) return;
+  table.dataset.commentPopoverBound = "1";
+  table.addEventListener("click", (e) => {
+    const td = e.target.closest("td.td-calc-comment");
+    if (!td || !table.contains(td)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    showCalcCommentPopover(td);
+  });
+  table.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const td = e.target.closest?.("td.td-calc-comment");
+    if (!td || !table.contains(td)) return;
+    e.preventDefault();
+    showCalcCommentPopover(td);
+  });
+}
+
 /** Как в таблице заказов (#ordersTable .btn-icon) */
 const CALC_ICON_EDIT_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 
@@ -145,7 +261,7 @@ export async function loadCalculations() {
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
       <td class="td-money"><span class="status-value">${escapeHtml(formatAmount(row.amount))}</span></td>
-      <td class="td-calc-comment" title="${escapedComment}"><span class="calc-table-cell-text">${escapedComment}</span></td>
+      <td class="td-calc-comment" data-comment-full="${escapeHtmlAttr(displayComment)}" tabindex="0" role="button" aria-label="Показать полный комментарий"><span class="calc-table-cell-text">${escapedComment}</span></td>
       ${actionsCell}
     `;
     tbody.appendChild(tr);
@@ -294,6 +410,8 @@ function setupCalculationsForm() {
   if (amountEl) {
     amountEl.addEventListener("blur", formatCalcAmountInput);
   }
+
+  setupCalcCommentPopover();
 }
 
 export async function initCalculationsSection() {
