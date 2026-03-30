@@ -959,14 +959,18 @@ h2 {
 
 /*
  * Узкий экран: горизонтальный скролл.
+ * iOS Safari: width:1% + table-layout:auto раздувает зазоры между «узкими» колонками;
+ * fixed + явные ширины — остаток у «Комментарий», между колонками только padding (3px).
  */
 @media (max-width: 768px) {
   #calculationsTable {
     min-width: 680px;
+    table-layout: fixed;
   }
 
   #calculationsTable th:nth-child(1),
   #calculationsTable td:nth-child(1) {
+    width: 96px;
     min-width: 96px;
   }
 
@@ -974,16 +978,25 @@ h2 {
   #calculationsTable td:nth-child(2),
   #calculationsTable th:nth-child(3),
   #calculationsTable td:nth-child(3) {
+    width: 80px;
     min-width: 80px;
   }
 
   #calculationsTable th:nth-child(4),
   #calculationsTable td:nth-child(4) {
+    width: 76px;
     min-width: 76px;
+  }
+
+  #calculationsTable th:nth-child(5),
+  #calculationsTable td:nth-child(5) {
+    width: auto;
+    min-width: 0;
   }
 
   #calculationsTable th:nth-child(6),
   #calculationsTable td:nth-child(6) {
+    width: 56px;
     min-width: 56px;
   }
 
