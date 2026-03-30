@@ -877,6 +877,20 @@ h2 {
   max-width: 320px;
 }
 
+.calculations-form-row--first {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.calculations-form-row--first .field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 #section-calculations .calculations-form .field,
 .calculations-page .calculations-form .field {
   margin: 0;

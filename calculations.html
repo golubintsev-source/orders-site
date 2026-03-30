@@ -31,34 +31,36 @@
     <div class="card">
       <form id="calculationsForm" class="calculations-form" aria-label="Добавить запись в расчеты">
         <div class="calculations-form-column">
-          <div class="field">
-            <label for="calcFrom">Откуда</label>
-            <select id="calcFrom">
-              <option value="">—</option>
-              <option value="Вова">Вова</option>
-              <option value="Дима">Дима</option>
-              <option value="Касса">Касса</option>
-              <option value="Безнал">Безнал</option>
-              <option value="Другое">Другое</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="calcTo">Куда</label>
-            <select id="calcTo">
-              <option value="">—</option>
-              <option value="Вова">Вова</option>
-              <option value="Дима">Дима</option>
-              <option value="Касса">Касса</option>
-              <option value="Зарплата">Зарплата</option>
-              <option value="Покупка">Покупка</option>
-              <option value="Списание">Списание</option>
-              <option value="Безнал">Безнал</option>
-              <option value="Другое">Другое</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="calcAmount">Сумма</label>
-            <input type="number" id="calcAmount" step="0.01" placeholder="0" />
+          <div class="calculations-form-row calculations-form-row--first">
+            <div class="field">
+              <label for="calcFrom">Откуда</label>
+              <select id="calcFrom">
+                <option value="">—</option>
+                <option value="Вова">Вова</option>
+                <option value="Дима">Дима</option>
+                <option value="Касса">Касса</option>
+                <option value="Безнал">Безнал</option>
+                <option value="Другое">Другое</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="calcTo">Куда</label>
+              <select id="calcTo">
+                <option value="">—</option>
+                <option value="Вова">Вова</option>
+                <option value="Дима">Дима</option>
+                <option value="Касса">Касса</option>
+                <option value="Зарплата">Зарплата</option>
+                <option value="Покупка">Покупка</option>
+                <option value="Списание">Списание</option>
+                <option value="Безнал">Безнал</option>
+                <option value="Другое">Другое</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="calcAmount">Сумма</label>
+              <input type="number" id="calcAmount" step="0.01" placeholder="0" />
+            </div>
           </div>
           <div class="field">
             <label for="calcComment">Комментарий</label>
