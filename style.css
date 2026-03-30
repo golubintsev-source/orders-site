@@ -936,6 +936,7 @@ h2 {
   max-width: 100%;
   min-width: 520px;
   table-layout: fixed;
+  border-spacing: 0;
   /* iOS Safari: не раздувать отдельные ячейки с длинным текстом */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -1025,6 +1026,25 @@ h2 {
   padding: 8px 2px;
   font-size: 13px;
   white-space: nowrap;
+}
+
+/* Плотная группа: Дата, Откуда, Куда, Сумма — минимум зазора между столбцами */
+#calculationsTable th:nth-child(1),
+#calculationsTable td:nth-child(1) {
+  padding-right: 0;
+  padding-left: 0;
+}
+#calculationsTable th:nth-child(2),
+#calculationsTable td:nth-child(2),
+#calculationsTable th:nth-child(3),
+#calculationsTable td:nth-child(3) {
+  padding-left: 0;
+  padding-right: 0;
+}
+#calculationsTable th:nth-child(4),
+#calculationsTable td:nth-child(4) {
+  padding-left: 0;
+  padding-right: 4px;
 }
 #calculationsTable td.td-calc-comment {
   max-width: 100%;
