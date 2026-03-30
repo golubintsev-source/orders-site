@@ -935,6 +935,7 @@ h2 {
   width: 100%;
   max-width: 100%;
   min-width: 520px;
+  /* fixed + col: первая четвёрка по содержимому (col width:0 → min-content), комментарий — остаток */
   table-layout: fixed;
   border-spacing: 0;
   /* iOS Safari: не раздувать отдельные ячейки с длинным текстом */
@@ -942,42 +943,24 @@ h2 {
   text-size-adjust: 100%;
 }
 
-#calculationsTable thead th:nth-child(1) {
-  width: 9%;
+#calculationsTable col.col-calc-tight {
+  width: 0;
 }
-#calculationsTable thead th:nth-child(2) {
-  width: 12%;
+
+#calculationsTable col.col-calc-comment {
+  width: auto;
 }
-#calculationsTable thead th:nth-child(3) {
-  width: 12%;
-}
-#calculationsTable thead th:nth-child(4) {
-  width: 11%;
-}
-#calculationsTable thead th:nth-child(5) {
-  width: 44%;
-}
-#calculationsTable thead th:nth-child(6) {
-  width: 12%;
+
+#calculationsTable col.col-calc-actions {
+  width: 4.5rem;
 }
 
 /*
- * iPhone / узкий экран: fixed + % ширин в WebKit даёт схлопывание и наложение
- * «Дата» / «Откуда». auto-layout + min-width по колонкам + горизонтальный скролл.
+ * Узкий экран: горизонтальный скролл; colgroup + fixed остаются — первая четвёрка по содержимому.
  */
 @media (max-width: 768px) {
   #calculationsTable {
-    table-layout: auto;
     min-width: 680px;
-  }
-
-  #calculationsTable thead th:nth-child(1),
-  #calculationsTable thead th:nth-child(2),
-  #calculationsTable thead th:nth-child(3),
-  #calculationsTable thead th:nth-child(4),
-  #calculationsTable thead th:nth-child(5),
-  #calculationsTable thead th:nth-child(6) {
-    width: auto;
   }
 
   #calculationsTable th:nth-child(1),
