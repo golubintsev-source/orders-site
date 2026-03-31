@@ -1,7 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { isUserLite } from "./roles.js";
 import { checkDatabaseAvailable, setDbUnavailableBannerVisible } from "./dbHealth.js";
-import { formatAmount } from "./format.js";
+import { formatAmountWholeRubles } from "./format.js";
 import { state } from "./state.js";
 
 const PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];

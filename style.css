@@ -1816,6 +1816,13 @@ select:required:valid {
   border-color: #d32f2f;
 }
 
+/* Суммы: недопустимый ввод (дробная часть, точка, запятая и т.п.) */
+input.sum-input-invalid,
+textarea.sum-input-invalid {
+  background-color: #ffebee;
+  border-color: #d32f2f;
+}
+
 /* ===== кнопки ===== */
 button {
   border: none;

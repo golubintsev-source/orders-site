@@ -40,6 +40,7 @@ import {
   bindOrderFormDdMmYyyyInputs,
   canShowEditButtonForOrder,
   setLockEditForUserLite,
+  RUBLE_INTEGER_ORDER_FIELD_IDS,
 } from "./orders.js";
 import { mergeNewAttachmentsOnChange } from "./files.js";
 import { initClientAutocomplete } from "./clientAutocomplete.js";
@@ -52,6 +53,7 @@ import {
 } from "./settings.js";
 import { loadBalance } from "./balance.js";
 import { canMutateOrders, isOrderEditLockedForUserLite, isUserLite } from "./roles.js";
+import { refreshRublesIntegerInputState } from "./format.js";
 
 export function toggleOrderRowHighlightById(orderId) {
   if (!ordersTable || orderId == null) return;
@@ -292,6 +294,12 @@ export function bindUIEvents() {
       if (id === "amount" || id === "prepayment" || id === "remaining_amount") updatePaidField();
     });
   });
+
+  RUBLE_INTEGER_ORDER_FIELD_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", () => refreshRublesIntegerInputState(el, el.value));
+  });
   ["prepayment_to", "remaining_to", "delivery", "delivery_date"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) {
@@ -351,8 +359,13 @@ export function bindUIEvents() {
       const ok = await saveInstallerRate(settingsInstallerRateInput.value);
       setMessage(ok ? "Сохранено" : "Ошибка сохранения или неверное значение", ok ? "" : "#d32f2f");
     });
-    settingsInstallerRateInput.addEventListener("input", updateSettingsSaveButtonState);
-    settingsInstallerRateInput.addEventListener("change", updateSettingsSaveButtonState);
+    const onSettingsRateInput = () => {
+      refreshRublesIntegerInputState(settingsInstallerRateInput, settingsInstallerRateInput.value);
+      updateSettingsSaveButtonState();
+    };
+    settingsInstallerRateInput.addEventListener("input", onSettingsRateInput);
+    settingsInstallerRateInput.addEventListener("change", onSettingsRateInput);
+    settingsInstallerRateInput.addEventListener("blur", onSettingsRateInput);
   }
 
   const settingsSaveAdjustmentsBtn = document.getElementById("settingsSaveAdjustmentsBtn");
@@ -365,8 +378,13 @@ export function bindUIEvents() {
     for (const { inputId } of BALANCE_ADJ_FIELDS) {
       const adjInput = document.getElementById(inputId);
       if (adjInput) {
-        adjInput.addEventListener("input", updateAdjustmentsSaveButtonState);
-        adjInput.addEventListener("change", updateAdjustmentsSaveButtonState);
+        const onAdj = () => {
+          refreshRublesIntegerInputState(adjInput, adjInput.value, { allowSign: true });
+          updateAdjustmentsSaveButtonState();
+        };
+        adjInput.addEventListener("input", onAdj);
+        adjInput.addEventListener("change", onAdj);
+        adjInput.addEventListener("blur", onAdj);
       }
     }
   }

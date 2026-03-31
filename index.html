@@ -203,7 +203,7 @@
           <div class="field compact-fields-row">
             <div class="field">
               <label>Стоимость</label>
-              <input type="text" inputmode="decimal" id="amount" />
+              <input type="text" inputmode="numeric" id="amount" title="Только целые рубли, без копеек" />
             </div>
             <div class="field">
               <label>Оплачено</label>
@@ -217,7 +217,7 @@
           <div class="field compact-fields-row">
             <div class="field">
               <label>Предоплата</label>
-              <input type="text" inputmode="decimal" id="prepayment" />
+              <input type="text" inputmode="numeric" id="prepayment" title="Только целые рубли, без копеек" />
             </div>
             <div class="field">
               <label>Кому предоплата</label>
@@ -234,7 +234,7 @@
           <div class="field compact-fields-row">
             <div class="field">
               <label>Остаток</label>
-              <input type="text" inputmode="decimal" id="remaining_amount" />
+              <input type="text" inputmode="numeric" id="remaining_amount" title="Только целые рубли, без копеек" />
             </div>
             <div class="field">
               <label>Кому остаток</label>
@@ -355,7 +355,7 @@
             <div class="field field-installer-rate-with-calc">
               <label for="installer_rate_per_m2">Монтаж 1м²</label>
               <div class="installer-rate-input-row">
-                <input type="text" inputmode="decimal" id="installer_rate_per_m2" class="installer-rate-input" />
+                <input type="text" inputmode="numeric" id="installer_rate_per_m2" class="installer-rate-input" title="Только целые рубли за 1 м²" />
                 <button type="button" id="installer_calc_btn" class="installer-calc-btn" title="Рассчитать сумму (Площадь × Монтаж 1м²)" aria-label="Рассчитать сумму (Площадь × Монтаж 1м²)">
                   <img src="img/calculator.svg" alt="" class="installer-calc-img" width="20" height="20" decoding="async" />
                 </button>
@@ -363,7 +363,7 @@
             </div>
             <div class="field">
               <label for="installer_payment_amount">з/п монтаж</label>
-              <input type="text" inputmode="decimal" id="installer_payment_amount" />
+              <input type="text" inputmode="numeric" id="installer_payment_amount" title="Только целые рубли, без копеек" />
             </div>
             <div class="field">
               <label for="installer_payment_by">Оплатил</label>
@@ -587,7 +587,7 @@
               </div>
               <div class="field">
                 <label for="calcAmount">Сумма</label>
-                <input type="text" id="calcAmount" inputmode="decimal" />
+                <input type="text" id="calcAmount" inputmode="numeric" title="Только целые рубли, без копеек" />
               </div>
             </div>
             <div class="field">
@@ -691,7 +691,7 @@
       <div class="card">
         <div class="settings-rate-row">
           <label for="settings_installer_rate_per_m2">Стоимость монтажа 1м², руб</label>
-          <input type="number" step="0.01" min="0" id="settings_installer_rate_per_m2" />
+          <input type="text" inputmode="numeric" id="settings_installer_rate_per_m2" title="Только целые рубли за 1 м²" />
           <button type="button" id="settingsSaveInstallerRateBtn" class="btn-primary">Сохранить</button>
         </div>
       </div>
@@ -700,19 +700,19 @@
         <div class="settings-adjustments-grid">
           <div class="settings-adjustments-field">
             <label for="settings_adj_dima">Дима</label>
-            <input type="number" step="1" id="settings_adj_dima" inputmode="numeric" />
+            <input type="text" inputmode="numeric" id="settings_adj_dima" title="Целое число рублей; допускается знак минус" />
           </div>
           <div class="settings-adjustments-field">
             <label for="settings_adj_vova">Вова</label>
-            <input type="number" step="1" id="settings_adj_vova" inputmode="numeric" />
+            <input type="text" inputmode="numeric" id="settings_adj_vova" title="Целое число рублей; допускается знак минус" />
           </div>
           <div class="settings-adjustments-field">
             <label for="settings_adj_kassa">Касса</label>
-            <input type="number" step="1" id="settings_adj_kassa" inputmode="numeric" />
+            <input type="text" inputmode="numeric" id="settings_adj_kassa" title="Целое число рублей; допускается знак минус" />
           </div>
           <div class="settings-adjustments-field">
             <label for="settings_adj_beznal">Безнал</label>
-            <input type="number" step="1" id="settings_adj_beznal" inputmode="numeric" />
+            <input type="text" inputmode="numeric" id="settings_adj_beznal" title="Целое число рублей; допускается знак минус" />
           </div>
         </div>
         <button type="button" id="settingsSaveAdjustmentsBtn" class="btn-primary settings-save-adjustments-btn settings-save-btn-inactive" disabled>Сохранить</button>

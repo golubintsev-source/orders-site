@@ -2,6 +2,7 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { isAdmin } from "./roles.js";
 import { checkDatabaseAvailable, setDbUnavailableBannerVisible } from "./dbHealth.js";
+import { tryParseRublesInteger } from "./format.js";
 
 const KEY_INSTALLER_RATE = "installer_rate_per_m2";
 const DEFAULT_RATE = 1400;
@@ -14,11 +15,13 @@ export const BALANCE_ADJ_FIELDS = [
   { participant: "Безнал", settingKey: "balance_adj_beznal", inputId: "settings_adj_beznal" },
 ];
 
+/** 0 для пустого/частичного ввода; NaN при недопустимом формате (дробь, буквы и т.д.). */
 export function parseAdjustmentInt(raw) {
   const s = String(raw ?? "").trim();
   if (s === "" || s === "-" || s === "+") return 0;
-  const n = parseInt(s, 10);
-  return Number.isFinite(n) ? n : 0;
+  const r = tryParseRublesInteger(raw, { allowSign: true });
+  if (r.invalidFormat) return NaN;
+  return r.value ?? 0;
 }
 
 /** Загрузить настройки из БД и обновить state и поля на странице. */
@@ -71,9 +74,12 @@ export function updateSettingsSaveButtonState() {
   const input = document.getElementById("settings_installer_rate_per_m2");
   const btn = document.getElementById("settingsSaveInstallerRateBtn");
   if (!input || !btn) return;
-  const current = parseFloat(input.value);
+  const r = tryParseRublesInteger(input.value);
   const saved = state.defaultInstallerRatePerM2 ?? DEFAULT_RATE;
-  const isDirty = !Number.isFinite(current) || current !== saved;
+  const trimmed = String(input.value).trim();
+  const isDirty =
+    r.invalidFormat ||
+    (trimmed === "" ? true : r.value !== saved);
   btn.disabled = !isDirty;
   btn.classList.toggle("settings-save-btn-inactive", !isDirty);
 }
@@ -87,6 +93,10 @@ export function updateAdjustmentsSaveButtonState() {
     const el = document.getElementById(inputId);
     if (!el) continue;
     const current = parseAdjustmentInt(el.value);
+    if (Number.isNaN(current)) {
+      isDirty = true;
+      break;
+    }
     const saved = state.balanceAdjustments[participant] ?? 0;
     if (current !== saved) {
       isDirty = true;
@@ -101,9 +111,10 @@ export function updateAdjustmentsSaveButtonState() {
 export async function saveInstallerRate(value) {
   if (!isAdmin()) return false;
 
-  const num = parseFloat(value);
-  if (!Number.isFinite(num) || num < 0) return false;
+  const r = tryParseRublesInteger(value);
+  if (r.invalidFormat || r.value == null || r.value < 0) return false;
 
+  const num = r.value;
   const valueStr = String(num);
   const { error } = await supabaseClient
     .from("app_settings")
@@ -122,11 +133,13 @@ export async function saveInstallerRate(value) {
 export async function saveBalanceAdjustments() {
   if (!isAdmin()) return false;
 
-  const upsertRows = BALANCE_ADJ_FIELDS.map(({ participant, settingKey, inputId }) => {
+  const upsertRows = [];
+  for (const { participant, settingKey, inputId } of BALANCE_ADJ_FIELDS) {
     const el = document.getElementById(inputId);
     const v = parseAdjustmentInt(el?.value);
-    return { key: settingKey, value: String(v) };
-  });
+    if (Number.isNaN(v)) return false;
+    upsertRows.push({ key: settingKey, value: String(v) });
+  }
 
   const { error } = await supabaseClient.from("app_settings").upsert(upsertRows, { onConflict: "key" });
 
@@ -135,7 +148,7 @@ export async function saveBalanceAdjustments() {
   for (const { participant, inputId } of BALANCE_ADJ_FIELDS) {
     const el = document.getElementById(inputId);
     const v = parseAdjustmentInt(el?.value);
-    state.balanceAdjustments[participant] = v;
+    state.balanceAdjustments[participant] = Number.isNaN(v) ? 0 : v;
   }
 
   updateAdjustmentsSaveButtonState();

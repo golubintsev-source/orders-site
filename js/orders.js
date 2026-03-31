@@ -25,7 +25,7 @@ import {
   clearExistingOrderFilesInForm,
   renderExistingOrderFilesInForm,
 } from "./files.js";
-import { formatAmount, formatOrderIdTypeChip } from "./format.js";
+import { formatAmount, formatOrderIdTypeChip, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY } from "./format.js";
 import { applyOrdersTableMobileFit } from "./ordersTableMobileFit.js";
 import {
   canMutateOrders,
@@ -119,15 +119,24 @@ function orderMatchesOrderTypeKeys(order, selectedKeys) {
 }
 
 const ORDER_FORM_NUMERIC_FIELD_DECIMALS = {
-  amount: 2,
-  prepayment: 2,
-  remaining_amount: 2,
+  amount: 0,
+  prepayment: 0,
+  remaining_amount: 0,
   area_m2: 2,
   mosquito_nets: 0,
   construction_count: 0,
-  installer_rate_per_m2: 2,
-  installer_payment_amount: 2,
+  installer_rate_per_m2: 0,
+  installer_payment_amount: 0,
 };
+
+/** Поля формы заказа: суммы в рублях только целые (без копеек). */
+export const RUBLE_INTEGER_ORDER_FIELD_IDS = [
+  "amount",
+  "prepayment",
+  "remaining_amount",
+  "installer_payment_amount",
+  "installer_rate_per_m2",
+];
 
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 
@@ -574,6 +583,34 @@ export function formatOrderFormNumericInputById(id) {
   if (!el) return;
   const decimals = ORDER_FORM_NUMERIC_FIELD_DECIMALS[id];
   if (decimals == null) return;
+
+  if (RUBLE_INTEGER_ORDER_FIELD_IDS.includes(id)) {
+    const raw = el.value;
+    if (raw == null || String(raw).trim() === "") {
+      el.value = "";
+      el.classList.remove("sum-input-invalid");
+      el.removeAttribute("title");
+      el.removeAttribute("aria-invalid");
+      return;
+    }
+    const r = tryParseRublesInteger(raw);
+    if (r.invalidFormat) {
+      el.classList.add("sum-input-invalid");
+      el.title = MSG_SUM_INTEGER_ONLY;
+      el.setAttribute("aria-invalid", "true");
+      return;
+    }
+    el.classList.remove("sum-input-invalid");
+    el.removeAttribute("title");
+    el.removeAttribute("aria-invalid");
+    if (r.value == null) {
+      el.value = "";
+      return;
+    }
+    el.value = formatNumberWithSpaces(r.value, 0);
+    return;
+  }
+
   const raw = el.value;
   if (raw == null || String(raw).trim() === "") {
     el.value = "";
@@ -1198,6 +1235,12 @@ export function initOrderTypeFilter() {
   dropdown.addEventListener("click", (e) => e.stopPropagation());
 }
 
+function parseRublesFieldFromDom(id) {
+  const r = tryParseRublesInteger(document.getElementById(id)?.value);
+  if (r.invalidFormat) return null;
+  return r.value;
+}
+
 export function getFormData() {
   const orderNumberEl = document.getElementById("order_number");
   return {
@@ -1209,10 +1252,10 @@ export function getFormData() {
     order_date: syncOrderFormDateTimeFromDom(),
     order_number: orderNumberEl ? (orderNumberEl.value.trim() || null) : null,
     description: document.getElementById("description").value.trim() || null,
-    amount: parseOrderFormNumber(document.getElementById("amount").value),
-    prepayment: parseOrderFormNumber(document.getElementById("prepayment").value),
+    amount: parseRublesFieldFromDom("amount"),
+    prepayment: parseRublesFieldFromDom("prepayment"),
     prepayment_to: document.getElementById("prepayment_to").value.trim() || null,
-    remaining_amount: parseOrderFormNumber(document.getElementById("remaining_amount").value),
+    remaining_amount: parseRublesFieldFromDom("remaining_amount"),
     remaining_to: document.getElementById("remaining_to").value.trim() || null,
     area_m2: parseOrderFormNumber(document.getElementById("area_m2").value),
     mosquito_nets: parseOrderFormNumber(document.getElementById("mosquito_nets").value),
@@ -1227,7 +1270,7 @@ export function getFormData() {
     reveals_date: document.getElementById("reveals").checked
       ? syncOrderFormDateFieldFromDom("reveals_date", "date")
       : null,
-    installer_payment_amount: parseOrderFormNumber(document.getElementById("installer_payment_amount")?.value),
+    installer_payment_amount: parseRublesFieldFromDom("installer_payment_amount"),
     installer_payment_by: document.getElementById("installer_payment_by")?.value?.trim() || null,
   };
 }
@@ -1238,9 +1281,12 @@ export function updateRemainingFromCostAndPrepayment() {
   const prepaymentEl = document.getElementById("prepayment");
   const remainingEl = document.getElementById("remaining_amount");
   if (!amountEl || !prepaymentEl || !remainingEl) return;
-  const amount = parseOrderFormNumber(amountEl.value);
+  const amountR = tryParseRublesInteger(amountEl.value);
+  const prepayR = tryParseRublesInteger(prepaymentEl.value);
+  if (amountR.invalidFormat || prepayR.invalidFormat) return;
+  const amount = amountR.value;
   if (amount == null) return;
-  const prepayment = parseOrderFormNumber(prepaymentEl.value) ?? 0;
+  const prepayment = prepayR.value ?? 0;
   const remaining = amount - prepayment;
   remainingEl.value = formatOrderFormNumberValue(remaining, ORDER_FORM_NUMERIC_FIELD_DECIMALS.remaining_amount);
 }
@@ -1255,8 +1301,10 @@ export function updatePaidField() {
   const remainingToRaw = (remainingToEl.value || "").trim();
   const remainingToFilled = remainingToRaw !== "" && remainingToRaw !== "—";
 
-  const remainingAmount = remainingAmountEl ? parseOrderFormNumber(remainingAmountEl.value) : null;
-  const remainingAmountZero = remainingAmount != null && Math.abs(remainingAmount) < 1e-9;
+  const remainingR = remainingAmountEl ? tryParseRublesInteger(remainingAmountEl.value) : { value: null, invalidFormat: false };
+  if (remainingR.invalidFormat) return;
+  const remainingAmount = remainingR.value;
+  const remainingAmountZero = remainingAmount != null && remainingAmount === 0;
 
   paidEl.value = remainingToFilled || remainingAmountZero ? "да" : "нет";
 }
@@ -1321,11 +1369,13 @@ export function updateInstallerPaymentAmountFromArea() {
   const areaEl = document.getElementById("area_m2");
   const rateEl = document.getElementById("installer_rate_per_m2");
   const area = parseOrderFormNumber(areaEl?.value);
-  const rate = parseOrderFormNumber(rateEl?.value);
+  const rateR = tryParseRublesInteger(rateEl?.value);
+  if (rateR.invalidFormat) return;
+  const rate = rateR.value;
 
   if (area != null && rate != null && area > 0 && rate > 0) {
     amountEl.value = formatOrderFormNumberValue(
-      area * rate,
+      Math.round(area * rate),
       ORDER_FORM_NUMERIC_FIELD_DECIMALS.installer_payment_amount
     );
   } else {
@@ -1699,9 +1749,22 @@ export async function submitOrderForm(event) {
     return;
   }
 
+  for (const id of RUBLE_INTEGER_ORDER_FIELD_IDS) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const r = tryParseRublesInteger(el.value);
+    if (r.invalidFormat) {
+      el.classList.add("sum-input-invalid");
+      el.title = MSG_SUM_INTEGER_ONLY;
+      el.setAttribute("aria-invalid", "true");
+      setMessage(MSG_SUM_INTEGER_ONLY, "#d32f2f");
+      return;
+    }
+  }
+
   // Правило: Предоплата не может быть больше стоимости.
-  const amountNum = parseOrderFormNumber(document.getElementById("amount")?.value);
-  const prepaymentNum = parseOrderFormNumber(document.getElementById("prepayment")?.value);
+  const amountNum = tryParseRublesInteger(document.getElementById("amount")?.value).value;
+  const prepaymentNum = tryParseRublesInteger(document.getElementById("prepayment")?.value).value;
   if (amountNum != null && prepaymentNum != null && prepaymentNum > amountNum) {
     setMessage("Предоплата не может быть больше суммы заказа", "#d32f2f");
     return;

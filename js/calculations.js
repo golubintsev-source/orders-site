@@ -1,6 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile } from "./auth.js";
-import { formatAmount } from "./format.js";
+import { formatAmount, formatAmountWholeRubles, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY, refreshRublesIntegerInputState } from "./format.js";
 import { isAdmin } from "./roles.js";
 import { checkDatabaseAvailable, setDbUnavailableBannerVisible } from "./dbHealth.js";
 
@@ -159,14 +159,11 @@ const CALC_ICON_EDIT_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill
 
 const CALC_ICON_DELETE_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 
+/** null — пусто; undefined — недопустимые символы (не целые рубли). */
 function parseCalcAmountInput(raw) {
-  if (raw == null) return null;
-  const s0 = String(raw).trim();
-  if (!s0) return null;
-  // Убираем пробелы-разделители тысяч и незначащие пробелы
-  const s = s0.replace(/[\s\u00A0\u202F]/g, "").replace(",", ".");
-  const n = Number(s);
-  return Number.isNaN(n) ? null : n;
+  const r = tryParseRublesInteger(raw);
+  if (r.invalidFormat) return undefined;
+  return r.value;
 }
 
 function shortLoginByEmail(email) {
@@ -185,9 +182,18 @@ function appendActorToComment(comment) {
 function formatCalcAmountInput() {
   const amountEl = document.getElementById("calcAmount");
   if (!amountEl) return;
-  const n = parseCalcAmountInput(amountEl.value);
+  const raw = amountEl.value;
+  if (!String(raw).trim()) return;
+  const n = parseCalcAmountInput(raw);
+  if (n === undefined) {
+    amountEl.classList.add("sum-input-invalid");
+    amountEl.title = MSG_SUM_INTEGER_ONLY;
+    return;
+  }
+  amountEl.classList.remove("sum-input-invalid");
+  amountEl.removeAttribute("title");
   if (n == null) return;
-  amountEl.value = formatAmount(n);
+  amountEl.value = formatAmountWholeRubles(n);
 }
 
 function setMessage(text, isError) {
@@ -282,10 +288,14 @@ function getFormValues() {
   const toEl = document.getElementById("calcTo");
   const amountEl = document.getElementById("calcAmount");
   const commentEl = document.getElementById("calcComment");
+  let amountParsed = null;
+  if (amountEl && String(amountEl.value).trim() !== "") {
+    amountParsed = parseCalcAmountInput(amountEl.value);
+  }
   const payload = {
     from_place: fromEl?.value?.trim() || null,
     to_place: toEl?.value?.trim() || null,
-    amount: amountEl?.value !== "" ? parseCalcAmountInput(amountEl.value) : null,
+    amount: amountParsed === undefined ? undefined : amountParsed,
     comment: appendActorToComment(commentEl?.value?.trim() || ""),
   };
   if (editingId && editingCreatedAt) {
@@ -301,7 +311,11 @@ function setFormValues(row) {
   const commentEl = document.getElementById("calcComment");
   if (fromEl) fromEl.value = row.from_place || "";
   if (toEl) toEl.value = row.to_place || "";
-  if (amountEl) amountEl.value = row.amount != null ? formatAmount(row.amount) : "";
+  if (amountEl) {
+    amountEl.value = row.amount != null ? formatAmountWholeRubles(row.amount) : "";
+    amountEl.classList.remove("sum-input-invalid");
+    amountEl.removeAttribute("title");
+  }
   if (commentEl) commentEl.value = row.comment || "";
 }
 
@@ -314,7 +328,11 @@ function resetForm() {
   const commentEl = document.getElementById("calcComment");
   if (fromEl) fromEl.value = "";
   if (toEl) toEl.value = "";
-  if (amountEl) amountEl.value = "";
+  if (amountEl) {
+    amountEl.value = "";
+    amountEl.classList.remove("sum-input-invalid");
+    amountEl.removeAttribute("title");
+  }
   if (commentEl) commentEl.value = "";
   const submitBtn = document.getElementById("calcSubmitBtn");
   if (submitBtn) submitBtn.textContent = "Добавить";
@@ -344,6 +362,20 @@ function startEdit(id) {
 async function submitForm(e) {
   e.preventDefault();
   const payload = getFormValues();
+  const amountEl = document.getElementById("calcAmount");
+
+  if (payload.amount === undefined) {
+    if (amountEl) {
+      amountEl.classList.add("sum-input-invalid");
+      amountEl.title = MSG_SUM_INTEGER_ONLY;
+    }
+    setMessage(MSG_SUM_INTEGER_ONLY, true);
+    return;
+  }
+  if (payload.amount == null) {
+    setMessage("Укажите сумму", true);
+    return;
+  }
 
   if (editingId) {
     if (!isAdmin()) {
@@ -409,6 +441,7 @@ function setupCalculationsForm() {
   const amountEl = document.getElementById("calcAmount");
   if (amountEl) {
     amountEl.addEventListener("blur", formatCalcAmountInput);
+    amountEl.addEventListener("input", () => refreshRublesIntegerInputState(amountEl, amountEl.value));
   }
 
   setupCalcCommentPopover();
