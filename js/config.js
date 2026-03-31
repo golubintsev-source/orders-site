@@ -9,13 +9,11 @@ export const SUPABASE_KEY =
     ? window.__SUPABASE_ANON_KEY__
     : "sb_publishable_e1pJB18UsEV-o_M43ROi9w_4mS--LrF";
 
-/** На localhost без vercel dev — прямой доступ к Supabase (как раньше). На проде — через /api/supabase-proxy. */
+/** Всегда через /api/supabase-proxy (в т.ч. на localhost с `vercel dev`). Прямой Supabase: window.__SUPABASE_USE_PROXY__ = false */
 function shouldUseDbProxy() {
   if (typeof window.__SUPABASE_USE_PROXY__ === "boolean") {
     return window.__SUPABASE_USE_PROXY__;
   }
-  const h = window.location.hostname;
-  if (h === "localhost" || h === "127.0.0.1") return false;
   return true;
 }
 
@@ -40,7 +38,7 @@ function isBinaryUploadContentType(ct) {
 }
 
 /**
- * Проксирует только PostgREST и Storage; /auth/v1/ идёт напрямую (вход, refresh токена).
+ * Проксирует PostgREST, Storage и Auth через same-origin /api/supabase-proxy (сервер → Supabase).
  */
 function createSupabaseProxyFetch(supabaseUrl) {
   const origin = new URL(supabaseUrl).origin;
@@ -56,10 +54,11 @@ function createSupabaseProxyFetch(supabaseUrl) {
     if (u.origin !== origin) {
       return fetch(input, init);
     }
-    if (u.pathname.startsWith("/auth/v1/")) {
-      return fetch(input, init);
-    }
-    if (!u.pathname.startsWith("/rest/v1/") && !u.pathname.startsWith("/storage/v1/")) {
+    if (
+      !u.pathname.startsWith("/rest/v1/") &&
+      !u.pathname.startsWith("/storage/v1/") &&
+      !u.pathname.startsWith("/auth/v1/")
+    ) {
       return fetch(input, init);
     }
 

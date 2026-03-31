@@ -1,5 +1,5 @@
 /**
- * Прокси PostgREST и Storage на Supabase через Vercel (сервер → Supabase).
+ * Прокси PostgREST, Storage и Auth на Supabase через Vercel (сервер → Supabase).
  * Клиент ходит на same-origin /api/supabase-proxy, а не напрямую в *.supabase.co.
  *
  * Переменные окружения в Vercel:
@@ -10,7 +10,7 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
-const ALLOWED_PREFIXES = ["/rest/v1/", "/storage/v1/"];
+const ALLOWED_PREFIXES = ["/rest/v1/", "/storage/v1/", "/auth/v1/"];
 
 function isAllowedPath(p) {
   return typeof p === "string" && ALLOWED_PREFIXES.some((prefix) => p.startsWith(prefix));
