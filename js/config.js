@@ -9,11 +9,13 @@ export const SUPABASE_KEY =
     ? window.__SUPABASE_ANON_KEY__
     : "sb_publishable_e1pJB18UsEV-o_M43ROi9w_4mS--LrF";
 
-/** Всегда через /api/supabase-proxy (в т.ч. на localhost с `vercel dev`). Прямой Supabase: window.__SUPABASE_USE_PROXY__ = false */
+/** На localhost — прямой Supabase; на проде — через /api/supabase-proxy. Принудительно: window.__SUPABASE_USE_PROXY__ */
 function shouldUseDbProxy() {
   if (typeof window.__SUPABASE_USE_PROXY__ === "boolean") {
     return window.__SUPABASE_USE_PROXY__;
   }
+  const h = window.location.hostname;
+  if (h === "localhost" || h === "127.0.0.1") return false;
   return true;
 }
 

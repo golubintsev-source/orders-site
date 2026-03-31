@@ -2,7 +2,6 @@ import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile } from "./auth.js";
 import { formatAmount, formatAmountWholeRubles, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY, refreshRublesIntegerInputState } from "./format.js";
 import { isAdmin } from "./roles.js";
-import { checkDatabaseAvailable, setDbUnavailableBannerVisible } from "./dbHealth.js";
 
 let editingId = null;
 let editingCreatedAt = null;
@@ -208,16 +207,6 @@ export async function loadCalculations() {
   const tbody = document.querySelector("#calculationsTable tbody");
   if (!tbody) return;
 
-  if (!(await checkDatabaseAvailable())) {
-    setDbUnavailableBannerVisible(true);
-    tbody.innerHTML = "";
-    const tr = document.createElement("tr");
-    tr.innerHTML = "<td colspan=\"6\">Не удалось загрузить данные.</td>";
-    tbody.appendChild(tr);
-    setMessage("Ошибка загрузки данных.", true);
-    return;
-  }
-
   const { data, error } = await supabaseClient
     .from("calculations")
     .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
@@ -228,12 +217,10 @@ export async function loadCalculations() {
 
   if (error) {
     console.error("Ошибка загрузки расчетов:", error);
-    setDbUnavailableBannerVisible(true);
     setMessage("Ошибка загрузки данных.", true);
     return;
   }
 
-  setDbUnavailableBannerVisible(false);
   setMessage("");
   if (!data || data.length === 0) {
     const tr = document.createElement("tr");

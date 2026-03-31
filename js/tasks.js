@@ -1,5 +1,4 @@
 import { supabaseClient } from "./config.js";
-import { checkDatabaseAvailable, setDbUnavailableBannerVisible } from "./dbHealth.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
 import { applyFiltersAndRender } from "./orders.js";
@@ -107,16 +106,6 @@ export async function loadAllTasks() {
     msg.classList.remove("order-tasks-message--error");
   }
 
-  if (!(await checkDatabaseAvailable())) {
-    setDbUnavailableBannerVisible(true);
-    tbody.innerHTML = "";
-    if (msg) {
-      msg.textContent = "Не удалось загрузить задачи.";
-      msg.classList.add("order-tasks-message--error");
-    }
-    return;
-  }
-
   const { data, error } = await supabaseClient
     .from("order_tasks")
     .select("id, created_at, author_login, body, order_id")
@@ -185,19 +174,6 @@ export async function loadOrderTasks() {
 
   if (msg) msg.textContent = "";
 
-  if (!(await checkDatabaseAvailable())) {
-    setDbUnavailableBannerVisible(true);
-    tbody.innerHTML = "";
-    if (msg) {
-      msg.textContent = "Не удалось загрузить задачи.";
-      msg.classList.add("order-tasks-message--error");
-    }
-    const cb = document.getElementById("orderTaskHighlightCheckbox");
-    if (cb) cb.disabled = true;
-    syncOrderTasksPageHighlightClass();
-    return;
-  }
-
   const { data, error } = await supabaseClient
     .from("order_tasks")
     .select("id, created_at, author_login, body")
@@ -206,7 +182,6 @@ export async function loadOrderTasks() {
 
   if (error) {
     console.error("Ошибка загрузки задач:", error);
-    setDbUnavailableBannerVisible(true);
     if (msg) {
       msg.textContent = "Не удалось загрузить задачи.";
       msg.classList.add("order-tasks-message--error");
@@ -218,7 +193,6 @@ export async function loadOrderTasks() {
     return;
   }
 
-  setDbUnavailableBannerVisible(false);
   if (msg) msg.classList.remove("order-tasks-message--error");
 
   const rows = data || [];

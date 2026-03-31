@@ -17,7 +17,6 @@ import {
 } from "./section-nav.js";
 import { canAccessSection } from "./roles.js";
 import { applyClientFilter } from "./orders.js";
-import { setDbUnavailableBannerVisible } from "./dbHealth.js";
 
 window.editOrder = editOrder;
 window.deleteOrder = deleteOrder;
@@ -51,7 +50,6 @@ async function init() {
     applyPendingOrdersSearchFromHistory();
   } catch (err) {
     console.error("Ошибка инициализации:", err);
-    setDbUnavailableBannerVisible(true);
     setMessage("Ошибка подключения к базе. Проверьте интернет и настройки Supabase.", "#d32f2f");
   }
 }
