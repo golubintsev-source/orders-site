@@ -585,11 +585,14 @@ export async function uploadFiles(orderId) {
 
   const files = [...pendingAttachments];
 
-  for (const file of files) {
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
     const fileToUpload = await compressImageForWebIfNeeded(file);
-    const safeName = fileToUpload.name.replace(/[^\w.\-]+/g, "_");
-    const ts = Date.now();
-    const filePath = `${state.currentUser.id}/${orderId}/${ts}_${safeName}`;
+    const rawName = (fileToUpload.name || "").trim() || "file";
+    const safeName = rawName.replace(/[^\w.\-]+/g, "_").replace(/^\.+$/, "") || "file";
+    /* iPhone часто даёт нескольким снимкам одно имя (image.jpg); Date.now() в одной миллисекунде совпадает — путь должен быть уникален. */
+    const stamp = `${Date.now()}_${i}_${Math.random().toString(36).slice(2, 10)}`;
+    const filePath = `${state.currentUser.id}/${orderId}/${stamp}_${safeName}`;
 
     const { error: uploadError } = await supabaseClient.storage
       .from("order-files")
@@ -601,7 +604,8 @@ export async function uploadFiles(orderId) {
 
     if (uploadError) {
       console.error("Ошибка загрузки файла:", uploadError);
-      setMessage(`Ошибка загрузки файла: ${file.name}`, "#d32f2f");
+      const hint = uploadError.message ? ` (${uploadError.message})` : "";
+      setMessage(`Ошибка загрузки файла: ${file.name || rawName}${hint}`, "#d32f2f");
       continue;
     }
 
@@ -615,7 +619,7 @@ export async function uploadFiles(orderId) {
       const thumbBlob = await buildThumbnailBlob(fileToUpload);
       if (thumbBlob && thumbBlob.size > 0) {
         const thumbExt = thumbBlob.type === "image/jpeg" ? "jpg" : "webp";
-        thumbnailStoragePath = `${state.currentUser.id}/${orderId}/${ts}_thumb.${thumbExt}`;
+        thumbnailStoragePath = `${state.currentUser.id}/${orderId}/${stamp}_thumb.${thumbExt}`;
         const { error: thumbErr } = await supabaseClient.storage.from("order-files").upload(thumbnailStoragePath, thumbBlob, {
           cacheControl: "86400",
           upsert: false,
