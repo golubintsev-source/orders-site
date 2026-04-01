@@ -576,6 +576,15 @@ async function compressImageForWebIfNeeded(file) {
   });
 }
 
+/**
+ * Safari/iOS: supabase-js отдаёт тело запроса как ReadableStream; WebKit отвечает
+ * «ReadableStream uploading is not supported». Собираем обычный Blob из буфера.
+ */
+async function blobBodyForStorageUpload(blob) {
+  const buf = await blob.arrayBuffer();
+  return new Blob([buf], { type: blob.type || "application/octet-stream" });
+}
+
 export async function uploadFiles(orderId) {
   applyPendingToAttachmentsInput();
   if (pendingAttachments.length === 0) {
@@ -594,9 +603,10 @@ export async function uploadFiles(orderId) {
     const stamp = `${Date.now()}_${i}_${Math.random().toString(36).slice(2, 10)}`;
     const filePath = `${state.currentUser.id}/${orderId}/${stamp}_${safeName}`;
 
+    const uploadBody = await blobBodyForStorageUpload(fileToUpload);
     const { error: uploadError } = await supabaseClient.storage
       .from("order-files")
-      .upload(filePath, fileToUpload, {
+      .upload(filePath, uploadBody, {
         cacheControl: "3600",
         upsert: false,
         contentType: fileToUpload.type || "application/octet-stream",
@@ -620,7 +630,8 @@ export async function uploadFiles(orderId) {
       if (thumbBlob && thumbBlob.size > 0) {
         const thumbExt = thumbBlob.type === "image/jpeg" ? "jpg" : "webp";
         thumbnailStoragePath = `${state.currentUser.id}/${orderId}/${stamp}_thumb.${thumbExt}`;
-        const { error: thumbErr } = await supabaseClient.storage.from("order-files").upload(thumbnailStoragePath, thumbBlob, {
+        const thumbUploadBody = await blobBodyForStorageUpload(thumbBlob);
+        const { error: thumbErr } = await supabaseClient.storage.from("order-files").upload(thumbnailStoragePath, thumbUploadBody, {
           cacheControl: "86400",
           upsert: false,
           contentType: thumbBlob.type || "image/webp",
