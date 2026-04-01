@@ -106,11 +106,12 @@ function createSupabaseProxyFetch(supabaseUrl) {
         if (lower.startsWith("x-proxy-")) return;
         proxyHeaders.set(key, value);
       });
+      /* Safari/iOS: fetch с body: ReadableStream и duplex не поддерживаются — «ReadableStream uploading is not supported». */
+      const bodyBuf = await req.arrayBuffer();
       return fetch(proxyUrl, {
         method: "POST",
         headers: proxyHeaders,
-        body: req.body,
-        duplex: "half",
+        body: bodyBuf,
       });
     }
 
