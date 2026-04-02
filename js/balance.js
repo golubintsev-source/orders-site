@@ -116,11 +116,11 @@ export async function loadBalance() {
     return `
       <tr>
         <td>${escapeHtml(p)}</td>
-        <td class="td-money">${formatAmount(balances[p])}</td>
-        <td class="td-money">${formatAmount(turnover[p].today)}</td>
-        <td class="td-money">${formatAmount(turnover[p].m1)}</td>
-        <td class="td-money">${formatAmount(turnover[p].m2)}</td>
-        <td class="td-money">${formatAmount(turnover[p].m3)}</td>
+        <td class="td-money">${formatAmountWholeRubles(balances[p])}</td>
+        <td class="td-money">${formatAmountWholeRubles(turnover[p].today)}</td>
+        <td class="td-money">${formatAmountWholeRubles(turnover[p].m1)}</td>
+        <td class="td-money">${formatAmountWholeRubles(turnover[p].m2)}</td>
+        <td class="td-money">${formatAmountWholeRubles(turnover[p].m3)}</td>
       </tr>
     `;
   }).join("");
