@@ -204,15 +204,37 @@ async function writeOrderDeltaCalculations({
 
   const remainingToBefore = (wasEditing ? initialParticipants?.remaining_to : "") || "";
   const remainingToAfter = orderData?.remaining_to || "";
-  const remainingToMissingBoth = !remainingToBefore.trim() && !remainingToAfter.trim();
-  if (!remainingToMissingBoth) {
-    pushRow({
-      key: "remaining_amount",
-      kindLabel: "Остаток",
-      from_place: "Клиент",
-      to_place: remainingToAfter || remainingToBefore || "—",
-      oldVal: old.remaining_amount,
-      newVal: next.remaining_amount,
+  const remainingToBeforeNorm = remainingToBefore.trim();
+  const remainingToAfterNorm = String(remainingToAfter || "").trim();
+
+  /** Дельта суммы «Остаток»: всегда фиксируем (куда — из текущего/предыдущего «Кому остаток» или «—»). */
+  pushRow({
+    key: "remaining_amount",
+    kindLabel: "Остаток",
+    from_place: "Клиент",
+    to_place: remainingToAfterNorm || remainingToBeforeNorm || "—",
+    oldVal: old.remaining_amount,
+    newVal: next.remaining_amount,
+  });
+
+  /**
+   * Смена только получателя «Кому остаток» при той же сумме: дельта суммы = 0, но движение по участникам нужно
+   * (например сначала остаток без получателя, затем выбрана «Касса» — иначе в Расчеты ничего не попадало).
+   */
+  const remainingAmtUnchanged =
+    Math.abs(next.remaining_amount - old.remaining_amount) < 0.000001;
+  const remainingDestChanged = remainingToBeforeNorm !== remainingToAfterNorm;
+  if (remainingAmtUnchanged && remainingDestChanged && next.remaining_amount > 0.000001) {
+    const fromPlace = remainingToBeforeNorm || "Клиент";
+    const toPlace = remainingToAfterNorm || "—";
+    rows.push({
+      created_at: nowIso,
+      from_place: fromPlace || "—",
+      to_place: toPlace || "—",
+      amount: next.remaining_amount,
+      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} Остаток (получатель); ${orderNumberStr}; ${clientStr}; ${remainingToBeforeNorm || "—"} → ${remainingToAfterNorm || "—"}; ${formatAmount(next.remaining_amount)}; ${timeHHmm}; ${actorShort}`,
+      order_id: orderId,
+      delta_key: "remaining_to",
     });
   }
 
