@@ -13,7 +13,7 @@ WITH order_chip AS (
     o.remaining_to,
     o.order_type,
     o.client,
-    o.updated_at,
+    o.created_at,
     -- Аналог String(orderId).padStart(4, '0') — для id >= 10000 строка без доп. нулей слева
     CASE
       WHEN length(trim(o.id::text)) >= 4 THEN trim(o.id::text)
@@ -45,7 +45,7 @@ SELECT
   oc.remaining_to,
   oc.order_type,
   oc.client,
-  oc.updated_at
+  oc.created_at
 FROM order_chip oc
 WHERE NOT EXISTS (
   SELECT 1

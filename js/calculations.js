@@ -8,6 +8,11 @@ let editingCreatedAt = null;
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 let currentUserEmail = "";
 
+/** Полные строки с сервера; фильтр поиска применяется при отрисовке. */
+let calculationsRowsCache = [];
+/** Непустая строка — поиск активен (кнопка «Отменить»). */
+let appliedCalculationsSearchQuery = null;
+
 function formatDateShort(iso) {
   if (!iso) return "";
   try {
@@ -178,6 +183,59 @@ function appendActorToComment(comment) {
   return base ? `${base}; ${actor}` : actor;
 }
 
+function getCalcDisplayComment(comment) {
+  const c = comment ?? "";
+  const isOrderDeltaRow = typeof c === "string" && c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
+  return isOrderDeltaRow ? c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim() : c;
+}
+
+function rowMatchesCalculationsSearch(row, needleLower) {
+  if (!needleLower) return true;
+  const displayComment = getCalcDisplayComment(row.comment);
+  const rawComment = row.comment ?? "";
+  const parts = [
+    formatDateShort(row.created_at),
+    row.created_at || "",
+    String(row.from_place ?? ""),
+    String(row.to_place ?? ""),
+    formatAmount(row.amount),
+    String(row.amount ?? ""),
+    displayComment,
+    rawComment,
+    String(row.id ?? ""),
+  ];
+  return parts.join(" ").toLowerCase().includes(needleLower);
+}
+
+function updateCalculationsSearchButton() {
+  const btn = document.getElementById("calcSearchBtn");
+  if (!btn) return;
+  const active =
+    appliedCalculationsSearchQuery != null && String(appliedCalculationsSearchQuery).trim() !== "";
+  btn.textContent = active ? "Отменить" : "Найти";
+  btn.setAttribute("aria-pressed", active ? "true" : "false");
+}
+
+function applyCalculationsSearchFromInput() {
+  const input = document.getElementById("calcSearchInput");
+  const raw = (input?.value ?? "").trim();
+  if (!raw) {
+    appliedCalculationsSearchQuery = null;
+  } else {
+    appliedCalculationsSearchQuery = raw;
+  }
+  updateCalculationsSearchButton();
+  renderCalculationsTableFromCache();
+}
+
+function cancelCalculationsSearch() {
+  appliedCalculationsSearchQuery = null;
+  const input = document.getElementById("calcSearchInput");
+  if (input) input.value = "";
+  updateCalculationsSearchButton();
+  renderCalculationsTableFromCache();
+}
+
 function formatCalcAmountInput() {
   const amountEl = document.getElementById("calcAmount");
   if (!amountEl) return;
@@ -203,33 +261,35 @@ function setMessage(text, isError) {
   }
 }
 
-export async function loadCalculations() {
+function renderCalculationsTableFromCache() {
   const tbody = document.querySelector("#calculationsTable tbody");
   if (!tbody) return;
 
-  const { data, error } = await supabaseClient
-    .from("calculations")
-    .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
-
   tbody.innerHTML = "";
 
-  if (error) {
-    console.error("Ошибка загрузки расчетов:", error);
-    setMessage("Ошибка загрузки данных.", true);
-    return;
+  const q =
+    appliedCalculationsSearchQuery != null ? String(appliedCalculationsSearchQuery).trim() : "";
+  const needle = q ? q.toLowerCase() : "";
+  let rows = calculationsRowsCache;
+  if (needle) {
+    rows = calculationsRowsCache.filter((row) => rowMatchesCalculationsSearch(row, needle));
   }
 
-  setMessage("");
-  if (!data || data.length === 0) {
+  if (calculationsRowsCache.length === 0) {
     const tr = document.createElement("tr");
     tr.innerHTML = "<td colspan=\"6\">Записей пока нет.</td>";
     tbody.appendChild(tr);
     return;
   }
 
-  data.forEach((row) => {
+  if (rows.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td colspan=\"6\">Ничего не найдено.</td>";
+    tbody.appendChild(tr);
+    return;
+  }
+
+  rows.forEach((row) => {
     const comment = row.comment ?? "";
     const isOrderDeltaRow = typeof comment === "string" && comment.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
     const displayComment = isOrderDeltaRow
@@ -268,6 +328,29 @@ export async function loadCalculations() {
       btn.addEventListener("click", () => softDeleteCalculationRow(Number(btn.dataset.id)));
     });
   }
+}
+
+export async function loadCalculations() {
+  const tbody = document.querySelector("#calculationsTable tbody");
+  if (!tbody) return;
+
+  const { data, error } = await supabaseClient
+    .from("calculations")
+    .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Ошибка загрузки расчетов:", error);
+    setMessage("Ошибка загрузки данных.", true);
+    calculationsRowsCache = [];
+    tbody.innerHTML = "";
+    return;
+  }
+
+  setMessage("");
+  calculationsRowsCache = data || [];
+  renderCalculationsTableFromCache();
 }
 
 function getFormValues() {
@@ -429,6 +512,27 @@ function setupCalculationsForm() {
   if (amountEl) {
     amountEl.addEventListener("blur", formatCalcAmountInput);
     amountEl.addEventListener("input", () => refreshRublesIntegerInputState(amountEl, amountEl.value));
+  }
+
+  const searchBtn = document.getElementById("calcSearchBtn");
+  const searchInput = document.getElementById("calcSearchInput");
+  if (searchBtn && searchInput && !searchBtn.dataset.searchBound) {
+    searchBtn.dataset.searchBound = "1";
+    searchBtn.addEventListener("click", () => {
+      const active =
+        appliedCalculationsSearchQuery != null &&
+        String(appliedCalculationsSearchQuery).trim() !== "";
+      if (active) {
+        cancelCalculationsSearch();
+      } else {
+        applyCalculationsSearchFromInput();
+      }
+    });
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      applyCalculationsSearchFromInput();
+    });
   }
 
   setupCalcCommentPopover();

@@ -66,7 +66,13 @@
             <label for="calcComment">Комментарий</label>
             <input type="text" id="calcComment" placeholder="Комментарий" />
           </div>
-          <button type="submit" id="calcSubmitBtn" class="calculations-submit-btn">Добавить</button>
+          <div class="calculations-form-row calculations-form-row--submit-search">
+            <button type="submit" id="calcSubmitBtn" class="calculations-submit-btn">Добавить</button>
+            <div class="calculations-search-wrap">
+              <input type="search" id="calcSearchInput" class="calculations-search-input" placeholder="Поиск…" autocomplete="off" enterkeyhint="search" aria-label="Поиск по таблице" />
+              <button type="button" id="calcSearchBtn" class="calculations-search-btn">Найти</button>
+            </div>
+          </div>
         </div>
       </form>
       <div class="table-wrap">
