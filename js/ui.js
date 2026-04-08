@@ -153,7 +153,7 @@ function openOrderIdActionsMenu(idTd) {
   menu.innerHTML = `
     ${editItem}
     ${tasksItem}
-    <a href="${historyHref}" class="order-id-actions-menu-item" role="menuitem">${history}<span>История</span></a>
+    <a href="${historyHref}" class="order-id-actions-menu-item" role="menuitem">${history}<span>Изменения</span></a>
     <button type="button" class="${filesItemClass}" role="menuitem" data-action="files">${filesIconBlock}<span>Файлы</span></button>
     ${callBlock}
     ${lockBlock}

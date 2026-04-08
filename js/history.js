@@ -21,11 +21,11 @@ function escapeHtml(s) {
 
 function setHistorySectionLabel(orderType) {
   if (!orderId) {
-    setStandaloneSectionNavLabel("История");
+    setStandaloneSectionNavLabel("Изменения");
     return;
   }
   const chip = formatOrderIdTypeChip(orderId, orderType);
-  const text = chip ? `История ${chip}` : `История #${orderId}`;
+  const text = chip ? `Изменения ${chip}` : `Изменения #${orderId}`;
   setStandaloneSectionNavLabel(text);
 }
 
@@ -146,7 +146,7 @@ async function init() {
       window.location.href = `index.html#${id}`;
     },
   });
-  setStandaloneSectionNavLabel("История");
+  setStandaloneSectionNavLabel("Изменения");
   wireHistorySearchAndLogout();
 
   if (!orderId) {
