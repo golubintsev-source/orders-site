@@ -1302,8 +1302,22 @@ h2 {
   min-width: 900px;
   width: 100%;
 }
+/* Между соседними колонками зазор 3px: справа 3px, слева у следующей 0 */
+#allChangesTable thead th:nth-child(1),
+#allChangesTable tbody td:nth-child(1) {
+  padding: 3px 3px 3px 2px;
+}
+#allChangesTable thead th:nth-child(2),
+#allChangesTable tbody td:nth-child(2),
+#allChangesTable thead th:nth-child(3),
+#allChangesTable tbody td:nth-child(3) {
+  padding: 3px 3px 3px 0;
+}
+#allChangesTable thead th:nth-child(4),
+#allChangesTable tbody td:nth-child(4) {
+  padding: 3px 2px 3px 0;
+}
 #allChangesTable thead th {
-  padding: 3px 2px;
   font-size: 13px;
   white-space: nowrap;
   text-align: left;
@@ -1317,7 +1331,6 @@ h2 {
   cursor: pointer;
 }
 #allChangesTable td {
-  padding: 3px 2px;
   font-size: 13px;
   vertical-align: top;
 }
