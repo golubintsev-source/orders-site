@@ -1297,9 +1297,18 @@ h2 {
   background-color: #f87171;
 }
 
-/* Все изменения — как таблица «Заказы» (компактные ячейки, шапка) */
+/* Все изменения: override глобального table { width:100%; min-width:900px } — иначе колонки растягиваются пустотой */
 #allChangesTable {
-  min-width: 900px;
+  width: 100%;
+  table-layout: fixed;
+  min-width: 0 !important;
+  border-collapse: collapse;
+}
+/* Первые три колонки — только по тексту; четвёртая забирает остаток ширины */
+#allChangesTable col.all-changes-col-compact {
+  width: 0;
+}
+#allChangesTable col.all-changes-col-fill {
   width: 100%;
 }
 /* Между соседними колонками зазор 3px: справа 3px, слева у следующей 0 */
@@ -1317,9 +1326,14 @@ h2 {
 #allChangesTable tbody td:nth-child(4) {
   padding: 3px 2px 3px 0;
 }
+#allChangesTable thead th:nth-child(-n+3) {
+  white-space: nowrap;
+}
+#allChangesTable thead th:nth-child(4) {
+  white-space: normal;
+}
 #allChangesTable thead th {
   font-size: 13px;
-  white-space: nowrap;
   text-align: left;
   background: #f8fafc;
   font-weight: 700;
@@ -1330,6 +1344,9 @@ h2 {
 #allChangesTable tbody tr.all-changes-row {
   cursor: pointer;
 }
+#allChangesTable tbody td:nth-child(-n+3) {
+  white-space: nowrap;
+}
 #allChangesTable td {
   font-size: 13px;
   vertical-align: top;
@@ -1337,7 +1354,7 @@ h2 {
 #allChangesTable .all-changes-text-cell {
   white-space: normal;
   word-break: break-word;
-  max-width: min(520px, 55vw);
+  min-width: 0;
 }
 
 /* Задачи по заказу */
