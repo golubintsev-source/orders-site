@@ -1364,6 +1364,151 @@ function parseRublesFieldFromDom(id) {
   return r.value;
 }
 
+/** Порядок и подписи полей для комментария в order_history */
+const ORDER_HISTORY_FIELDS = [
+  { key: "order_type", label: "Тип заказа" },
+  { key: "order_number", label: "Номер заказа" },
+  { key: "order_date", label: "Дата и время заказа" },
+  { key: "phone", label: "Телефон" },
+  { key: "client", label: "Клиент" },
+  { key: "address", label: "Адрес" },
+  { key: "payment_status", label: "Статус" },
+  { key: "description", label: "Комментарий" },
+  { key: "amount", label: "Стоимость" },
+  { key: "prepayment", label: "Предоплата" },
+  { key: "prepayment_to", label: "Кому предоплата" },
+  { key: "remaining_amount", label: "Остаток" },
+  { key: "remaining_to", label: "Кому остаток" },
+  { key: "area_m2", label: "Площадь м²" },
+  { key: "mosquito_nets", label: "Москитные сетки" },
+  { key: "construction_count", label: "Конструкций" },
+  { key: "delivery", label: "Доставка" },
+  { key: "delivery_date", label: "Дата доставки" },
+  { key: "installation", label: "Монтаж" },
+  { key: "installation_date", label: "Дата монтажа" },
+  { key: "reveals", label: "Откосы" },
+  { key: "reveals_date", label: "Дата откосов" },
+  { key: "installer_payment_amount", label: "з/п монтаж" },
+  { key: "installer_payment_by", label: "Кто оплатил монтаж" },
+];
+
+function formatOrderHistoryDateTimeForDisplay(iso) {
+  if (iso == null || iso === "") return "—";
+  const s = String(iso).trim();
+  const datePart = s.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return s || "—";
+  const ddmmyyyy = formatDateDDMMYYYY(datePart);
+  const tm = s.match(/T(\d{2}):(\d{2})/);
+  if (!tm) return ddmmyyyy;
+  return `${ddmmyyyy} ${tm[1]}:${tm[2]}`;
+}
+
+function formatOrderHistoryValue(key, val) {
+  if (val === true) return "да";
+  if (val === false) return "нет";
+  if (key === "order_date") return formatOrderHistoryDateTimeForDisplay(val);
+  if (key === "delivery_date" || key === "installation_date" || key === "reveals_date") {
+    if (val == null || val === "") return "—";
+    const s = String(val).trim().slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? formatDateDDMMYYYY(s) : String(val);
+  }
+  const rubleKeys = new Set(["amount", "prepayment", "remaining_amount", "installer_payment_amount"]);
+  if (rubleKeys.has(key)) {
+    if (val == null || val === "") return "—";
+    const n = typeof val === "number" ? val : Number(val);
+    return Number.isFinite(n) ? formatAmount(n) : "—";
+  }
+  const numKeys = {
+    area_m2: ORDER_FORM_NUMERIC_FIELD_DECIMALS.area_m2,
+    mosquito_nets: ORDER_FORM_NUMERIC_FIELD_DECIMALS.mosquito_nets,
+    construction_count: ORDER_FORM_NUMERIC_FIELD_DECIMALS.construction_count,
+  };
+  if (Object.prototype.hasOwnProperty.call(numKeys, key)) {
+    if (val == null || val === "") return "—";
+    const n = typeof val === "number" ? val : parseOrderFormNumber(val);
+    return n == null ? "—" : formatOrderFormNumberValue(n, numKeys[key]);
+  }
+  if (val == null || val === "") return "—";
+  return String(val);
+}
+
+function normHistoryNumber(v) {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function numbersEqualHistory(a, b) {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  return Math.abs(a - b) < 1e-9;
+}
+
+function valuesEqualForOrderHistory(key, a, b) {
+  if (key === "installation" || key === "reveals") {
+    return !!a === !!b;
+  }
+  if (
+    key === "amount" ||
+    key === "prepayment" ||
+    key === "remaining_amount" ||
+    key === "installer_payment_amount" ||
+    key === "area_m2" ||
+    key === "mosquito_nets" ||
+    key === "construction_count"
+  ) {
+    return numbersEqualHistory(normHistoryNumber(a), normHistoryNumber(b));
+  }
+  if (key === "order_date" || key === "delivery_date" || key === "installation_date" || key === "reveals_date") {
+    const sa = a == null || a === "" ? null : String(a).trim();
+    const sb = b == null || b === "" ? null : String(b).trim();
+    if (sa == null && sb == null) return true;
+    if (sa == null || sb == null) return false;
+    return sa === sb;
+  }
+  const sa = a == null || a === "" ? null : String(a).trim();
+  const sb = b == null || b === "" ? null : String(b).trim();
+  if (sa == null && sb == null) return true;
+  if (sa == null || sb == null) return false;
+  return sa === sb;
+}
+
+function shouldIncludeFieldOnCreate(key, val) {
+  if (key === "installation" || key === "reveals") return val === true;
+  if (typeof val === "boolean") return val === true;
+  if (typeof val === "number") return val != null && Number.isFinite(val);
+  if (val == null) return false;
+  if (typeof val === "string") return String(val).trim() !== "";
+  return false;
+}
+
+/**
+ * Текст комментария для order_history: «Поле: старое -> новое; …».
+ * @param {Record<string, unknown> | null} prev снимок до правок (null при создании)
+ * @param {Record<string, unknown>} next данные сохранения (getFormData)
+ * @param {boolean} wasEditing режим редактирования
+ */
+function buildOrderHistoryComment(prev, next, wasEditing) {
+  if (!wasEditing) {
+    const fieldParts = [];
+    for (const { key, label } of ORDER_HISTORY_FIELDS) {
+      const nv = next[key];
+      if (!shouldIncludeFieldOnCreate(key, nv)) continue;
+      fieldParts.push(`${label}: — -> ${formatOrderHistoryValue(key, nv)}`);
+    }
+    return fieldParts.length > 0 ? `Заказ создан; ${fieldParts.join("; ")}` : "Заказ создан";
+  }
+
+  const parts = [];
+  for (const { key, label } of ORDER_HISTORY_FIELDS) {
+    const ov = prev ? prev[key] : undefined;
+    const nv = next[key];
+    if (valuesEqualForOrderHistory(key, ov, nv)) continue;
+    parts.push(`${label}: ${formatOrderHistoryValue(key, ov)} -> ${formatOrderHistoryValue(key, nv)}`);
+  }
+  return parts.length > 0 ? parts.join("; ") : "Сохранено без изменений";
+}
+
 export function getFormData() {
   const orderNumberEl = document.getElementById("order_number");
   return {
@@ -1528,7 +1673,7 @@ export async function checkInstallerPaymentDone(orderId) {
   updateInstallerBlockByInstallationDate();
 }
 
-export function fillForm(order) {
+export async function fillForm(order) {
   state.installerPaymentDone = false;
   state.initialOrderSums = {
     amount: order.amount != null ? Number(order.amount) : null,
@@ -1650,7 +1795,8 @@ export function fillForm(order) {
     console.error("Список файлов заявки:", err);
     clearExistingOrderFilesInForm();
   });
-  checkInstallerPaymentDone(order.id);
+  await checkInstallerPaymentDone(order.id);
+  state.initialOrderSnapshot = JSON.parse(JSON.stringify(getFormData()));
 }
 
 export function resetFormMode() {
@@ -1659,6 +1805,7 @@ export function resetFormMode() {
   state.initialPaymentStatus = null;
   state.initialOrderSums = null;
   state.initialOrderParticipants = null;
+  state.initialOrderSnapshot = null;
   state.installerPaymentDone = false;
   document.getElementById("orderForm").reset();
   updatePaidField();
@@ -1750,7 +1897,7 @@ export async function editOrder(orderId) {
 
   state.editingOrderId = orderId;
   state.editingOrderDescription = data.description || null;
-  fillForm(data);
+  await fillForm(data);
   setMessage("", "");
 
   if (submitBtn) submitBtn.textContent = "Сохранить изменения";
@@ -1945,71 +2092,15 @@ export async function submitOrderForm(event) {
     orderData,
   });
 
-  const addCommentText = (document.getElementById("description")?.value || "").trim();
-  const newStatus = orderData.payment_status || "";
-
-  if (!wasEditing && savedOrderId && state.currentUser?.email) {
-    const historyRows = [
-      { order_id: savedOrderId, user_email: state.currentUser.email, comment: "Заказ создан" },
-      { order_id: savedOrderId, user_email: state.currentUser.email, comment: `Статус: ${newStatus || "Контакт с клиентом"}` },
-    ];
-    if (addCommentText) {
-      historyRows.push({ order_id: savedOrderId, user_email: state.currentUser.email, comment: addCommentText });
-    }
-    await supabaseClient.from("order_history").insert(historyRows);
-  }
-
-  if (wasEditing && savedOrderId && state.currentUser?.email) {
-    const historyRows = [];
-    const oldStatus = state.initialPaymentStatus ?? "";
-    if (oldStatus !== newStatus) {
-      historyRows.push({
-        order_id: savedOrderId,
-        user_email: state.currentUser.email,
-        comment: `Статус изменён: ${oldStatus || "—"} → ${newStatus || "—"}`,
-      });
-    }
-
-    // История изменений сумм
-    const initialSums = state.initialOrderSums || {};
-    const toComparable = (v) => (v == null ? null : (Number.isFinite(Number(v)) ? Number(v) : null));
-    const numbersEqual = (a, b) => {
-      if (a == null && b == null) return true;
-      if (a == null || b == null) return false;
-      return Math.abs(a - b) < 0.000001;
-    };
-    const formatSum = (v) => (v == null ? "—" : formatAmount(v));
-
-    const sumChanges = [];
-    const fieldsToCheck = [
-      { key: "amount", label: "Стоимость", oldVal: initialSums.amount, newVal: orderData.amount },
-      { key: "prepayment", label: "Предоплата", oldVal: initialSums.prepayment, newVal: orderData.prepayment },
-      { key: "remaining_amount", label: "Остаток", oldVal: initialSums.remaining_amount, newVal: orderData.remaining_amount },
-      { key: "installer_payment_amount", label: "з/п монтаж", oldVal: initialSums.installer_payment_amount, newVal: orderData.installer_payment_amount },
-    ];
-
-    fieldsToCheck.forEach((f) => {
-      const oldN = toComparable(f.oldVal);
-      const newN = toComparable(f.newVal);
-      if (!numbersEqual(oldN, newN)) {
-        sumChanges.push(`${f.label}: ${formatSum(oldN)} → ${formatSum(newN)}`);
-      }
-    });
-
-    if (sumChanges.length > 0) {
-      historyRows.push({
-        order_id: savedOrderId,
-        user_email: state.currentUser.email,
-        comment: sumChanges.join("; "),
-      });
-    }
-
-    if (addCommentText) {
-      historyRows.push({ order_id: savedOrderId, user_email: state.currentUser.email, comment: addCommentText });
-    }
-    if (historyRows.length > 0) {
-      await supabaseClient.from("order_history").insert(historyRows);
-    }
+  if (savedOrderId && state.currentUser?.email) {
+    const historyComment = buildOrderHistoryComment(
+      wasEditing ? state.initialOrderSnapshot : null,
+      orderData,
+      wasEditing
+    );
+    await supabaseClient.from("order_history").insert([
+      { order_id: savedOrderId, user_email: state.currentUser.email, comment: historyComment },
+    ]);
   }
 
   resetFormMode();

@@ -8,6 +8,8 @@ export const state = {
   initialOrderSums: null,
   /** снапшот "кому/кто" полей для фиксации дельт в расчетах */
   initialOrderParticipants: null,
+  /** полный снимок getFormData() после загрузки заказа в форму (для истории изменений) */
+  initialOrderSnapshot: null,
   allOrders: [],
   filesCountMap: {},
   /** выбранные статусы для фильтра; пустой массив = показывать все */
