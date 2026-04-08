@@ -193,21 +193,82 @@ async function writeOrderDeltaCalculations({
     });
   };
 
-  pushRow({
-    key: "prepayment",
-    kindLabel: "Предоплата",
-    from_place: "Клиент",
-    to_place: orderData?.prepayment_to || (wasEditing ? initialParticipants?.prepayment_to : "") || "—",
-    oldVal: old.prepayment,
-    newVal: next.prepayment,
-  });
-
-  const normRemainingTo = (v) => {
+  const normRecipientSelect = (v) => {
     const t = String(v ?? "").trim();
     return t === "—" ? "" : t;
   };
-  const remToBefore = normRemainingTo(wasEditing ? initialParticipants?.remaining_to : "");
-  const remToAfter = normRemainingTo(orderData?.remaining_to);
+
+  const pushAmountRecipientCalcRow = (kindLabel, { from_place, to_place, amount, delta_key, detail }) => {
+    if (Math.abs(amount) < 0.000001) return;
+    rows.push({
+      created_at: nowIso,
+      from_place: from_place || "—",
+      to_place: to_place || "—",
+      amount,
+      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${kindLabel}; ${orderNumberStr}; ${clientStr}; ${detail}; ${timeHHmm}; ${actorShort}`,
+      order_id: orderId,
+      delta_key,
+    });
+  };
+
+  /**
+   * Предоплата / Кому предоплата — та же схема, что для «Остаток» / «Кому остаток»:
+   * пустой select и «—» = «-»; ветки 1–5 как для остатка.
+   */
+  const prepToBefore = normRecipientSelect(wasEditing ? initialParticipants?.prepayment_to : "");
+  const prepToAfter = normRecipientSelect(orderData?.prepayment_to);
+  const prepToBeforeEmpty = prepToBefore === "";
+  const prepToAfterEmpty = prepToAfter === "";
+  const prepOld = old.prepayment;
+  const prepNew = next.prepayment;
+  const prepSame = Math.abs(prepOld - prepNew) < 0.000001;
+  const prepToSame = prepToBefore === prepToAfter;
+
+  if (!(prepToBeforeEmpty && prepToAfterEmpty) && !(prepSame && prepToSame)) {
+    if (prepToBeforeEmpty && !prepToAfterEmpty) {
+      pushAmountRecipientCalcRow("Предоплата", {
+        from_place: "Клиент",
+        to_place: prepToAfter,
+        amount: prepNew,
+        delta_key: "prepayment",
+        detail: `кому − → ${prepToAfter}; сумма ${formatAmount(prepNew)}`,
+      });
+    } else if (!prepToBeforeEmpty && prepToAfterEmpty) {
+      pushAmountRecipientCalcRow("Предоплата", {
+        from_place: prepToBefore,
+        to_place: "Клиент",
+        amount: prepOld,
+        delta_key: "prepayment",
+        detail: `${prepToBefore} → клиент; сумма ${formatAmount(prepOld)}`,
+      });
+    } else if (!prepToBeforeEmpty && !prepToAfterEmpty && prepToSame) {
+      pushAmountRecipientCalcRow("Предоплата", {
+        from_place: "Клиент",
+        to_place: prepToAfter,
+        amount: prepNew - prepOld,
+        delta_key: "prepayment",
+        detail: `${prepToAfter}; ${formatAmount(prepOld)} → ${formatAmount(prepNew)}`,
+      });
+    } else if (!prepToBeforeEmpty && !prepToAfterEmpty && !prepToSame) {
+      pushAmountRecipientCalcRow("Предоплата", {
+        from_place: prepToBefore,
+        to_place: "Клиент",
+        amount: prepOld,
+        delta_key: "prepayment_to",
+        detail: `смена получателя; ${prepToBefore} → клиент; ${formatAmount(prepOld)}`,
+      });
+      pushAmountRecipientCalcRow("Предоплата", {
+        from_place: "Клиент",
+        to_place: prepToAfter,
+        amount: prepNew,
+        delta_key: "prepayment_to",
+        detail: `смена получателя; клиент → ${prepToAfter}; ${formatAmount(prepNew)}`,
+      });
+    }
+  }
+
+  const remToBefore = normRecipientSelect(wasEditing ? initialParticipants?.remaining_to : "");
+  const remToAfter = normRecipientSelect(orderData?.remaining_to);
   const remToBeforeEmpty = remToBefore === "";
   const remToAfterEmpty = remToAfter === "";
 
@@ -216,31 +277,12 @@ async function writeOrderDeltaCalculations({
   const remSame = Math.abs(remOld - remNew) < 0.000001;
   const remToSame = remToBefore === remToAfter;
 
-  const pushRemainderCalcRow = ({ from_place, to_place, amount, delta_key, detail }) => {
-    if (Math.abs(amount) < 0.000001) return;
-    rows.push({
-      created_at: nowIso,
-      from_place: from_place || "—",
-      to_place: to_place || "—",
-      amount,
-      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} Остаток; ${orderNumberStr}; ${clientStr}; ${detail}; ${timeHHmm}; ${actorShort}`,
-      order_id: orderId,
-      delta_key,
-    });
-  };
-
   /**
-   * Запись в «Расчеты» по полям «Остаток» и «Кому остаток»:
-   * пустое значение в select (и «—») считаем «-».
-   * 1) Оба «-» ИЛИ (сумма и получатель не менялись) — строк не добавляем.
-   * 2) Было «-», стало заполнено: Клиент → получатель, сумма = новый остаток.
-   * 3) Было заполнено, стало «-»: получатель → Клиент, сумма = старый остаток.
-   * 4) Оба заполнены, получатель тот же: Клиент → получатель, сумма = новый − старый остаток.
-   * 5) Оба заполнены, получатель другой: две строки (старый → Клиент со старой суммой; Клиент → новый с новой суммой).
+   * Остаток / Кому остаток — пустой select и «—» = «-»; ветки 1–5.
    */
   if (!(remToBeforeEmpty && remToAfterEmpty) && !(remSame && remToSame)) {
     if (remToBeforeEmpty && !remToAfterEmpty) {
-      pushRemainderCalcRow({
+      pushAmountRecipientCalcRow("Остаток", {
         from_place: "Клиент",
         to_place: remToAfter,
         amount: remNew,
@@ -248,7 +290,7 @@ async function writeOrderDeltaCalculations({
         detail: `кому − → ${remToAfter}; сумма ${formatAmount(remNew)}`,
       });
     } else if (!remToBeforeEmpty && remToAfterEmpty) {
-      pushRemainderCalcRow({
+      pushAmountRecipientCalcRow("Остаток", {
         from_place: remToBefore,
         to_place: "Клиент",
         amount: remOld,
@@ -256,7 +298,7 @@ async function writeOrderDeltaCalculations({
         detail: `${remToBefore} → клиент; сумма ${formatAmount(remOld)}`,
       });
     } else if (!remToBeforeEmpty && !remToAfterEmpty && remToSame) {
-      pushRemainderCalcRow({
+      pushAmountRecipientCalcRow("Остаток", {
         from_place: "Клиент",
         to_place: remToAfter,
         amount: remNew - remOld,
@@ -264,14 +306,14 @@ async function writeOrderDeltaCalculations({
         detail: `${remToAfter}; ${formatAmount(remOld)} → ${formatAmount(remNew)}`,
       });
     } else if (!remToBeforeEmpty && !remToAfterEmpty && !remToSame) {
-      pushRemainderCalcRow({
+      pushAmountRecipientCalcRow("Остаток", {
         from_place: remToBefore,
         to_place: "Клиент",
         amount: remOld,
         delta_key: "remaining_to",
         detail: `смена получателя; ${remToBefore} → клиент; ${formatAmount(remOld)}`,
       });
-      pushRemainderCalcRow({
+      pushAmountRecipientCalcRow("Остаток", {
         from_place: "Клиент",
         to_place: remToAfter,
         amount: remNew,
