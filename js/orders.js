@@ -179,19 +179,6 @@ async function writeOrderDeltaCalculations({
   };
 
   const rows = [];
-  const pushRow = ({ key, kindLabel, from_place, to_place, oldVal, newVal }) => {
-    const delta = newVal - oldVal;
-    if (Math.abs(delta) < 0.000001) return;
-    rows.push({
-      created_at: nowIso,
-      from_place: from_place || "—",
-      to_place: to_place || "—",
-      amount: delta,
-      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${kindLabel}; ${orderNumberStr}; ${clientStr}; ${formatAmount(oldVal)} → ${formatAmount(newVal)}; ${timeHHmm}; ${actorShort}`,
-      order_id: orderId,
-      delta_key: key,
-    });
-  };
 
   const normRecipientSelect = (v) => {
     const t = String(v ?? "").trim();
@@ -323,18 +310,60 @@ async function writeOrderDeltaCalculations({
     }
   }
 
-  const installerByBefore = (wasEditing ? initialParticipants?.installer_payment_by : "") || "";
-  const installerByAfter = orderData?.installer_payment_by || "";
-  const installerByMissingBoth = !installerByBefore.trim() && !installerByAfter.trim();
-  if (!installerByMissingBoth) {
-    pushRow({
-      key: "installer_payment_amount",
-      kindLabel: "Монтаж",
-      from_place: installerByAfter || installerByBefore || "—",
-      to_place: "Монтаж",
-      oldVal: old.installer_payment_amount,
-      newVal: next.installer_payment_amount,
-    });
+  /**
+   * з/п монтаж / Оплатил — та же схема ветвлений, что для «Остаток» / «Кому остаток»,
+   * но расход: движение «плательщик → Монтаж» (в остатке было «Клиент → получатель»).
+   */
+  const instByBefore = normRecipientSelect(wasEditing ? initialParticipants?.installer_payment_by : "");
+  const instByAfter = normRecipientSelect(orderData?.installer_payment_by);
+  const instByBeforeEmpty = instByBefore === "";
+  const instByAfterEmpty = instByAfter === "";
+  const instOld = old.installer_payment_amount;
+  const instNew = next.installer_payment_amount;
+  const instSame = Math.abs(instOld - instNew) < 0.000001;
+  const instBySame = instByBefore === instByAfter;
+
+  if (!(instByBeforeEmpty && instByAfterEmpty) && !(instSame && instBySame)) {
+    if (instByBeforeEmpty && !instByAfterEmpty) {
+      pushAmountRecipientCalcRow("Монтаж", {
+        from_place: instByAfter,
+        to_place: "Монтаж",
+        amount: instNew,
+        delta_key: "installer_payment_amount",
+        detail: `оплатил − → ${instByAfter}; сумма ${formatAmount(instNew)}`,
+      });
+    } else if (!instByBeforeEmpty && instByAfterEmpty) {
+      pushAmountRecipientCalcRow("Монтаж", {
+        from_place: "Монтаж",
+        to_place: instByBefore,
+        amount: instOld,
+        delta_key: "installer_payment_amount",
+        detail: `Монтаж → ${instByBefore}; сумма ${formatAmount(instOld)}`,
+      });
+    } else if (!instByBeforeEmpty && !instByAfterEmpty && instBySame) {
+      pushAmountRecipientCalcRow("Монтаж", {
+        from_place: instByAfter,
+        to_place: "Монтаж",
+        amount: instNew - instOld,
+        delta_key: "installer_payment_amount",
+        detail: `${instByAfter}; ${formatAmount(instOld)} → ${formatAmount(instNew)}`,
+      });
+    } else if (!instByBeforeEmpty && !instByAfterEmpty && !instBySame) {
+      pushAmountRecipientCalcRow("Монтаж", {
+        from_place: "Монтаж",
+        to_place: instByBefore,
+        amount: instOld,
+        delta_key: "installer_payment_by",
+        detail: `смена плательщика; Монтаж → ${instByBefore}; ${formatAmount(instOld)}`,
+      });
+      pushAmountRecipientCalcRow("Монтаж", {
+        from_place: instByAfter,
+        to_place: "Монтаж",
+        amount: instNew,
+        delta_key: "installer_payment_by",
+        detail: `смена плательщика; ${instByAfter} → Монтаж; ${formatAmount(instNew)}`,
+      });
+    }
   }
 
   if (rows.length === 0) return;
