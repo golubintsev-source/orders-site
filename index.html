@@ -47,6 +47,7 @@
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="new">Новый</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="calculations">Расчеты</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="tasks-all">Все задачи</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="changes-all">Все изменения</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="balance">Баланс</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="settings">Настройки</button>
             <div class="section-nav-dropdown-footer">
@@ -638,6 +639,25 @@
           </table>
         </div>
         <p id="allTasksMessage" class="order-tasks-hint"></p>
+      </div>
+    </section>
+
+    <section id="section-changes-all" class="content-section">
+      <div class="card order-tasks-card">
+        <div class="table-wrap">
+          <table id="allChangesTable">
+            <thead>
+              <tr>
+                <th class="th-order-date">Дата</th>
+                <th>Логин</th>
+                <th>Заказ</th>
+                <th>Изменения</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="allChangesMessage" class="order-tasks-hint"></p>
       </div>
     </section>
 

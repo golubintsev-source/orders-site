@@ -58,6 +58,7 @@ const SECTION_LABELS = {
   all: "Заказы",
   calculations: "Расчеты",
   "tasks-all": "Все задачи",
+  "changes-all": "Все изменения",
   balance: "Баланс",
   settings: "Настройки",
 };
@@ -71,6 +72,7 @@ export const STANDALONE_SECTION_NAV_ID = "__standalone__";
 const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "calculations",
   "tasks-all",
+  "changes-all",
   "order-tasks",
   "balance",
   "settings",
@@ -258,6 +260,9 @@ export function switchSection(sectionId) {
 
   if (sectionId === "tasks-all") {
     void import("./tasks.js").then((m) => m.loadAllTasks());
+  }
+  if (sectionId === "changes-all") {
+    void import("./all-changes.js").then((m) => m.loadAllChanges());
   }
   if (sectionId === "order-tasks") {
     void import("./tasks.js").then((m) => m.loadOrderTasks());

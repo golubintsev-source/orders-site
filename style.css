@@ -1297,6 +1297,36 @@ h2 {
   background-color: #f87171;
 }
 
+/* Все изменения — как таблица «Заказы» (компактные ячейки, шапка) */
+#allChangesTable {
+  min-width: 900px;
+  width: 100%;
+}
+#allChangesTable thead th {
+  padding: 3px 2px;
+  font-size: 13px;
+  white-space: nowrap;
+  text-align: left;
+  background: #f8fafc;
+  font-weight: 700;
+  vertical-align: middle;
+  box-shadow: none;
+  border-bottom: 1px solid #e7ebf0;
+}
+#allChangesTable tbody tr.all-changes-row {
+  cursor: pointer;
+}
+#allChangesTable td {
+  padding: 3px 2px;
+  font-size: 13px;
+  vertical-align: top;
+}
+#allChangesTable .all-changes-text-cell {
+  white-space: normal;
+  word-break: break-word;
+  max-width: min(520px, 55vw);
+}
+
 /* Задачи по заказу */
 .order-tasks-form-stack {
   display: flex;

@@ -5,6 +5,7 @@ import { initCalculationsSection } from "./calculations.js";
 import { initBalanceSection } from "./balance.js";
 import { loadSettings } from "./settings.js";
 import { initOrderTasksSection } from "./tasks.js";
+import { initAllChangesSection } from "./all-changes.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { setMessage } from "./dom.js";
 import { initOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
@@ -40,6 +41,7 @@ async function init() {
     await loadSettings();
     await loadOrders();
     initOrderTasksSection();
+    initAllChangesSection();
     resetFormMode();
     if (canAccessSection("calculations")) {
       await initCalculationsSection();
@@ -54,7 +56,15 @@ async function init() {
   }
 }
 
-const HASH_SECTION_IDS = new Set(["all", "new", "calculations", "tasks-all", "balance", "settings"]);
+const HASH_SECTION_IDS = new Set([
+  "all",
+  "new",
+  "calculations",
+  "tasks-all",
+  "changes-all",
+  "balance",
+  "settings",
+]);
 
 function applyHashSection() {
   const h = window.location.hash.replace(/^#/, "");
