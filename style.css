@@ -933,7 +933,9 @@ h2 {
   opacity: 0.95;
 }
 
+/* Одна высота в строке: Добавить, поле поиска, Найти */
 .calculations-form-row--submit-search {
+  --calc-submit-row-height: 40px;
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -945,8 +947,15 @@ h2 {
 
 .calculations-form-row--submit-search .calculations-submit-btn {
   flex: 0 0 auto;
-  padding: 6px 10px;
-  font-size: 12px;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--calc-submit-row-height);
+  min-height: var(--calc-submit-row-height);
+  padding: 0 12px;
+  font-size: 13px;
+  box-sizing: border-box;
 }
 
 .calculations-search-wrap {
@@ -965,17 +974,23 @@ h2 {
   min-width: 0;
   max-width: 100%;
   width: auto;
-  padding: 4px 8px;
+  padding: 0 8px;
   font-size: 16px;
-  height: 36px;
+  height: var(--calc-submit-row-height, 40px);
+  min-height: var(--calc-submit-row-height, 40px);
   box-sizing: border-box;
 }
 
 #section-calculations .calculations-form .calculations-search-btn,
 .calculations-page .calculations-form .calculations-search-btn {
   flex: 0 0 auto;
-  padding: 6px 10px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--calc-submit-row-height, 40px);
+  min-height: var(--calc-submit-row-height, 40px);
+  padding: 0 12px;
+  font-size: 13px;
   font-weight: 600;
   background: #f3f4f6;
   color: #111827;
@@ -983,6 +998,7 @@ h2 {
   border-radius: 8px;
   cursor: pointer;
   white-space: nowrap;
+  box-sizing: border-box;
 }
 
 #section-calculations .calculations-form .calculations-search-btn:hover,
