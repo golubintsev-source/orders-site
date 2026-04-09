@@ -58,8 +58,9 @@ function getRecentMskDayKeys(daysCount) {
 
 export async function loadBalance() {
   const messageEl = document.getElementById("balanceMessage");
+  const theadRow = document.querySelector("#balanceTable thead tr");
   const tbody = document.querySelector("#balanceTable tbody");
-  if (!tbody) return;
+  if (!theadRow || !tbody) return;
 
   if (messageEl) messageEl.textContent = "";
 
@@ -112,18 +113,31 @@ export async function loadBalance() {
     balances[p] += Number.isFinite(n) ? Math.trunc(n) : 0;
   }
 
-  tbody.innerHTML = PARTICIPANTS.map((p) => {
-    return `
+  theadRow.innerHTML =
+    '<th scope="col"></th>' +
+    PARTICIPANTS.map((p) => `<th scope="col">${escapeHtml(p)}</th>`).join("");
+
+  const metricRows = [
+    { label: "Сейчас", value: (p) => balances[p] },
+    { label: "Сегодня", value: (p) => turnover[p].today },
+    { label: "С-1", value: (p) => turnover[p].m1 },
+    { label: "С-2", value: (p) => turnover[p].m2 },
+    { label: "С-3", value: (p) => turnover[p].m3 },
+  ];
+
+  tbody.innerHTML = metricRows
+    .map(
+      ({ label, value }) => `
       <tr>
-        <td>${escapeHtml(p)}</td>
-        <td class="td-money">${formatAmountWholeRubles(balances[p])}</td>
-        <td class="td-money">${formatAmountWholeRubles(turnover[p].today)}</td>
-        <td class="td-money">${formatAmountWholeRubles(turnover[p].m1)}</td>
-        <td class="td-money">${formatAmountWholeRubles(turnover[p].m2)}</td>
-        <td class="td-money">${formatAmountWholeRubles(turnover[p].m3)}</td>
+        <th scope="row">${escapeHtml(label)}</th>
+        ${PARTICIPANTS.map(
+          (p) =>
+            `<td class="td-money">${formatAmountWholeRubles(value(p))}</td>`
+        ).join("")}
       </tr>
-    `;
-  }).join("");
+    `
+    )
+    .join("");
 }
 
 export async function initBalanceSection() {

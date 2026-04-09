@@ -1534,8 +1534,17 @@ h2 {
   max-width: 420px;
 }
 
-#balanceTable { min-width: 200px; }
-#balanceTable th, #balanceTable td { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
+#balanceTable th,
+#balanceTable td {
+  padding: 8px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+#balanceTable thead th:first-child,
+#balanceTable tbody th {
+  font-weight: 600;
+  text-align: left;
+}
 #balanceTable th:first-child,
 #balanceTable td:first-child {
   padding-right: 0;
@@ -2443,10 +2452,10 @@ table {
   min-width: 900px;
 }
 
-/* Баланс: фиксируем ширину как в требованиях */
+/* Баланс: строки — показатели, столбцы — участники */
 #balanceTable {
-  width: 200px;
-  min-width: 200px;
+  width: 100%;
+  min-width: 360px;
 }
 
 /* Маршрутный лист: компактно под мобильный просмотр */
