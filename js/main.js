@@ -69,6 +69,15 @@ const HASH_SECTION_IDS = new Set([
 function applyHashSection() {
   const h = window.location.hash.replace(/^#/, "");
   if (!h) return;
+  if (h === "orders-excel") {
+    if (!canAccessSection("orders-excel")) {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      return;
+    }
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    void import("./ordersExcelExport.js").then((m) => m.exportOrdersToExcel());
+    return;
+  }
   if (!HASH_SECTION_IDS.has(h) || !canAccessSection(h)) return;
   switchSection(h);
 }

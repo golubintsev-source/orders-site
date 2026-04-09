@@ -904,7 +904,7 @@ function syncOrdersScrollPositions() {
   ordersCopyScrollBottomToTop();
 }
 
-function getFilteredOrders() {
+export function getFilteredOrders() {
   let list = state.allOrders;
 
   if (isUserLite()) {
@@ -1086,6 +1086,90 @@ function paidBadge(order) {
   if (paid) return '<span class="status-paid">да</span>';
   if (isOplahenoPaidNoAlert(order)) return '<span class="paid-no-alert">нет</span>';
   return '<span class="status-value">нет</span>';
+}
+
+/** Заголовки столбцов экспорта (как в таблице «Заказы», без колонки удаления). */
+export const ORDERS_EXCEL_HEADERS = [
+  "Номер",
+  "Дата",
+  "Клиент",
+  "Опл.",
+  "Адрес",
+  "Описание",
+  "Статус",
+  "Стоимость",
+  "Предоплата",
+  "Кому",
+  "Остаток",
+  "Кому",
+  "Отправка",
+  "Дата",
+  "Монтаж",
+  "м2",
+  "з/п",
+  "Оплатил",
+  "Откосы",
+  "Моск.",
+  "Конс.",
+  "Телефон",
+];
+
+/** Одна строка для Excel: те же значения, что видны в таблице (без HTML). */
+export function getOrderRowValuesForExcel(order) {
+  const statusDisplayText =
+    order.payment_status === "нет"
+      ? "Контакт с клиентом"
+      : (order.payment_status ?? "Контакт с клиентом");
+
+  let paidText = "";
+  if (order.amount != null && order.amount !== "") {
+    paidText = isOrderPaid(order) ? "да" : "нет";
+  }
+
+  const remainingStr =
+    order.remaining_amount != null && order.remaining_amount !== ""
+      ? formatAmount(order.remaining_amount)
+      : "";
+
+  const installationOn =
+    order.installation === true || order.installation === 1 || order.installation === "1";
+  const installationDateEmpty =
+    order.installation_date == null || String(order.installation_date).trim() === "";
+  const installationText =
+    installationOn && installationDateEmpty ? "есть" : formatDateShortRU(order.installation_date);
+
+  const revealsOn = order.reveals === true || order.reveals === 1 || order.reveals === "1";
+  const revealsDateEmpty =
+    order.reveals_date == null || String(order.reveals_date).trim() === "";
+  const revealsText =
+    revealsOn && revealsDateEmpty ? "есть" : formatDateShortRU(order.reveals_date);
+
+  return [
+    order.id != null ? formatOrderIdTypeChip(order.id, order.order_type) : "",
+    formatDateShortRU(order.order_date),
+    order.client ?? "",
+    paidText,
+    order.address ?? "",
+    order.description ?? "",
+    statusDisplayText,
+    order.amount != null && order.amount !== "" ? formatAmount(order.amount) : "",
+    order.prepayment != null && order.prepayment !== "" ? formatAmount(order.prepayment) : "",
+    order.prepayment_to ? String(order.prepayment_to) : "",
+    remainingStr,
+    order.remaining_to ? String(order.remaining_to) : "",
+    order.delivery ? String(order.delivery) : "",
+    formatDateShortRU(order.delivery_date),
+    installationText,
+    order.area_m2 != null && order.area_m2 !== "" ? String(order.area_m2) : "",
+    order.installer_payment_amount != null && order.installer_payment_amount !== ""
+      ? formatAmount(order.installer_payment_amount)
+      : "",
+    order.installer_payment_by ? String(order.installer_payment_by) : "",
+    revealsText,
+    order.mosquito_nets != null && order.mosquito_nets !== "" ? String(order.mosquito_nets) : "",
+    order.construction_count != null && order.construction_count !== "" ? String(order.construction_count) : "",
+    order.phone ?? "",
+  ];
 }
 
 export function renderOrders(orders) {

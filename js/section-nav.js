@@ -331,6 +331,18 @@ export function initSectionNavDropdown(options = {}) {
       item.addEventListener("click", () => {
         const id = item.dataset.section;
         if (!id) return;
+        if (id === "orders-excel") {
+          if (!canAccessSection("orders-excel")) return;
+          const hasOrdersTable = Boolean(document.getElementById("ordersTable"));
+          if (!hasOrdersTable) {
+            window.location.href = "index.html#orders-excel";
+            closeSectionNavDropdown();
+            return;
+          }
+          void import("./ordersExcelExport.js").then((m) => m.exportOrdersToExcel());
+          closeSectionNavDropdown();
+          return;
+        }
         if (typeof onSectionItemSelect === "function") {
           onSectionItemSelect(id);
           closeSectionNavDropdown();
