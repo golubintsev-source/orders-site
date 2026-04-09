@@ -712,14 +712,14 @@
 
     <section id="section-route-sheet" class="content-section">
       <div class="card route-sheet-card">
-        <div class="route-sheet-dates">
-          <label class="route-sheet-date-field">
-            <span class="route-sheet-date-label">с</span>
-            <input type="date" id="routeSheetDateFrom" min="2000-01-01" max="2099-12-31" />
+        <div class="route-sheet-dates" role="group" aria-label="Период по дате отправки">
+          <label class="route-sheet-date-inline">
+            <span class="route-sheet-date-prefix">с</span>
+            <input type="date" id="routeSheetDateFrom" class="route-sheet-date-input" min="2000-01-01" max="2099-12-31" />
           </label>
-          <label class="route-sheet-date-field">
-            <span class="route-sheet-date-label">по</span>
-            <input type="date" id="routeSheetDateTo" min="2000-01-01" max="2099-12-31" />
+          <label class="route-sheet-date-inline">
+            <span class="route-sheet-date-prefix">по</span>
+            <input type="date" id="routeSheetDateTo" class="route-sheet-date-input" min="2000-01-01" max="2099-12-31" />
           </label>
         </div>
         <p id="routeSheetMessage" class="route-sheet-message"></p>
@@ -727,7 +727,7 @@
           <table id="routeSheetTableMain" class="route-sheet-table">
             <thead>
               <tr>
-                <th>Номер заказа</th>
+                <th>Заказ</th>
                 <th>Клиент</th>
                 <th>Адрес</th>
                 <th>Описание</th>
@@ -735,7 +735,7 @@
                 <th>Конст.</th>
                 <th>Монтаж</th>
                 <th>Откосы</th>
-                <th>Телефон</th>
+                <th class="route-sheet-col-phone">Телефон</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -747,11 +747,11 @@
           <table id="routeSheetTableShop" class="route-sheet-table">
             <thead>
               <tr>
-                <th>Номер заказа</th>
+                <th>Заказ</th>
                 <th>Клиент</th>
                 <th>Адрес</th>
                 <th>Описание</th>
-                <th>Телефон</th>
+                <th class="route-sheet-col-phone">Телефон</th>
               </tr>
             </thead>
             <tbody></tbody>

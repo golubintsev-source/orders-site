@@ -6,7 +6,7 @@ const MAIN_ORDER_TYPES = new Set(["Окна", "Подоконники", "Алл�
 const SHOP_TYPE = "Магазин";
 
 const HEADERS_MAIN = [
-  "Номер заказа",
+  "Заказ",
   "Клиент",
   "Адрес",
   "Описание",
@@ -17,7 +17,7 @@ const HEADERS_MAIN = [
   "Телефон",
 ];
 
-const HEADERS_SHOP = ["Номер заказа", "Клиент", "Адрес", "Описание", "Телефон"];
+const HEADERS_SHOP = ["Заказ", "Клиент", "Адрес", "Описание", "Телефон"];
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -111,7 +111,7 @@ function rowMainHtml(order) {
     <td>${konst}</td>
     <td>${escapeHtml(boolDaNet(order.installation))}</td>
     <td>${escapeHtml(boolDaNet(order.reveals))}</td>
-    <td>${escapeHtml(order.phone ?? "")}</td>
+    <td class="route-sheet-col-phone">${escapeHtml(order.phone ?? "")}</td>
   </tr>`;
 }
 
@@ -122,7 +122,7 @@ function rowShopHtml(order) {
     <td>${escapeHtml(order.client ?? "")}</td>
     <td>${escapeHtml(order.address ?? "")}</td>
     <td>${escapeHtml(order.description ?? "")}</td>
-    <td>${escapeHtml(order.phone ?? "")}</td>
+    <td class="route-sheet-col-phone">${escapeHtml(order.phone ?? "")}</td>
   </tr>`;
 }
 
