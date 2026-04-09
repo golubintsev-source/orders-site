@@ -2,6 +2,8 @@ export const state = {
   currentUser: null,
   currentRole: "user",
   editingOrderId: null,
+  /** режим только просмотра (меню «Посмотреть»); взаимно исключается с editingOrderId */
+  viewingOrderId: null,
   editingOrderDescription: null,
   initialPaymentStatus: null,
   /** снапшот числовых полей (сумм) при открытии заказа на редактирование */

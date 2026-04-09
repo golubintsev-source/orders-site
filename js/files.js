@@ -393,8 +393,13 @@ export async function renderExistingOrderFilesInForm(orderId) {
     return;
   }
 
+  const onDelete =
+    state.viewingOrderId != null && Number(state.viewingOrderId) === Number(orderId)
+      ? null
+      : removeOrderFileFromEditForm;
+
   for (const file of files) {
-    const row = await createOrderFileRowElement(file, orderId, removeOrderFileFromEditForm);
+    const row = await createOrderFileRowElement(file, orderId, onDelete);
     list.appendChild(row);
   }
 }
@@ -866,7 +871,7 @@ async function createOrderFileRowElement(file, orderId, onAdminDelete) {
     actions.appendChild(dlA);
   }
 
-  if (isAdmin()) {
+  if (isAdmin() && onAdminDelete) {
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "file-remove-btn";
@@ -1003,7 +1008,7 @@ export async function removeOrderFileFromEditForm(fileId, orderId) {
   const { applyClientFilter } = await import("./orders.js");
   applyClientFilter();
 
-  if (state.editingOrderId === orderId) {
+  if (state.editingOrderId === orderId || state.viewingOrderId === orderId) {
     await renderExistingOrderFilesInForm(orderId);
   }
 }

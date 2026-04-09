@@ -98,6 +98,12 @@ function updateOrdersTypeToggleVisibility(sectionId) {
 
 function labelForSection(sectionId) {
   if (sectionId === "new") {
+    if (state.viewingOrderId != null) {
+      const o = state.allOrders?.find((x) => Number(x.id) === Number(state.viewingOrderId));
+      const orderType = o?.order_type ?? document.getElementById("order_type")?.value ?? "";
+      const chip = formatOrderIdTypeChip(state.viewingOrderId, orderType);
+      return `Просмотр ${chip}`;
+    }
     if (!state.editingOrderId) return "Новый";
     const orderType = document.getElementById("order_type")?.value ?? "";
     const chip = formatOrderIdTypeChip(state.editingOrderId, orderType);

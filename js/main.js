@@ -1,6 +1,6 @@
 import { checkAuth, loadProfile } from "./auth.js";
 import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
-import { loadOrders, resetFormMode, editOrder, deleteOrder, applyOrderTypeSelectForRole } from "./orders.js";
+import { loadOrders, resetFormMode, editOrder, viewOrder, deleteOrder, applyOrderTypeSelectForRole } from "./orders.js";
 import { initCalculationsSection } from "./calculations.js";
 import { initBalanceSection } from "./balance.js";
 import { loadSettings } from "./settings.js";
@@ -20,6 +20,7 @@ import { canAccessSection } from "./roles.js";
 import { applyClientFilter } from "./orders.js";
 
 window.editOrder = editOrder;
+window.viewOrder = viewOrder;
 window.deleteOrder = deleteOrder;
 window.openFilesModal = openFilesModal;
 window.removeFile = removeFile;

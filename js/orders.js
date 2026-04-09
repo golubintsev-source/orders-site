@@ -1978,7 +1978,55 @@ export async function fillForm(order) {
   state.initialOrderSnapshot = JSON.parse(JSON.stringify(getFormData()));
 }
 
+/** Снимок disabled у полей формы заказа для режима «только просмотр». */
+let orderFormReadOnlyRestore = null;
+
+/**
+ * Все поля формы заказа только для чтения или снова редактируемые.
+ * Кнопки «Сохранить» скрываются отдельно в viewOrder.
+ */
+export function applyOrderFormReadOnly(readOnly) {
+  const formEl = document.getElementById("orderForm");
+  if (!formEl) return;
+
+  if (readOnly) {
+    if (orderFormReadOnlyRestore) {
+      orderFormReadOnlyRestore.forEach((wasDisabled, el) => {
+        el.disabled = wasDisabled;
+      });
+      orderFormReadOnlyRestore = null;
+    }
+    orderFormReadOnlyRestore = new Map();
+    formEl.querySelectorAll("input, select, textarea, button").forEach((el) => {
+      if (el.type === "hidden") return;
+      if (el.id === "submitBtn" || el.id === "submitBtnTop") return;
+      orderFormReadOnlyRestore.set(el, el.disabled);
+      el.disabled = true;
+    });
+    formEl.querySelectorAll(".order-form-date-calendar-btn").forEach((el) => {
+      el.dataset.orderFormReadonlyPe = el.style.pointerEvents || "";
+      el.style.pointerEvents = "none";
+    });
+    return;
+  }
+
+  if (orderFormReadOnlyRestore) {
+    orderFormReadOnlyRestore.forEach((wasDisabled, el) => {
+      el.disabled = wasDisabled;
+    });
+    orderFormReadOnlyRestore = null;
+  }
+  formEl.querySelectorAll(".order-form-date-calendar-btn").forEach((el) => {
+    el.style.pointerEvents = el.dataset.orderFormReadonlyPe || "";
+    delete el.dataset.orderFormReadonlyPe;
+  });
+  updateInstallerBlockByInstallationDate();
+  updatePaidField();
+}
+
 export function resetFormMode() {
+  state.viewingOrderId = null;
+  applyOrderFormReadOnly(false);
   state.editingOrderId = null;
   state.editingOrderDescription = null;
   state.initialPaymentStatus = null;
@@ -2044,6 +2092,57 @@ export function resetFormMode() {
 
   if (cancelEditBtn) cancelEditBtn.style.display = "inline-block";
   if (cancelEditBtnTop) cancelEditBtnTop.style.display = "inline-block";
+  if (submitBtn) submitBtn.style.display = "";
+  if (submitBtnTop) submitBtnTop.style.display = "";
+}
+
+/** Просмотр заказа: та же форма, что при редактировании, без изменения данных. */
+export async function viewOrder(orderId) {
+  state.editingOrderId = null;
+  state.viewingOrderId = orderId;
+
+  const { data, error } = await supabaseClient
+    .from("orders")
+    .select("*")
+    .eq("id", orderId)
+    .single();
+
+  if (error) {
+    console.error("Ошибка загрузки заявки:", error);
+    setMessage("Ошибка загрузки заявки", "#d32f2f");
+    state.viewingOrderId = null;
+    return;
+  }
+
+  if (isOrderHiddenFromUserLite(data)) {
+    setMessage("Нет доступа к заказам типа «Магазин»", "#d32f2f");
+    state.viewingOrderId = null;
+    return;
+  }
+
+  await fillForm(data);
+  applyOrderFormReadOnly(true);
+  setMessage("", "");
+
+  if (submitBtn) {
+    submitBtn.style.display = "none";
+    submitBtn.textContent = "Сохранить заказ";
+  }
+  if (submitBtnTop) {
+    submitBtnTop.style.display = "none";
+    submitBtnTop.textContent = "Сохранить заказ";
+  }
+  if (cancelEditBtn) cancelEditBtn.style.display = "none";
+  if (cancelEditBtnTop) cancelEditBtnTop.style.display = "none";
+
+  if (formTitle) {
+    formTitle.textContent = `Просмотр ${formatOrderIdTypeChip(orderId, data.order_type)}`;
+  }
+
+  switchSection("new");
+  refreshSectionNavLabel();
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 export async function editOrder(orderId) {
@@ -2051,6 +2150,9 @@ export async function editOrder(orderId) {
     setMessage("Недостаточно прав для редактирования заявок", "#d32f2f");
     return;
   }
+
+  state.viewingOrderId = null;
+  applyOrderFormReadOnly(false);
 
   const { data, error } = await supabaseClient
     .from("orders")
@@ -2079,8 +2181,14 @@ export async function editOrder(orderId) {
   await fillForm(data);
   setMessage("", "");
 
-  if (submitBtn) submitBtn.textContent = "Сохранить изменения";
-  if (submitBtnTop) submitBtnTop.textContent = "Сохранить изменения";
+  if (submitBtn) {
+    submitBtn.style.display = "";
+    submitBtn.textContent = "Сохранить изменения";
+  }
+  if (submitBtnTop) {
+    submitBtnTop.style.display = "";
+    submitBtnTop.textContent = "Сохранить изменения";
+  }
 
   if (formTitle) {
     formTitle.textContent = `Редактирование ${formatOrderIdTypeChip(orderId, data.order_type)}`;
@@ -2127,6 +2235,10 @@ export async function deleteOrder(orderId) {
 export async function submitOrderForm(event) {
   event.preventDefault();
   setOrderFormInvalidDateMessage(false);
+
+  if (state.viewingOrderId != null) {
+    return;
+  }
 
   if (!canMutateOrders()) {
     setMessage("Недостаточно прав для сохранения заявок", "#d32f2f");
