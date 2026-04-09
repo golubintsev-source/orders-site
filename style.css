@@ -1542,7 +1542,10 @@ h2 {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-#balanceTable thead th:first-child,
+#balanceTable thead th:first-child {
+  padding-left: 0;
+  padding-right: 4px;
+}
 #balanceTable tbody th {
   font-weight: 600;
   text-align: left;
@@ -1552,6 +1555,7 @@ h2 {
 #balanceTable thead th:not(:first-child) {
   padding-left: 1px;
   padding-right: 1px;
+  text-align: right;
 }
 
 #section-settings .settings-rate-row {
