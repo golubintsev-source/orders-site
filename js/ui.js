@@ -100,11 +100,16 @@ function openOrderIdActionsMenu(idTd) {
   const menu = document.getElementById("orderIdActionsMenu");
   if (!menu || !idTd) return;
 
-  closeOrderIdActionsMenu();
-
   const raw = idTd.getAttribute("data-order-id") || "";
   const orderId = raw ? Number(raw) : NaN;
   if (Number.isNaN(orderId)) return;
+
+  if (!menu.hidden && menu.dataset.currentOrderId === String(orderId)) {
+    closeOrderIdActionsMenu();
+    return;
+  }
+
+  closeOrderIdActionsMenu();
 
   const phoneRaw = (idTd.getAttribute("data-phone") || "").trim();
   const telHref = phoneRaw ? `tel:${phoneRaw.replace(/[^\d+]/g, "")}` : "";
