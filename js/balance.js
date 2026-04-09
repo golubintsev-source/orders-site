@@ -69,9 +69,10 @@ export async function loadBalance() {
   const turnover = Object.fromEntries(
     PARTICIPANTS.map((p) => [
       p,
-      { today: 0, m1: 0, m2: 0, m3: 0 },
+      { hour: 0, today: 0, m1: 0, m2: 0, m3: 0 },
     ])
   );
+  const hourAgoMs = Date.now() - 60 * 60 * 1000;
 
   const calcRes = await supabaseClient
     .from("calculations")
@@ -98,6 +99,17 @@ export async function loadBalance() {
           : dayKey === dayM2Key ? "m2"
             : dayKey === dayM3Key ? "m3"
               : null;
+
+    const rowTime = row.created_at ? new Date(row.created_at).getTime() : NaN;
+    if (Number.isFinite(rowTime) && rowTime >= hourAgoMs) {
+      if (row.from_place && Object.prototype.hasOwnProperty.call(turnover, row.from_place)) {
+        turnover[row.from_place].hour -= amount;
+      }
+      if (row.to_place && Object.prototype.hasOwnProperty.call(turnover, row.to_place)) {
+        turnover[row.to_place].hour += amount;
+      }
+    }
+
     if (!bucket) continue;
     if (row.from_place && Object.prototype.hasOwnProperty.call(turnover, row.from_place)) {
       turnover[row.from_place][bucket] -= amount;
@@ -119,6 +131,7 @@ export async function loadBalance() {
 
   const metricRows = [
     { label: "Сейчас", value: (p) => balances[p] },
+    { label: "Час", value: (p) => turnover[p].hour },
     { label: "Сегодня", value: (p) => turnover[p].today },
     { label: "С-1", value: (p) => turnover[p].m1 },
     { label: "С-2", value: (p) => turnover[p].m2 },
