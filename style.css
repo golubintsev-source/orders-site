@@ -223,17 +223,39 @@ h2 {
 }
 
 .section-nav-dropdown-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   padding: 10px 14px;
   font-size: 14px;
   font-weight: 700;
+  font-family: inherit;
+  line-height: 1.2;
   text-align: left;
   border: none;
   background: transparent;
   color: #374151;
   cursor: pointer;
   transition: background 0.15s;
+  box-sizing: border-box;
+}
+
+.section-nav-dropdown-item-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.section-nav-dropdown-item-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: #6b7280;
+}
+
+.section-nav-dropdown-item:hover .section-nav-dropdown-item-icon,
+.section-nav-dropdown-item:focus-visible .section-nav-dropdown-item-icon {
+  color: #111827;
 }
 
 .section-nav-dropdown-item:hover {
