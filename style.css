@@ -2766,6 +2766,10 @@ th {
   white-space: nowrap;
 }
 
+#ordersTable .th-paid-header {
+  white-space: nowrap;
+}
+
 #ordersTable .th-status-label {
   flex-shrink: 0;
 }

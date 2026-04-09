@@ -479,6 +479,9 @@
       <div id="orderTypeFilterDropdown" class="status-filter-dropdown" role="dialog" aria-label="Фильтр по типу заказа" style="display: none;">
         <div class="status-filter-dropdown-inner" id="orderTypeFilterCheckboxes"></div>
       </div>
+      <div id="paidFilterDropdown" class="status-filter-dropdown" role="dialog" aria-label="Фильтр по оплате" style="display: none;">
+        <div class="status-filter-dropdown-inner" id="paidFilterCheckboxes"></div>
+      </div>
       <div id="ordersTableScrollTop" class="orders-table-scroll-top" aria-hidden="true">
         <div id="ordersTableScrollSpacer" class="orders-table-scroll-spacer"></div>
       </div>
@@ -511,7 +514,14 @@
                   <span class="th-status-label">Клиент</span>
                 </div>
               </th>
-              <th class="th-paid">Опл.</th>
+              <th class="th-paid th-paid-header">
+                <div class="th-status-header-inner">
+                  <span class="th-status-label">Опл.</span>
+                  <button type="button" class="status-filter-btn paid-filter-btn" id="paidFilterBtn" title="Фильтр по оплате" aria-haspopup="true" aria-expanded="false">
+                    <svg class="status-filter-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                  </button>
+                </div>
+              </th>
               <th class="th-orders-col-150">
                 <div class="th-status-header-inner">
                   <span class="th-status-label">Адрес</span>

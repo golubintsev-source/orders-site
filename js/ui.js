@@ -28,6 +28,7 @@ import {
   applyClientFilter,
   initStatusFilter,
   initOrderTypeFilter,
+  initPaidFilter,
   resetFormMode,
   submitOrderForm,
   updatePaidField,
@@ -468,6 +469,7 @@ export function bindUIEvents() {
 
   initStatusFilter();
   initOrderTypeFilter();
+  initPaidFilter();
 
   // "О" и "М" переключатели справа от заголовка "Заказы".
   // Они управляют фильтром по типу заказов в таблице.

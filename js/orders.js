@@ -82,6 +82,9 @@ const STATUS_OPTIONS = [
   "Заказ закрыт",
 ];
 
+/** Значения фильтра колонки «Опл.» (да / нет / без указанной суммы заказа). */
+const PAID_FILTER_OPTIONS = ["да", "нет", "Без суммы"];
+
 function normalizeStatus(val) {
   if (val === "нет" || val === "оплачен" || val == null || val === "") return "Контакт с клиентом";
   return val;
@@ -919,6 +922,10 @@ function getFilteredOrders() {
     list = list.filter((order) => orderMatchesOrderTypeKeys(order, state.orderTypeFilterSelected));
   }
 
+  if (state.paidFilterSelected && state.paidFilterSelected.length > 0) {
+    list = list.filter((order) => state.paidFilterSelected.includes(paidFilterCategory(order)));
+  }
+
   const query = clientSearch?.value.trim().toLowerCase() || "";
   if (query) {
     list = list.filter((order) => {
@@ -1019,6 +1026,12 @@ function isOrderPaid(order) {
   const paidByRemainingAmountZero = remainingAmount != null && Math.abs(remainingAmount) < 1e-9;
 
   return paidByRemainingTo || paidByRemainingAmountZero;
+}
+
+/** Категория для фильтра «Опл.» (как в ячейке: да / нет / пусто при отсутствии суммы). */
+function paidFilterCategory(order) {
+  if (order.amount == null || order.amount === "") return "Без суммы";
+  return isOrderPaid(order) ? "да" : "нет";
 }
 
 function isRemainingAmountZero(order) {
@@ -1227,6 +1240,51 @@ function closeOrderTypeFilterDropdown() {
   if (btn) btn.setAttribute("aria-expanded", "false");
 }
 
+function closePaidFilterDropdown() {
+  const btn = document.getElementById("paidFilterBtn");
+  const dropdown = document.getElementById("paidFilterDropdown");
+  if (dropdown) dropdown.style.display = "none";
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
+function renderPaidFilterDropdown() {
+  const container = document.getElementById("paidFilterCheckboxes");
+  if (!container) return;
+  const allSelected = !state.paidFilterSelected || state.paidFilterSelected.length === 0;
+  const allHtml = `<label class="status-filter-item status-filter-all"><input type="checkbox" data-paid-all="true" ${allSelected ? "checked" : ""}> Все</label>`;
+  const optionsHtml = PAID_FILTER_OPTIONS.map((value) => {
+    const checked = allSelected || state.paidFilterSelected.includes(value);
+    return `<label class="status-filter-item"><input type="checkbox" data-paid="${escapeAttr(value)}" ${checked ? "checked" : ""}> ${escapeHtml(value)}</label>`;
+  }).join("");
+  container.innerHTML = allHtml + optionsHtml;
+  container.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.addEventListener("change", onPaidFilterChange);
+  });
+}
+
+function onPaidFilterChange(e) {
+  const container = document.getElementById("paidFilterCheckboxes");
+  if (!container) return;
+  const target = e.target;
+  const allCb = container.querySelector('input[data-paid-all="true"]');
+  const paidCbs = container.querySelectorAll("input[type=checkbox][data-paid]");
+
+  if (target === allCb) {
+    const checked = allCb.checked;
+    paidCbs.forEach((cb) => {
+      cb.checked = checked;
+    });
+    state.paidFilterSelected = checked ? [] : [];
+    applyFiltersAndRender();
+    return;
+  }
+
+  const checkedValues = Array.from(paidCbs).filter((cb) => cb.checked).map((el) => el.dataset.paid);
+  state.paidFilterSelected = checkedValues.length === PAID_FILTER_OPTIONS.length ? [] : checkedValues;
+  if (allCb) allCb.checked = checkedValues.length === PAID_FILTER_OPTIONS.length;
+  applyFiltersAndRender();
+}
+
 let tableFilterDocClickBound = false;
 
 function bindTableFilterDocClose() {
@@ -1235,6 +1293,7 @@ function bindTableFilterDocClose() {
   document.addEventListener("click", () => {
     closeStatusFilterDropdown();
     closeOrderTypeFilterDropdown();
+    closePaidFilterDropdown();
   });
 }
 
@@ -1310,10 +1369,11 @@ export function initStatusFilter() {
       closeStatusFilterDropdown();
     } else {
       closeOrderTypeFilterDropdown();
+      closePaidFilterDropdown();
       renderStatusFilterDropdown();
       const rect = getFilterDropdownAnchorRect(
         btn,
-        "#ordersTableStickyHeadTable thead button.status-filter-btn:not(.order-type-filter-btn)"
+        "#ordersTableStickyHeadTable thead button.status-filter-btn:not(.order-type-filter-btn):not(.paid-filter-btn)"
       );
       dropdown.style.position = "fixed";
       dropdown.style.zIndex = "1200";
@@ -1341,10 +1401,43 @@ export function initOrderTypeFilter() {
       closeOrderTypeFilterDropdown();
     } else {
       closeStatusFilterDropdown();
+      closePaidFilterDropdown();
       renderOrderTypeFilterDropdown();
       const rect = getFilterDropdownAnchorRect(
         btn,
         "#ordersTableStickyHeadTable thead button.order-type-filter-btn"
+      );
+      dropdown.style.position = "fixed";
+      dropdown.style.zIndex = "1200";
+      dropdown.style.top = rect.bottom + 4 + "px";
+      dropdown.style.left = rect.left + "px";
+      dropdown.style.display = "block";
+      btn.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  bindTableFilterDocClose();
+
+  dropdown.addEventListener("click", (e) => e.stopPropagation());
+}
+
+export function initPaidFilter() {
+  const btn = document.getElementById("paidFilterBtn");
+  const dropdown = document.getElementById("paidFilterDropdown");
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = dropdown.style.display === "block";
+    if (isOpen) {
+      closePaidFilterDropdown();
+    } else {
+      closeStatusFilterDropdown();
+      closeOrderTypeFilterDropdown();
+      renderPaidFilterDropdown();
+      const rect = getFilterDropdownAnchorRect(
+        btn,
+        "#ordersTableStickyHeadTable thead button.paid-filter-btn"
       );
       dropdown.style.position = "fixed";
       dropdown.style.zIndex = "1200";
