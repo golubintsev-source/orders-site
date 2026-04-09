@@ -46,6 +46,7 @@ export function canAccessSection(sectionId) {
   if (!isUserLite()) return true;
   return (
     sectionId !== "balance" &&
+    sectionId !== "route-sheet" &&
     sectionId !== "settings" &&
     sectionId !== "calculations"
   );
@@ -56,5 +57,10 @@ export function isSectionHiddenFromNav(sectionId) {
   if (sectionId === "settings" && !isAdmin()) return true;
   if (sectionId === "orders-excel" && isUserLite()) return true;
   if (!isUserLite()) return false;
-  return sectionId === "balance" || sectionId === "settings" || sectionId === "calculations";
+  return (
+    sectionId === "balance" ||
+    sectionId === "route-sheet" ||
+    sectionId === "settings" ||
+    sectionId === "calculations"
+  );
 }

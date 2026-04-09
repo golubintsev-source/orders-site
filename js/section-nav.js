@@ -1,5 +1,6 @@
 import { state } from "./state.js";
 import { loadBalance } from "./balance.js";
+import { loadRouteSheet } from "./route-sheet.js";
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
@@ -60,6 +61,7 @@ const SECTION_LABELS = {
   "tasks-all": "Все задачи",
   "changes-all": "Все изменения",
   balance: "Баланс",
+  "route-sheet": "Маршрутный лист",
   settings: "Настройки",
 };
 
@@ -75,6 +77,7 @@ const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "changes-all",
   "order-tasks",
   "balance",
+  "route-sheet",
   "settings",
 ]);
 
@@ -259,6 +262,9 @@ export function switchSection(sectionId) {
 
   if (sectionId === "balance") {
     loadBalance();
+  }
+  if (sectionId === "route-sheet") {
+    loadRouteSheet();
   }
   if (sectionId === "calculations") {
     void import("./calculations.js").then((m) => m.loadCalculations());

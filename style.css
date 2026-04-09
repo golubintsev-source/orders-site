@@ -246,8 +246,9 @@ h2 {
   background: #eff6ff;
 }
 
-/* user_lite: пункты Баланс, Заказы в Excel, Настройки, Расчёты не показываются (дублирует логику hidden в JS) */
+/* user_lite: пункты Баланс, Маршрутный лист, Заказы в Excel, Настройки, Расчёты не показываются (дублирует логику hidden в JS) */
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="balance"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="route-sheet"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="settings"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="calculations"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="orders-excel"] {
@@ -2424,6 +2425,73 @@ table {
 #balanceTable {
   width: 200px;
   min-width: 200px;
+}
+
+/* Маршрутный лист */
+.route-sheet-card {
+  padding-top: 4px;
+}
+
+.route-sheet-dates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 24px;
+  margin-bottom: 12px;
+}
+
+.route-sheet-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.route-sheet-date-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.route-sheet-date-field input[type="date"] {
+  min-height: 40px;
+  padding: 8px 10px;
+  font-size: 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.route-sheet-message {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: #b45309;
+  min-height: 1.2em;
+}
+
+.route-sheet-table-title {
+  margin: 22px 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.route-sheet-table-wrap {
+  margin-bottom: 10px;
+}
+
+.route-sheet-table {
+  min-width: 720px;
+}
+
+#routeSheetTableShop.route-sheet-table {
+  min-width: 560px;
+}
+
+.route-sheet-export-btn {
+  margin-bottom: 4px;
 }
 
 th,

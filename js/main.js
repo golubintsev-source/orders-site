@@ -3,6 +3,7 @@ import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
 import { loadOrders, resetFormMode, editOrder, viewOrder, deleteOrder, applyOrderTypeSelectForRole } from "./orders.js";
 import { initCalculationsSection } from "./calculations.js";
 import { initBalanceSection } from "./balance.js";
+import { initRouteSheetSection } from "./route-sheet.js";
 import { loadSettings } from "./settings.js";
 import { initOrderTasksSection } from "./tasks.js";
 import { initAllChangesSection } from "./all-changes.js";
@@ -48,6 +49,7 @@ async function init() {
       await initCalculationsSection();
     }
     await initBalanceSection();
+    initRouteSheetSection();
 
     applyHashSection();
     applyPendingOrdersSearchFromHistory();
@@ -64,6 +66,7 @@ const HASH_SECTION_IDS = new Set([
   "tasks-all",
   "changes-all",
   "balance",
+  "route-sheet",
   "settings",
 ]);
 

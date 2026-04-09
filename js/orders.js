@@ -66,6 +66,8 @@ export async function loadOrders() {
   } else if (getCurrentSectionId() === "order-tasks") {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadOrderTasks());
+  } else if (getCurrentSectionId() === "route-sheet") {
+    void import("./route-sheet.js").then((m) => m.loadRouteSheet());
   }
 }
 

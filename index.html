@@ -49,6 +49,7 @@
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="tasks-all">Все задачи</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="changes-all">Все изменения</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="balance">Баланс</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="route-sheet">Маршрутный лист</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="orders-excel">Заказы в Excel</button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="settings">Настройки</button>
             <div class="section-nav-dropdown-footer">
@@ -709,6 +710,57 @@
       </div>
     </section>
 
+    <section id="section-route-sheet" class="content-section">
+      <div class="card route-sheet-card">
+        <div class="route-sheet-dates">
+          <label class="route-sheet-date-field">
+            <span class="route-sheet-date-label">с</span>
+            <input type="date" id="routeSheetDateFrom" min="2000-01-01" max="2099-12-31" />
+          </label>
+          <label class="route-sheet-date-field">
+            <span class="route-sheet-date-label">по</span>
+            <input type="date" id="routeSheetDateTo" min="2000-01-01" max="2099-12-31" />
+          </label>
+        </div>
+        <p id="routeSheetMessage" class="route-sheet-message"></p>
+        <div class="table-wrap route-sheet-table-wrap">
+          <table id="routeSheetTableMain" class="route-sheet-table">
+            <thead>
+              <tr>
+                <th>Номер заказа</th>
+                <th>Клиент</th>
+                <th>Адрес</th>
+                <th>Описание</th>
+                <th>Моск.</th>
+                <th>Конст.</th>
+                <th>Монтаж</th>
+                <th>Откосы</th>
+                <th>Телефон</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button type="button" id="routeSheetExportMainBtn" class="btn-primary route-sheet-export-btn">Выгрузить в Excel</button>
+        <h3 class="route-sheet-table-title">Магазин</h3>
+        <div class="table-wrap route-sheet-table-wrap">
+          <table id="routeSheetTableShop" class="route-sheet-table">
+            <thead>
+              <tr>
+                <th>Номер заказа</th>
+                <th>Клиент</th>
+                <th>Адрес</th>
+                <th>Описание</th>
+                <th>Телефон</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button type="button" id="routeSheetExportShopBtn" class="btn-primary route-sheet-export-btn">Выгрузить в Excel</button>
+      </div>
+    </section>
+
     <section id="section-balance" class="content-section">
       <div class="card">
         <div class="table-wrap">
@@ -811,6 +863,6 @@
   <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=21"></script>
+  <script type="module" src="./js/main.js?v=22"></script>
 </body>
 </html>
