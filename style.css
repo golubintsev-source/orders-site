@@ -2539,6 +2539,10 @@ table {
 
 .route-sheet-export-btn {
   margin-bottom: 2px;
+  padding: 5px 10px;
+  font-size: 12px;
+  line-height: 1.25;
+  border-radius: 8px;
 }
 
 th,
