@@ -1534,24 +1534,24 @@ h2 {
   max-width: 420px;
 }
 
+/* Баланс: максимально узкие столбцы участников под мобильный экран */
 #balanceTable th,
 #balanceTable td {
-  padding: 8px 10px;
-  font-size: 13px;
+  padding: 3px 1px;
+  font-size: 12px;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 #balanceTable thead th:first-child,
 #balanceTable tbody th {
   font-weight: 600;
   text-align: left;
-}
-#balanceTable th:first-child,
-#balanceTable td:first-child {
-  padding-right: 0;
-}
-#balanceTable th:nth-child(2),
-#balanceTable td:nth-child(2) {
   padding-left: 0;
+  padding-right: 4px;
+}
+#balanceTable thead th:not(:first-child) {
+  padding-left: 1px;
+  padding-right: 1px;
 }
 
 #section-settings .settings-rate-row {
@@ -2452,10 +2452,11 @@ table {
   min-width: 900px;
 }
 
-/* Баланс: строки — показатели, столбцы — участники */
+/* Баланс: строки — показатели, столбцы — участники; без растягивания столбцов на всю ширину карточки */
 #balanceTable {
-  width: 100%;
-  min-width: 360px;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
 }
 
 /* Маршрутный лист: компактно под мобильный просмотр */
