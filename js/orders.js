@@ -2111,6 +2111,15 @@ export async function deleteOrder(orderId) {
     return;
   }
 
+  if (state.currentUser?.email) {
+    const { error: histError } = await supabaseClient.from("order_history").insert([
+      { order_id: orderId, user_email: state.currentUser.email, comment: "Заявка удалена" },
+    ]);
+    if (histError) {
+      console.error("Ошибка записи в историю изменений:", histError);
+    }
+  }
+
   setMessage(`Заявка #${orderId} удалена`, "");
   await loadOrders();
 }
