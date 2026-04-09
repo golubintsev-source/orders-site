@@ -1300,16 +1300,16 @@ h2 {
 /* Все изменения: override глобального table { width:100%; min-width:900px } — иначе колонки растягиваются пустотой */
 #allChangesTable {
   width: 100%;
-  table-layout: fixed;
+  table-layout: auto;
   min-width: 0 !important;
   border-collapse: collapse;
 }
-/* Первые три колонки — только по тексту; четвёртая забирает остаток ширины */
+/* Явные ширины для iOS Safari: width:0 у col при fixed-layout даёт наложение текста */
 #allChangesTable col.all-changes-col-compact {
-  width: 0;
+  width: 1%;
 }
 #allChangesTable col.all-changes-col-fill {
-  width: 100%;
+  width: auto;
 }
 /* Между соседними колонками зазор 3px: справа 3px, слева у следующей 0 */
 #allChangesTable thead th:nth-child(1),
@@ -1350,10 +1350,12 @@ h2 {
 #allChangesTable td {
   font-size: 13px;
   vertical-align: top;
+  line-height: 1.35;
 }
 #allChangesTable .all-changes-text-cell {
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: anywhere;
+  word-break: normal;
   min-width: 0;
 }
 
