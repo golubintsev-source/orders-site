@@ -2282,6 +2282,11 @@ button:active {
     overflow-x: hidden;
   }
 
+  /* Отступ под шапку, вынесенную из потока (position: fixed); только если есть .topbar */
+  .container:has(.topbar) {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
+  }
+
   /* Раздел «Заказы»: ширина как на ПК; колонка таблицы — на всю высоту под topbar (flex, без урезания max-height). */
   .container:has(#section-all.content-section.active) {
     max-width: 1550px;
@@ -2321,14 +2326,27 @@ button:active {
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Шапка с лупой, разделом и выходом — закреплена при прокрутке страницы (z-index ниже модалок и дропдауна разделов) */
+  /*
+   * Шапка с лупой, разделом и выходом — фиксирована к верху экрана.
+   * position: sticky на iOS часто не срабатывает, если у предков overflow-x: hidden (scroll containment).
+   */
   .topbar {
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 980;
+    width: 100%;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 0;
+    box-sizing: border-box;
     background: #f5f7fb;
     padding-top: max(6px, env(safe-area-inset-top, 0px));
     padding-bottom: 6px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
   }
 
@@ -3603,9 +3621,17 @@ th {
   background: #e5e7eb;
 }
 
-/* iPhone: не даём max-width:768 перезаписать верхний отступ — он в закреплённой .topbar (safe-area) */
+/*
+ * iPhone: горизонтальные отступы шапки как у .container (12px).
+ * После @media (max-width: 768px) сокращение padding перезаписывает padding-top — задаём снова под фикс. шапку.
+ */
 @media (max-width: 768px) and (hover: none) and (pointer: coarse) {
-  .container {
-    padding-top: 0;
+  .topbar {
+    padding-left: max(12px, env(safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right, 0px));
+  }
+
+  .container:has(.topbar) {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
   }
 }
