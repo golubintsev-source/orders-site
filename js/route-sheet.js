@@ -4,6 +4,8 @@ import { formatOrderIdTypeChip } from "./format.js";
 
 const MAIN_ORDER_TYPES = new Set(["Окна", "Подоконники", "Аллюминий", "Сетки/мелочь"]);
 const SHOP_TYPE = "Магазин";
+const DELIVERY_SHIP = "Доставка";
+const DELIVERY_PICKUP = "Самовывоз";
 
 const HEADERS_MAIN = [
   "Заказ",
@@ -88,6 +90,10 @@ function filterMainOrders(orders, fromKey, toKey) {
     .sort(sortByDeliveryThenId);
 }
 
+function filterMainOrdersByShipment(orders, fromKey, toKey, shipment) {
+  return filterMainOrders(orders, fromKey, toKey).filter((o) => (o.delivery || "").trim() === shipment);
+}
+
 function filterShopOrders(orders, fromKey, toKey) {
   return orders
     .filter((o) => (o.order_type || "").trim() === SHOP_TYPE && isInDateRange(o, fromKey, toKey))
@@ -133,20 +139,23 @@ function rowShopHtml(order) {
 
 export function loadRouteSheet() {
   const msgEl = document.getElementById("routeSheetMessage");
-  const tbodyMain = document.querySelector("#routeSheetTableMain tbody");
+  const tbodyDelivery = document.querySelector("#routeSheetTableDelivery tbody");
+  const tbodyPickup = document.querySelector("#routeSheetTablePickup tbody");
   const tbodyShop = document.querySelector("#routeSheetTableShop tbody");
-  if (!tbodyMain || !tbodyShop) return;
+  if (!tbodyDelivery || !tbodyPickup || !tbodyShop) return;
 
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid) {
     if (msgEl) msgEl.textContent = "Укажите даты «с» и «по» в формате ГГГГ-ММ-ДД.";
-    tbodyMain.innerHTML = "";
+    tbodyDelivery.innerHTML = "";
+    tbodyPickup.innerHTML = "";
     tbodyShop.innerHTML = "";
     return;
   }
   if (fromKey > toKey) {
     if (msgEl) msgEl.textContent = "Дата «с» не может быть позже даты «по».";
-    tbodyMain.innerHTML = "";
+    tbodyDelivery.innerHTML = "";
+    tbodyPickup.innerHTML = "";
     tbodyShop.innerHTML = "";
     return;
   }
@@ -154,10 +163,12 @@ export function loadRouteSheet() {
   if (msgEl) msgEl.textContent = "";
 
   const orders = ordersVisibleOnRouteSheet();
-  const main = filterMainOrders(orders, fromKey, toKey);
+  const deliveryRows = filterMainOrdersByShipment(orders, fromKey, toKey, DELIVERY_SHIP);
+  const pickupRows = filterMainOrdersByShipment(orders, fromKey, toKey, DELIVERY_PICKUP);
   const shop = filterShopOrders(orders, fromKey, toKey);
 
-  tbodyMain.innerHTML = main.map(rowMainHtml).join("");
+  tbodyDelivery.innerHTML = deliveryRows.map(rowMainHtml).join("");
+  tbodyPickup.innerHTML = pickupRows.map(rowMainHtml).join("");
   tbodyShop.innerHTML = shop.map(rowShopHtml).join("");
 }
 
@@ -223,12 +234,20 @@ function rowShopValues(order) {
   ];
 }
 
-export function exportRouteSheetMainExcel() {
+export function exportRouteSheetDeliveryExcel() {
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid || fromKey > toKey) return;
-  const main = filterMainOrders(ordersVisibleOnRouteSheet(), fromKey, toKey);
-  const rows = main.map(rowMainValues);
-  exportSheet(HEADERS_MAIN, rows, "Маршрут", "marshrutnyy_list");
+  const list = filterMainOrdersByShipment(ordersVisibleOnRouteSheet(), fromKey, toKey, DELIVERY_SHIP);
+  const rows = list.map(rowMainValues);
+  exportSheet(HEADERS_MAIN, rows, "Доставка", "marshrutnyy_list_dostavka");
+}
+
+export function exportRouteSheetPickupExcel() {
+  const { fromKey, toKey, valid } = getRangeFromDom();
+  if (!valid || fromKey > toKey) return;
+  const list = filterMainOrdersByShipment(ordersVisibleOnRouteSheet(), fromKey, toKey, DELIVERY_PICKUP);
+  const rows = list.map(rowMainValues);
+  exportSheet(HEADERS_MAIN, rows, "Самовывоз", "marshrutnyy_list_samovyvoz");
 }
 
 export function exportRouteSheetShopExcel() {
@@ -257,11 +276,16 @@ export function initRouteSheetSection() {
     toEl.addEventListener("change", onChange);
   }
 
-  const mainBtn = document.getElementById("routeSheetExportMainBtn");
+  const deliveryBtn = document.getElementById("routeSheetExportDeliveryBtn");
+  const pickupBtn = document.getElementById("routeSheetExportPickupBtn");
   const shopBtn = document.getElementById("routeSheetExportShopBtn");
-  if (mainBtn && !mainBtn.dataset.routeSheetBound) {
-    mainBtn.dataset.routeSheetBound = "1";
-    mainBtn.addEventListener("click", () => exportRouteSheetMainExcel());
+  if (deliveryBtn && !deliveryBtn.dataset.routeSheetBound) {
+    deliveryBtn.dataset.routeSheetBound = "1";
+    deliveryBtn.addEventListener("click", () => exportRouteSheetDeliveryExcel());
+  }
+  if (pickupBtn && !pickupBtn.dataset.routeSheetBound) {
+    pickupBtn.dataset.routeSheetBound = "1";
+    pickupBtn.addEventListener("click", () => exportRouteSheetPickupExcel());
   }
   if (shopBtn && !shopBtn.dataset.routeSheetBound) {
     shopBtn.dataset.routeSheetBound = "1";

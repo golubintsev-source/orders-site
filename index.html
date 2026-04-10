@@ -750,8 +750,9 @@
           </label>
         </div>
         <p id="routeSheetMessage" class="route-sheet-message"></p>
+        <h3 class="route-sheet-table-title">Доставка</h3>
         <div class="table-wrap route-sheet-table-wrap">
-          <table id="routeSheetTableMain" class="route-sheet-table">
+          <table id="routeSheetTableDelivery" class="route-sheet-table">
             <thead>
               <tr>
                 <th>Заказ</th>
@@ -768,7 +769,27 @@
             <tbody></tbody>
           </table>
         </div>
-        <button type="button" id="routeSheetExportMainBtn" class="btn-primary route-sheet-export-btn">Выгрузить в Excel</button>
+        <button type="button" id="routeSheetExportDeliveryBtn" class="btn-primary route-sheet-export-btn">Выгрузить в Excel</button>
+        <h3 class="route-sheet-table-title">Самовывоз</h3>
+        <div class="table-wrap route-sheet-table-wrap">
+          <table id="routeSheetTablePickup" class="route-sheet-table">
+            <thead>
+              <tr>
+                <th>Заказ</th>
+                <th>Клиент</th>
+                <th>Адрес</th>
+                <th>Описание</th>
+                <th>Моск.</th>
+                <th>Конст.</th>
+                <th>Монтаж</th>
+                <th>Откосы</th>
+                <th class="route-sheet-col-phone">Телефон</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button type="button" id="routeSheetExportPickupBtn" class="btn-primary route-sheet-export-btn">Выгрузить в Excel</button>
         <div id="routeSheetShopSection" class="route-sheet-shop-section">
           <h3 class="route-sheet-table-title">Магазин</h3>
           <div class="table-wrap route-sheet-table-wrap">
