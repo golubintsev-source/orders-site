@@ -1,5 +1,5 @@
 import { state } from "./state.js";
-import { isUserLite } from "./roles.js";
+import { isOrderHiddenFromUserLite, isUserLite } from "./roles.js";
 import { formatOrderIdTypeChip } from "./format.js";
 
 const MAIN_ORDER_TYPES = new Set(["Окна", "Подоконники", "Аллюминий", "Сетки/мелочь"]);
@@ -94,6 +94,11 @@ function filterShopOrders(orders, fromKey, toKey) {
     .sort(sortByDeliveryThenId);
 }
 
+/** Как в таблице заказов: user_lite не видит тип «Магазин». */
+function ordersVisibleOnRouteSheet() {
+  return (state.allOrders || []).filter((o) => !isOrderHiddenFromUserLite(o));
+}
+
 function rowMainHtml(order) {
   const chip = formatOrderIdTypeChip(order.id, order.order_type);
   const mosk =
@@ -127,8 +132,6 @@ function rowShopHtml(order) {
 }
 
 export function loadRouteSheet() {
-  if (isUserLite()) return;
-
   const msgEl = document.getElementById("routeSheetMessage");
   const tbodyMain = document.querySelector("#routeSheetTableMain tbody");
   const tbodyShop = document.querySelector("#routeSheetTableShop tbody");
@@ -150,7 +153,7 @@ export function loadRouteSheet() {
 
   if (msgEl) msgEl.textContent = "";
 
-  const orders = state.allOrders || [];
+  const orders = ordersVisibleOnRouteSheet();
   const main = filterMainOrders(orders, fromKey, toKey);
   const shop = filterShopOrders(orders, fromKey, toKey);
 
@@ -223,7 +226,7 @@ function rowShopValues(order) {
 export function exportRouteSheetMainExcel() {
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid || fromKey > toKey) return;
-  const main = filterMainOrders(state.allOrders || [], fromKey, toKey);
+  const main = filterMainOrders(ordersVisibleOnRouteSheet(), fromKey, toKey);
   const rows = main.map(rowMainValues);
   exportSheet(HEADERS_MAIN, rows, "Маршрут", "marshrutnyy_list");
 }
@@ -231,13 +234,14 @@ export function exportRouteSheetMainExcel() {
 export function exportRouteSheetShopExcel() {
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid || fromKey > toKey) return;
-  const shop = filterShopOrders(state.allOrders || [], fromKey, toKey);
+  const shop = filterShopOrders(ordersVisibleOnRouteSheet(), fromKey, toKey);
   const rows = shop.map(rowShopValues);
   exportSheet(HEADERS_SHOP, rows, "Магазин", "marshrutnyy_list_magazin");
 }
 
 export function initRouteSheetSection() {
-  if (isUserLite()) return;
+  const shopSection = document.getElementById("routeSheetShopSection");
+  if (shopSection) shopSection.hidden = isUserLite();
 
   const fromEl = document.getElementById("routeSheetDateFrom");
   const toEl = document.getElementById("routeSheetDateTo");
