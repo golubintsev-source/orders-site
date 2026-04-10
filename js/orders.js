@@ -29,6 +29,7 @@ import { formatAmount, formatOrderIdTypeChip, tryParseRublesInteger, MSG_SUM_INT
 import { applyOrdersTableMobileFit } from "./ordersTableMobileFit.js";
 import {
   canMutateOrders,
+  canDeleteOrders,
   isAdmin,
   isOrderEditLockedForUserLite,
   isOrderHiddenFromUserLite,
@@ -1181,7 +1182,7 @@ export function renderOrders(orders) {
 
   orders.forEach((order) => {
     const deleteButton =
-      isAdmin()
+      canDeleteOrders()
         ? `<button type="button" class="btn-icon btn-delete" onclick="deleteOrder(${order.id})" title="Удалить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>`
         : "";
 
@@ -2205,7 +2206,7 @@ export async function editOrder(orderId) {
 }
 
 export async function deleteOrder(orderId) {
-  if (!isAdmin()) return;
+  if (!canDeleteOrders()) return;
 
   const ok = confirm(`Удалить заявку #${orderId}?`);
   if (!ok) return;

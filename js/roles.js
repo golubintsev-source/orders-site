@@ -39,6 +39,11 @@ export function canMutateOrders() {
   return isAdmin() || state.currentRole === "user" || isUserLite();
 }
 
+/** Мягкое удаление заявок (поле deleted_at). Доступно админу и роли user, не user_lite. */
+export function canDeleteOrders() {
+  return isAdmin() || state.currentRole === "user";
+}
+
 /** Разделы меню, закрытые для user_lite. */
 export function canAccessSection(sectionId) {
   if (sectionId === "settings" && !isAdmin()) return false;
