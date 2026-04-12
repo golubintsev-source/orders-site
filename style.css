@@ -2652,23 +2652,46 @@ table {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
-.route-sheet-map-office-divicon .route-sheet-map-office-wrap {
+/* Маркер главного офиса: флажок с «домиком» + шест + красная точка */
+.route-sheet-map-office-divicon .route-sheet-office-pin {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 10px;
-  height: 10px;
+  width: 28px;
   margin: 0;
   padding: 0;
   pointer-events: auto;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.28));
 }
 
-.route-sheet-map-office-logo {
+.route-sheet-office-pin__flag {
+  line-height: 0;
+  transform-origin: 50% 100%;
+  transform: rotate(-6deg);
+}
+
+.route-sheet-office-pin__flag-svg {
   display: block;
-  width: 10px;
-  height: 10px;
-  object-fit: contain;
-  filter: drop-shadow(0 0.5px 1px rgba(0, 0, 0, 0.4));
+}
+
+.route-sheet-office-pin__pole {
+  width: 2px;
+  height: 9px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: linear-gradient(180deg, #a8a29e 0%, #57534e 100%);
+}
+
+.route-sheet-office-pin__dot {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: -1px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: #dc2626;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 .route-sheet-map .leaflet-popup-content {

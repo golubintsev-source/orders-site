@@ -50,8 +50,6 @@ const ROUTE_SHEET_OFFICE_ADDRESS = "Автотранспортная улица,
 const ROUTE_SHEET_OFFICE_ADDR_NORM = normalizeAddrForOfficeCompare(ROUTE_SHEET_OFFICE_ADDRESS);
 const ROUTE_SHEET_OFFICE_LAT = 48.6903978;
 const ROUTE_SHEET_OFFICE_LON = 44.4336316;
-/** Тот же файл, что на форме входа (`login.html`). */
-const ROUTE_SHEET_LOGIN_LOGO_PATH = "./img/logo.png";
 
 let routeDeliveryMap = null;
 let routeDeliveryOfficeLayer = null;
@@ -345,13 +343,23 @@ function routeSheetOfficeLatLng(L) {
 function addRouteSheetOfficeMarker(L) {
   if (!routeDeliveryOfficeLayer) return;
   const latlng = routeSheetOfficeLatLng(L);
-  const html = `<div class="route-sheet-map-office-wrap"><img class="route-sheet-map-office-logo" src="${escapeAttr(ROUTE_SHEET_LOGIN_LOGO_PATH)}" alt="" width="10" height="10" decoding="async" /></div>`;
+  const html = `<div class="route-sheet-office-pin" role="img" aria-label="Главный офис">
+    <div class="route-sheet-office-pin__flag">
+      <svg class="route-sheet-office-pin__flag-svg" viewBox="0 0 28 18" width="22" height="14" aria-hidden="true" focusable="false">
+        <path fill="#fef2f2" stroke="#b91c1c" stroke-width="1.1" d="M2 4 L14 1 L26 4 L26 17 L2 17 Z"/>
+        <path fill="#fecaca" stroke="#991b1b" stroke-width="0.9" d="M8 17 L8 10 L12 7 L16 10 L16 17"/>
+        <rect x="11" y="12" width="6" height="5" rx="0.5" fill="#fff" stroke="#b91c1c" stroke-width="0.8"/>
+      </svg>
+    </div>
+    <div class="route-sheet-office-pin__pole" aria-hidden="true"></div>
+    <div class="route-sheet-office-pin__dot" aria-hidden="true"></div>
+  </div>`;
   const icon = L.divIcon({
     className: "route-sheet-map-divicon-root route-sheet-map-office-divicon",
     html,
-    iconSize: [10, 10],
-    iconAnchor: [5, 10],
-    popupAnchor: [0, -10],
+    iconSize: [28, 42],
+    iconAnchor: [14, 42],
+    popupAnchor: [0, -44],
   });
   const m = L.marker(latlng, { icon, zIndexOffset: -200 });
   m.bindPopup(
