@@ -2699,6 +2699,14 @@ table {
   font-size: 13px;
 }
 
+.route-sheet-table th.route-sheet-col-km,
+.route-sheet-table td.route-sheet-col-km {
+  min-width: 3.25rem;
+  width: 3.25rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .route-sheet-table th.route-sheet-col-phone,
 .route-sheet-table td.route-sheet-col-phone {
   min-width: 12.5rem;

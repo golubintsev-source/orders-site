@@ -20,6 +20,20 @@ const HEADERS_MAIN = [
   "Телефон",
 ];
 
+/** Экспорт таблицы «Доставка» — с километражем от офиса. */
+const HEADERS_DELIVERY = [
+  "Номер",
+  "Клиент",
+  "Адрес",
+  "км",
+  "Описание",
+  "Моск.",
+  "Конст.",
+  "Монтаж",
+  "Откосы",
+  "Телефон",
+];
+
 const HEADERS_SHOP = ["Номер", "Клиент", "Адрес", "Описание", "Телефон"];
 
 /** Центр Волгограда (OSM). */
@@ -43,6 +57,10 @@ let routeDeliveryMap = null;
 let routeDeliveryOfficeLayer = null;
 let routeDeliveryMarkersLayer = null;
 let routeDeliveryMapGeneration = 0;
+/** Инкремент при новой загрузке маршрутного листа / уходе с раздела — отмена расчёта «км». */
+let routeDeliveryKmGeneration = 0;
+/** Км от офиса по `order.id` (число км или null). */
+const deliveryKmByOrderId = new Map();
 const nominatimCache = new Map();
 
 function escapeHtml(s) {
@@ -161,6 +179,117 @@ function isRouteSheetSectionActive() {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function addressNormKeyFromOrder(order) {
+  return String(order.address ?? "").trim().toLowerCase();
+}
+
+function formatKmCellDisplay(km) {
+  if (km == null || !Number.isFinite(km)) return "—";
+  const rounded = Math.round(km * 10) / 10;
+  if (rounded === 0) return "0";
+  return String(rounded).replace(".", ",");
+}
+
+/**
+ * Расстояние по дорогам офис → адреса (OSRM public, один запрос table).
+ * @returns {Promise<Map<string, number|null>>} ключ — нормализованный адрес, значение — км или null
+ */
+async function computeKmByAddressNormFromOffice(deliveryRows, gen) {
+  /** @type {Map<string, number|null>} */
+  const out = new Map();
+  const uniqueKeys = [
+    ...new Set(deliveryRows.map((o) => addressNormKeyFromOrder(o)).filter((k) => k !== "")),
+  ];
+
+  for (const key of uniqueKeys) {
+    if (isRouteSheetOfficeAddress(key)) out.set(key, 0);
+  }
+
+  const needGeocode = uniqueKeys.filter((k) => !out.has(k));
+  /** @type {{ key: string; lat: number; lon: number }[]} */
+  const destList = [];
+
+  for (let i = 0; i < needGeocode.length; i++) {
+    if (gen !== routeDeliveryKmGeneration) return out;
+    const key = needGeocode[i];
+    const order = deliveryRows.find((o) => addressNormKeyFromOrder(o) === key);
+    const rawAddr = order?.address ?? "";
+    const coords = await geocodeAddressVolgograd(rawAddr);
+    if (gen !== routeDeliveryKmGeneration) return out;
+    if (!coords) {
+      out.set(key, null);
+    } else {
+      destList.push({ key, lat: coords.lat, lon: coords.lon });
+    }
+    if (i < needGeocode.length - 1) await sleep(NOMINATIM_DELAY_MS);
+  }
+
+  if (gen !== routeDeliveryKmGeneration) return out;
+  if (destList.length === 0) return out;
+
+  const CHUNK = 45;
+  for (let start = 0; start < destList.length; start += CHUNK) {
+    if (gen !== routeDeliveryKmGeneration) return out;
+    const chunk = destList.slice(start, start + CHUNK);
+    const coordStr = [
+      `${ROUTE_SHEET_OFFICE_LON},${ROUTE_SHEET_OFFICE_LAT}`,
+      ...chunk.map((d) => `${d.lon},${d.lat}`),
+    ].join(";");
+    const destIdx = chunk.map((_, i) => i + 1).join(";");
+    const url = `https://router.project-osrm.org/table/v1/driving/${coordStr}?sources=0&destinations=${destIdx}&annotations=distance`;
+
+    try {
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      if (gen !== routeDeliveryKmGeneration) return out;
+      if (!res.ok) {
+        for (const d of chunk) out.set(d.key, null);
+        continue;
+      }
+      const json = await res.json();
+      if (gen !== routeDeliveryKmGeneration) return out;
+      if (json.code !== "Ok" || !Array.isArray(json.distances) || !Array.isArray(json.distances[0])) {
+        for (const d of chunk) out.set(d.key, null);
+        continue;
+      }
+      const row = json.distances[0];
+      for (let j = 0; j < chunk.length; j++) {
+        const meters = row[j];
+        if (meters == null || !Number.isFinite(meters)) out.set(chunk[j].key, null);
+        else out.set(chunk[j].key, meters / 1000);
+      }
+    } catch {
+      for (const d of chunk) out.set(d.key, null);
+    }
+  }
+  return out;
+}
+
+async function fillDeliveryDistanceColumn(deliveryRows, gen) {
+  deliveryKmByOrderId.clear();
+  const kmByAddr = await computeKmByAddressNormFromOffice(deliveryRows, gen);
+  if (gen !== routeDeliveryKmGeneration) return;
+
+  for (const o of deliveryRows) {
+    const k = addressNormKeyFromOrder(o);
+    if (k === "") {
+      deliveryKmByOrderId.set(o.id, null);
+      continue;
+    }
+    const km = kmByAddr.get(k);
+    deliveryKmByOrderId.set(o.id, km === undefined ? null : km);
+  }
+
+  const tbody = document.querySelector("#routeSheetTableDelivery tbody");
+  if (!tbody || gen !== routeDeliveryKmGeneration) return;
+  const rows = tbody.querySelectorAll("tr");
+  deliveryRows.forEach((order, i) => {
+    const td = rows[i]?.querySelector("td.route-sheet-col-km");
+    if (!td) return;
+    const v = deliveryKmByOrderId.get(order.id);
+    td.textContent = formatKmCellDisplay(v);
+  });
 }
 
 function nominatimQueryForAddress(address) {
@@ -397,17 +526,26 @@ function ordersVisibleOnRouteSheet() {
   return (state.allOrders || []).filter((o) => !isOrderHiddenFromUserLite(o));
 }
 
-function rowMainHtml(order) {
+/**
+ * @param {object} order
+ * @param {string} [kmDisplay] если передано — колонка «км» (таблица «Доставка»); иначе без колонки («Самовывоз»).
+ */
+function rowMainHtml(order, kmDisplay) {
   const mosk =
     order.area_m2 != null && order.area_m2 !== "" ? escapeHtml(String(order.area_m2)) : "";
   const konst =
     order.construction_count != null && order.construction_count !== ""
       ? escapeHtml(String(order.construction_count))
       : "";
+  const kmTd =
+    kmDisplay === undefined
+      ? ""
+      : `<td class="route-sheet-col-km">${escapeHtml(String(kmDisplay))}</td>`;
   return `<tr>
     ${orderIdCellHtml(order)}
     <td>${escapeHtml(order.client ?? "")}</td>
     <td>${escapeHtml(order.address ?? "")}</td>
+    ${kmTd}
     <td>${escapeHtml(order.description ?? "")}</td>
     <td>${mosk}</td>
     <td>${konst}</td>
@@ -443,6 +581,8 @@ export function loadRouteSheet() {
     tbodyPickup.innerHTML = "";
     tbodyShop.innerHTML = "";
     routeDeliveryMapGeneration += 1;
+    routeDeliveryKmGeneration += 1;
+    deliveryKmByOrderId.clear();
     if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
     setRouteDeliveryMapStatus("");
     return;
@@ -453,6 +593,8 @@ export function loadRouteSheet() {
     tbodyPickup.innerHTML = "";
     tbodyShop.innerHTML = "";
     routeDeliveryMapGeneration += 1;
+    routeDeliveryKmGeneration += 1;
+    deliveryKmByOrderId.clear();
     if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
     setRouteDeliveryMapStatus("");
     return;
@@ -465,13 +607,18 @@ export function loadRouteSheet() {
   const pickupRows = filterMainOrdersByShipment(orders, fromKey, toKey, DELIVERY_PICKUP);
   const shop = filterShopOrders(orders, fromKey, toKey);
 
-  tbodyDelivery.innerHTML = deliveryRows.map(rowMainHtml).join("");
-  tbodyPickup.innerHTML = pickupRows.map(rowMainHtml).join("");
+  tbodyPickup.innerHTML = pickupRows.map((o) => rowMainHtml(o)).join("");
   tbodyShop.innerHTML = shop.map(rowShopHtml).join("");
 
   if (isRouteSheetSectionActive()) {
+    const kmGen = ++routeDeliveryKmGeneration;
+    tbodyDelivery.innerHTML = deliveryRows.map((o) => rowMainHtml(o, "…")).join("");
+    void fillDeliveryDistanceColumn(deliveryRows, kmGen);
     void updateRouteSheetDeliveryMap(deliveryRows);
   } else {
+    routeDeliveryKmGeneration += 1;
+    deliveryKmByOrderId.clear();
+    tbodyDelivery.innerHTML = deliveryRows.map((o) => rowMainHtml(o, "—")).join("");
     routeDeliveryMapGeneration += 1;
   }
 }
@@ -528,6 +675,23 @@ function rowMainValues(order) {
   ];
 }
 
+function rowDeliveryMainValues(order) {
+  const km = deliveryKmByOrderId.get(order.id);
+  const kmCell = km != null && Number.isFinite(km) ? Math.round(km * 10) / 10 : "";
+  return [
+    order.id != null ? formatOrderIdTypeChip(order.id, order.order_type) : "",
+    order.client ?? "",
+    order.address ?? "",
+    kmCell,
+    order.description ?? "",
+    order.area_m2 != null && order.area_m2 !== "" ? String(order.area_m2) : "",
+    order.construction_count != null && order.construction_count !== "" ? String(order.construction_count) : "",
+    boolDaNet(order.installation),
+    boolDaNet(order.reveals),
+    order.phone ?? "",
+  ];
+}
+
 function rowShopValues(order) {
   return [
     order.id != null ? formatOrderIdTypeChip(order.id, order.order_type) : "",
@@ -541,6 +705,8 @@ function rowShopValues(order) {
 /** При уходе с раздела — отменить фоновое геокодирование и очистить маркеры. */
 export function bumpRouteDeliveryMapGeneration() {
   routeDeliveryMapGeneration += 1;
+  routeDeliveryKmGeneration += 1;
+  deliveryKmByOrderId.clear();
   if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
   setRouteDeliveryMapStatus("");
 }
@@ -549,8 +715,8 @@ export function exportRouteSheetDeliveryExcel() {
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid || fromKey > toKey) return;
   const list = filterMainOrdersByShipment(ordersVisibleOnRouteSheet(), fromKey, toKey, DELIVERY_SHIP);
-  const rows = list.map(rowMainValues);
-  exportSheet(HEADERS_MAIN, rows, "Доставка", "marshrutnyy_list_dostavka");
+  const rows = list.map(rowDeliveryMainValues);
+  exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka");
 }
 
 export function exportRouteSheetPickupExcel() {
