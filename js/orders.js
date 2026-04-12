@@ -885,6 +885,50 @@ function paidBadge(order) {
   return '<span class="status-value">нет</span>';
 }
 
+function sumOrderNumericField(orders, key) {
+  let s = 0;
+  for (const o of orders) {
+    const v = o[key];
+    if (v == null || v === "") continue;
+    const n = Number(v);
+    if (Number.isFinite(n)) s += n;
+  }
+  return s;
+}
+
+function renderOrdersTotals(orders) {
+  const piecesEl = document.getElementById("ordersTotalsPieces");
+  if (!piecesEl) return;
+
+  const count = orders.length;
+  const sumAmount = sumOrderNumericField(orders, "amount");
+  const sumPrepayment = sumOrderNumericField(orders, "prepayment");
+  const sumRemaining = sumOrderNumericField(orders, "remaining_amount");
+  const sumArea = sumOrderNumericField(orders, "area_m2");
+  const sumInstaller = sumOrderNumericField(orders, "installer_payment_amount");
+  const sumMosquito = sumOrderNumericField(orders, "mosquito_nets");
+  const sumConstruction = sumOrderNumericField(orders, "construction_count");
+
+  piecesEl.textContent = String(count);
+  const setMoney = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val === 0 ? "" : formatAmount(val);
+  };
+  setMoney("ordersTotalsAmount", sumAmount);
+  setMoney("ordersTotalsPrepayment", sumPrepayment);
+  setMoney("ordersTotalsRemaining", sumRemaining);
+  setMoney("ordersTotalsInstallerPay", sumInstaller);
+
+  const areaEl = document.getElementById("ordersTotalsAreaM2");
+  if (areaEl) areaEl.textContent = sumArea === 0 ? "" : formatAmount(sumArea);
+
+  const mosquitoEl = document.getElementById("ordersTotalsMosquito");
+  if (mosquitoEl) mosquitoEl.textContent = sumMosquito === 0 ? "" : formatAmount(sumMosquito);
+
+  const consEl = document.getElementById("ordersTotalsConstruction");
+  if (consEl) consEl.textContent = sumConstruction === 0 ? "" : formatAmount(sumConstruction);
+}
+
 export function renderOrders(orders) {
   document.dispatchEvent(new CustomEvent("orders-table-will-render"));
   const table = document.querySelector("#ordersTable tbody");
@@ -981,6 +1025,7 @@ export function renderOrders(orders) {
   syncOrdersScrollPositions();
   applyOrdersTableMobileFit();
   syncOrdersTableOuterWidthForTouch();
+  renderOrdersTotals(orders);
 }
 
 export function applyClientFilter() {

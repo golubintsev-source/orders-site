@@ -2150,6 +2150,55 @@ button:active {
   width: 1px;
 }
 
+/* Итого под таблицей заказов — отдельная компактная таблица */
+.orders-totals-wrap {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.orders-totals-table {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
+.orders-totals-caption {
+  caption-side: top;
+  text-align: left;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 0 0 6px 2px;
+  color: #1e293b;
+}
+
+.orders-totals-table th,
+.orders-totals-table td {
+  padding: 6px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.orders-totals-table thead th {
+  background: #f1f5f9;
+}
+
+.orders-totals-table tbody td {
+  background: #fafbfc;
+  font-weight: 600;
+}
+
+.orders-totals-th-m2,
+.orders-totals-td-m2 {
+  text-align: right;
+}
+
+.orders-totals-table .th-money,
+.orders-totals-table .td-money {
+  text-align: right;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

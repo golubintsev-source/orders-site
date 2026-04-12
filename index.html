@@ -552,6 +552,36 @@
         </div>
         </div>
       </div>
+
+      <div class="orders-totals-wrap">
+        <table id="ordersTotalsTable" class="orders-totals-table" aria-label="Итого по отфильтрованным заказам">
+          <caption class="orders-totals-caption">Итого</caption>
+          <thead>
+            <tr>
+              <th scope="col">Штук</th>
+              <th scope="col" class="th-money">Стоимость</th>
+              <th scope="col" class="th-money">Предоплата</th>
+              <th scope="col" class="th-money">Остаток</th>
+              <th scope="col" class="orders-totals-th-m2">м2</th>
+              <th scope="col" class="th-money">з/п</th>
+              <th scope="col">Моск.</th>
+              <th scope="col">Конс.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td id="ordersTotalsPieces">0</td>
+              <td id="ordersTotalsAmount" class="td-money"></td>
+              <td id="ordersTotalsPrepayment" class="td-money"></td>
+              <td id="ordersTotalsRemaining" class="td-money"></td>
+              <td id="ordersTotalsAreaM2" class="orders-totals-td-m2 td-money"></td>
+              <td id="ordersTotalsInstallerPay" class="td-money"></td>
+              <td id="ordersTotalsMosquito"></td>
+              <td id="ordersTotalsConstruction"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
     </section>
 
