@@ -2134,7 +2134,7 @@ button:active {
   caption-side: top;
   text-align: left;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 13px; /* как у ячеек #ordersTable */
   padding: 0 0 4px 0;
 }
 
@@ -2151,12 +2151,18 @@ button:active {
 #ordersTotalsTable td {
   box-sizing: border-box;
   padding: 3px 0;
-  font-size: 12px;
+  padding-right: 3px; /* зазор 3px между столбцами */
+  font-size: 13px; /* как #ordersTable th / td */
   vertical-align: middle;
   white-space: nowrap;
 }
 
-/* «Итого»: заголовки и числа по правому краю, минимальная ширина столбцов */
+#ordersTotalsTable th:last-child,
+#ordersTotalsTable td:last-child {
+  padding-right: 0;
+}
+
+/* «Итого»: заголовки и числа по правому краю */
 #ordersTotalsTable th {
   text-align: right;
 }
@@ -2167,19 +2173,6 @@ button:active {
 
 #ordersTotalsTable .td-orders-totals-count {
   text-align: center;
-}
-
-@media (max-width: 480px) {
-  .orders-totals-caption {
-    font-size: 12px;
-    padding: 0 0 3px 0;
-  }
-
-  #ordersTotalsTable th,
-  #ordersTotalsTable td {
-    padding: 2px 0;
-    font-size: 11px;
-  }
 }
 
 #ordersTable col.orders-col-150 {
