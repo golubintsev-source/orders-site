@@ -59,9 +59,13 @@ const ROUTE_SHEET_OFFICE_LON = 44.4336316;
 
 let routeDeliveryMap = null;
 let routeDeliveryOfficeLayer = null;
+/** Линия маршрута офис → точка (OSRM), под маркерами доставки. */
+let routeDeliveryRouteLayer = null;
 let routeDeliveryMarkersLayer = null;
 /** Одна очередь: карта доставки + км; инкремент отменяет текущий проход. */
 let routeDeliveryPipelineGeneration = 0;
+/** Отмена отрисовки маршрута при новом клике / сбросе карты. */
+let routeRoadDrawGeneration = 0;
 /** Км от офиса по `order.id` (число км или null). */
 const deliveryKmByOrderId = new Map();
 const nominatimCache = new Map();
@@ -218,6 +222,90 @@ async function osrmDrivingDistanceKm(fromLon, fromLat, toLon, toLat) {
   }
 }
 
+/**
+ * Геометрия маршрута по дорогам (OSRM route): массив [lat, lng] для Leaflet.
+ * @returns {Promise<Array<[number, number]>|null>}
+ */
+async function osrmDrivingRouteLatLngs(fromLon, fromLat, toLon, toLat) {
+  try {
+    const coordStr = `${fromLon},${fromLat};${toLon},${toLat}`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.code !== "Ok" || !Array.isArray(json.routes) || !json.routes[0]) return null;
+    const coords = json.routes[0].geometry?.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) return null;
+    const latLngs = coords.map((c) => {
+      const lon = Number(c[0]);
+      const lat = Number(c[1]);
+      return Number.isFinite(lat) && Number.isFinite(lon) ? /** @type {[number, number]} */ ([lat, lon]) : null;
+    }).filter((x) => x != null);
+    return latLngs.length >= 2 ? latLngs : null;
+  } catch {
+    return null;
+  }
+}
+
+function invalidateRoadRouteDraw() {
+  routeRoadDrawGeneration += 1;
+}
+
+function clearRouteDeliveryRoadRouteLayer() {
+  routeDeliveryRouteLayer?.clearLayers();
+}
+
+function clearRouteDeliveryMarkersAndRoadRoute() {
+  invalidateRoadRouteDraw();
+  routeDeliveryMarkersLayer?.clearLayers();
+  clearRouteDeliveryRoadRouteLayer();
+}
+
+/** По клику на маркер доставки: линия офис → точка по OSRM. */
+async function showDeliveryRoadRouteFromOffice(destLatLng) {
+  const L = globalThis.L;
+  if (!L || !routeDeliveryRouteLayer || !destLatLng) return;
+  const officeLL = routeSheetOfficeLatLng(L);
+  if (officeLL.distanceTo(destLatLng) < 35) {
+    invalidateRoadRouteDraw();
+    clearRouteDeliveryRoadRouteLayer();
+    return;
+  }
+
+  const myGen = ++routeRoadDrawGeneration;
+  clearRouteDeliveryRoadRouteLayer();
+
+  let pts;
+  try {
+    pts = await osrmDrivingRouteLatLngs(
+      ROUTE_SHEET_OFFICE_LON,
+      ROUTE_SHEET_OFFICE_LAT,
+      destLatLng.lng,
+      destLatLng.lat,
+    );
+  } catch (e) {
+    console.error("OSRM route:", e);
+    if (myGen === routeRoadDrawGeneration) {
+      setRouteDeliveryMapStatus("Не удалось построить маршрут по дорогам.", true);
+    }
+    return;
+  }
+
+  if (myGen !== routeRoadDrawGeneration) return;
+  if (!pts?.length) {
+    setRouteDeliveryMapStatus("Маршрут по дорогам не найден.", true);
+    return;
+  }
+
+  L.polyline(pts, {
+    color: "#1d4ed8",
+    weight: 5,
+    opacity: 0.9,
+    lineJoin: "round",
+    lineCap: "round",
+  }).addTo(routeDeliveryRouteLayer);
+}
+
 function updateKmCellsForOrders(orders) {
   if (!orders.length) return;
   const tbody = document.querySelector("#routeSheetTableDelivery tbody");
@@ -356,6 +444,10 @@ function addRouteSheetOfficeMarker(L) {
   m.bindPopup(
     `<div class="route-sheet-map-popup-order"><strong>${escapeHtml(ROUTE_SHEET_OFFICE_ADDRESS)}</strong><br><span class="route-sheet-map-popup-addr">Волгоград</span></div>`,
   );
+  m.on("popupopen", () => {
+    invalidateRoadRouteDraw();
+    clearRouteDeliveryRoadRouteLayer();
+  });
   m.addTo(routeDeliveryOfficeLayer);
 }
 
@@ -374,6 +466,7 @@ function ensureRouteDeliveryMap() {
   }).addTo(routeDeliveryMap);
   routeDeliveryOfficeLayer = L.layerGroup().addTo(routeDeliveryMap);
   addRouteSheetOfficeMarker(L);
+  routeDeliveryRouteLayer = L.layerGroup().addTo(routeDeliveryMap);
   routeDeliveryMarkersLayer = L.layerGroup().addTo(routeDeliveryMap);
 }
 
@@ -450,7 +543,7 @@ async function runDeliveryPipeline(deliveryRows, gen) {
     if (!routeDeliveryMap || !routeDeliveryMarkersLayer) return;
     if (gen !== routeDeliveryPipelineGeneration) return;
 
-    routeDeliveryMarkersLayer.clearLayers();
+    clearRouteDeliveryMarkersAndRoadRoute();
     deliveryKmByOrderId.clear();
 
     const noAddrOrders = deliveryRows.filter((o) => addressNormKeyFromOrder(o) === "");
@@ -544,6 +637,9 @@ async function runDeliveryPipeline(deliveryRows, gen) {
           icon: deliveryMapMarkerIcon(L, ordersHere),
         });
         marker.bindPopup(buildDeliveryPopupHtml(ordersHere));
+        marker.on("popupopen", () => {
+          void showDeliveryRoadRouteFromOffice(marker.getLatLng());
+        });
         marker.addTo(routeDeliveryMarkersLayer);
       } catch (e) {
         console.error("Leaflet marker:", e);
@@ -674,7 +770,7 @@ export function loadRouteSheet() {
     tbodyShop.innerHTML = "";
     routeDeliveryPipelineGeneration += 1;
     deliveryKmByOrderId.clear();
-    if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
+    clearRouteDeliveryMarkersAndRoadRoute();
     setRouteDeliveryMapStatus("");
     return;
   }
@@ -685,7 +781,7 @@ export function loadRouteSheet() {
     tbodyShop.innerHTML = "";
     routeDeliveryPipelineGeneration += 1;
     deliveryKmByOrderId.clear();
-    if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
+    clearRouteDeliveryMarkersAndRoadRoute();
     setRouteDeliveryMapStatus("");
     return;
   }
@@ -707,6 +803,7 @@ export function loadRouteSheet() {
   } else {
     routeDeliveryPipelineGeneration += 1;
     deliveryKmByOrderId.clear();
+    clearRouteDeliveryMarkersAndRoadRoute();
     tbodyDelivery.innerHTML = deliveryRows.map((o) => rowMainHtml(o, "—", { includeShipDate: true })).join("");
   }
 }
@@ -795,7 +892,7 @@ function rowShopValues(order) {
 export function bumpRouteDeliveryMapGeneration() {
   routeDeliveryPipelineGeneration += 1;
   deliveryKmByOrderId.clear();
-  if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
+  clearRouteDeliveryMarkersAndRoadRoute();
   setRouteDeliveryMapStatus("");
 }
 
