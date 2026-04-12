@@ -234,8 +234,17 @@ function updateKmCellsForOrders(orders) {
   }
 }
 
-function geocodeNominatimCacheKey(raw) {
-  return `v2|${String(raw).trim().toLowerCase()}`;
+function geocodeNominatimCacheKey(normalizedQuery) {
+  return `v3|${String(normalizedQuery).trim().toLowerCase()}`;
+}
+
+/** Для Nominatim: убрать квартиру/этаж после первого «-» (и сам дефис). Полный адрес в таблице не меняется. */
+function addressForNominatimSearch(raw) {
+  const t = String(raw).trim();
+  if (!t) return "";
+  const i = t.indexOf("-");
+  if (i === -1) return t;
+  return t.slice(0, i).trim();
 }
 
 /** Запрос 1: только внутри города Волгоград (viewbox + bounded). */
@@ -273,19 +282,21 @@ async function nominatimSearchRequest(params) {
 
 /**
  * Геокодирование (Nominatim): сначала строго в границах города Волгоград, иначе — в границах Волгоградской области.
- * Кэш с префиксом v2| — после смены логики старые значения не подхватываются.
+ * Кэш с префиксом v3| — после смены логики старые значения не подхватываются.
  * @returns {Promise<{ lat: number, lon: number } | null>}
  */
 async function geocodeAddressVolgograd(address) {
   const raw = String(address).trim();
   if (!raw) return null;
-  const key = geocodeNominatimCacheKey(raw);
+  const searchAddr = addressForNominatimSearch(raw);
+  if (!searchAddr) return null;
+  const key = geocodeNominatimCacheKey(searchAddr);
   if (nominatimCache.has(key)) return nominatimCache.get(key);
 
   const base = new URLSearchParams({ format: "json", limit: "1", countrycodes: "ru" });
 
   const cityParams = new URLSearchParams(base);
-  cityParams.set("q", nominatimQueryCityPhase(raw));
+  cityParams.set("q", nominatimQueryCityPhase(searchAddr));
   cityParams.set("viewbox", NOMINATIM_VIEWBOX_VOLGOGRAD_CITY);
   cityParams.set("bounded", "1");
 
@@ -295,7 +306,7 @@ async function geocodeAddressVolgograd(address) {
   if (!hit) {
     await sleep(NOMINATIM_DELAY_MS);
     const oblastParams = new URLSearchParams(base);
-    oblastParams.set("q", nominatimQueryOblastPhase(raw));
+    oblastParams.set("q", nominatimQueryOblastPhase(searchAddr));
     oblastParams.set("viewbox", NOMINATIM_VIEWBOX_VOLGOGRAD_OBLAST);
     oblastParams.set("bounded", "1");
     data = await nominatimSearchRequest(oblastParams);
