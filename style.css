@@ -2126,6 +2126,48 @@ button:active {
   max-width: none;
 }
 
+.orders-totals-wrap {
+  margin-top: 10px;
+}
+
+.orders-totals-caption {
+  caption-side: top;
+  text-align: left;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 0 0 8px 0;
+}
+
+#ordersTotalsTable.orders-totals-table {
+  border-collapse: collapse;
+  width: max-content;
+  max-width: 100%;
+}
+
+#ordersTotalsTable th,
+#ordersTotalsTable td {
+  padding: 6px 10px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+#ordersTotalsTable th.th-money {
+  text-align: left;
+}
+
+#ordersTotalsTable th.th-money.th-money-header-right {
+  text-align: right;
+}
+
+#ordersTotalsTable th.th-area-m2,
+#ordersTotalsTable td.td-area-m2 {
+  text-align: right;
+}
+
+#ordersTotalsTable .td-orders-totals-count {
+  text-align: center;
+}
+
 #ordersTable col.orders-col-150 {
   width: 100px;
   min-width: 100px;

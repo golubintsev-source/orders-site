@@ -1175,6 +1175,42 @@ export function getOrderRowValuesForExcel(order) {
   ];
 }
 
+function sumOrderNumericField(orders, fieldName) {
+  let sum = 0;
+  for (const order of orders) {
+    const n = parseOrderFormNumber(order[fieldName]);
+    if (n != null && Number.isFinite(n)) sum += n;
+  }
+  return sum;
+}
+
+function renderOrdersTotals(orders) {
+  const row = document.getElementById("ordersTotalsRow");
+  if (!row) return;
+
+  const count = orders.length;
+  const sumAmount = sumOrderNumericField(orders, "amount");
+  const sumPrepayment = sumOrderNumericField(orders, "prepayment");
+  const sumRemaining = sumOrderNumericField(orders, "remaining_amount");
+  const sumArea = sumOrderNumericField(orders, "area_m2");
+  const sumInstaller = sumOrderNumericField(orders, "installer_payment_amount");
+  const sumMosquito = sumOrderNumericField(orders, "mosquito_nets");
+  const sumConstruction = sumOrderNumericField(orders, "construction_count");
+
+  const fmt = (n) => (count ? formatAmount(n) : "");
+
+  row.innerHTML = `
+    <td class="td-orders-totals-count">${String(count)}</td>
+    <td class="td-money">${fmt(sumAmount)}</td>
+    <td class="td-money">${fmt(sumPrepayment)}</td>
+    <td class="td-money">${fmt(sumRemaining)}</td>
+    <td class="td-area-m2">${fmt(sumArea)}</td>
+    <td class="td-money td-installer-payment">${fmt(sumInstaller)}</td>
+    <td>${fmt(sumMosquito)}</td>
+    <td>${fmt(sumConstruction)}</td>
+  `;
+}
+
 export function renderOrders(orders) {
   document.dispatchEvent(new CustomEvent("orders-table-will-render"));
   const table = document.querySelector("#ordersTable tbody");
@@ -1271,6 +1307,7 @@ export function renderOrders(orders) {
   syncOrdersScrollPositions();
   applyOrdersTableMobileFit();
   syncOrdersTableOuterWidthForTouch();
+  renderOrdersTotals(orders);
 }
 
 export function applyClientFilter() {
