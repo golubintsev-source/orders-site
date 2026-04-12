@@ -319,6 +319,8 @@ async function updateRouteSheetDeliveryMap(deliveryRows) {
   routeDeliveryMarkersLayer.clearLayers();
   setRouteDeliveryMapStatus("");
 
+  const officeLL = routeSheetOfficeLatLng(L);
+
   const withAddr = deliveryRows.filter((o) => String(o.address ?? "").trim() !== "");
   if (withAddr.length === 0) {
     routeDeliveryMap.setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
@@ -326,9 +328,17 @@ async function updateRouteSheetDeliveryMap(deliveryRows) {
     return;
   }
 
+  const withAddrForMap = withAddr.filter((o) => !isRouteSheetOfficeAddress(o.address));
+  if (withAddrForMap.length === 0) {
+    routeDeliveryMap.setView(officeLL, 15);
+    scheduleInvalidateRouteDeliveryMap();
+    setRouteDeliveryMapStatus("");
+    return;
+  }
+
   /** @type {Map<string, object[]>} */
   const byAddress = new Map();
-  for (const o of withAddr) {
+  for (const o of withAddrForMap) {
     const k = String(o.address).trim().toLowerCase();
     if (!byAddress.has(k)) byAddress.set(k, []);
     byAddress.get(k).push(o);
@@ -362,9 +372,11 @@ async function updateRouteSheetDeliveryMap(deliveryRows) {
   if (gen !== routeDeliveryMapGeneration) return;
 
   if (latLngs.length === 1) {
-    routeDeliveryMap.setView(latLngs[0], 14);
+    routeDeliveryMap.fitBounds(L.latLngBounds([latLngs[0], officeLL]), { padding: [36, 36], maxZoom: 15 });
   } else if (latLngs.length > 1) {
-    routeDeliveryMap.fitBounds(L.latLngBounds(latLngs), { padding: [28, 28], maxZoom: 15 });
+    const b = L.latLngBounds(latLngs);
+    b.extend(officeLL);
+    routeDeliveryMap.fitBounds(b, { padding: [28, 28], maxZoom: 15 });
   } else {
     routeDeliveryMap.setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
   }
