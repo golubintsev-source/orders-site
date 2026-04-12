@@ -59,9 +59,8 @@ const ROUTE_SHEET_OFFICE_LON = 44.4336316;
 let routeDeliveryMap = null;
 let routeDeliveryOfficeLayer = null;
 let routeDeliveryMarkersLayer = null;
-let routeDeliveryMapGeneration = 0;
-/** Инкремент при новой загрузке маршрутного листа / уходе с раздела — отмена расчёта «км». */
-let routeDeliveryKmGeneration = 0;
+/** Одна очередь: карта доставки + км; инкремент отменяет текущий проход. */
+let routeDeliveryPipelineGeneration = 0;
 /** Км от офиса по `order.id` (число км или null). */
 const deliveryKmByOrderId = new Map();
 const nominatimCache = new Map();
@@ -195,104 +194,44 @@ function formatKmCellDisplay(km) {
   return String(rounded).replace(".", ",");
 }
 
-/**
- * Расстояние по дорогам офис → адреса (OSRM public, один запрос table).
- * @returns {Promise<Map<string, number|null>>} ключ — нормализованный адрес, значение — км или null
- */
-async function computeKmByAddressNormFromOffice(deliveryRows, gen) {
-  /** @type {Map<string, number|null>} */
-  const out = new Map();
-  const uniqueKeys = [
-    ...new Set(deliveryRows.map((o) => addressNormKeyFromOrder(o)).filter((k) => k !== "")),
-  ];
-
-  for (const key of uniqueKeys) {
-    if (isRouteSheetOfficeAddress(key)) out.set(key, 0);
-  }
-
-  const needGeocode = uniqueKeys.filter((k) => !out.has(k));
-  /** @type {{ key: string; lat: number; lon: number }[]} */
-  const destList = [];
-
-  for (let i = 0; i < needGeocode.length; i++) {
-    if (gen !== routeDeliveryKmGeneration) return out;
-    const key = needGeocode[i];
-    const order = deliveryRows.find((o) => addressNormKeyFromOrder(o) === key);
-    const rawAddr = order?.address ?? "";
-    const coords = await geocodeAddressVolgograd(rawAddr);
-    if (gen !== routeDeliveryKmGeneration) return out;
-    if (!coords) {
-      out.set(key, null);
-    } else {
-      destList.push({ key, lat: coords.lat, lon: coords.lon });
-    }
-    if (i < needGeocode.length - 1) await sleep(NOMINATIM_DELAY_MS);
-  }
-
-  if (gen !== routeDeliveryKmGeneration) return out;
-  if (destList.length === 0) return out;
-
-  const CHUNK = 45;
-  for (let start = 0; start < destList.length; start += CHUNK) {
-    if (gen !== routeDeliveryKmGeneration) return out;
-    const chunk = destList.slice(start, start + CHUNK);
-    const coordStr = [
-      `${ROUTE_SHEET_OFFICE_LON},${ROUTE_SHEET_OFFICE_LAT}`,
-      ...chunk.map((d) => `${d.lon},${d.lat}`),
-    ].join(";");
-    const destIdx = chunk.map((_, i) => i + 1).join(";");
-    const url = `https://router.project-osrm.org/table/v1/driving/${coordStr}?sources=0&destinations=${destIdx}&annotations=distance`;
-
-    try {
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
-      if (gen !== routeDeliveryKmGeneration) return out;
-      if (!res.ok) {
-        for (const d of chunk) out.set(d.key, null);
-        continue;
-      }
-      const json = await res.json();
-      if (gen !== routeDeliveryKmGeneration) return out;
-      if (json.code !== "Ok" || !Array.isArray(json.distances) || !Array.isArray(json.distances[0])) {
-        for (const d of chunk) out.set(d.key, null);
-        continue;
-      }
-      const row = json.distances[0];
-      for (let j = 0; j < chunk.length; j++) {
-        const meters = row[j];
-        if (meters == null || !Number.isFinite(meters)) out.set(chunk[j].key, null);
-        else out.set(chunk[j].key, meters / 1000);
-      }
-    } catch {
-      for (const d of chunk) out.set(d.key, null);
-    }
-  }
-  return out;
+function truncateForStatus(s, maxLen) {
+  const t = String(s).replace(/\s+/g, " ").trim();
+  if (t.length <= maxLen) return t;
+  return `${t.slice(0, Math.max(0, maxLen - 1))}…`;
 }
 
-async function fillDeliveryDistanceColumn(deliveryRows, gen) {
-  deliveryKmByOrderId.clear();
-  const kmByAddr = await computeKmByAddressNormFromOffice(deliveryRows, gen);
-  if (gen !== routeDeliveryKmGeneration) return;
-
-  for (const o of deliveryRows) {
-    const k = addressNormKeyFromOrder(o);
-    if (k === "") {
-      deliveryKmByOrderId.set(o.id, null);
-      continue;
-    }
-    const km = kmByAddr.get(k);
-    deliveryKmByOrderId.set(o.id, km === undefined ? null : km);
+/** Одна пара точек: офис → адрес (км по дорогам, OSRM). */
+async function osrmDrivingDistanceKm(fromLon, fromLat, toLon, toLat) {
+  try {
+    const coordStr = `${fromLon},${fromLat};${toLon},${toLat}`;
+    const url = `https://router.project-osrm.org/table/v1/driving/${coordStr}?sources=0&destinations=1&annotations=distance`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.code !== "Ok" || !Array.isArray(json.distances) || !Array.isArray(json.distances[0])) return null;
+    const meters = json.distances[0][0];
+    if (meters == null || !Number.isFinite(meters)) return null;
+    return meters / 1000;
+  } catch {
+    return null;
   }
+}
 
+function updateKmCellsForOrders(orders) {
+  if (!orders.length) return;
   const tbody = document.querySelector("#routeSheetTableDelivery tbody");
-  if (!tbody || gen !== routeDeliveryKmGeneration) return;
-  const rows = tbody.querySelectorAll("tr");
-  deliveryRows.forEach((order, i) => {
-    const td = rows[i]?.querySelector("td.route-sheet-col-km");
-    if (!td) return;
-    const v = deliveryKmByOrderId.get(order.id);
-    td.textContent = formatKmCellDisplay(v);
-  });
+  if (!tbody) return;
+  const idSet = new Set(orders.map((o) => String(o.id ?? "")));
+  for (const tr of tbody.querySelectorAll("tr")) {
+    const idTd = tr.querySelector("td.td-order-id");
+    const oid = String(idTd?.getAttribute("data-order-id") ?? "");
+    if (!idSet.has(oid)) continue;
+    const td = tr.querySelector("td.route-sheet-col-km");
+    if (!td) continue;
+    const order = orders.find((o) => String(o.id ?? "") === oid);
+    const km = order != null ? deliveryKmByOrderId.get(order.id) : undefined;
+    td.textContent = formatKmCellDisplay(km);
+  }
 }
 
 function geocodeNominatimCacheKey(raw) {
@@ -479,94 +418,178 @@ function scheduleInvalidateRouteDeliveryMap() {
 }
 
 /**
- * Точки доставки на карте Волгограда (по адресам из таблицы «Доставка»).
+ * По очереди для каждого уникального адреса: геокод → маркер на карте → км в таблице (OSRM офис → точка).
+ * Один проход устраняет гонки Nominatim/OSRM между картой и колонкой «км».
  * @param {Array<object>} deliveryRows
+ * @param {number} gen
  */
-async function updateRouteSheetDeliveryMap(deliveryRows) {
-  const gen = ++routeDeliveryMapGeneration;
+async function runDeliveryPipeline(deliveryRows, gen) {
   const L = globalThis.L;
   if (!L) {
-    setRouteDeliveryMapStatus("Библиотека карты не загружена. Обновите страницу.", true);
+    setRouteDeliveryMapStatus("Карта: библиотека не загружена. Обновите страницу.", true);
     return;
   }
 
-  ensureRouteDeliveryMap();
-  if (!routeDeliveryMap || !routeDeliveryMarkersLayer) return;
+  try {
+    ensureRouteDeliveryMap();
+    if (!routeDeliveryMap || !routeDeliveryMarkersLayer) return;
+    if (gen !== routeDeliveryPipelineGeneration) return;
 
-  routeDeliveryMarkersLayer.clearLayers();
-  setRouteDeliveryMapStatus("");
+    routeDeliveryMarkersLayer.clearLayers();
+    deliveryKmByOrderId.clear();
 
-  const officeLL = routeSheetOfficeLatLng(L);
+    const noAddrOrders = deliveryRows.filter((o) => addressNormKeyFromOrder(o) === "");
+    for (const o of noAddrOrders) deliveryKmByOrderId.set(o.id, null);
+    updateKmCellsForOrders(noAddrOrders);
 
-  const withAddr = deliveryRows.filter((o) => String(o.address ?? "").trim() !== "");
-  if (withAddr.length === 0) {
-    routeDeliveryMap.setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
-    scheduleInvalidateRouteDeliveryMap();
-    return;
-  }
-
-  const withAddrForMap = withAddr.filter((o) => !isRouteSheetOfficeAddress(o.address));
-  if (withAddrForMap.length === 0) {
-    routeDeliveryMap.setView(officeLL, 15);
-    scheduleInvalidateRouteDeliveryMap();
-    setRouteDeliveryMapStatus("");
-    return;
-  }
-
-  /** @type {Map<string, object[]>} */
-  const byAddress = new Map();
-  for (const o of withAddrForMap) {
-    const k = String(o.address).trim().toLowerCase();
-    if (!byAddress.has(k)) byAddress.set(k, []);
-    byAddress.get(k).push(o);
-  }
-  const uniqueAddresses = [...byAddress.keys()].map((k) => byAddress.get(k)[0].address.trim());
-
-  setRouteDeliveryMapStatus("Ищем адреса на карте…");
-  const failed = [];
-  const latLngs = [];
-
-  for (let i = 0; i < uniqueAddresses.length; i++) {
-    if (gen !== routeDeliveryMapGeneration) return;
-    const addr = uniqueAddresses[i];
-    const coords = await geocodeAddressVolgograd(addr);
-    if (gen !== routeDeliveryMapGeneration) return;
-    if (!coords) {
-      failed.push(addr);
-      continue;
+    const withAddr = deliveryRows.filter((o) => String(o.address ?? "").trim() !== "");
+    if (withAddr.length === 0) {
+      routeDeliveryMap.setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
+      setRouteDeliveryMapStatus("");
+      scheduleInvalidateRouteDeliveryMap();
+      return;
     }
-    const ordersHere = byAddress.get(addr.toLowerCase()) || [];
-    const latlng = L.latLng(coords.lat, coords.lon);
-    latLngs.push(latlng);
-    const marker = L.marker(latlng, {
-      icon: deliveryMapMarkerIcon(L, ordersHere),
-    });
-    marker.bindPopup(buildDeliveryPopupHtml(ordersHere));
-    marker.addTo(routeDeliveryMarkersLayer);
-    if (i < uniqueAddresses.length - 1) await sleep(NOMINATIM_DELAY_MS);
+
+    const officeLL = routeSheetOfficeLatLng(L);
+    const withAddrForMap = withAddr.filter((o) => !isRouteSheetOfficeAddress(o.address));
+
+    /** @type {Map<string, object[]>} */
+    const byAddress = new Map();
+    for (const o of withAddr) {
+      const k = addressNormKeyFromOrder(o);
+      if (!byAddress.has(k)) byAddress.set(k, []);
+      byAddress.get(k).push(o);
+    }
+
+    const orderedKeys = [];
+    const keySeen = new Set();
+    for (const o of deliveryRows) {
+      const k = addressNormKeyFromOrder(o);
+      if (k === "" || keySeen.has(k)) continue;
+      keySeen.add(k);
+      orderedKeys.push(k);
+    }
+    const Y = orderedKeys.length;
+    const failedGeocode = [];
+    const failedOsrm = [];
+    const latLngs = [];
+
+    if (withAddrForMap.length === 0) {
+      for (const o of withAddr) {
+        if (isRouteSheetOfficeAddress(o.address)) deliveryKmByOrderId.set(o.id, 0);
+        else deliveryKmByOrderId.set(o.id, null);
+      }
+      updateKmCellsForOrders(withAddr);
+      routeDeliveryMap.setView(officeLL, 15);
+      setRouteDeliveryMapStatus("");
+      scheduleInvalidateRouteDeliveryMap();
+      return;
+    }
+
+    for (let i = 0; i < orderedKeys.length; i++) {
+      if (gen !== routeDeliveryPipelineGeneration) return;
+      const key = orderedKeys[i];
+      const ordersHere = byAddress.get(key) || [];
+      const displayAddr = (ordersHere[0]?.address ?? "").trim();
+      const x = i + 1;
+      setRouteDeliveryMapStatus(`Ищем адрес ${x} из ${Y}: ${truncateForStatus(displayAddr, 72)}`, false);
+
+      if (isRouteSheetOfficeAddress(displayAddr)) {
+        for (const o of ordersHere) deliveryKmByOrderId.set(o.id, 0);
+        updateKmCellsForOrders(ordersHere);
+        latLngs.push(officeLL);
+        if (i < orderedKeys.length - 1) await sleep(NOMINATIM_DELAY_MS);
+        continue;
+      }
+
+      let coords = null;
+      try {
+        coords = await geocodeAddressVolgograd(displayAddr);
+      } catch (e) {
+        console.error("Nominatim:", e);
+        setRouteDeliveryMapStatus(
+          `Ошибка сети (${x} из ${Y}): запрос адреса. ${truncateForStatus(displayAddr, 56)}`,
+          true,
+        );
+      }
+      if (gen !== routeDeliveryPipelineGeneration) return;
+
+      if (!coords) {
+        failedGeocode.push(displayAddr);
+        for (const o of ordersHere) deliveryKmByOrderId.set(o.id, null);
+        updateKmCellsForOrders(ordersHere);
+        if (i < orderedKeys.length - 1) await sleep(NOMINATIM_DELAY_MS);
+        continue;
+      }
+
+      const latlng = L.latLng(coords.lat, coords.lon);
+      latLngs.push(latlng);
+      try {
+        const marker = L.marker(latlng, {
+          icon: deliveryMapMarkerIcon(L, ordersHere),
+        });
+        marker.bindPopup(buildDeliveryPopupHtml(ordersHere));
+        marker.addTo(routeDeliveryMarkersLayer);
+      } catch (e) {
+        console.error("Leaflet marker:", e);
+        setRouteDeliveryMapStatus(`Ошибка отображения точки (${x} из ${Y}).`, true);
+      }
+
+      let km = null;
+      try {
+        km = await osrmDrivingDistanceKm(
+          ROUTE_SHEET_OFFICE_LON,
+          ROUTE_SHEET_OFFICE_LAT,
+          coords.lon,
+          coords.lat,
+        );
+      } catch (e) {
+        console.error("OSRM:", e);
+        setRouteDeliveryMapStatus(`Ошибка маршрута км (${x} из ${Y}).`, true);
+      }
+      if (gen !== routeDeliveryPipelineGeneration) return;
+      if (km == null) failedOsrm.push(displayAddr);
+      for (const o of ordersHere) deliveryKmByOrderId.set(o.id, km);
+      updateKmCellsForOrders(ordersHere);
+
+      if (i < orderedKeys.length - 1) await sleep(NOMINATIM_DELAY_MS);
+    }
+
+    if (gen !== routeDeliveryPipelineGeneration) return;
+
+    if (latLngs.length === 1) {
+      routeDeliveryMap.fitBounds(L.latLngBounds([latLngs[0], officeLL]), { padding: [36, 36], maxZoom: 15 });
+    } else if (latLngs.length > 1) {
+      const b = L.latLngBounds(latLngs);
+      b.extend(officeLL);
+      routeDeliveryMap.fitBounds(b, { padding: [28, 28], maxZoom: 15 });
+    } else {
+      routeDeliveryMap.setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
+    }
+
+    const parts = [];
+    if (failedGeocode.length) {
+      parts.push(
+        `не найдено на карте (${failedGeocode.length}): ${truncateForStatus(failedGeocode.slice(0, 2).join("; "), 100)}`,
+      );
+    }
+    if (failedOsrm.length) {
+      parts.push(`км по маршруту не получены (${failedOsrm.length} адр.)`);
+    }
+    if (parts.length) {
+      setRouteDeliveryMapStatus(`Обработка завершена. ${parts.join(" ")}`, true);
+    } else {
+      setRouteDeliveryMapStatus("");
+    }
+    scheduleInvalidateRouteDeliveryMap();
+  } catch (e) {
+    console.error("runDeliveryPipeline:", e);
+    setRouteDeliveryMapStatus(
+      `Сбой: ${e instanceof Error ? truncateForStatus(e.message, 140) : "неизвестная ошибка"}. Попробуйте обновить страницу или сузить период.`,
+      true,
+    );
+    scheduleInvalidateRouteDeliveryMap();
   }
-
-  if (gen !== routeDeliveryMapGeneration) return;
-
-  if (latLngs.length === 1) {
-    routeDeliveryMap.fitBounds(L.latLngBounds([latLngs[0], officeLL]), { padding: [36, 36], maxZoom: 15 });
-  } else if (latLngs.length > 1) {
-    const b = L.latLngBounds(latLngs);
-    b.extend(officeLL);
-    routeDeliveryMap.fitBounds(b, { padding: [28, 28], maxZoom: 15 });
-  } else {
-    routeDeliveryMap.setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
-  }
-
-  if (failed.length) {
-    const sample = failed.slice(0, 3).join("; ");
-    const more = failed.length > 3 ? ` (+${failed.length - 3})` : "";
-    setRouteDeliveryMapStatus(`Не удалось найти на карте: ${sample}${more}`, true);
-  } else {
-    setRouteDeliveryMapStatus("");
-  }
-
-  scheduleInvalidateRouteDeliveryMap();
 }
 
 /** Как в таблице заказов: user_lite не видит тип «Магазин». */
@@ -628,8 +651,7 @@ export function loadRouteSheet() {
     tbodyDelivery.innerHTML = "";
     tbodyPickup.innerHTML = "";
     tbodyShop.innerHTML = "";
-    routeDeliveryMapGeneration += 1;
-    routeDeliveryKmGeneration += 1;
+    routeDeliveryPipelineGeneration += 1;
     deliveryKmByOrderId.clear();
     if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
     setRouteDeliveryMapStatus("");
@@ -640,8 +662,7 @@ export function loadRouteSheet() {
     tbodyDelivery.innerHTML = "";
     tbodyPickup.innerHTML = "";
     tbodyShop.innerHTML = "";
-    routeDeliveryMapGeneration += 1;
-    routeDeliveryKmGeneration += 1;
+    routeDeliveryPipelineGeneration += 1;
     deliveryKmByOrderId.clear();
     if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
     setRouteDeliveryMapStatus("");
@@ -659,15 +680,13 @@ export function loadRouteSheet() {
   tbodyShop.innerHTML = shop.map(rowShopHtml).join("");
 
   if (isRouteSheetSectionActive()) {
-    const kmGen = ++routeDeliveryKmGeneration;
+    const gen = ++routeDeliveryPipelineGeneration;
     tbodyDelivery.innerHTML = deliveryRows.map((o) => rowMainHtml(o, "…")).join("");
-    void fillDeliveryDistanceColumn(deliveryRows, kmGen);
-    void updateRouteSheetDeliveryMap(deliveryRows);
+    void runDeliveryPipeline(deliveryRows, gen);
   } else {
-    routeDeliveryKmGeneration += 1;
+    routeDeliveryPipelineGeneration += 1;
     deliveryKmByOrderId.clear();
     tbodyDelivery.innerHTML = deliveryRows.map((o) => rowMainHtml(o, "—")).join("");
-    routeDeliveryMapGeneration += 1;
   }
 }
 
@@ -752,8 +771,7 @@ function rowShopValues(order) {
 
 /** При уходе с раздела — отменить фоновое геокодирование и очистить маркеры. */
 export function bumpRouteDeliveryMapGeneration() {
-  routeDeliveryMapGeneration += 1;
-  routeDeliveryKmGeneration += 1;
+  routeDeliveryPipelineGeneration += 1;
   deliveryKmByOrderId.clear();
   if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
   setRouteDeliveryMapStatus("");

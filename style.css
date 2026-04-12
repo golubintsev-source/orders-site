@@ -2596,6 +2596,9 @@ table {
   font-size: 12px;
   line-height: 1.35;
   color: #6b7280;
+  white-space: normal;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .route-sheet-map-status--warn {
