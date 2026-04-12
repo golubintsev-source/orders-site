@@ -2580,6 +2580,54 @@ table {
   margin-bottom: 8px;
 }
 
+.route-sheet-map-block {
+  margin: 12px 0 14px;
+}
+
+.route-sheet-map-heading {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.route-sheet-map-status {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #6b7280;
+}
+
+.route-sheet-map-status--warn {
+  color: #b45309;
+}
+
+.route-sheet-map {
+  height: min(52vh, 360px);
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #f1f5f9;
+  z-index: 0;
+}
+
+.route-sheet-map .leaflet-popup-content {
+  margin: 10px 12px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.route-sheet-map-popup-order + .route-sheet-map-popup-order {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.route-sheet-map-popup-addr {
+  color: #4b5563;
+  font-size: 12px;
+}
+
 .route-sheet-table {
   min-width: 720px;
 }

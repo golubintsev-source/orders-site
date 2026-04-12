@@ -22,6 +22,16 @@ const HEADERS_MAIN = [
 
 const HEADERS_SHOP = ["Номер", "Клиент", "Адрес", "Описание", "Телефон"];
 
+/** Центр Волгограда (OSM). */
+const VOLGOGRAD_CENTER = [48.708, 44.513];
+const VOLGOGRAD_ZOOM_DEFAULT = 11;
+const NOMINATIM_DELAY_MS = 1100;
+
+let routeDeliveryMap = null;
+let routeDeliveryMarkersLayer = null;
+let routeDeliveryMapGeneration = 0;
+const nominatimCache = new Map();
+
 function escapeHtml(s) {
   if (s == null) return "";
   const div = document.createElement("div");
@@ -132,6 +142,186 @@ function filterShopOrders(orders, fromKey, toKey) {
     .sort(sortByDeliveryThenId);
 }
 
+function isRouteSheetSectionActive() {
+  return document.getElementById("section-route-sheet")?.classList.contains("active") === true;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function nominatimQueryForAddress(address) {
+  const t = String(address).trim();
+  if (!t) return "";
+  const lower = t.toLowerCase();
+  if (lower.includes("волгоград")) return `${t}, Россия`;
+  return `${t}, Волгоград, Россия`;
+}
+
+/**
+ * Геокодирование адреса (Nominatim). Кэш и пауза между запросами — по правилам использования API.
+ * @returns {Promise<{ lat: number, lon: number } | null>}
+ */
+async function geocodeAddressVolgograd(address) {
+  const raw = String(address).trim();
+  if (!raw) return null;
+  const key = raw.toLowerCase();
+  if (nominatimCache.has(key)) return nominatimCache.get(key);
+
+  const q = nominatimQueryForAddress(raw);
+  const params = new URLSearchParams({ q, format: "json", limit: "1", countrycodes: "ru" });
+  const url = `https://nominatim.openstreetmap.org/search?${params}`;
+  const res = await fetch(url, { headers: { "Accept-Language": "ru,en" } });
+  if (!res.ok) {
+    nominatimCache.set(key, null);
+    return null;
+  }
+  const data = await res.json();
+  if (!Array.isArray(data) || !data[0]) {
+    nominatimCache.set(key, null);
+    return null;
+  }
+  const lat = Number.parseFloat(data[0].lat);
+  const lon = Number.parseFloat(data[0].lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    nominatimCache.set(key, null);
+    return null;
+  }
+  const coords = { lat, lon };
+  nominatimCache.set(key, coords);
+  return coords;
+}
+
+function ensureRouteDeliveryMap() {
+  const L = globalThis.L;
+  const el = document.getElementById("routeSheetDeliveryMap");
+  if (!L || !el || routeDeliveryMap) return;
+
+  routeDeliveryMap = L.map(el, { scrollWheelZoom: false }).setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(routeDeliveryMap);
+  routeDeliveryMarkersLayer = L.layerGroup().addTo(routeDeliveryMap);
+}
+
+function setRouteDeliveryMapStatus(text, warn) {
+  const statusEl = document.getElementById("routeSheetDeliveryMapStatus");
+  if (!statusEl) return;
+  if (!text) {
+    statusEl.textContent = "";
+    statusEl.hidden = true;
+    statusEl.classList.remove("route-sheet-map-status--warn");
+    return;
+  }
+  statusEl.textContent = text;
+  statusEl.hidden = false;
+  statusEl.classList.toggle("route-sheet-map-status--warn", Boolean(warn));
+}
+
+function buildDeliveryPopupHtml(ordersAtAddress) {
+  return ordersAtAddress
+    .map((o) => {
+      const num =
+        o.id != null ? escapeHtml(formatOrderIdTypeChip(o.id, o.order_type)) : "";
+      const client = escapeHtml(o.client ?? "");
+      const addr = escapeHtml(o.address ?? "");
+      return `<div class="route-sheet-map-popup-order"><strong>${num}</strong> — ${client}<br><span class="route-sheet-map-popup-addr">${addr}</span></div>`;
+    })
+    .join("");
+}
+
+function scheduleInvalidateRouteDeliveryMap() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      routeDeliveryMap?.invalidateSize();
+    });
+  });
+}
+
+/**
+ * Точки доставки на карте Волгограда (по адресам из таблицы «Доставка»).
+ * @param {Array<object>} deliveryRows
+ */
+async function updateRouteSheetDeliveryMap(deliveryRows) {
+  const gen = ++routeDeliveryMapGeneration;
+  const L = globalThis.L;
+  if (!L) {
+    setRouteDeliveryMapStatus("Библиотека карты не загружена. Обновите страницу.", true);
+    return;
+  }
+
+  ensureRouteDeliveryMap();
+  if (!routeDeliveryMap || !routeDeliveryMarkersLayer) return;
+
+  routeDeliveryMarkersLayer.clearLayers();
+  setRouteDeliveryMapStatus("");
+
+  const withAddr = deliveryRows.filter((o) => String(o.address ?? "").trim() !== "");
+  if (withAddr.length === 0) {
+    routeDeliveryMap.setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
+    scheduleInvalidateRouteDeliveryMap();
+    return;
+  }
+
+  /** @type {Map<string, object[]>} */
+  const byAddress = new Map();
+  for (const o of withAddr) {
+    const k = String(o.address).trim().toLowerCase();
+    if (!byAddress.has(k)) byAddress.set(k, []);
+    byAddress.get(k).push(o);
+  }
+  const uniqueAddresses = [...byAddress.keys()].map((k) => byAddress.get(k)[0].address.trim());
+
+  setRouteDeliveryMapStatus("Ищем адреса на карте…");
+  const failed = [];
+  const latLngs = [];
+
+  for (let i = 0; i < uniqueAddresses.length; i++) {
+    if (gen !== routeDeliveryMapGeneration) return;
+    const addr = uniqueAddresses[i];
+    const coords = await geocodeAddressVolgograd(addr);
+    if (gen !== routeDeliveryMapGeneration) return;
+    if (!coords) {
+      failed.push(addr);
+      continue;
+    }
+    const ordersHere = byAddress.get(addr.toLowerCase()) || [];
+    const latlng = L.latLng(coords.lat, coords.lon);
+    latLngs.push(latlng);
+    const marker = L.circleMarker(latlng, {
+      radius: 9,
+      color: "#1d4ed8",
+      weight: 2,
+      fillColor: "#3b82f6",
+      fillOpacity: 0.85,
+    });
+    marker.bindPopup(buildDeliveryPopupHtml(ordersHere));
+    marker.addTo(routeDeliveryMarkersLayer);
+    if (i < uniqueAddresses.length - 1) await sleep(NOMINATIM_DELAY_MS);
+  }
+
+  if (gen !== routeDeliveryMapGeneration) return;
+
+  if (latLngs.length === 1) {
+    routeDeliveryMap.setView(latLngs[0], 14);
+  } else if (latLngs.length > 1) {
+    routeDeliveryMap.fitBounds(L.latLngBounds(latLngs), { padding: [28, 28], maxZoom: 15 });
+  } else {
+    routeDeliveryMap.setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
+  }
+
+  if (failed.length) {
+    const sample = failed.slice(0, 3).join("; ");
+    const more = failed.length > 3 ? ` (+${failed.length - 3})` : "";
+    setRouteDeliveryMapStatus(`Не удалось найти на карте: ${sample}${more}`, true);
+  } else {
+    setRouteDeliveryMapStatus("");
+  }
+
+  scheduleInvalidateRouteDeliveryMap();
+}
+
 /** Как в таблице заказов: user_lite не видит тип «Магазин». */
 function ordersVisibleOnRouteSheet() {
   return (state.allOrders || []).filter((o) => !isOrderHiddenFromUserLite(o));
@@ -182,6 +372,9 @@ export function loadRouteSheet() {
     tbodyDelivery.innerHTML = "";
     tbodyPickup.innerHTML = "";
     tbodyShop.innerHTML = "";
+    routeDeliveryMapGeneration += 1;
+    if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
+    setRouteDeliveryMapStatus("");
     return;
   }
   if (fromKey > toKey) {
@@ -189,6 +382,9 @@ export function loadRouteSheet() {
     tbodyDelivery.innerHTML = "";
     tbodyPickup.innerHTML = "";
     tbodyShop.innerHTML = "";
+    routeDeliveryMapGeneration += 1;
+    if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
+    setRouteDeliveryMapStatus("");
     return;
   }
 
@@ -202,6 +398,12 @@ export function loadRouteSheet() {
   tbodyDelivery.innerHTML = deliveryRows.map(rowMainHtml).join("");
   tbodyPickup.innerHTML = pickupRows.map(rowMainHtml).join("");
   tbodyShop.innerHTML = shop.map(rowShopHtml).join("");
+
+  if (isRouteSheetSectionActive()) {
+    void updateRouteSheetDeliveryMap(deliveryRows);
+  } else {
+    routeDeliveryMapGeneration += 1;
+  }
 }
 
 function excelFileNameTimestamp() {
@@ -264,6 +466,13 @@ function rowShopValues(order) {
     order.description ?? "",
     order.phone ?? "",
   ];
+}
+
+/** При уходе с раздела — отменить фоновое геокодирование и очистить маркеры. */
+export function bumpRouteDeliveryMapGeneration() {
+  routeDeliveryMapGeneration += 1;
+  if (routeDeliveryMarkersLayer) routeDeliveryMarkersLayer.clearLayers();
+  setRouteDeliveryMapStatus("");
 }
 
 export function exportRouteSheetDeliveryExcel() {

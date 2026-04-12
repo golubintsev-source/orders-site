@@ -1,6 +1,6 @@
 import { state } from "./state.js";
 import { loadBalance } from "./balance.js";
-import { loadRouteSheet } from "./route-sheet.js";
+import { bumpRouteDeliveryMapGeneration, loadRouteSheet } from "./route-sheet.js";
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
@@ -249,6 +249,8 @@ export function switchSection(sectionId) {
   const contentSections = getContentSections();
   if (!contentSections.length) return;
 
+  const prevSectionId = currentSectionId;
+
   currentSectionId = sectionId;
   contentSections.forEach((section) => {
     section.classList.toggle("active", section.id === `section-${sectionId}`);
@@ -265,6 +267,9 @@ export function switchSection(sectionId) {
   }
   if (sectionId === "route-sheet") {
     loadRouteSheet();
+  }
+  if (prevSectionId === "route-sheet" && sectionId !== "route-sheet") {
+    bumpRouteDeliveryMapGeneration();
   }
   if (sectionId === "calculations") {
     void import("./calculations.js").then((m) => m.loadCalculations());

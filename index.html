@@ -6,6 +6,7 @@
   <title>Заявки</title>
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
 </head>
 <body>
   <div id="dbUnavailableBanner" class="db-unavailable-banner" hidden role="alert" aria-live="polite">
@@ -800,6 +801,11 @@
             <tbody></tbody>
           </table>
         </div>
+        <div class="route-sheet-map-block" aria-label="Карта доставки по Волгограду">
+          <h4 class="route-sheet-map-heading">Карта: адреса доставки (Волгоград)</h4>
+          <p id="routeSheetDeliveryMapStatus" class="route-sheet-map-status" hidden></p>
+          <div id="routeSheetDeliveryMap" class="route-sheet-map" role="region"></div>
+        </div>
         <button type="button" id="routeSheetExportDeliveryBtn" class="btn-primary route-sheet-export-btn">Выгрузить в Excel</button>
         <h3 class="route-sheet-table-title">Самовывоз</h3>
         <div class="table-wrap route-sheet-table-wrap">
@@ -936,7 +942,8 @@
   <script src="https://cdn.jsdelivr.net/npm/blueimp-load-image@5.16.0/js/load-image.all.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=22"></script>
+  <script type="module" src="./js/main.js?v=23"></script>
 </body>
 </html>
