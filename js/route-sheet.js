@@ -352,10 +352,13 @@ function ensureRouteDeliveryMap() {
   const el = document.getElementById("routeSheetDeliveryMap");
   if (!L || !el || routeDeliveryMap) return;
 
-  routeDeliveryMap = L.map(el, { scrollWheelZoom: false }).setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
+  routeDeliveryMap = L.map(el, {
+    scrollWheelZoom: false,
+    attributionControl: false,
+  }).setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    attribution: "",
   }).addTo(routeDeliveryMap);
   routeDeliveryOfficeLayer = L.layerGroup().addTo(routeDeliveryMap);
   addRouteSheetOfficeMarker(L);

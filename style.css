@@ -2614,6 +2614,10 @@ table {
   z-index: 0;
 }
 
+.route-sheet-map .leaflet-control-attribution {
+  display: none !important;
+}
+
 .route-sheet-map .route-sheet-map-divicon-root {
   background: transparent !important;
   border: none !important;
