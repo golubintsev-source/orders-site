@@ -2127,15 +2127,15 @@ button:active {
 }
 
 .orders-totals-wrap {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .orders-totals-caption {
   caption-side: top;
   text-align: left;
   font-weight: 600;
-  font-size: 14px;
-  padding: 0 0 8px 0;
+  font-size: 13px;
+  padding: 0 0 4px 0;
 }
 
 #ordersTotalsTable.orders-totals-table {
@@ -2146,26 +2146,37 @@ button:active {
 
 #ordersTotalsTable th,
 #ordersTotalsTable td {
-  padding: 6px 10px;
-  font-size: 13px;
+  box-sizing: border-box;
+  padding: 3px 4px;
+  font-size: 12px;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
-#ordersTotalsTable th.th-money {
-  text-align: left;
-}
-
-#ordersTotalsTable th.th-money.th-money-header-right {
+/* «Итого»: заголовки и числа по правому краю, минимальная ширина столбцов */
+#ordersTotalsTable th {
   text-align: right;
 }
 
-#ordersTotalsTable th.th-area-m2,
-#ordersTotalsTable td.td-area-m2 {
+#ordersTotalsTable td {
   text-align: right;
 }
 
 #ordersTotalsTable .td-orders-totals-count {
   text-align: center;
+}
+
+@media (max-width: 480px) {
+  .orders-totals-caption {
+    font-size: 12px;
+    padding: 0 0 3px 0;
+  }
+
+  #ordersTotalsTable th,
+  #ordersTotalsTable td {
+    padding: 2px 3px;
+    font-size: 11px;
+  }
 }
 
 #ordersTable col.orders-col-150 {
