@@ -43,12 +43,42 @@
             <svg class="section-nav-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="section-nav-dropdown-panel" id="sectionNavDropdownPanel" role="listbox" aria-label="Разделы" hidden>
-            <button type="button" role="option" class="section-nav-dropdown-item" data-section="all">Заказы</button>
-            <button type="button" role="option" class="section-nav-dropdown-item" data-section="new">Новый</button>
-            <button type="button" role="option" class="section-nav-dropdown-item" data-section="calculations">Расчеты</button>
-            <button type="button" role="option" class="section-nav-dropdown-item" data-section="tasks-all">Все задачи</button>
-            <button type="button" role="option" class="section-nav-dropdown-item" data-section="balance">Баланс</button>
-            <button type="button" role="option" class="section-nav-dropdown-item" data-section="settings">Настройки</button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="all">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2h9l3 3v17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M15 2v5h5"/><path d="M7 13h10"/><path d="M7 17h7"/></svg>
+              <span class="section-nav-dropdown-item-text">Заказы</span>
+            </button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="new">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              <span class="section-nav-dropdown-item-text">Новый</span>
+            </button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="calculations">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+              <span class="section-nav-dropdown-item-text">Расчеты</span>
+            </button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="tasks-all">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <span class="section-nav-dropdown-item-text">Все задачи</span>
+            </button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="changes-all">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <span class="section-nav-dropdown-item-text">Все изменения</span>
+            </button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="balance">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              <span class="section-nav-dropdown-item-text">Баланс</span>
+            </button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="route-sheet">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-8-4.5-8-11a8 8 0 0 1 16 0c0 6.5-8 11-8 11z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span class="section-nav-dropdown-item-text">Маршрутный лист</span>
+            </button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="orders-excel">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+              <span class="section-nav-dropdown-item-text">Заказы в Excel</span>
+            </button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="settings">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+              <span class="section-nav-dropdown-item-text">Настройки</span>
+            </button>
             <div class="section-nav-dropdown-footer">
               <div class="section-nav-dropdown-stat section-nav-dropdown-stat--admin" id="sectionNavRicherStat" role="status" aria-live="polite" hidden>
                 <div class="section-nav-dropdown-stat-row">
@@ -203,7 +233,7 @@
           <div class="field compact-fields-row">
             <div class="field">
               <label>Стоимость</label>
-              <input type="text" inputmode="decimal" id="amount" />
+              <input type="text" inputmode="numeric" id="amount" title="Только целые рубли, без копеек" />
             </div>
             <div class="field">
               <label>Оплачено</label>
@@ -217,7 +247,7 @@
           <div class="field compact-fields-row">
             <div class="field">
               <label>Предоплата</label>
-              <input type="text" inputmode="decimal" id="prepayment" />
+              <input type="text" inputmode="numeric" id="prepayment" title="Только целые рубли, без копеек" />
             </div>
             <div class="field">
               <label>Кому предоплата</label>
@@ -234,7 +264,7 @@
           <div class="field compact-fields-row">
             <div class="field">
               <label>Остаток</label>
-              <input type="text" inputmode="decimal" id="remaining_amount" />
+              <input type="text" inputmode="numeric" id="remaining_amount" title="Только целые рубли, без копеек" />
             </div>
             <div class="field">
               <label>Кому остаток</label>
@@ -355,7 +385,7 @@
             <div class="field field-installer-rate-with-calc">
               <label for="installer_rate_per_m2">Монтаж 1м²</label>
               <div class="installer-rate-input-row">
-                <input type="text" inputmode="decimal" id="installer_rate_per_m2" class="installer-rate-input" />
+                <input type="text" inputmode="numeric" id="installer_rate_per_m2" class="installer-rate-input" title="Только целые рубли за 1 м²" />
                 <button type="button" id="installer_calc_btn" class="installer-calc-btn" title="Рассчитать сумму (Площадь × Монтаж 1м²)" aria-label="Рассчитать сумму (Площадь × Монтаж 1м²)">
                   <img src="img/calculator.svg" alt="" class="installer-calc-img" width="20" height="20" decoding="async" />
                 </button>
@@ -363,7 +393,7 @@
             </div>
             <div class="field">
               <label for="installer_payment_amount">з/п монтаж</label>
-              <input type="text" inputmode="decimal" id="installer_payment_amount" />
+              <input type="text" inputmode="numeric" id="installer_payment_amount" title="Только целые рубли, без копеек" />
             </div>
             <div class="field">
               <label for="installer_payment_by">Оплатил</label>
@@ -478,6 +508,9 @@
       <div id="orderTypeFilterDropdown" class="status-filter-dropdown" role="dialog" aria-label="Фильтр по типу заказа" style="display: none;">
         <div class="status-filter-dropdown-inner" id="orderTypeFilterCheckboxes"></div>
       </div>
+      <div id="paidFilterDropdown" class="status-filter-dropdown" role="dialog" aria-label="Фильтр по оплате" style="display: none;">
+        <div class="status-filter-dropdown-inner" id="paidFilterCheckboxes"></div>
+      </div>
       <div id="ordersTableScrollTop" class="orders-table-scroll-top" aria-hidden="true">
         <div id="ordersTableScrollSpacer" class="orders-table-scroll-spacer"></div>
       </div>
@@ -510,7 +543,14 @@
                   <span class="th-status-label">Клиент</span>
                 </div>
               </th>
-              <th class="th-paid">Опл.</th>
+              <th class="th-paid th-paid-header">
+                <div class="th-status-header-inner">
+                  <span class="th-status-label">Опл.</span>
+                  <button type="button" class="status-filter-btn paid-filter-btn" id="paidFilterBtn" title="Фильтр по оплате" aria-haspopup="true" aria-expanded="false">
+                    <svg class="status-filter-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                  </button>
+                </div>
+              </th>
               <th class="th-orders-col-150">
                 <div class="th-status-header-inner">
                   <span class="th-status-label">Адрес</span>
@@ -552,36 +592,6 @@
         </div>
         </div>
       </div>
-
-      <div class="orders-totals-wrap">
-        <table id="ordersTotalsTable" class="orders-totals-table" aria-label="Итого по отфильтрованным заказам">
-          <caption class="orders-totals-caption">Итого</caption>
-          <thead>
-            <tr>
-              <th scope="col">Штук</th>
-              <th scope="col" class="th-money">Стоимость</th>
-              <th scope="col" class="th-money">Предоплата</th>
-              <th scope="col" class="th-money">Остаток</th>
-              <th scope="col" class="orders-totals-th-m2">м2</th>
-              <th scope="col" class="th-money">з/п</th>
-              <th scope="col">Моск.</th>
-              <th scope="col">Конс.</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td id="ordersTotalsPieces">0</td>
-              <td id="ordersTotalsAmount" class="td-money"></td>
-              <td id="ordersTotalsPrepayment" class="td-money"></td>
-              <td id="ordersTotalsRemaining" class="td-money"></td>
-              <td id="ordersTotalsAreaM2" class="orders-totals-td-m2 td-money"></td>
-              <td id="ordersTotalsInstallerPay" class="td-money"></td>
-              <td id="ordersTotalsMosquito"></td>
-              <td id="ordersTotalsConstruction"></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
     </div>
     </section>
 
@@ -589,40 +599,48 @@
       <div class="card">
         <form id="calculationsForm" class="calculations-form" aria-label="Добавить запись в расчеты">
           <div class="calculations-form-column">
-            <div class="field">
-              <label for="calcFrom">Откуда</label>
-              <select id="calcFrom">
-                <option value="">—</option>
-                <option value="Вова">Вова</option>
-                <option value="Дима">Дима</option>
-                <option value="Касса">Касса</option>
-                <option value="Безнал">Безнал</option>
-                <option value="Другое">Другое</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="calcTo">Куда</label>
-              <select id="calcTo">
-                <option value="">—</option>
-                <option value="Вова">Вова</option>
-                <option value="Дима">Дима</option>
-                <option value="Касса">Касса</option>
-                <option value="Зарплата">Зарплата</option>
-                <option value="Покупка">Покупка</option>
-                <option value="Списание">Списание</option>
-                <option value="Безнал">Безнал</option>
-                <option value="Другое">Другое</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="calcAmount">Сумма</label>
-              <input type="text" id="calcAmount" inputmode="decimal" />
+            <div class="calculations-form-row calculations-form-row--first">
+              <div class="field">
+                <label for="calcFrom">Откуда</label>
+                <select id="calcFrom">
+                  <option value="">—</option>
+                  <option value="Вова">Вова</option>
+                  <option value="Дима">Дима</option>
+                  <option value="Касса">Касса</option>
+                  <option value="Безнал">Безнал</option>
+                  <option value="Другое">Другое</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="calcTo">Куда</label>
+                <select id="calcTo">
+                  <option value="">—</option>
+                  <option value="Вова">Вова</option>
+                  <option value="Дима">Дима</option>
+                  <option value="Касса">Касса</option>
+                  <option value="Зарплата">Зарплата</option>
+                  <option value="Покупка">Покупка</option>
+                  <option value="Списание">Списание</option>
+                  <option value="Безнал">Безнал</option>
+                  <option value="Другое">Другое</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="calcAmount">Сумма</label>
+                <input type="text" id="calcAmount" inputmode="numeric" title="Только целые рубли, без копеек" />
+              </div>
             </div>
             <div class="field">
               <label for="calcComment">Комментарий</label>
               <input type="text" id="calcComment" />
             </div>
-            <button type="submit" id="calcSubmitBtn" class="calculations-submit-btn">Добавить</button>
+            <div class="calculations-form-row calculations-form-row--submit-search">
+              <button type="submit" id="calcSubmitBtn" class="calculations-submit-btn">Добавить</button>
+              <div class="calculations-search-wrap">
+                <input type="search" id="calcSearchInput" class="calculations-search-input" placeholder="Поиск…" autocomplete="off" enterkeyhint="search" aria-label="Поиск по таблице" />
+                <button type="button" id="calcSearchBtn" class="calculations-search-btn">Найти</button>
+              </div>
+            </div>
           </div>
         </form>
         <div class="table-wrap">
@@ -663,6 +681,31 @@
       </div>
     </section>
 
+    <section id="section-changes-all" class="content-section">
+      <div class="card order-tasks-card">
+        <div class="table-wrap">
+          <table id="allChangesTable">
+            <colgroup>
+              <col class="all-changes-col-compact" />
+              <col class="all-changes-col-compact" />
+              <col class="all-changes-col-compact" />
+              <col class="all-changes-col-fill" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="th-order-date">Дата</th>
+                <th>Логин</th>
+                <th>Заказ</th>
+                <th>Изменения</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="allChangesMessage" class="order-tasks-hint"></p>
+      </div>
+    </section>
+
     <section id="section-order-tasks" class="content-section">
       <div class="card order-tasks-card">
         <div class="order-tasks-form-stack">
@@ -694,19 +737,86 @@
       </div>
     </section>
 
+    <section id="section-route-sheet" class="content-section">
+      <div class="card route-sheet-card">
+        <div class="route-sheet-dates" role="group" aria-label="Период по дате отправки">
+          <label class="route-sheet-date-inline">
+            <span class="route-sheet-date-prefix">с</span>
+            <input type="date" id="routeSheetDateFrom" class="route-sheet-date-input" min="2000-01-01" max="2099-12-31" />
+          </label>
+          <label class="route-sheet-date-inline">
+            <span class="route-sheet-date-prefix">по</span>
+            <input type="date" id="routeSheetDateTo" class="route-sheet-date-input" min="2000-01-01" max="2099-12-31" />
+          </label>
+        </div>
+        <p id="routeSheetMessage" class="route-sheet-message"></p>
+        <h3 class="route-sheet-table-title">Доставка</h3>
+        <div class="table-wrap route-sheet-table-wrap">
+          <table id="routeSheetTableDelivery" class="route-sheet-table">
+            <thead>
+              <tr>
+                <th>Заказ</th>
+                <th>Клиент</th>
+                <th>Адрес</th>
+                <th>Описание</th>
+                <th>Моск.</th>
+                <th>Конст.</th>
+                <th>Монтаж</th>
+                <th>Откосы</th>
+                <th class="route-sheet-col-phone">Телефон</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button type="button" id="routeSheetExportDeliveryBtn" class="btn-primary route-sheet-export-btn">Выгрузить в Excel</button>
+        <h3 class="route-sheet-table-title">Самовывоз</h3>
+        <div class="table-wrap route-sheet-table-wrap">
+          <table id="routeSheetTablePickup" class="route-sheet-table">
+            <thead>
+              <tr>
+                <th>Заказ</th>
+                <th>Клиент</th>
+                <th>Адрес</th>
+                <th>Описание</th>
+                <th>Моск.</th>
+                <th>Конст.</th>
+                <th>Монтаж</th>
+                <th>Откосы</th>
+                <th class="route-sheet-col-phone">Телефон</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button type="button" id="routeSheetExportPickupBtn" class="btn-primary route-sheet-export-btn">Выгрузить в Excel</button>
+        <div id="routeSheetShopSection" class="route-sheet-shop-section">
+          <h3 class="route-sheet-table-title">Магазин</h3>
+          <div class="table-wrap route-sheet-table-wrap">
+            <table id="routeSheetTableShop" class="route-sheet-table">
+              <thead>
+                <tr>
+                  <th>Заказ</th>
+                  <th>Клиент</th>
+                  <th>Адрес</th>
+                  <th>Описание</th>
+                  <th class="route-sheet-col-phone">Телефон</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <button type="button" id="routeSheetExportShopBtn" class="btn-primary route-sheet-export-btn">Выгрузить в Excel</button>
+        </div>
+      </div>
+    </section>
+
     <section id="section-balance" class="content-section">
       <div class="card">
         <div class="table-wrap">
           <table id="balanceTable">
             <thead>
-              <tr>
-                <th>Участник</th>
-                <th class="th-money">Сейчас</th>
-                <th class="th-money">Сегодня</th>
-                <th class="th-money">С-1</th>
-                <th class="th-money">С-2</th>
-                <th class="th-money">С-3</th>
-              </tr>
+              <tr></tr>
             </thead>
             <tbody></tbody>
           </table>
@@ -719,7 +829,7 @@
       <div class="card">
         <div class="settings-rate-row">
           <label for="settings_installer_rate_per_m2">Стоимость монтажа 1м², руб</label>
-          <input type="number" step="0.01" min="0" id="settings_installer_rate_per_m2" />
+          <input type="text" inputmode="numeric" id="settings_installer_rate_per_m2" title="Только целые рубли за 1 м²" />
           <button type="button" id="settingsSaveInstallerRateBtn" class="btn-primary">Сохранить</button>
         </div>
       </div>
@@ -728,19 +838,19 @@
         <div class="settings-adjustments-grid">
           <div class="settings-adjustments-field">
             <label for="settings_adj_dima">Дима</label>
-            <input type="number" step="1" id="settings_adj_dima" inputmode="numeric" />
+            <input type="text" inputmode="numeric" id="settings_adj_dima" title="Целое число рублей; допускается знак минус" />
           </div>
           <div class="settings-adjustments-field">
             <label for="settings_adj_vova">Вова</label>
-            <input type="number" step="1" id="settings_adj_vova" inputmode="numeric" />
+            <input type="text" inputmode="numeric" id="settings_adj_vova" title="Целое число рублей; допускается знак минус" />
           </div>
           <div class="settings-adjustments-field">
             <label for="settings_adj_kassa">Касса</label>
-            <input type="number" step="1" id="settings_adj_kassa" inputmode="numeric" />
+            <input type="text" inputmode="numeric" id="settings_adj_kassa" title="Целое число рублей; допускается знак минус" />
           </div>
           <div class="settings-adjustments-field">
             <label for="settings_adj_beznal">Безнал</label>
-            <input type="number" step="1" id="settings_adj_beznal" inputmode="numeric" />
+            <input type="text" inputmode="numeric" id="settings_adj_beznal" title="Целое число рублей; допускается знак минус" />
           </div>
         </div>
         <button type="button" id="settingsSaveAdjustmentsBtn" class="btn-primary settings-save-adjustments-btn settings-save-btn-inactive" disabled>Сохранить</button>
@@ -794,7 +904,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/blueimp-load-image@5.16.0/js/load-image.all.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=20"></script>
+  <script type="module" src="./js/main.js?v=22"></script>
 </body>
 </html>

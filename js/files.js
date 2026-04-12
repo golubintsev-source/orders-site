@@ -393,8 +393,13 @@ export async function renderExistingOrderFilesInForm(orderId) {
     return;
   }
 
+  const onDelete =
+    state.viewingOrderId != null && Number(state.viewingOrderId) === Number(orderId)
+      ? null
+      : removeOrderFileFromEditForm;
+
   for (const file of files) {
-    const row = await createOrderFileRowElement(file, orderId, removeOrderFileFromEditForm);
+    const row = await createOrderFileRowElement(file, orderId, onDelete);
     list.appendChild(row);
   }
 }
@@ -576,6 +581,15 @@ async function compressImageForWebIfNeeded(file) {
   });
 }
 
+/**
+ * Safari/iOS: supabase-js отдаёт тело запроса как ReadableStream; WebKit отвечает
+ * «ReadableStream uploading is not supported». Собираем обычный Blob из буфера.
+ */
+async function blobBodyForStorageUpload(blob) {
+  const buf = await blob.arrayBuffer();
+  return new Blob([buf], { type: blob.type || "application/octet-stream" });
+}
+
 export async function uploadFiles(orderId) {
   applyPendingToAttachmentsInput();
   if (pendingAttachments.length === 0) {
@@ -585,15 +599,19 @@ export async function uploadFiles(orderId) {
 
   const files = [...pendingAttachments];
 
-  for (const file of files) {
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
     const fileToUpload = await compressImageForWebIfNeeded(file);
-    const safeName = fileToUpload.name.replace(/[^\w.\-]+/g, "_");
-    const ts = Date.now();
-    const filePath = `${state.currentUser.id}/${orderId}/${ts}_${safeName}`;
+    const rawName = (fileToUpload.name || "").trim() || "file";
+    const safeName = rawName.replace(/[^\w.\-]+/g, "_").replace(/^\.+$/, "") || "file";
+    /* iPhone часто даёт нескольким снимкам одно имя (image.jpg); Date.now() в одной миллисекунде совпадает — путь должен быть уникален. */
+    const stamp = `${Date.now()}_${i}_${Math.random().toString(36).slice(2, 10)}`;
+    const filePath = `${state.currentUser.id}/${orderId}/${stamp}_${safeName}`;
 
+    const uploadBody = await blobBodyForStorageUpload(fileToUpload);
     const { error: uploadError } = await supabaseClient.storage
       .from("order-files")
-      .upload(filePath, fileToUpload, {
+      .upload(filePath, uploadBody, {
         cacheControl: "3600",
         upsert: false,
         contentType: fileToUpload.type || "application/octet-stream",
@@ -601,7 +619,8 @@ export async function uploadFiles(orderId) {
 
     if (uploadError) {
       console.error("Ошибка загрузки файла:", uploadError);
-      setMessage(`Ошибка загрузки файла: ${file.name}`, "#d32f2f");
+      const hint = uploadError.message ? ` (${uploadError.message})` : "";
+      setMessage(`Ошибка загрузки файла: ${file.name || rawName}${hint}`, "#d32f2f");
       continue;
     }
 
@@ -615,8 +634,9 @@ export async function uploadFiles(orderId) {
       const thumbBlob = await buildThumbnailBlob(fileToUpload);
       if (thumbBlob && thumbBlob.size > 0) {
         const thumbExt = thumbBlob.type === "image/jpeg" ? "jpg" : "webp";
-        thumbnailStoragePath = `${state.currentUser.id}/${orderId}/${ts}_thumb.${thumbExt}`;
-        const { error: thumbErr } = await supabaseClient.storage.from("order-files").upload(thumbnailStoragePath, thumbBlob, {
+        thumbnailStoragePath = `${state.currentUser.id}/${orderId}/${stamp}_thumb.${thumbExt}`;
+        const thumbUploadBody = await blobBodyForStorageUpload(thumbBlob);
+        const { error: thumbErr } = await supabaseClient.storage.from("order-files").upload(thumbnailStoragePath, thumbUploadBody, {
           cacheControl: "86400",
           upsert: false,
           contentType: thumbBlob.type || "image/webp",
@@ -851,7 +871,7 @@ async function createOrderFileRowElement(file, orderId, onAdminDelete) {
     actions.appendChild(dlA);
   }
 
-  if (isAdmin()) {
+  if (isAdmin() && onAdminDelete) {
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "file-remove-btn";
@@ -988,7 +1008,7 @@ export async function removeOrderFileFromEditForm(fileId, orderId) {
   const { applyClientFilter } = await import("./orders.js");
   applyClientFilter();
 
-  if (state.editingOrderId === orderId) {
+  if (state.editingOrderId === orderId || state.viewingOrderId === orderId) {
     await renderExistingOrderFilesInForm(orderId);
   }
 }

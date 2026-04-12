@@ -1,5 +1,5 @@
 import { supabaseClient } from "./config.js";
-import { checkDatabaseAvailable, setDbUnavailableBannerVisible } from "./dbHealth.js";
+import { setDbUnavailableBannerVisible } from "./dbHealth.js";
 import { state } from "./state.js";
 import {
   clientSearch,
@@ -25,10 +25,11 @@ import {
   clearExistingOrderFilesInForm,
   renderExistingOrderFilesInForm,
 } from "./files.js";
-import { formatAmount, formatOrderIdTypeChip } from "./format.js";
+import { formatAmount, formatOrderIdTypeChip, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY } from "./format.js";
 import { applyOrdersTableMobileFit } from "./ordersTableMobileFit.js";
 import {
   canMutateOrders,
+  canDeleteOrders,
   isAdmin,
   isOrderEditLockedForUserLite,
   isOrderHiddenFromUserLite,
@@ -36,23 +37,6 @@ import {
 } from "./roles.js";
 
 export async function loadOrders() {
-  if (!(await checkDatabaseAvailable())) {
-    setDbUnavailableBannerVisible(true);
-    state.allOrders = [];
-    state.filesCountMap = {};
-    applyFiltersAndRender();
-    updateSectionNavRicherStat();
-    if (getCurrentSectionId() === "tasks-all") {
-      refreshSectionNavLabel();
-      void import("./tasks.js").then((m) => m.loadAllTasks());
-    } else if (getCurrentSectionId() === "order-tasks") {
-      refreshSectionNavLabel();
-      void import("./tasks.js").then((m) => m.loadOrderTasks());
-    }
-    setMessage("Ошибка загрузки заявок", "#d32f2f");
-    return;
-  }
-
   const { data, error } = await supabaseClient
     .from("orders")
     .select("*")
@@ -62,6 +46,10 @@ export async function loadOrders() {
   if (error) {
     console.error("Ошибка загрузки:", error);
     setDbUnavailableBannerVisible(true);
+    state.allOrders = [];
+    state.filesCountMap = {};
+    applyFiltersAndRender();
+    updateSectionNavRicherStat();
     setMessage("Ошибка загрузки заявок", "#d32f2f");
     return;
   }
@@ -74,9 +62,13 @@ export async function loadOrders() {
   if (getCurrentSectionId() === "tasks-all") {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadAllTasks());
+  } else if (getCurrentSectionId() === "changes-all") {
+    void import("./all-changes.js").then((m) => m.loadAllChanges());
   } else if (getCurrentSectionId() === "order-tasks") {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadOrderTasks());
+  } else if (getCurrentSectionId() === "route-sheet") {
+    void import("./route-sheet.js").then((m) => m.loadRouteSheet());
   }
 }
 
@@ -92,6 +84,9 @@ const STATUS_OPTIONS = [
   "Монтаж выполнен",
   "Заказ закрыт",
 ];
+
+/** Значения фильтра колонки «Опл.» (да / нет / без указанной суммы заказа). */
+const PAID_FILTER_OPTIONS = ["да", "нет", "Без суммы"];
 
 function normalizeStatus(val) {
   if (val === "нет" || val === "оплачен" || val == null || val === "") return "Контакт с клиентом";
@@ -119,15 +114,24 @@ function orderMatchesOrderTypeKeys(order, selectedKeys) {
 }
 
 const ORDER_FORM_NUMERIC_FIELD_DECIMALS = {
-  amount: 2,
-  prepayment: 2,
-  remaining_amount: 2,
+  amount: 0,
+  prepayment: 0,
+  remaining_amount: 0,
   area_m2: 2,
   mosquito_nets: 0,
   construction_count: 0,
-  installer_rate_per_m2: 2,
-  installer_payment_amount: 2,
+  installer_rate_per_m2: 0,
+  installer_payment_amount: 0,
 };
+
+/** Поля формы заказа: суммы в рублях только целые (без копеек). */
+export const RUBLE_INTEGER_ORDER_FIELD_IDS = [
+  "amount",
+  "prepayment",
+  "remaining_amount",
+  "installer_payment_amount",
+  "installer_rate_per_m2",
+];
 
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 
@@ -183,55 +187,191 @@ async function writeOrderDeltaCalculations({
   };
 
   const rows = [];
-  const pushRow = ({ key, kindLabel, from_place, to_place, oldVal, newVal }) => {
-    const delta = newVal - oldVal;
-    if (Math.abs(delta) < 0.000001) return;
+
+  const normRecipientSelect = (v) => {
+    const t = String(v ?? "").trim();
+    return t === "—" ? "" : t;
+  };
+
+  const pushAmountRecipientCalcRow = (kindLabel, { from_place, to_place, amount, delta_key, detail }) => {
+    if (Math.abs(amount) < 0.000001) return;
     rows.push({
       created_at: nowIso,
       from_place: from_place || "—",
       to_place: to_place || "—",
-      amount: delta,
-      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${kindLabel}; ${orderNumberStr}; ${clientStr}; ${formatAmount(oldVal)} → ${formatAmount(newVal)}; ${timeHHmm}; ${actorShort}`,
+      amount,
+      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${kindLabel}; ${orderNumberStr}; ${clientStr}; ${detail}; ${timeHHmm}; ${actorShort}`,
       order_id: orderId,
-      delta_key: key,
+      delta_key,
     });
   };
 
-  pushRow({
-    key: "prepayment",
-    kindLabel: "Предоплата",
-    from_place: "Клиент",
-    to_place: orderData?.prepayment_to || (wasEditing ? initialParticipants?.prepayment_to : "") || "—",
-    oldVal: old.prepayment,
-    newVal: next.prepayment,
-  });
+  /**
+   * Предоплата / Кому предоплата — та же схема, что для «Остаток» / «Кому остаток»:
+   * пустой select и «—» = «-»; ветки 1–5 как для остатка.
+   */
+  const prepToBefore = normRecipientSelect(wasEditing ? initialParticipants?.prepayment_to : "");
+  const prepToAfter = normRecipientSelect(orderData?.prepayment_to);
+  const prepToBeforeEmpty = prepToBefore === "";
+  const prepToAfterEmpty = prepToAfter === "";
+  const prepOld = old.prepayment;
+  const prepNew = next.prepayment;
+  const prepSame = Math.abs(prepOld - prepNew) < 0.000001;
+  const prepToSame = prepToBefore === prepToAfter;
 
-  const remainingToBefore = (wasEditing ? initialParticipants?.remaining_to : "") || "";
-  const remainingToAfter = orderData?.remaining_to || "";
-  const remainingToMissingBoth = !remainingToBefore.trim() && !remainingToAfter.trim();
-  if (!remainingToMissingBoth) {
-    pushRow({
-      key: "remaining_amount",
-      kindLabel: "Остаток",
-      from_place: "Клиент",
-      to_place: remainingToAfter || remainingToBefore || "—",
-      oldVal: old.remaining_amount,
-      newVal: next.remaining_amount,
-    });
+  if (!(prepToBeforeEmpty && prepToAfterEmpty) && !(prepSame && prepToSame)) {
+    if (prepToBeforeEmpty && !prepToAfterEmpty) {
+      pushAmountRecipientCalcRow("Предоплата", {
+        from_place: "Клиент",
+        to_place: prepToAfter,
+        amount: prepNew,
+        delta_key: "prepayment",
+        detail: `кому − → ${prepToAfter}; сумма ${formatAmount(prepNew)}`,
+      });
+    } else if (!prepToBeforeEmpty && prepToAfterEmpty) {
+      pushAmountRecipientCalcRow("Предоплата", {
+        from_place: prepToBefore,
+        to_place: "Клиент",
+        amount: prepOld,
+        delta_key: "prepayment",
+        detail: `${prepToBefore} → клиент; сумма ${formatAmount(prepOld)}`,
+      });
+    } else if (!prepToBeforeEmpty && !prepToAfterEmpty && prepToSame) {
+      pushAmountRecipientCalcRow("Предоплата", {
+        from_place: "Клиент",
+        to_place: prepToAfter,
+        amount: prepNew - prepOld,
+        delta_key: "prepayment",
+        detail: `${prepToAfter}; ${formatAmount(prepOld)} → ${formatAmount(prepNew)}`,
+      });
+    } else if (!prepToBeforeEmpty && !prepToAfterEmpty && !prepToSame) {
+      pushAmountRecipientCalcRow("Предоплата", {
+        from_place: prepToBefore,
+        to_place: "Клиент",
+        amount: prepOld,
+        delta_key: "prepayment_to",
+        detail: `смена получателя; ${prepToBefore} → клиент; ${formatAmount(prepOld)}`,
+      });
+      pushAmountRecipientCalcRow("Предоплата", {
+        from_place: "Клиент",
+        to_place: prepToAfter,
+        amount: prepNew,
+        delta_key: "prepayment_to",
+        detail: `смена получателя; клиент → ${prepToAfter}; ${formatAmount(prepNew)}`,
+      });
+    }
   }
 
-  const installerByBefore = (wasEditing ? initialParticipants?.installer_payment_by : "") || "";
-  const installerByAfter = orderData?.installer_payment_by || "";
-  const installerByMissingBoth = !installerByBefore.trim() && !installerByAfter.trim();
-  if (!installerByMissingBoth) {
-    pushRow({
-      key: "installer_payment_amount",
-      kindLabel: "Монтаж",
-      from_place: installerByAfter || installerByBefore || "—",
-      to_place: "Монтаж",
-      oldVal: old.installer_payment_amount,
-      newVal: next.installer_payment_amount,
-    });
+  const remToBefore = normRecipientSelect(wasEditing ? initialParticipants?.remaining_to : "");
+  const remToAfter = normRecipientSelect(orderData?.remaining_to);
+  const remToBeforeEmpty = remToBefore === "";
+  const remToAfterEmpty = remToAfter === "";
+
+  const remOld = old.remaining_amount;
+  const remNew = next.remaining_amount;
+  const remSame = Math.abs(remOld - remNew) < 0.000001;
+  const remToSame = remToBefore === remToAfter;
+
+  /**
+   * Остаток / Кому остаток — пустой select и «—» = «-»; ветки 1–5.
+   */
+  if (!(remToBeforeEmpty && remToAfterEmpty) && !(remSame && remToSame)) {
+    if (remToBeforeEmpty && !remToAfterEmpty) {
+      pushAmountRecipientCalcRow("Остаток", {
+        from_place: "Клиент",
+        to_place: remToAfter,
+        amount: remNew,
+        delta_key: "remaining_amount",
+        detail: `кому − → ${remToAfter}; сумма ${formatAmount(remNew)}`,
+      });
+    } else if (!remToBeforeEmpty && remToAfterEmpty) {
+      pushAmountRecipientCalcRow("Остаток", {
+        from_place: remToBefore,
+        to_place: "Клиент",
+        amount: remOld,
+        delta_key: "remaining_amount",
+        detail: `${remToBefore} → клиент; сумма ${formatAmount(remOld)}`,
+      });
+    } else if (!remToBeforeEmpty && !remToAfterEmpty && remToSame) {
+      pushAmountRecipientCalcRow("Остаток", {
+        from_place: "Клиент",
+        to_place: remToAfter,
+        amount: remNew - remOld,
+        delta_key: "remaining_amount",
+        detail: `${remToAfter}; ${formatAmount(remOld)} → ${formatAmount(remNew)}`,
+      });
+    } else if (!remToBeforeEmpty && !remToAfterEmpty && !remToSame) {
+      pushAmountRecipientCalcRow("Остаток", {
+        from_place: remToBefore,
+        to_place: "Клиент",
+        amount: remOld,
+        delta_key: "remaining_to",
+        detail: `смена получателя; ${remToBefore} → клиент; ${formatAmount(remOld)}`,
+      });
+      pushAmountRecipientCalcRow("Остаток", {
+        from_place: "Клиент",
+        to_place: remToAfter,
+        amount: remNew,
+        delta_key: "remaining_to",
+        detail: `смена получателя; клиент → ${remToAfter}; ${formatAmount(remNew)}`,
+      });
+    }
+  }
+
+  /**
+   * з/п монтаж / Оплатил — та же схема ветвлений, что для «Остаток» / «Кому остаток»,
+   * но расход: движение «плательщик → Монтаж» (в остатке было «Клиент → получатель»).
+   */
+  const instByBefore = normRecipientSelect(wasEditing ? initialParticipants?.installer_payment_by : "");
+  const instByAfter = normRecipientSelect(orderData?.installer_payment_by);
+  const instByBeforeEmpty = instByBefore === "";
+  const instByAfterEmpty = instByAfter === "";
+  const instOld = old.installer_payment_amount;
+  const instNew = next.installer_payment_amount;
+  const instSame = Math.abs(instOld - instNew) < 0.000001;
+  const instBySame = instByBefore === instByAfter;
+
+  if (!(instByBeforeEmpty && instByAfterEmpty) && !(instSame && instBySame)) {
+    if (instByBeforeEmpty && !instByAfterEmpty) {
+      pushAmountRecipientCalcRow("Монтаж", {
+        from_place: instByAfter,
+        to_place: "Монтаж",
+        amount: instNew,
+        delta_key: "installer_payment_amount",
+        detail: `оплатил − → ${instByAfter}; сумма ${formatAmount(instNew)}`,
+      });
+    } else if (!instByBeforeEmpty && instByAfterEmpty) {
+      pushAmountRecipientCalcRow("Монтаж", {
+        from_place: "Монтаж",
+        to_place: instByBefore,
+        amount: instOld,
+        delta_key: "installer_payment_amount",
+        detail: `Монтаж → ${instByBefore}; сумма ${formatAmount(instOld)}`,
+      });
+    } else if (!instByBeforeEmpty && !instByAfterEmpty && instBySame) {
+      pushAmountRecipientCalcRow("Монтаж", {
+        from_place: instByAfter,
+        to_place: "Монтаж",
+        amount: instNew - instOld,
+        delta_key: "installer_payment_amount",
+        detail: `${instByAfter}; ${formatAmount(instOld)} → ${formatAmount(instNew)}`,
+      });
+    } else if (!instByBeforeEmpty && !instByAfterEmpty && !instBySame) {
+      pushAmountRecipientCalcRow("Монтаж", {
+        from_place: "Монтаж",
+        to_place: instByBefore,
+        amount: instOld,
+        delta_key: "installer_payment_by",
+        detail: `смена плательщика; Монтаж → ${instByBefore}; ${formatAmount(instOld)}`,
+      });
+      pushAmountRecipientCalcRow("Монтаж", {
+        from_place: instByAfter,
+        to_place: "Монтаж",
+        amount: instNew,
+        delta_key: "installer_payment_by",
+        detail: `смена плательщика; ${instByAfter} → Монтаж; ${formatAmount(instNew)}`,
+      });
+    }
   }
 
   if (rows.length === 0) return;
@@ -574,6 +714,34 @@ export function formatOrderFormNumericInputById(id) {
   if (!el) return;
   const decimals = ORDER_FORM_NUMERIC_FIELD_DECIMALS[id];
   if (decimals == null) return;
+
+  if (RUBLE_INTEGER_ORDER_FIELD_IDS.includes(id)) {
+    const raw = el.value;
+    if (raw == null || String(raw).trim() === "") {
+      el.value = "";
+      el.classList.remove("sum-input-invalid");
+      el.removeAttribute("title");
+      el.removeAttribute("aria-invalid");
+      return;
+    }
+    const r = tryParseRublesInteger(raw);
+    if (r.invalidFormat) {
+      el.classList.add("sum-input-invalid");
+      el.title = MSG_SUM_INTEGER_ONLY;
+      el.setAttribute("aria-invalid", "true");
+      return;
+    }
+    el.classList.remove("sum-input-invalid");
+    el.removeAttribute("title");
+    el.removeAttribute("aria-invalid");
+    if (r.value == null) {
+      el.value = "";
+      return;
+    }
+    el.value = formatNumberWithSpaces(r.value, 0);
+    return;
+  }
+
   const raw = el.value;
   if (raw == null || String(raw).trim() === "") {
     el.value = "";
@@ -739,7 +907,7 @@ function syncOrdersScrollPositions() {
   ordersCopyScrollBottomToTop();
 }
 
-function getFilteredOrders() {
+export function getFilteredOrders() {
   let list = state.allOrders;
 
   if (isUserLite()) {
@@ -755,6 +923,10 @@ function getFilteredOrders() {
 
   if (state.orderTypeFilterSelected && state.orderTypeFilterSelected.length > 0) {
     list = list.filter((order) => orderMatchesOrderTypeKeys(order, state.orderTypeFilterSelected));
+  }
+
+  if (state.paidFilterSelected && state.paidFilterSelected.length > 0) {
+    list = list.filter((order) => state.paidFilterSelected.includes(paidFilterCategory(order)));
   }
 
   const query = clientSearch?.value.trim().toLowerCase() || "";
@@ -820,6 +992,34 @@ function formatDateShortRU(dateStr) {
   }
 }
 
+/** Колонка «Монтаж»: при включённом монтаже без даты показываем «есть». */
+function formatInstallationDateCell(order) {
+  const installationOn =
+    order.installation === true ||
+    order.installation === 1 ||
+    order.installation === "1";
+  const raw = order.installation_date;
+  const emptyDate = raw == null || String(raw).trim() === "";
+  if (installationOn && emptyDate) {
+    return '<span class="status-value">есть</span>';
+  }
+  return formatDateShortRU(order.installation_date);
+}
+
+/** Колонка «Откосы»: при включённой галке без даты откосов показываем «есть». */
+function formatRevealsDateCell(order) {
+  const revealsOn =
+    order.reveals === true ||
+    order.reveals === 1 ||
+    order.reveals === "1";
+  const raw = order.reveals_date;
+  const emptyDate = raw == null || String(raw).trim() === "";
+  if (revealsOn && emptyDate) {
+    return '<span class="status-value">есть</span>';
+  }
+  return formatDateShortRU(order.reveals_date);
+}
+
 /** Оплачено = "да", если заполнено "Кому остаток" ИЛИ Остаток = 0. */
 function isOrderPaid(order) {
   const remainingToRaw = (order.remaining_to || "").trim();
@@ -829,6 +1029,12 @@ function isOrderPaid(order) {
   const paidByRemainingAmountZero = remainingAmount != null && Math.abs(remainingAmount) < 1e-9;
 
   return paidByRemainingTo || paidByRemainingAmountZero;
+}
+
+/** Категория для фильтра «Опл.» (как в ячейке: да / нет / пусто при отсутствии суммы). */
+function paidFilterCategory(order) {
+  if (order.amount == null || order.amount === "") return "Без суммы";
+  return isOrderPaid(order) ? "да" : "нет";
 }
 
 function isRemainingAmountZero(order) {
@@ -885,48 +1091,88 @@ function paidBadge(order) {
   return '<span class="status-value">нет</span>';
 }
 
-function sumOrderNumericField(orders, key) {
-  let s = 0;
-  for (const o of orders) {
-    const v = o[key];
-    if (v == null || v === "") continue;
-    const n = Number(v);
-    if (Number.isFinite(n)) s += n;
+/** Заголовки столбцов экспорта (как в таблице «Заказы», без колонки удаления). */
+export const ORDERS_EXCEL_HEADERS = [
+  "Номер",
+  "Дата",
+  "Клиент",
+  "Опл.",
+  "Адрес",
+  "Описание",
+  "Статус",
+  "Стоимость",
+  "Предоплата",
+  "Кому",
+  "Остаток",
+  "Кому",
+  "Отправка",
+  "Дата",
+  "Монтаж",
+  "м2",
+  "з/п",
+  "Оплатил",
+  "Откосы",
+  "Моск.",
+  "Конс.",
+  "Телефон",
+];
+
+/** Одна строка для Excel: те же значения, что видны в таблице (без HTML). */
+export function getOrderRowValuesForExcel(order) {
+  const statusDisplayText =
+    order.payment_status === "нет"
+      ? "Контакт с клиентом"
+      : (order.payment_status ?? "Контакт с клиентом");
+
+  let paidText = "";
+  if (order.amount != null && order.amount !== "") {
+    paidText = isOrderPaid(order) ? "да" : "нет";
   }
-  return s;
-}
 
-function renderOrdersTotals(orders) {
-  const piecesEl = document.getElementById("ordersTotalsPieces");
-  if (!piecesEl) return;
+  const remainingStr =
+    order.remaining_amount != null && order.remaining_amount !== ""
+      ? formatAmount(order.remaining_amount)
+      : "";
 
-  const count = orders.length;
-  const sumAmount = sumOrderNumericField(orders, "amount");
-  const sumPrepayment = sumOrderNumericField(orders, "prepayment");
-  const sumRemaining = sumOrderNumericField(orders, "remaining_amount");
-  const sumArea = sumOrderNumericField(orders, "area_m2");
-  const sumInstaller = sumOrderNumericField(orders, "installer_payment_amount");
-  const sumMosquito = sumOrderNumericField(orders, "mosquito_nets");
-  const sumConstruction = sumOrderNumericField(orders, "construction_count");
+  const installationOn =
+    order.installation === true || order.installation === 1 || order.installation === "1";
+  const installationDateEmpty =
+    order.installation_date == null || String(order.installation_date).trim() === "";
+  const installationText =
+    installationOn && installationDateEmpty ? "есть" : formatDateShortRU(order.installation_date);
 
-  piecesEl.textContent = String(count);
-  const setMoney = (id, val) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val === 0 ? "" : formatAmount(val);
-  };
-  setMoney("ordersTotalsAmount", sumAmount);
-  setMoney("ordersTotalsPrepayment", sumPrepayment);
-  setMoney("ordersTotalsRemaining", sumRemaining);
-  setMoney("ordersTotalsInstallerPay", sumInstaller);
+  const revealsOn = order.reveals === true || order.reveals === 1 || order.reveals === "1";
+  const revealsDateEmpty =
+    order.reveals_date == null || String(order.reveals_date).trim() === "";
+  const revealsText =
+    revealsOn && revealsDateEmpty ? "есть" : formatDateShortRU(order.reveals_date);
 
-  const areaEl = document.getElementById("ordersTotalsAreaM2");
-  if (areaEl) areaEl.textContent = sumArea === 0 ? "" : formatAmount(sumArea);
-
-  const mosquitoEl = document.getElementById("ordersTotalsMosquito");
-  if (mosquitoEl) mosquitoEl.textContent = sumMosquito === 0 ? "" : formatAmount(sumMosquito);
-
-  const consEl = document.getElementById("ordersTotalsConstruction");
-  if (consEl) consEl.textContent = sumConstruction === 0 ? "" : formatAmount(sumConstruction);
+  return [
+    order.id != null ? formatOrderIdTypeChip(order.id, order.order_type) : "",
+    formatDateShortRU(order.order_date),
+    order.client ?? "",
+    paidText,
+    order.address ?? "",
+    order.description ?? "",
+    statusDisplayText,
+    order.amount != null && order.amount !== "" ? formatAmount(order.amount) : "",
+    order.prepayment != null && order.prepayment !== "" ? formatAmount(order.prepayment) : "",
+    order.prepayment_to ? String(order.prepayment_to) : "",
+    remainingStr,
+    order.remaining_to ? String(order.remaining_to) : "",
+    order.delivery ? String(order.delivery) : "",
+    formatDateShortRU(order.delivery_date),
+    installationText,
+    order.area_m2 != null && order.area_m2 !== "" ? String(order.area_m2) : "",
+    order.installer_payment_amount != null && order.installer_payment_amount !== ""
+      ? formatAmount(order.installer_payment_amount)
+      : "",
+    order.installer_payment_by ? String(order.installer_payment_by) : "",
+    revealsText,
+    order.mosquito_nets != null && order.mosquito_nets !== "" ? String(order.mosquito_nets) : "",
+    order.construction_count != null && order.construction_count !== "" ? String(order.construction_count) : "",
+    order.phone ?? "",
+  ];
 }
 
 export function renderOrders(orders) {
@@ -936,7 +1182,7 @@ export function renderOrders(orders) {
 
   orders.forEach((order) => {
     const deleteButton =
-      isAdmin()
+      canDeleteOrders()
         ? `<button type="button" class="btn-icon btn-delete" onclick="deleteOrder(${order.id})" title="Удалить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>`
         : "";
 
@@ -989,7 +1235,7 @@ export function renderOrders(orders) {
         <td class="td-remaining-to">${order.remaining_to ? escapeHtml(order.remaining_to) : ""}</td>
         <td class="td-delivery">${order.delivery ? escapeHtml(order.delivery) : ""}</td>
         <td class="td-delivery-date">${formatDateShortRU(order.delivery_date)}</td>
-        <td class="td-installation-date">${formatDateShortRU(order.installation_date)}</td>
+        <td class="td-installation-date">${formatInstallationDateCell(order)}</td>
         <td class="td-area-m2">${order.area_m2 != null && order.area_m2 !== "" ? escapeHtml(String(order.area_m2)) : ""}</td>
         <td class="td-money td-installer-payment">${
           order.installer_payment_amount != null && order.installer_payment_amount !== ""
@@ -999,7 +1245,7 @@ export function renderOrders(orders) {
             : ""
         }</td>
         <td>${order.installer_payment_by ? escapeHtml(order.installer_payment_by) : ""}</td>
-        <td>${formatDateShortRU(order.reveals_date)}</td>
+        <td>${formatRevealsDateCell(order)}</td>
         <td class="td-mosquito-nets">${order.mosquito_nets != null && order.mosquito_nets !== "" ? escapeHtml(String(order.mosquito_nets)) : ""}</td>
         <td class="td-construction-count">${order.construction_count != null && order.construction_count !== "" ? escapeHtml(String(order.construction_count)) : ""}</td>
         <td class="td-phone">${phone ? escapeHtml(phone) : ""}</td>
@@ -1025,7 +1271,6 @@ export function renderOrders(orders) {
   syncOrdersScrollPositions();
   applyOrdersTableMobileFit();
   syncOrdersTableOuterWidthForTouch();
-  renderOrdersTotals(orders);
 }
 
 export function applyClientFilter() {
@@ -1082,6 +1327,51 @@ function closeOrderTypeFilterDropdown() {
   if (btn) btn.setAttribute("aria-expanded", "false");
 }
 
+function closePaidFilterDropdown() {
+  const btn = document.getElementById("paidFilterBtn");
+  const dropdown = document.getElementById("paidFilterDropdown");
+  if (dropdown) dropdown.style.display = "none";
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
+function renderPaidFilterDropdown() {
+  const container = document.getElementById("paidFilterCheckboxes");
+  if (!container) return;
+  const allSelected = !state.paidFilterSelected || state.paidFilterSelected.length === 0;
+  const allHtml = `<label class="status-filter-item status-filter-all"><input type="checkbox" data-paid-all="true" ${allSelected ? "checked" : ""}> Все</label>`;
+  const optionsHtml = PAID_FILTER_OPTIONS.map((value) => {
+    const checked = allSelected || state.paidFilterSelected.includes(value);
+    return `<label class="status-filter-item"><input type="checkbox" data-paid="${escapeAttr(value)}" ${checked ? "checked" : ""}> ${escapeHtml(value)}</label>`;
+  }).join("");
+  container.innerHTML = allHtml + optionsHtml;
+  container.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.addEventListener("change", onPaidFilterChange);
+  });
+}
+
+function onPaidFilterChange(e) {
+  const container = document.getElementById("paidFilterCheckboxes");
+  if (!container) return;
+  const target = e.target;
+  const allCb = container.querySelector('input[data-paid-all="true"]');
+  const paidCbs = container.querySelectorAll("input[type=checkbox][data-paid]");
+
+  if (target === allCb) {
+    const checked = allCb.checked;
+    paidCbs.forEach((cb) => {
+      cb.checked = checked;
+    });
+    state.paidFilterSelected = checked ? [] : [];
+    applyFiltersAndRender();
+    return;
+  }
+
+  const checkedValues = Array.from(paidCbs).filter((cb) => cb.checked).map((el) => el.dataset.paid);
+  state.paidFilterSelected = checkedValues.length === PAID_FILTER_OPTIONS.length ? [] : checkedValues;
+  if (allCb) allCb.checked = checkedValues.length === PAID_FILTER_OPTIONS.length;
+  applyFiltersAndRender();
+}
+
 let tableFilterDocClickBound = false;
 
 function bindTableFilterDocClose() {
@@ -1090,6 +1380,7 @@ function bindTableFilterDocClose() {
   document.addEventListener("click", () => {
     closeStatusFilterDropdown();
     closeOrderTypeFilterDropdown();
+    closePaidFilterDropdown();
   });
 }
 
@@ -1165,10 +1456,11 @@ export function initStatusFilter() {
       closeStatusFilterDropdown();
     } else {
       closeOrderTypeFilterDropdown();
+      closePaidFilterDropdown();
       renderStatusFilterDropdown();
       const rect = getFilterDropdownAnchorRect(
         btn,
-        "#ordersTableStickyHeadTable thead button.status-filter-btn:not(.order-type-filter-btn)"
+        "#ordersTableStickyHeadTable thead button.status-filter-btn:not(.order-type-filter-btn):not(.paid-filter-btn)"
       );
       dropdown.style.position = "fixed";
       dropdown.style.zIndex = "1200";
@@ -1196,6 +1488,7 @@ export function initOrderTypeFilter() {
       closeOrderTypeFilterDropdown();
     } else {
       closeStatusFilterDropdown();
+      closePaidFilterDropdown();
       renderOrderTypeFilterDropdown();
       const rect = getFilterDropdownAnchorRect(
         btn,
@@ -1215,6 +1508,189 @@ export function initOrderTypeFilter() {
   dropdown.addEventListener("click", (e) => e.stopPropagation());
 }
 
+export function initPaidFilter() {
+  const btn = document.getElementById("paidFilterBtn");
+  const dropdown = document.getElementById("paidFilterDropdown");
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = dropdown.style.display === "block";
+    if (isOpen) {
+      closePaidFilterDropdown();
+    } else {
+      closeStatusFilterDropdown();
+      closeOrderTypeFilterDropdown();
+      renderPaidFilterDropdown();
+      const rect = getFilterDropdownAnchorRect(
+        btn,
+        "#ordersTableStickyHeadTable thead button.paid-filter-btn"
+      );
+      dropdown.style.position = "fixed";
+      dropdown.style.zIndex = "1200";
+      dropdown.style.top = rect.bottom + 4 + "px";
+      dropdown.style.left = rect.left + "px";
+      dropdown.style.display = "block";
+      btn.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  bindTableFilterDocClose();
+
+  dropdown.addEventListener("click", (e) => e.stopPropagation());
+}
+
+function parseRublesFieldFromDom(id) {
+  const r = tryParseRublesInteger(document.getElementById(id)?.value);
+  if (r.invalidFormat) return null;
+  return r.value;
+}
+
+/** Порядок и подписи полей для комментария в order_history */
+const ORDER_HISTORY_FIELDS = [
+  { key: "order_type", label: "Тип заказа" },
+  { key: "order_number", label: "Номер заказа" },
+  { key: "order_date", label: "Дата и время заказа" },
+  { key: "phone", label: "Телефон" },
+  { key: "client", label: "Клиент" },
+  { key: "address", label: "Адрес" },
+  { key: "payment_status", label: "Статус" },
+  { key: "description", label: "Комментарий" },
+  { key: "amount", label: "Стоимость" },
+  { key: "prepayment", label: "Предоплата" },
+  { key: "prepayment_to", label: "Кому предоплата" },
+  { key: "remaining_amount", label: "Остаток" },
+  { key: "remaining_to", label: "Кому остаток" },
+  { key: "area_m2", label: "Площадь м²" },
+  { key: "mosquito_nets", label: "Москитные сетки" },
+  { key: "construction_count", label: "Конструкций" },
+  { key: "delivery", label: "Доставка" },
+  { key: "delivery_date", label: "Дата доставки" },
+  { key: "installation", label: "Монтаж" },
+  { key: "installation_date", label: "Дата монтажа" },
+  { key: "reveals", label: "Откосы" },
+  { key: "reveals_date", label: "Дата откосов" },
+  { key: "installer_payment_amount", label: "з/п монтаж" },
+  { key: "installer_payment_by", label: "Кто оплатил монтаж" },
+];
+
+function formatOrderHistoryDateTimeForDisplay(iso) {
+  if (iso == null || iso === "") return "—";
+  const s = String(iso).trim();
+  const datePart = s.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return s || "—";
+  const ddmmyyyy = formatDateDDMMYYYY(datePart);
+  const tm = s.match(/T(\d{2}):(\d{2})/);
+  if (!tm) return ddmmyyyy;
+  return `${ddmmyyyy} ${tm[1]}:${tm[2]}`;
+}
+
+function formatOrderHistoryValue(key, val) {
+  if (val === true) return "да";
+  if (val === false) return "нет";
+  if (key === "order_date") return formatOrderHistoryDateTimeForDisplay(val);
+  if (key === "delivery_date" || key === "installation_date" || key === "reveals_date") {
+    if (val == null || val === "") return "—";
+    const s = String(val).trim().slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? formatDateDDMMYYYY(s) : String(val);
+  }
+  const rubleKeys = new Set(["amount", "prepayment", "remaining_amount", "installer_payment_amount"]);
+  if (rubleKeys.has(key)) {
+    if (val == null || val === "") return "—";
+    const n = typeof val === "number" ? val : Number(val);
+    return Number.isFinite(n) ? formatAmount(n) : "—";
+  }
+  const numKeys = {
+    area_m2: ORDER_FORM_NUMERIC_FIELD_DECIMALS.area_m2,
+    mosquito_nets: ORDER_FORM_NUMERIC_FIELD_DECIMALS.mosquito_nets,
+    construction_count: ORDER_FORM_NUMERIC_FIELD_DECIMALS.construction_count,
+  };
+  if (Object.prototype.hasOwnProperty.call(numKeys, key)) {
+    if (val == null || val === "") return "—";
+    const n = typeof val === "number" ? val : parseOrderFormNumber(val);
+    return n == null ? "—" : formatOrderFormNumberValue(n, numKeys[key]);
+  }
+  if (val == null || val === "") return "—";
+  return String(val);
+}
+
+function normHistoryNumber(v) {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function numbersEqualHistory(a, b) {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  return Math.abs(a - b) < 1e-9;
+}
+
+function valuesEqualForOrderHistory(key, a, b) {
+  if (key === "installation" || key === "reveals") {
+    return !!a === !!b;
+  }
+  if (
+    key === "amount" ||
+    key === "prepayment" ||
+    key === "remaining_amount" ||
+    key === "installer_payment_amount" ||
+    key === "area_m2" ||
+    key === "mosquito_nets" ||
+    key === "construction_count"
+  ) {
+    return numbersEqualHistory(normHistoryNumber(a), normHistoryNumber(b));
+  }
+  if (key === "order_date" || key === "delivery_date" || key === "installation_date" || key === "reveals_date") {
+    const sa = a == null || a === "" ? null : String(a).trim();
+    const sb = b == null || b === "" ? null : String(b).trim();
+    if (sa == null && sb == null) return true;
+    if (sa == null || sb == null) return false;
+    return sa === sb;
+  }
+  const sa = a == null || a === "" ? null : String(a).trim();
+  const sb = b == null || b === "" ? null : String(b).trim();
+  if (sa == null && sb == null) return true;
+  if (sa == null || sb == null) return false;
+  return sa === sb;
+}
+
+function shouldIncludeFieldOnCreate(key, val) {
+  if (key === "installation" || key === "reveals") return val === true;
+  if (typeof val === "boolean") return val === true;
+  if (typeof val === "number") return val != null && Number.isFinite(val);
+  if (val == null) return false;
+  if (typeof val === "string") return String(val).trim() !== "";
+  return false;
+}
+
+/**
+ * Текст комментария для order_history: «Поле: старое -> новое; …».
+ * @param {Record<string, unknown> | null} prev снимок до правок (null при создании)
+ * @param {Record<string, unknown>} next данные сохранения (getFormData)
+ * @param {boolean} wasEditing режим редактирования
+ */
+function buildOrderHistoryComment(prev, next, wasEditing) {
+  if (!wasEditing) {
+    const fieldParts = [];
+    for (const { key, label } of ORDER_HISTORY_FIELDS) {
+      const nv = next[key];
+      if (!shouldIncludeFieldOnCreate(key, nv)) continue;
+      fieldParts.push(`${label}: — -> ${formatOrderHistoryValue(key, nv)}`);
+    }
+    return fieldParts.length > 0 ? `Заказ создан; ${fieldParts.join("; ")}` : "Заказ создан";
+  }
+
+  const parts = [];
+  for (const { key, label } of ORDER_HISTORY_FIELDS) {
+    const ov = prev ? prev[key] : undefined;
+    const nv = next[key];
+    if (valuesEqualForOrderHistory(key, ov, nv)) continue;
+    parts.push(`${label}: ${formatOrderHistoryValue(key, ov)} -> ${formatOrderHistoryValue(key, nv)}`);
+  }
+  return parts.length > 0 ? parts.join("; ") : "Сохранено без изменений";
+}
+
 export function getFormData() {
   const orderNumberEl = document.getElementById("order_number");
   return {
@@ -1226,10 +1702,10 @@ export function getFormData() {
     order_date: syncOrderFormDateTimeFromDom(),
     order_number: orderNumberEl ? (orderNumberEl.value.trim() || null) : null,
     description: document.getElementById("description").value.trim() || null,
-    amount: parseOrderFormNumber(document.getElementById("amount").value),
-    prepayment: parseOrderFormNumber(document.getElementById("prepayment").value),
+    amount: parseRublesFieldFromDom("amount"),
+    prepayment: parseRublesFieldFromDom("prepayment"),
     prepayment_to: document.getElementById("prepayment_to").value.trim() || null,
-    remaining_amount: parseOrderFormNumber(document.getElementById("remaining_amount").value),
+    remaining_amount: parseRublesFieldFromDom("remaining_amount"),
     remaining_to: document.getElementById("remaining_to").value.trim() || null,
     area_m2: parseOrderFormNumber(document.getElementById("area_m2").value),
     mosquito_nets: parseOrderFormNumber(document.getElementById("mosquito_nets").value),
@@ -1244,7 +1720,7 @@ export function getFormData() {
     reveals_date: document.getElementById("reveals").checked
       ? syncOrderFormDateFieldFromDom("reveals_date", "date")
       : null,
-    installer_payment_amount: parseOrderFormNumber(document.getElementById("installer_payment_amount")?.value),
+    installer_payment_amount: parseRublesFieldFromDom("installer_payment_amount"),
     installer_payment_by: document.getElementById("installer_payment_by")?.value?.trim() || null,
   };
 }
@@ -1255,9 +1731,12 @@ export function updateRemainingFromCostAndPrepayment() {
   const prepaymentEl = document.getElementById("prepayment");
   const remainingEl = document.getElementById("remaining_amount");
   if (!amountEl || !prepaymentEl || !remainingEl) return;
-  const amount = parseOrderFormNumber(amountEl.value);
+  const amountR = tryParseRublesInteger(amountEl.value);
+  const prepayR = tryParseRublesInteger(prepaymentEl.value);
+  if (amountR.invalidFormat || prepayR.invalidFormat) return;
+  const amount = amountR.value;
   if (amount == null) return;
-  const prepayment = parseOrderFormNumber(prepaymentEl.value) ?? 0;
+  const prepayment = prepayR.value ?? 0;
   const remaining = amount - prepayment;
   remainingEl.value = formatOrderFormNumberValue(remaining, ORDER_FORM_NUMERIC_FIELD_DECIMALS.remaining_amount);
 }
@@ -1272,8 +1751,10 @@ export function updatePaidField() {
   const remainingToRaw = (remainingToEl.value || "").trim();
   const remainingToFilled = remainingToRaw !== "" && remainingToRaw !== "—";
 
-  const remainingAmount = remainingAmountEl ? parseOrderFormNumber(remainingAmountEl.value) : null;
-  const remainingAmountZero = remainingAmount != null && Math.abs(remainingAmount) < 1e-9;
+  const remainingR = remainingAmountEl ? tryParseRublesInteger(remainingAmountEl.value) : { value: null, invalidFormat: false };
+  if (remainingR.invalidFormat) return;
+  const remainingAmount = remainingR.value;
+  const remainingAmountZero = remainingAmount != null && remainingAmount === 0;
 
   paidEl.value = remainingToFilled || remainingAmountZero ? "да" : "нет";
 }
@@ -1338,11 +1819,13 @@ export function updateInstallerPaymentAmountFromArea() {
   const areaEl = document.getElementById("area_m2");
   const rateEl = document.getElementById("installer_rate_per_m2");
   const area = parseOrderFormNumber(areaEl?.value);
-  const rate = parseOrderFormNumber(rateEl?.value);
+  const rateR = tryParseRublesInteger(rateEl?.value);
+  if (rateR.invalidFormat) return;
+  const rate = rateR.value;
 
   if (area != null && rate != null && area > 0 && rate > 0) {
     amountEl.value = formatOrderFormNumberValue(
-      area * rate,
+      Math.round(area * rate),
       ORDER_FORM_NUMERIC_FIELD_DECIMALS.installer_payment_amount
     );
   } else {
@@ -1372,7 +1855,7 @@ export async function checkInstallerPaymentDone(orderId) {
   updateInstallerBlockByInstallationDate();
 }
 
-export function fillForm(order) {
+export async function fillForm(order) {
   state.installerPaymentDone = false;
   state.initialOrderSums = {
     amount: order.amount != null ? Number(order.amount) : null,
@@ -1494,15 +1977,65 @@ export function fillForm(order) {
     console.error("Список файлов заявки:", err);
     clearExistingOrderFilesInForm();
   });
-  checkInstallerPaymentDone(order.id);
+  await checkInstallerPaymentDone(order.id);
+  state.initialOrderSnapshot = JSON.parse(JSON.stringify(getFormData()));
+}
+
+/** Снимок disabled у полей формы заказа для режима «только просмотр». */
+let orderFormReadOnlyRestore = null;
+
+/**
+ * Все поля формы заказа только для чтения или снова редактируемые.
+ * Кнопки «Сохранить» скрываются отдельно в viewOrder.
+ */
+export function applyOrderFormReadOnly(readOnly) {
+  const formEl = document.getElementById("orderForm");
+  if (!formEl) return;
+
+  if (readOnly) {
+    if (orderFormReadOnlyRestore) {
+      orderFormReadOnlyRestore.forEach((wasDisabled, el) => {
+        el.disabled = wasDisabled;
+      });
+      orderFormReadOnlyRestore = null;
+    }
+    orderFormReadOnlyRestore = new Map();
+    formEl.querySelectorAll("input, select, textarea, button").forEach((el) => {
+      if (el.type === "hidden") return;
+      if (el.id === "submitBtn" || el.id === "submitBtnTop") return;
+      orderFormReadOnlyRestore.set(el, el.disabled);
+      el.disabled = true;
+    });
+    formEl.querySelectorAll(".order-form-date-calendar-btn").forEach((el) => {
+      el.dataset.orderFormReadonlyPe = el.style.pointerEvents || "";
+      el.style.pointerEvents = "none";
+    });
+    return;
+  }
+
+  if (orderFormReadOnlyRestore) {
+    orderFormReadOnlyRestore.forEach((wasDisabled, el) => {
+      el.disabled = wasDisabled;
+    });
+    orderFormReadOnlyRestore = null;
+  }
+  formEl.querySelectorAll(".order-form-date-calendar-btn").forEach((el) => {
+    el.style.pointerEvents = el.dataset.orderFormReadonlyPe || "";
+    delete el.dataset.orderFormReadonlyPe;
+  });
+  updateInstallerBlockByInstallationDate();
+  updatePaidField();
 }
 
 export function resetFormMode() {
+  state.viewingOrderId = null;
+  applyOrderFormReadOnly(false);
   state.editingOrderId = null;
   state.editingOrderDescription = null;
   state.initialPaymentStatus = null;
   state.initialOrderSums = null;
   state.initialOrderParticipants = null;
+  state.initialOrderSnapshot = null;
   state.installerPaymentDone = false;
   document.getElementById("orderForm").reset();
   updatePaidField();
@@ -1562,6 +2095,57 @@ export function resetFormMode() {
 
   if (cancelEditBtn) cancelEditBtn.style.display = "inline-block";
   if (cancelEditBtnTop) cancelEditBtnTop.style.display = "inline-block";
+  if (submitBtn) submitBtn.style.display = "";
+  if (submitBtnTop) submitBtnTop.style.display = "";
+}
+
+/** Просмотр заказа: та же форма, что при редактировании, без изменения данных. */
+export async function viewOrder(orderId) {
+  state.editingOrderId = null;
+  state.viewingOrderId = orderId;
+
+  const { data, error } = await supabaseClient
+    .from("orders")
+    .select("*")
+    .eq("id", orderId)
+    .single();
+
+  if (error) {
+    console.error("Ошибка загрузки заявки:", error);
+    setMessage("Ошибка загрузки заявки", "#d32f2f");
+    state.viewingOrderId = null;
+    return;
+  }
+
+  if (isOrderHiddenFromUserLite(data)) {
+    setMessage("Нет доступа к заказам типа «Магазин»", "#d32f2f");
+    state.viewingOrderId = null;
+    return;
+  }
+
+  await fillForm(data);
+  applyOrderFormReadOnly(true);
+  setMessage("", "");
+
+  if (submitBtn) {
+    submitBtn.style.display = "none";
+    submitBtn.textContent = "Сохранить заказ";
+  }
+  if (submitBtnTop) {
+    submitBtnTop.style.display = "none";
+    submitBtnTop.textContent = "Сохранить заказ";
+  }
+  if (cancelEditBtn) cancelEditBtn.style.display = "none";
+  if (cancelEditBtnTop) cancelEditBtnTop.style.display = "none";
+
+  if (formTitle) {
+    formTitle.textContent = `Просмотр ${formatOrderIdTypeChip(orderId, data.order_type)}`;
+  }
+
+  switchSection("new");
+  refreshSectionNavLabel();
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 export async function editOrder(orderId) {
@@ -1569,6 +2153,9 @@ export async function editOrder(orderId) {
     setMessage("Недостаточно прав для редактирования заявок", "#d32f2f");
     return;
   }
+
+  state.viewingOrderId = null;
+  applyOrderFormReadOnly(false);
 
   const { data, error } = await supabaseClient
     .from("orders")
@@ -1594,11 +2181,17 @@ export async function editOrder(orderId) {
 
   state.editingOrderId = orderId;
   state.editingOrderDescription = data.description || null;
-  fillForm(data);
+  await fillForm(data);
   setMessage("", "");
 
-  if (submitBtn) submitBtn.textContent = "Сохранить изменения";
-  if (submitBtnTop) submitBtnTop.textContent = "Сохранить изменения";
+  if (submitBtn) {
+    submitBtn.style.display = "";
+    submitBtn.textContent = "Сохранить изменения";
+  }
+  if (submitBtnTop) {
+    submitBtnTop.style.display = "";
+    submitBtnTop.textContent = "Сохранить изменения";
+  }
 
   if (formTitle) {
     formTitle.textContent = `Редактирование ${formatOrderIdTypeChip(orderId, data.order_type)}`;
@@ -1613,7 +2206,7 @@ export async function editOrder(orderId) {
 }
 
 export async function deleteOrder(orderId) {
-  if (!isAdmin()) return;
+  if (!canDeleteOrders()) return;
 
   const ok = confirm(`Удалить заявку #${orderId}?`);
   if (!ok) return;
@@ -1629,6 +2222,15 @@ export async function deleteOrder(orderId) {
     return;
   }
 
+  if (state.currentUser?.email) {
+    const { error: histError } = await supabaseClient.from("order_history").insert([
+      { order_id: orderId, user_email: state.currentUser.email, comment: "Заявка удалена" },
+    ]);
+    if (histError) {
+      console.error("Ошибка записи в историю изменений:", histError);
+    }
+  }
+
   setMessage(`Заявка #${orderId} удалена`, "");
   await loadOrders();
 }
@@ -1636,6 +2238,10 @@ export async function deleteOrder(orderId) {
 export async function submitOrderForm(event) {
   event.preventDefault();
   setOrderFormInvalidDateMessage(false);
+
+  if (state.viewingOrderId != null) {
+    return;
+  }
 
   if (!canMutateOrders()) {
     setMessage("Недостаточно прав для сохранения заявок", "#d32f2f");
@@ -1716,9 +2322,22 @@ export async function submitOrderForm(event) {
     return;
   }
 
+  for (const id of RUBLE_INTEGER_ORDER_FIELD_IDS) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const r = tryParseRublesInteger(el.value);
+    if (r.invalidFormat) {
+      el.classList.add("sum-input-invalid");
+      el.title = MSG_SUM_INTEGER_ONLY;
+      el.setAttribute("aria-invalid", "true");
+      setMessage(MSG_SUM_INTEGER_ONLY, "#d32f2f");
+      return;
+    }
+  }
+
   // Правило: Предоплата не может быть больше стоимости.
-  const amountNum = parseOrderFormNumber(document.getElementById("amount")?.value);
-  const prepaymentNum = parseOrderFormNumber(document.getElementById("prepayment")?.value);
+  const amountNum = tryParseRublesInteger(document.getElementById("amount")?.value).value;
+  const prepaymentNum = tryParseRublesInteger(document.getElementById("prepayment")?.value).value;
   if (amountNum != null && prepaymentNum != null && prepaymentNum > amountNum) {
     setMessage("Предоплата не может быть больше суммы заказа", "#d32f2f");
     return;
@@ -1776,71 +2395,15 @@ export async function submitOrderForm(event) {
     orderData,
   });
 
-  const addCommentText = (document.getElementById("description")?.value || "").trim();
-  const newStatus = orderData.payment_status || "";
-
-  if (!wasEditing && savedOrderId && state.currentUser?.email) {
-    const historyRows = [
-      { order_id: savedOrderId, user_email: state.currentUser.email, comment: "Заказ создан" },
-      { order_id: savedOrderId, user_email: state.currentUser.email, comment: `Статус: ${newStatus || "Контакт с клиентом"}` },
-    ];
-    if (addCommentText) {
-      historyRows.push({ order_id: savedOrderId, user_email: state.currentUser.email, comment: addCommentText });
-    }
-    await supabaseClient.from("order_history").insert(historyRows);
-  }
-
-  if (wasEditing && savedOrderId && state.currentUser?.email) {
-    const historyRows = [];
-    const oldStatus = state.initialPaymentStatus ?? "";
-    if (oldStatus !== newStatus) {
-      historyRows.push({
-        order_id: savedOrderId,
-        user_email: state.currentUser.email,
-        comment: `Статус изменён: ${oldStatus || "—"} → ${newStatus || "—"}`,
-      });
-    }
-
-    // История изменений сумм
-    const initialSums = state.initialOrderSums || {};
-    const toComparable = (v) => (v == null ? null : (Number.isFinite(Number(v)) ? Number(v) : null));
-    const numbersEqual = (a, b) => {
-      if (a == null && b == null) return true;
-      if (a == null || b == null) return false;
-      return Math.abs(a - b) < 0.000001;
-    };
-    const formatSum = (v) => (v == null ? "—" : formatAmount(v));
-
-    const sumChanges = [];
-    const fieldsToCheck = [
-      { key: "amount", label: "Стоимость", oldVal: initialSums.amount, newVal: orderData.amount },
-      { key: "prepayment", label: "Предоплата", oldVal: initialSums.prepayment, newVal: orderData.prepayment },
-      { key: "remaining_amount", label: "Остаток", oldVal: initialSums.remaining_amount, newVal: orderData.remaining_amount },
-      { key: "installer_payment_amount", label: "з/п монтаж", oldVal: initialSums.installer_payment_amount, newVal: orderData.installer_payment_amount },
-    ];
-
-    fieldsToCheck.forEach((f) => {
-      const oldN = toComparable(f.oldVal);
-      const newN = toComparable(f.newVal);
-      if (!numbersEqual(oldN, newN)) {
-        sumChanges.push(`${f.label}: ${formatSum(oldN)} → ${formatSum(newN)}`);
-      }
-    });
-
-    if (sumChanges.length > 0) {
-      historyRows.push({
-        order_id: savedOrderId,
-        user_email: state.currentUser.email,
-        comment: sumChanges.join("; "),
-      });
-    }
-
-    if (addCommentText) {
-      historyRows.push({ order_id: savedOrderId, user_email: state.currentUser.email, comment: addCommentText });
-    }
-    if (historyRows.length > 0) {
-      await supabaseClient.from("order_history").insert(historyRows);
-    }
+  if (savedOrderId && state.currentUser?.email) {
+    const historyComment = buildOrderHistoryComment(
+      wasEditing ? state.initialOrderSnapshot : null,
+      orderData,
+      wasEditing
+    );
+    await supabaseClient.from("order_history").insert([
+      { order_id: savedOrderId, user_email: state.currentUser.email, comment: historyComment },
+    ]);
   }
 
   resetFormMode();

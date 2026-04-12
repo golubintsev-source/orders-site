@@ -28,6 +28,7 @@ import {
   applyClientFilter,
   initStatusFilter,
   initOrderTypeFilter,
+  initPaidFilter,
   resetFormMode,
   submitOrderForm,
   updatePaidField,
@@ -40,6 +41,7 @@ import {
   bindOrderFormDdMmYyyyInputs,
   canShowEditButtonForOrder,
   setLockEditForUserLite,
+  RUBLE_INTEGER_ORDER_FIELD_IDS,
 } from "./orders.js";
 import { mergeNewAttachmentsOnChange } from "./files.js";
 import { initClientAutocomplete } from "./clientAutocomplete.js";
@@ -52,6 +54,7 @@ import {
 } from "./settings.js";
 import { loadBalance } from "./balance.js";
 import { canMutateOrders, isOrderEditLockedForUserLite, isUserLite } from "./roles.js";
+import { refreshRublesIntegerInputState } from "./format.js";
 
 export function toggleOrderRowHighlightById(orderId) {
   if (!ordersTable || orderId == null) return;
@@ -66,6 +69,7 @@ export function toggleOrderRowHighlightById(orderId) {
 }
 
 const ORDER_ID_MENU_ICONS = {
+  view: `<svg class="order-id-actions-menu-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
   edit: `<svg class="order-id-actions-menu-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
   tasks: `<svg class="order-id-actions-menu-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
   history: `<svg class="order-id-actions-menu-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
@@ -96,11 +100,16 @@ function openOrderIdActionsMenu(idTd) {
   const menu = document.getElementById("orderIdActionsMenu");
   if (!menu || !idTd) return;
 
-  closeOrderIdActionsMenu();
-
   const raw = idTd.getAttribute("data-order-id") || "";
   const orderId = raw ? Number(raw) : NaN;
   if (Number.isNaN(orderId)) return;
+
+  if (!menu.hidden && menu.dataset.currentOrderId === String(orderId)) {
+    closeOrderIdActionsMenu();
+    return;
+  }
+
+  closeOrderIdActionsMenu();
 
   const phoneRaw = (idTd.getAttribute("data-phone") || "").trim();
   const telHref = phoneRaw ? `tel:${phoneRaw.replace(/[^\d+]/g, "")}` : "";
@@ -108,7 +117,7 @@ function openOrderIdActionsMenu(idTd) {
 
   const filesCount = Math.max(0, parseInt(String(idTd.getAttribute("data-files-count") || "0"), 10) || 0);
 
-  const { edit, tasks, history, files, phone } = ORDER_ID_MENU_ICONS;
+  const { view, edit, tasks, history, files, phone } = ORDER_ID_MENU_ICONS;
 
   const filesIconBlock =
     filesCount > 0
@@ -125,6 +134,7 @@ function openOrderIdActionsMenu(idTd) {
     : `<div class="order-id-actions-menu-item order-id-actions-menu-item--disabled" role="menuitem" aria-disabled="true">${phone}<span>Позвонить</span></div>`;
 
   const orderRow = state.allOrders.find((o) => Number(o.id) === orderId);
+  const viewItem = `<button type="button" class="order-id-actions-menu-item" role="menuitem" data-action="view">${view}<span>Посмотреть</span></button>`;
   const editItem = orderRow && canShowEditButtonForOrder(orderRow)
     ? `<button type="button" class="order-id-actions-menu-item" role="menuitem" data-action="edit">${edit}<span>Редактировать</span></button>`
     : "";
@@ -149,9 +159,10 @@ function openOrderIdActionsMenu(idTd) {
       : "";
 
   menu.innerHTML = `
+    ${viewItem}
     ${editItem}
     ${tasksItem}
-    <a href="${historyHref}" class="order-id-actions-menu-item" role="menuitem">${history}<span>История</span></a>
+    <a href="${historyHref}" class="order-id-actions-menu-item" role="menuitem">${history}<span>Изменения</span></a>
     <button type="button" class="${filesItemClass}" role="menuitem" data-action="files">${filesIconBlock}<span>Файлы</span></button>
     ${callBlock}
     ${lockBlock}
@@ -234,7 +245,14 @@ function onPhoneInput() {
 }
 
 export function bindUIEvents() {
-  initSectionNavDropdown();
+  initSectionNavDropdown({
+    onSectionItemSelect: (id) => {
+      if (id === "new" && state.viewingOrderId != null) {
+        resetFormMode();
+      }
+      switchSection(id);
+    },
+  });
 
   bindOrderFormDdMmYyyyInputs();
 
@@ -291,6 +309,12 @@ export function bindUIEvents() {
       if (id === "amount" || id === "prepayment" || id === "remaining_amount") updateConditionalRequiredHighlight();
       if (id === "amount" || id === "prepayment" || id === "remaining_amount") updatePaidField();
     });
+  });
+
+  RUBLE_INTEGER_ORDER_FIELD_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", () => refreshRublesIntegerInputState(el, el.value));
   });
   ["prepayment_to", "remaining_to", "delivery", "delivery_date"].forEach((id) => {
     const el = document.getElementById(id);
@@ -351,8 +375,13 @@ export function bindUIEvents() {
       const ok = await saveInstallerRate(settingsInstallerRateInput.value);
       setMessage(ok ? "Сохранено" : "Ошибка сохранения или неверное значение", ok ? "" : "#d32f2f");
     });
-    settingsInstallerRateInput.addEventListener("input", updateSettingsSaveButtonState);
-    settingsInstallerRateInput.addEventListener("change", updateSettingsSaveButtonState);
+    const onSettingsRateInput = () => {
+      refreshRublesIntegerInputState(settingsInstallerRateInput, settingsInstallerRateInput.value);
+      updateSettingsSaveButtonState();
+    };
+    settingsInstallerRateInput.addEventListener("input", onSettingsRateInput);
+    settingsInstallerRateInput.addEventListener("change", onSettingsRateInput);
+    settingsInstallerRateInput.addEventListener("blur", onSettingsRateInput);
   }
 
   const settingsSaveAdjustmentsBtn = document.getElementById("settingsSaveAdjustmentsBtn");
@@ -365,8 +394,13 @@ export function bindUIEvents() {
     for (const { inputId } of BALANCE_ADJ_FIELDS) {
       const adjInput = document.getElementById(inputId);
       if (adjInput) {
-        adjInput.addEventListener("input", updateAdjustmentsSaveButtonState);
-        adjInput.addEventListener("change", updateAdjustmentsSaveButtonState);
+        const onAdj = () => {
+          refreshRublesIntegerInputState(adjInput, adjInput.value, { allowSign: true });
+          updateAdjustmentsSaveButtonState();
+        };
+        adjInput.addEventListener("input", onAdj);
+        adjInput.addEventListener("change", onAdj);
+        adjInput.addEventListener("blur", onAdj);
       }
     }
   }
@@ -450,6 +484,7 @@ export function bindUIEvents() {
 
   initStatusFilter();
   initOrderTypeFilter();
+  initPaidFilter();
 
   // "О" и "М" переключатели справа от заголовка "Заказы".
   // Они управляют фильтром по типу заказов в таблице.
@@ -747,7 +782,10 @@ export function bindUIEvents() {
       const action = btn.dataset.action;
       const id = Number(orderIdActionsMenu.dataset.currentOrderId);
       if (Number.isNaN(id)) return;
-      if (action === "edit") {
+      if (action === "view") {
+        closeOrderIdActionsMenu();
+        window.viewOrder?.(id);
+      } else if (action === "edit") {
         closeOrderIdActionsMenu();
         window.editOrder?.(id);
       } else if (action === "tasks") {

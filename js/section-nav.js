@@ -1,5 +1,6 @@
 import { state } from "./state.js";
 import { loadBalance } from "./balance.js";
+import { loadRouteSheet } from "./route-sheet.js";
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
@@ -58,7 +59,9 @@ const SECTION_LABELS = {
   all: "Заказы",
   calculations: "Расчеты",
   "tasks-all": "Все задачи",
+  "changes-all": "Все изменения",
   balance: "Баланс",
+  "route-sheet": "Маршрутный лист",
   settings: "Настройки",
 };
 
@@ -71,8 +74,10 @@ export const STANDALONE_SECTION_NAV_ID = "__standalone__";
 const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "calculations",
   "tasks-all",
+  "changes-all",
   "order-tasks",
   "balance",
+  "route-sheet",
   "settings",
 ]);
 
@@ -96,6 +101,12 @@ function updateOrdersTypeToggleVisibility(sectionId) {
 
 function labelForSection(sectionId) {
   if (sectionId === "new") {
+    if (state.viewingOrderId != null) {
+      const o = state.allOrders?.find((x) => Number(x.id) === Number(state.viewingOrderId));
+      const orderType = o?.order_type ?? document.getElementById("order_type")?.value ?? "";
+      const chip = formatOrderIdTypeChip(state.viewingOrderId, orderType);
+      return `Просмотр ${chip}`;
+    }
     if (!state.editingOrderId) return "Новый";
     const orderType = document.getElementById("order_type")?.value ?? "";
     const chip = formatOrderIdTypeChip(state.editingOrderId, orderType);
@@ -252,12 +263,18 @@ export function switchSection(sectionId) {
   if (sectionId === "balance") {
     loadBalance();
   }
+  if (sectionId === "route-sheet") {
+    loadRouteSheet();
+  }
   if (sectionId === "calculations") {
     void import("./calculations.js").then((m) => m.loadCalculations());
   }
 
   if (sectionId === "tasks-all") {
     void import("./tasks.js").then((m) => m.loadAllTasks());
+  }
+  if (sectionId === "changes-all") {
+    void import("./all-changes.js").then((m) => m.loadAllChanges());
   }
   if (sectionId === "order-tasks") {
     void import("./tasks.js").then((m) => m.loadOrderTasks());
@@ -326,6 +343,18 @@ export function initSectionNavDropdown(options = {}) {
       item.addEventListener("click", () => {
         const id = item.dataset.section;
         if (!id) return;
+        if (id === "orders-excel") {
+          if (!canAccessSection("orders-excel")) return;
+          const hasOrdersTable = Boolean(document.getElementById("ordersTable"));
+          if (!hasOrdersTable) {
+            window.location.href = "index.html#orders-excel";
+            closeSectionNavDropdown();
+            return;
+          }
+          void import("./ordersExcelExport.js").then((m) => m.exportOrdersToExcel());
+          closeSectionNavDropdown();
+          return;
+        }
         if (typeof onSectionItemSelect === "function") {
           onSectionItemSelect(id);
           closeSectionNavDropdown();

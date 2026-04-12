@@ -1,7 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { isUserLite } from "./roles.js";
-import { checkDatabaseAvailable, setDbUnavailableBannerVisible } from "./dbHealth.js";
-import { formatAmount } from "./format.js";
+import { formatAmountWholeRubles } from "./format.js";
 import { state } from "./state.js";
 
 const PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
@@ -59,26 +58,21 @@ function getRecentMskDayKeys(daysCount) {
 
 export async function loadBalance() {
   const messageEl = document.getElementById("balanceMessage");
+  const theadRow = document.querySelector("#balanceTable thead tr");
   const tbody = document.querySelector("#balanceTable tbody");
-  if (!tbody) return;
+  if (!theadRow || !tbody) return;
 
   if (messageEl) messageEl.textContent = "";
-
-  if (!(await checkDatabaseAvailable())) {
-    setDbUnavailableBannerVisible(true);
-    if (messageEl) messageEl.textContent = "Не удалось загрузить баланс.";
-    tbody.innerHTML = "";
-    return;
-  }
 
   const balances = Object.fromEntries(PARTICIPANTS.map((p) => [p, 0]));
   const [todayKey, dayM1Key, dayM2Key, dayM3Key] = getRecentMskDayKeys(4);
   const turnover = Object.fromEntries(
     PARTICIPANTS.map((p) => [
       p,
-      { today: 0, m1: 0, m2: 0, m3: 0 },
+      { hour: 0, today: 0, m1: 0, m2: 0, m3: 0 },
     ])
   );
+  const hourAgoMs = Date.now() - 60 * 60 * 1000;
 
   const calcRes = await supabaseClient
     .from("calculations")
@@ -87,11 +81,9 @@ export async function loadBalance() {
 
   if (calcRes.error) {
     console.error("Ошибка загрузки расчётов для баланса:", calcRes.error);
-    setDbUnavailableBannerVisible(true);
     if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса";
     return;
   }
-  setDbUnavailableBannerVisible(false);
   const calcRows = calcRes.data || [];
   for (const row of calcRows) {
     const amount = toNumber(row.amount);
@@ -107,6 +99,17 @@ export async function loadBalance() {
           : dayKey === dayM2Key ? "m2"
             : dayKey === dayM3Key ? "m3"
               : null;
+
+    const rowTime = row.created_at ? new Date(row.created_at).getTime() : NaN;
+    if (Number.isFinite(rowTime) && rowTime >= hourAgoMs) {
+      if (row.from_place && Object.prototype.hasOwnProperty.call(turnover, row.from_place)) {
+        turnover[row.from_place].hour -= amount;
+      }
+      if (row.to_place && Object.prototype.hasOwnProperty.call(turnover, row.to_place)) {
+        turnover[row.to_place].hour += amount;
+      }
+    }
+
     if (!bucket) continue;
     if (row.from_place && Object.prototype.hasOwnProperty.call(turnover, row.from_place)) {
       turnover[row.from_place][bucket] -= amount;
@@ -122,18 +125,32 @@ export async function loadBalance() {
     balances[p] += Number.isFinite(n) ? Math.trunc(n) : 0;
   }
 
-  tbody.innerHTML = PARTICIPANTS.map((p) => {
-    return `
+  theadRow.innerHTML =
+    '<th scope="col"></th>' +
+    PARTICIPANTS.map((p) => `<th scope="col">${escapeHtml(p)}</th>`).join("");
+
+  const metricRows = [
+    { label: "Сейчас", value: (p) => balances[p] },
+    { label: "Час", value: (p) => turnover[p].hour },
+    { label: "Сегодня", value: (p) => turnover[p].today },
+    { label: "С-1", value: (p) => turnover[p].m1 },
+    { label: "С-2", value: (p) => turnover[p].m2 },
+    { label: "С-3", value: (p) => turnover[p].m3 },
+  ];
+
+  tbody.innerHTML = metricRows
+    .map(
+      ({ label, value }) => `
       <tr>
-        <td>${escapeHtml(p)}</td>
-        <td class="td-money">${formatAmount(balances[p])}</td>
-        <td class="td-money">${formatAmount(turnover[p].today)}</td>
-        <td class="td-money">${formatAmount(turnover[p].m1)}</td>
-        <td class="td-money">${formatAmount(turnover[p].m2)}</td>
-        <td class="td-money">${formatAmount(turnover[p].m3)}</td>
+        <th scope="row">${escapeHtml(label)}</th>
+        ${PARTICIPANTS.map(
+          (p) =>
+            `<td class="td-money">${formatAmountWholeRubles(value(p))}</td>`
+        ).join("")}
       </tr>
-    `;
-  }).join("");
+    `
+    )
+    .join("");
 }
 
 export async function initBalanceSection() {

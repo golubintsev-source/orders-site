@@ -1,10 +1,12 @@
 import { checkAuth, loadProfile } from "./auth.js";
 import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
-import { loadOrders, resetFormMode, editOrder, deleteOrder, applyOrderTypeSelectForRole } from "./orders.js";
+import { loadOrders, resetFormMode, editOrder, viewOrder, deleteOrder, applyOrderTypeSelectForRole } from "./orders.js";
 import { initCalculationsSection } from "./calculations.js";
 import { initBalanceSection } from "./balance.js";
+import { initRouteSheetSection } from "./route-sheet.js";
 import { loadSettings } from "./settings.js";
 import { initOrderTasksSection } from "./tasks.js";
+import { initAllChangesSection } from "./all-changes.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { setMessage } from "./dom.js";
 import { initOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
@@ -17,9 +19,9 @@ import {
 } from "./section-nav.js";
 import { canAccessSection } from "./roles.js";
 import { applyClientFilter } from "./orders.js";
-import { setDbUnavailableBannerVisible } from "./dbHealth.js";
 
 window.editOrder = editOrder;
+window.viewOrder = viewOrder;
 window.deleteOrder = deleteOrder;
 window.openFilesModal = openFilesModal;
 window.removeFile = removeFile;
@@ -41,26 +43,45 @@ async function init() {
     await loadSettings();
     await loadOrders();
     initOrderTasksSection();
+    initAllChangesSection();
     resetFormMode();
     if (canAccessSection("calculations")) {
       await initCalculationsSection();
     }
     await initBalanceSection();
+    initRouteSheetSection();
 
     applyHashSection();
     applyPendingOrdersSearchFromHistory();
   } catch (err) {
     console.error("Ошибка инициализации:", err);
-    setDbUnavailableBannerVisible(true);
     setMessage("Ошибка подключения к базе. Проверьте интернет и настройки Supabase.", "#d32f2f");
   }
 }
 
-const HASH_SECTION_IDS = new Set(["all", "new", "calculations", "tasks-all", "balance", "settings"]);
+const HASH_SECTION_IDS = new Set([
+  "all",
+  "new",
+  "calculations",
+  "tasks-all",
+  "changes-all",
+  "balance",
+  "route-sheet",
+  "settings",
+]);
 
 function applyHashSection() {
   const h = window.location.hash.replace(/^#/, "");
   if (!h) return;
+  if (h === "orders-excel") {
+    if (!canAccessSection("orders-excel")) {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      return;
+    }
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    void import("./ordersExcelExport.js").then((m) => m.exportOrdersToExcel());
+    return;
+  }
   if (!HASH_SECTION_IDS.has(h) || !canAccessSection(h)) return;
   switchSection(h);
 }

@@ -181,6 +181,14 @@ export function initOrdersTableStickyHeader() {
         document.getElementById("orderTypeFilterBtn")?.click();
         return;
       }
+      const paidBtn = e.target.closest(".paid-filter-btn");
+      if (paidBtn && wrap.contains(paidBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        document.getElementById("paidFilterBtn")?.click();
+        return;
+      }
       const statusBtn = e.target.closest(".status-filter-btn");
       if (statusBtn && wrap.contains(statusBtn)) {
         e.preventDefault();

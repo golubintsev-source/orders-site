@@ -223,17 +223,39 @@ h2 {
 }
 
 .section-nav-dropdown-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   padding: 10px 14px;
   font-size: 14px;
   font-weight: 700;
+  font-family: inherit;
+  line-height: 1.2;
   text-align: left;
   border: none;
   background: transparent;
   color: #374151;
   cursor: pointer;
   transition: background 0.15s;
+  box-sizing: border-box;
+}
+
+.section-nav-dropdown-item-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.section-nav-dropdown-item-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: #6b7280;
+}
+
+.section-nav-dropdown-item:hover .section-nav-dropdown-item-icon,
+.section-nav-dropdown-item:focus-visible .section-nav-dropdown-item-icon {
+  color: #111827;
 }
 
 .section-nav-dropdown-item:hover {
@@ -246,10 +268,11 @@ h2 {
   background: #eff6ff;
 }
 
-/* user_lite: пункты Баланс, Настройки, Расчёты не показываются (дублирует логику hidden в JS) */
+/* user_lite: пункты Баланс, Заказы в Excel, Настройки, Расчёты не показываются (дублирует логику hidden в JS) */
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="balance"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="settings"],
-#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="calculations"] {
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="calculations"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="orders-excel"] {
   display: none !important;
 }
 
@@ -874,7 +897,21 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 320px;
+  max-width: 100%;
+}
+
+.calculations-form-row--first {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.calculations-form-row--first .field {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 #section-calculations .calculations-form .field,
@@ -901,6 +938,11 @@ h2 {
   min-width: 0;
 }
 
+#section-calculations .calculations-form #calcComment,
+.calculations-page .calculations-form #calcComment {
+  font-size: 16px;
+}
+
 #section-calculations .calculations-submit-btn,
 .calculations-page .calculations-submit-btn {
   padding: 8px 12px;
@@ -919,6 +961,82 @@ h2 {
   opacity: 0.95;
 }
 
+/* Одна высота в строке: Добавить, поле поиска, Найти */
+.calculations-form-row--submit-search {
+  --calc-submit-row-height: 40px;
+  /* Общая ширина для «Добавить» и поля «Поиск» */
+  --calc-primary-action-width: 9rem;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.calculations-form-row--submit-search .calculations-submit-btn {
+  flex: 0 0 var(--calc-primary-action-width);
+  width: var(--calc-primary-action-width);
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--calc-submit-row-height);
+  min-height: var(--calc-submit-row-height);
+  padding: 0 12px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.calculations-search-wrap {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+#section-calculations .calculations-form .calculations-search-input,
+.calculations-page .calculations-form .calculations-search-input {
+  flex: 0 0 var(--calc-primary-action-width);
+  width: var(--calc-primary-action-width);
+  min-width: 0;
+  max-width: var(--calc-primary-action-width);
+  padding: 0 8px;
+  font-size: 16px;
+  height: var(--calc-submit-row-height, 40px);
+  min-height: var(--calc-submit-row-height, 40px);
+  box-sizing: border-box;
+}
+
+#section-calculations .calculations-form .calculations-search-btn,
+.calculations-page .calculations-form .calculations-search-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--calc-submit-row-height, 40px);
+  min-height: var(--calc-submit-row-height, 40px);
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #f3f4f6;
+  color: #111827;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+#section-calculations .calculations-form .calculations-search-btn:hover,
+.calculations-page .calculations-form .calculations-search-btn:hover {
+  background: #e5e7eb;
+}
+
 /*
  * Глобальный `table { min-width: 900px }` для расчётов не подходит.
  * На узком экране (iPhone) нужен min-width таблицы + горизонтальный скролл — иначе
@@ -935,70 +1053,63 @@ h2 {
   width: 100%;
   max-width: 100%;
   min-width: 520px;
-  table-layout: fixed;
+  /* auto + width:1% на «узких» колонках: по содержимому без дыр; «Комментарий» забирает остаток (без col width:0 — он даёт наложение в части браузеров) */
+  table-layout: auto;
+  border-spacing: 0;
   /* iOS Safari: не раздувать отдельные ячейки с длинным текстом */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-#calculationsTable thead th:nth-child(1) {
-  width: 9%;
-}
-#calculationsTable thead th:nth-child(2) {
-  width: 12%;
-}
-#calculationsTable thead th:nth-child(3) {
-  width: 12%;
-}
-#calculationsTable thead th:nth-child(4) {
-  width: 11%;
-}
-#calculationsTable thead th:nth-child(5) {
-  width: 44%;
-}
-#calculationsTable thead th:nth-child(6) {
-  width: 12%;
+/* «Узкие» колонки: 1% от таблицы как нижняя граница, фактически — max(1%, min-content) — без растягивания пустотой */
+#calculationsTable th:nth-child(1),
+#calculationsTable td:nth-child(1),
+#calculationsTable th:nth-child(2),
+#calculationsTable td:nth-child(2),
+#calculationsTable th:nth-child(3),
+#calculationsTable td:nth-child(3),
+#calculationsTable th:nth-child(4),
+#calculationsTable td:nth-child(4),
+#calculationsTable th:nth-child(6),
+#calculationsTable td:nth-child(6) {
+  width: 1%;
 }
 
 /*
- * iPhone / узкий экран: fixed + % ширин в WebKit даёт схлопывание и наложение
- * «Дата» / «Откуда». auto-layout + min-width по колонкам + горизонтальный скролл.
+ * Узкий экран: горизонтальный скролл (.table-wrap).
+ * iPhone: не задавать min-width таблице и не растягивать «узкие» колонки до 96/80px —
+ * иначе между текстами огромные пустые поля (кажется «зазором между столбцами»).
+ * Таблица по ширине = сумма колонок (max-content); 3px — только padding между ячейками.
  */
 @media (max-width: 768px) {
   #calculationsTable {
+    width: max-content;
+    min-width: 0;
+    max-width: none;
     table-layout: auto;
-    min-width: 680px;
+    /* collapse: заливка строк/шапки без разрывов; зазор между колонками — padding в блоке ниже */
+    border-collapse: collapse;
   }
 
-  #calculationsTable thead th:nth-child(1),
-  #calculationsTable thead th:nth-child(2),
-  #calculationsTable thead th:nth-child(3),
-  #calculationsTable thead th:nth-child(4),
-  #calculationsTable thead th:nth-child(5),
-  #calculationsTable thead th:nth-child(6) {
-    width: auto;
-  }
-
+  /* Перекрываем width:1% — колонки ровно по содержимому + padding */
   #calculationsTable th:nth-child(1),
-  #calculationsTable td:nth-child(1) {
-    min-width: 96px;
-  }
-
+  #calculationsTable td:nth-child(1),
   #calculationsTable th:nth-child(2),
   #calculationsTable td:nth-child(2),
   #calculationsTable th:nth-child(3),
-  #calculationsTable td:nth-child(3) {
-    min-width: 80px;
-  }
-
+  #calculationsTable td:nth-child(3),
   #calculationsTable th:nth-child(4),
-  #calculationsTable td:nth-child(4) {
-    min-width: 76px;
-  }
-
+  #calculationsTable td:nth-child(4),
   #calculationsTable th:nth-child(6),
   #calculationsTable td:nth-child(6) {
-    min-width: 56px;
+    width: max-content;
+    min-width: 0;
+  }
+
+  #calculationsTable th:nth-child(5),
+  #calculationsTable td:nth-child(5) {
+    width: auto;
+    min-width: 0;
   }
 
   /* дата в «пилюле» — меньше отступы, чтобы не выталкивала соседнюю ячейку */
@@ -1026,15 +1137,103 @@ h2 {
   font-size: 13px;
   white-space: nowrap;
 }
+
+/* Дата, Откуда, Куда, Сумма, Комментарий — 3px между соседними столбцами */
+#calculationsTable th:nth-child(1),
+#calculationsTable td:nth-child(1) {
+  padding-left: 0;
+  padding-right: 3px;
+}
+#calculationsTable th:nth-child(2),
+#calculationsTable td:nth-child(2),
+#calculationsTable th:nth-child(3),
+#calculationsTable td:nth-child(3) {
+  padding-left: 0;
+  padding-right: 3px;
+}
+#calculationsTable th:nth-child(4),
+#calculationsTable td:nth-child(4) {
+  padding-left: 0;
+  padding-right: 3px;
+}
+#calculationsTable th:nth-child(5),
+#calculationsTable td:nth-child(5) {
+  padding-left: 0;
+}
 #calculationsTable td.td-calc-comment {
   max-width: 100%;
   min-width: 0;
-  cursor: help;
+  cursor: pointer;
   font-size: 13px;
   line-height: 1.35;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+
+#calculationsTable td.td-calc-comment:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 1px;
+}
+
+.calc-comment-popover {
+  position: fixed;
+  z-index: 10050;
+  max-width: min(400px, calc(100vw - 16px));
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #111827;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: auto;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media (max-width: 768px) {
+  /* После базового max-width:100% — иначе колонка «Комментарий» растягивает таблицу на весь min-width */
+  #calculationsTable td.td-calc-comment {
+    max-width: min(60vw, 320px);
+  }
+
+  #calculationsTable th,
+  #calculationsTable td {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  /* ~4px между колонками без border-spacing (он даёт разрывы заливки) */
+  #calculationsTable th:nth-child(1),
+  #calculationsTable td:nth-child(1) {
+    padding-left: 0;
+    padding-right: 4px;
+  }
+  #calculationsTable th:nth-child(2),
+  #calculationsTable td:nth-child(2),
+  #calculationsTable th:nth-child(3),
+  #calculationsTable td:nth-child(3) {
+    padding-left: 0;
+    padding-right: 4px;
+  }
+  #calculationsTable th:nth-child(4),
+  #calculationsTable td:nth-child(4) {
+    padding-left: 0;
+    padding-right: 4px;
+  }
+  #calculationsTable th:nth-child(5),
+  #calculationsTable td:nth-child(5) {
+    padding-left: 0;
+  }
+
+  #calculationsTable td.td-actions {
+    padding: 4px 0;
+  }
+}
+
 /* Как у .status-value в «Дата» / «Сумма»: тот же кегль, без серой подложки */
 #calculationsTable td.td-calc-comment .calc-table-cell-text {
   display: block;
@@ -1119,6 +1318,68 @@ h2 {
 }
 #allTasksTable tbody tr.all-tasks-row--highlight:hover {
   background-color: #f87171;
+}
+
+/* Все изменения: override глобального table { width:100%; min-width:900px } — иначе колонки растягиваются пустотой */
+#allChangesTable {
+  width: 100%;
+  table-layout: auto;
+  min-width: 0 !important;
+  border-collapse: collapse;
+}
+/* Явные ширины для iOS Safari: width:0 у col при fixed-layout даёт наложение текста */
+#allChangesTable col.all-changes-col-compact {
+  width: 1%;
+}
+#allChangesTable col.all-changes-col-fill {
+  width: auto;
+}
+/* Между соседними колонками зазор 3px: справа 3px, слева у следующей 0 */
+#allChangesTable thead th:nth-child(1),
+#allChangesTable tbody td:nth-child(1) {
+  padding: 3px 3px 3px 2px;
+}
+#allChangesTable thead th:nth-child(2),
+#allChangesTable tbody td:nth-child(2),
+#allChangesTable thead th:nth-child(3),
+#allChangesTable tbody td:nth-child(3) {
+  padding: 3px 3px 3px 0;
+}
+#allChangesTable thead th:nth-child(4),
+#allChangesTable tbody td:nth-child(4) {
+  padding: 3px 2px 3px 0;
+}
+#allChangesTable thead th:nth-child(-n+3) {
+  white-space: nowrap;
+}
+#allChangesTable thead th:nth-child(4) {
+  white-space: normal;
+}
+#allChangesTable thead th {
+  font-size: 13px;
+  text-align: left;
+  background: #f8fafc;
+  font-weight: 700;
+  vertical-align: middle;
+  box-shadow: none;
+  border-bottom: 1px solid #e7ebf0;
+}
+#allChangesTable tbody tr.all-changes-row {
+  cursor: pointer;
+}
+#allChangesTable tbody td:nth-child(-n+3) {
+  white-space: nowrap;
+}
+#allChangesTable td {
+  font-size: 13px;
+  vertical-align: top;
+  line-height: 1.35;
+}
+#allChangesTable .all-changes-text-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  min-width: 0;
 }
 
 /* Задачи по заказу */
@@ -1272,15 +1533,28 @@ h2 {
   max-width: 420px;
 }
 
-#balanceTable { min-width: 200px; }
-#balanceTable th, #balanceTable td { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
-#balanceTable th:first-child,
-#balanceTable td:first-child {
-  padding-right: 0;
+/* Баланс: максимально узкие столбцы участников под мобильный экран */
+#balanceTable th,
+#balanceTable td {
+  padding: 3px 1px;
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-#balanceTable th:nth-child(2),
-#balanceTable td:nth-child(2) {
+#balanceTable thead th:first-child {
   padding-left: 0;
+  padding-right: 4px;
+}
+#balanceTable tbody th {
+  font-weight: 600;
+  text-align: left;
+  padding-left: 0;
+  padding-right: 4px;
+}
+#balanceTable thead th:not(:first-child) {
+  padding-left: 1px;
+  padding-right: 1px;
+  text-align: right;
 }
 
 #section-settings .settings-rate-row {
@@ -1721,6 +1995,13 @@ select:required:valid {
   border-color: #d32f2f;
 }
 
+/* Суммы: недопустимый ввод (дробная часть, точка, запятая и т.п.) */
+input.sum-input-invalid,
+textarea.sum-input-invalid {
+  background-color: #ffebee;
+  border-color: #d32f2f;
+}
+
 /* ===== кнопки ===== */
 button {
   border: none;
@@ -2037,6 +2318,11 @@ button:active {
     overflow-x: hidden;
   }
 
+  /* Отступ под шапку, вынесенную из потока (position: fixed); только если есть .topbar */
+  .container:has(.topbar) {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
+  }
+
   /* Раздел «Заказы»: ширина как на ПК; колонка таблицы — на всю высоту под topbar (flex, без урезания max-height). */
   .container:has(#section-all.content-section.active) {
     max-width: 1550px;
@@ -2076,14 +2362,27 @@ button:active {
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Шапка с лупой, разделом и выходом — закреплена при прокрутке страницы (z-index ниже модалок и дропдауна разделов) */
+  /*
+   * Шапка с лупой, разделом и выходом — фиксирована к верху экрана.
+   * position: sticky на iOS часто не срабатывает, если у предков overflow-x: hidden (scroll containment).
+   */
   .topbar {
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 980;
+    width: 100%;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 0;
+    box-sizing: border-box;
     background: #f5f7fb;
     padding-top: max(6px, env(safe-area-inset-top, 0px));
     padding-bottom: 6px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
   }
 
@@ -2150,65 +2449,113 @@ button:active {
   width: 1px;
 }
 
-/* Итого под таблицей заказов — отдельная компактная таблица */
-.orders-totals-wrap {
-  margin-top: 0.75rem;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.orders-totals-table {
-  width: auto;
-  min-width: 0;
-  max-width: 100%;
-  border-collapse: collapse;
-}
-
-.orders-totals-caption {
-  caption-side: top;
-  text-align: left;
-  font-weight: 700;
-  font-size: 14px;
-  padding: 0 0 6px 2px;
-  color: #1e293b;
-}
-
-.orders-totals-table th,
-.orders-totals-table td {
-  padding: 6px 10px;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.orders-totals-table thead th {
-  background: #f1f5f9;
-}
-
-.orders-totals-table tbody td {
-  background: #fafbfc;
-  font-weight: 600;
-}
-
-.orders-totals-th-m2,
-.orders-totals-td-m2 {
-  text-align: right;
-}
-
-.orders-totals-table .th-money,
-.orders-totals-table .td-money {
-  text-align: right;
-}
-
 table {
   width: 100%;
   border-collapse: collapse;
   min-width: 900px;
 }
 
-/* Баланс: фиксируем ширину как в требованиях */
+/* Баланс: строки — показатели, столбцы — участники; без растягивания столбцов на всю ширину карточки */
 #balanceTable {
-  width: 200px;
-  min-width: 200px;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Маршрутный лист: компактно под мобильный просмотр */
+.route-sheet-card.card {
+  padding: 8px 10px 10px;
+}
+
+.route-sheet-dates {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-bottom: 2px;
+}
+
+.route-sheet-date-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+}
+
+.route-sheet-date-prefix {
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.route-sheet-date-input,
+.route-sheet-date-inline input[type="date"] {
+  box-sizing: border-box;
+  min-height: 30px;
+  height: 30px;
+  padding: 2px 6px;
+  font-size: 13px;
+  line-height: 1.2;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.route-sheet-message {
+  margin: 0 0 2px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.25;
+  color: #b45309;
+  min-height: 0;
+}
+
+.route-sheet-message:empty {
+  display: none;
+}
+
+.route-sheet-table-title {
+  margin: 14px 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.route-sheet-table-wrap {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.route-sheet-table {
+  min-width: 720px;
+}
+
+.route-sheet-table th,
+.route-sheet-table td {
+  padding: 6px 7px;
+  font-size: 13px;
+}
+
+.route-sheet-table th.route-sheet-col-phone,
+.route-sheet-table td.route-sheet-col-phone {
+  min-width: 12.5rem;
+  width: 12.5rem;
+  white-space: nowrap;
+}
+
+#routeSheetTableShop.route-sheet-table {
+  min-width: 560px;
+}
+
+.route-sheet-export-btn {
+  margin-bottom: 2px;
+  padding: 5px 10px;
+  font-size: 12px;
+  line-height: 1.25;
+  border-radius: 8px;
 }
 
 th,
@@ -2549,6 +2896,10 @@ th {
 }
 
 #ordersTable .th-status-header {
+  white-space: nowrap;
+}
+
+#ordersTable .th-paid-header {
   white-space: nowrap;
 }
 
@@ -3407,9 +3758,17 @@ th {
   background: #e5e7eb;
 }
 
-/* iPhone: не даём max-width:768 перезаписать верхний отступ — он в закреплённой .topbar (safe-area) */
+/*
+ * iPhone: горизонтальные отступы шапки как у .container (12px).
+ * После @media (max-width: 768px) сокращение padding перезаписывает padding-top — задаём снова под фикс. шапку.
+ */
 @media (max-width: 768px) and (hover: none) and (pointer: coarse) {
-  .container {
-    padding-top: 0;
+  .topbar {
+    padding-left: max(12px, env(safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right, 0px));
+  }
+
+  .container:has(.topbar) {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
   }
 }

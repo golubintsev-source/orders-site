@@ -3,26 +3,40 @@
 <head>
 
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Login</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 
+html{
+box-sizing:border-box;
+}
+*,*::before,*::after{
+box-sizing:inherit;
+}
+
 body{
 font-family:Arial;
 display:flex;
 justify-content:center;
 align-items:center;
-height:100vh;
+min-height:100vh;
+min-height:100dvh;
+width:100%;
+margin:0;
+padding:max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 background:#f4f4f4;
 }
 
 .card{
 background:white;
-padding:30px;
+padding:24px;
 border-radius:10px;
-width:300px;
+width:100%;
+max-width:420px;
+box-sizing:border-box;
 }
 
 .login-logo{
@@ -49,6 +63,18 @@ box-sizing:border-box;
 display:block;
 }
 
+@media (max-width:480px){
+body{
+padding:max(0px, env(safe-area-inset-top)) max(0px, env(safe-area-inset-right)) max(0px, env(safe-area-inset-bottom)) max(0px, env(safe-area-inset-left));
+align-items:stretch;
+}
+.card{
+max-width:none;
+border-radius:0;
+min-height:100dvh;
+}
+}
+
 </style>
 
 </head>
@@ -69,7 +95,7 @@ display:block;
 
 </div>
 
-<script src="login.js"></script>
+<script type="module" src="js/login-page.js"></script>
 
 </body>
 </html>

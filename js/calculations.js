@@ -1,13 +1,17 @@
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile } from "./auth.js";
-import { formatAmount } from "./format.js";
+import { formatAmount, formatAmountWholeRubles, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY, refreshRublesIntegerInputState } from "./format.js";
 import { isAdmin } from "./roles.js";
-import { checkDatabaseAvailable, setDbUnavailableBannerVisible } from "./dbHealth.js";
 
 let editingId = null;
 let editingCreatedAt = null;
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 let currentUserEmail = "";
+
+/** Полные строки с сервера; фильтр поиска применяется при отрисовке. */
+let calculationsRowsCache = [];
+/** Непустая строка — поиск активен (кнопка «Отменить»). */
+let appliedCalculationsSearchQuery = null;
 
 function formatDateShort(iso) {
   if (!iso) return "";
@@ -38,19 +42,132 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+function escapeHtmlAttr(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+let calcCommentPopoverEl = null;
+let calcCommentPopoverTd = null;
+
+function ensureCalcCommentPopover() {
+  if (calcCommentPopoverEl) return calcCommentPopoverEl;
+  const el = document.createElement("div");
+  el.id = "calcCommentPopover";
+  el.className = "calc-comment-popover";
+  el.setAttribute("role", "tooltip");
+  el.hidden = true;
+  el.setAttribute("aria-hidden", "true");
+  document.body.appendChild(el);
+  calcCommentPopoverEl = el;
+  return el;
+}
+
+function hideCalcCommentPopover() {
+  const el = calcCommentPopoverEl;
+  if (!el) return;
+  el.hidden = true;
+  el.textContent = "";
+  el.removeAttribute("style");
+  el.setAttribute("aria-hidden", "true");
+  calcCommentPopoverTd = null;
+  document.removeEventListener("keydown", onCalcCommentPopoverKeydown);
+}
+
+function onCalcCommentPopoverKeydown(e) {
+  if (e.key === "Escape") hideCalcCommentPopover();
+}
+
+function positionCalcCommentPopover(td, popover) {
+  const rect = td.getBoundingClientRect();
+  const margin = 8;
+  const maxW = Math.min(400, window.innerWidth - 2 * margin);
+  popover.style.cssText = [
+    "position:fixed",
+    "z-index:10050",
+    `max-width:${maxW}px`,
+    `left:${margin}px`,
+    `top:${rect.bottom + margin}px`,
+    "visibility:hidden",
+  ].join(";");
+  requestAnimationFrame(() => {
+    const ph = popover.offsetHeight;
+    const pw = popover.offsetWidth;
+    let left = rect.left;
+    if (left + pw > window.innerWidth - margin) left = window.innerWidth - margin - pw;
+    if (left < margin) left = margin;
+    let top = rect.bottom + margin;
+    if (top + ph > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - ph - margin);
+    }
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+    popover.style.visibility = "visible";
+  });
+}
+
+function showCalcCommentPopover(td) {
+  const full = td.dataset.commentFull ?? "";
+  if (calcCommentPopoverTd === td && calcCommentPopoverEl && !calcCommentPopoverEl.hidden) {
+    hideCalcCommentPopover();
+    return;
+  }
+  calcCommentPopoverTd = td;
+  const popover = ensureCalcCommentPopover();
+  popover.textContent = full.trim() ? full : "(пусто)";
+  popover.hidden = false;
+  popover.setAttribute("aria-hidden", "false");
+  document.removeEventListener("keydown", onCalcCommentPopoverKeydown);
+  document.addEventListener("keydown", onCalcCommentPopoverKeydown);
+  positionCalcCommentPopover(td, popover);
+  setTimeout(() => {
+    document.addEventListener(
+      "click",
+      function onDocClick(e) {
+        if (calcCommentPopoverEl && calcCommentPopoverEl.contains(e.target)) return;
+        if (e.target.closest?.("td.td-calc-comment")) return;
+        hideCalcCommentPopover();
+      },
+      { once: true }
+    );
+  }, 0);
+}
+
+function setupCalcCommentPopover() {
+  const table = document.getElementById("calculationsTable");
+  if (!table || table.dataset.commentPopoverBound) return;
+  table.dataset.commentPopoverBound = "1";
+  table.addEventListener("click", (e) => {
+    const td = e.target.closest("td.td-calc-comment");
+    if (!td || !table.contains(td)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    showCalcCommentPopover(td);
+  });
+  table.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const td = e.target.closest?.("td.td-calc-comment");
+    if (!td || !table.contains(td)) return;
+    e.preventDefault();
+    showCalcCommentPopover(td);
+  });
+}
+
 /** Как в таблице заказов (#ordersTable .btn-icon) */
 const CALC_ICON_EDIT_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 
 const CALC_ICON_DELETE_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 
+/** null — пусто; undefined — недопустимые символы (не целые рубли). */
 function parseCalcAmountInput(raw) {
-  if (raw == null) return null;
-  const s0 = String(raw).trim();
-  if (!s0) return null;
-  // Убираем пробелы-разделители тысяч и незначащие пробелы
-  const s = s0.replace(/[\s\u00A0\u202F]/g, "").replace(",", ".");
-  const n = Number(s);
-  return Number.isNaN(n) ? null : n;
+  const r = tryParseRublesInteger(raw);
+  if (r.invalidFormat) return undefined;
+  return r.value;
 }
 
 function shortLoginByEmail(email) {
@@ -66,12 +183,74 @@ function appendActorToComment(comment) {
   return base ? `${base}; ${actor}` : actor;
 }
 
+function getCalcDisplayComment(comment) {
+  const c = comment ?? "";
+  const isOrderDeltaRow = typeof c === "string" && c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
+  return isOrderDeltaRow ? c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim() : c;
+}
+
+function rowMatchesCalculationsSearch(row, needleLower) {
+  if (!needleLower) return true;
+  const displayComment = getCalcDisplayComment(row.comment);
+  const rawComment = row.comment ?? "";
+  const parts = [
+    formatDateShort(row.created_at),
+    row.created_at || "",
+    String(row.from_place ?? ""),
+    String(row.to_place ?? ""),
+    formatAmount(row.amount),
+    String(row.amount ?? ""),
+    displayComment,
+    rawComment,
+    String(row.id ?? ""),
+  ];
+  return parts.join(" ").toLowerCase().includes(needleLower);
+}
+
+function updateCalculationsSearchButton() {
+  const btn = document.getElementById("calcSearchBtn");
+  if (!btn) return;
+  const active =
+    appliedCalculationsSearchQuery != null && String(appliedCalculationsSearchQuery).trim() !== "";
+  btn.textContent = active ? "Отменить" : "Найти";
+  btn.setAttribute("aria-pressed", active ? "true" : "false");
+}
+
+function applyCalculationsSearchFromInput() {
+  const input = document.getElementById("calcSearchInput");
+  const raw = (input?.value ?? "").trim();
+  if (!raw) {
+    appliedCalculationsSearchQuery = null;
+  } else {
+    appliedCalculationsSearchQuery = raw;
+  }
+  updateCalculationsSearchButton();
+  renderCalculationsTableFromCache();
+}
+
+function cancelCalculationsSearch() {
+  appliedCalculationsSearchQuery = null;
+  const input = document.getElementById("calcSearchInput");
+  if (input) input.value = "";
+  updateCalculationsSearchButton();
+  renderCalculationsTableFromCache();
+}
+
 function formatCalcAmountInput() {
   const amountEl = document.getElementById("calcAmount");
   if (!amountEl) return;
-  const n = parseCalcAmountInput(amountEl.value);
+  const raw = amountEl.value;
+  if (!String(raw).trim()) return;
+  const n = parseCalcAmountInput(raw);
+  if (n === undefined) {
+    amountEl.classList.add("sum-input-invalid");
+    amountEl.title = MSG_SUM_INTEGER_ONLY;
+    return;
+  }
+  amountEl.classList.remove("sum-input-invalid");
+  amountEl.removeAttribute("title");
   if (n == null) return;
-  amountEl.value = formatAmount(n);
+  amountEl.value = formatAmountWholeRubles(n);
 }
 
 function setMessage(text, isError) {
@@ -82,45 +261,35 @@ function setMessage(text, isError) {
   }
 }
 
-export async function loadCalculations() {
+function renderCalculationsTableFromCache() {
   const tbody = document.querySelector("#calculationsTable tbody");
   if (!tbody) return;
 
-  if (!(await checkDatabaseAvailable())) {
-    setDbUnavailableBannerVisible(true);
-    tbody.innerHTML = "";
-    const tr = document.createElement("tr");
-    tr.innerHTML = "<td colspan=\"6\">Не удалось загрузить данные.</td>";
-    tbody.appendChild(tr);
-    setMessage("Ошибка загрузки данных.", true);
-    return;
-  }
-
-  const { data, error } = await supabaseClient
-    .from("calculations")
-    .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
-
   tbody.innerHTML = "";
 
-  if (error) {
-    console.error("Ошибка загрузки расчетов:", error);
-    setDbUnavailableBannerVisible(true);
-    setMessage("Ошибка загрузки данных.", true);
-    return;
+  const q =
+    appliedCalculationsSearchQuery != null ? String(appliedCalculationsSearchQuery).trim() : "";
+  const needle = q ? q.toLowerCase() : "";
+  let rows = calculationsRowsCache;
+  if (needle) {
+    rows = calculationsRowsCache.filter((row) => rowMatchesCalculationsSearch(row, needle));
   }
 
-  setDbUnavailableBannerVisible(false);
-  setMessage("");
-  if (!data || data.length === 0) {
+  if (calculationsRowsCache.length === 0) {
     const tr = document.createElement("tr");
     tr.innerHTML = "<td colspan=\"6\">Записей пока нет.</td>";
     tbody.appendChild(tr);
     return;
   }
 
-  data.forEach((row) => {
+  if (rows.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td colspan=\"6\">Ничего не найдено.</td>";
+    tbody.appendChild(tr);
+    return;
+  }
+
+  rows.forEach((row) => {
     const comment = row.comment ?? "";
     const isOrderDeltaRow = typeof comment === "string" && comment.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
     const displayComment = isOrderDeltaRow
@@ -145,7 +314,7 @@ export async function loadCalculations() {
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
       <td class="td-money"><span class="status-value">${escapeHtml(formatAmount(row.amount))}</span></td>
-      <td class="td-calc-comment" title="${escapedComment}"><span class="calc-table-cell-text">${escapedComment}</span></td>
+      <td class="td-calc-comment" data-comment-full="${escapeHtmlAttr(displayComment)}" tabindex="0" role="button" aria-label="Показать полный комментарий"><span class="calc-table-cell-text">${escapedComment}</span></td>
       ${actionsCell}
     `;
     tbody.appendChild(tr);
@@ -161,15 +330,42 @@ export async function loadCalculations() {
   }
 }
 
+export async function loadCalculations() {
+  const tbody = document.querySelector("#calculationsTable tbody");
+  if (!tbody) return;
+
+  const { data, error } = await supabaseClient
+    .from("calculations")
+    .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Ошибка загрузки расчетов:", error);
+    setMessage("Ошибка загрузки данных.", true);
+    calculationsRowsCache = [];
+    tbody.innerHTML = "";
+    return;
+  }
+
+  setMessage("");
+  calculationsRowsCache = data || [];
+  renderCalculationsTableFromCache();
+}
+
 function getFormValues() {
   const fromEl = document.getElementById("calcFrom");
   const toEl = document.getElementById("calcTo");
   const amountEl = document.getElementById("calcAmount");
   const commentEl = document.getElementById("calcComment");
+  let amountParsed = null;
+  if (amountEl && String(amountEl.value).trim() !== "") {
+    amountParsed = parseCalcAmountInput(amountEl.value);
+  }
   const payload = {
     from_place: fromEl?.value?.trim() || null,
     to_place: toEl?.value?.trim() || null,
-    amount: amountEl?.value !== "" ? parseCalcAmountInput(amountEl.value) : null,
+    amount: amountParsed === undefined ? undefined : amountParsed,
     comment: appendActorToComment(commentEl?.value?.trim() || ""),
   };
   if (editingId && editingCreatedAt) {
@@ -185,7 +381,11 @@ function setFormValues(row) {
   const commentEl = document.getElementById("calcComment");
   if (fromEl) fromEl.value = row.from_place || "";
   if (toEl) toEl.value = row.to_place || "";
-  if (amountEl) amountEl.value = row.amount != null ? formatAmount(row.amount) : "";
+  if (amountEl) {
+    amountEl.value = row.amount != null ? formatAmountWholeRubles(row.amount) : "";
+    amountEl.classList.remove("sum-input-invalid");
+    amountEl.removeAttribute("title");
+  }
   if (commentEl) commentEl.value = row.comment || "";
 }
 
@@ -198,7 +398,11 @@ function resetForm() {
   const commentEl = document.getElementById("calcComment");
   if (fromEl) fromEl.value = "";
   if (toEl) toEl.value = "";
-  if (amountEl) amountEl.value = "";
+  if (amountEl) {
+    amountEl.value = "";
+    amountEl.classList.remove("sum-input-invalid");
+    amountEl.removeAttribute("title");
+  }
   if (commentEl) commentEl.value = "";
   const submitBtn = document.getElementById("calcSubmitBtn");
   if (submitBtn) submitBtn.textContent = "Добавить";
@@ -228,6 +432,20 @@ function startEdit(id) {
 async function submitForm(e) {
   e.preventDefault();
   const payload = getFormValues();
+  const amountEl = document.getElementById("calcAmount");
+
+  if (payload.amount === undefined) {
+    if (amountEl) {
+      amountEl.classList.add("sum-input-invalid");
+      amountEl.title = MSG_SUM_INTEGER_ONLY;
+    }
+    setMessage(MSG_SUM_INTEGER_ONLY, true);
+    return;
+  }
+  if (payload.amount == null) {
+    setMessage("Укажите сумму", true);
+    return;
+  }
 
   if (editingId) {
     if (!isAdmin()) {
@@ -293,7 +511,31 @@ function setupCalculationsForm() {
   const amountEl = document.getElementById("calcAmount");
   if (amountEl) {
     amountEl.addEventListener("blur", formatCalcAmountInput);
+    amountEl.addEventListener("input", () => refreshRublesIntegerInputState(amountEl, amountEl.value));
   }
+
+  const searchBtn = document.getElementById("calcSearchBtn");
+  const searchInput = document.getElementById("calcSearchInput");
+  if (searchBtn && searchInput && !searchBtn.dataset.searchBound) {
+    searchBtn.dataset.searchBound = "1";
+    searchBtn.addEventListener("click", () => {
+      const active =
+        appliedCalculationsSearchQuery != null &&
+        String(appliedCalculationsSearchQuery).trim() !== "";
+      if (active) {
+        cancelCalculationsSearch();
+      } else {
+        applyCalculationsSearchFromInput();
+      }
+    });
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      applyCalculationsSearchFromInput();
+    });
+  }
+
+  setupCalcCommentPopover();
 }
 
 export async function initCalculationsSection() {
