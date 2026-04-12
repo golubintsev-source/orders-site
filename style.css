@@ -2895,13 +2895,6 @@ th {
   flex-shrink: 0;
 }
 
-/* Воронка у «Номер» — плотно к тексту */
-#ordersTable .th-order-type-header .order-type-filter-btn,
-#ordersTableStickyHeadTable .th-order-type-header .order-type-filter-btn {
-  padding: 2px;
-  margin: 0;
-}
-
 /* Первый столбец без width: растягивается на весь «лишний» запас при table width:100%. */
 #ordersTable thead tr th:first-child,
 #ordersTable tbody td.td-order-id {
@@ -2937,7 +2930,13 @@ th {
   vertical-align: middle;
 }
 
-.order-date-filter-btn {
+#ordersTable th.th-order-filter-heading-cell,
+#ordersTableStickyHeadTable th.th-order-filter-heading-cell {
+  padding: 0 2px;
+  vertical-align: middle;
+}
+
+.orders-filter-heading-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2957,21 +2956,35 @@ th {
   white-space: nowrap;
 }
 
-.order-date-filter-btn:hover {
+.orders-filter-heading-btn--with-icon {
+  gap: 4px;
+}
+
+.orders-filter-heading-label {
+  flex-shrink: 0;
+}
+
+.orders-filter-heading-icon {
+  display: block;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.orders-filter-heading-btn:hover {
   background: rgba(31, 111, 235, 0.08);
 }
 
-.order-date-filter-btn[aria-expanded="true"] {
+.orders-filter-heading-btn[aria-expanded="true"] {
   color: #1f6feb;
   background: rgba(31, 111, 235, 0.12);
 }
 
-.order-date-filter-btn--active:not([aria-expanded="true"]) {
+.orders-filter-heading-btn--active:not([aria-expanded="true"]) {
   color: #1f6feb;
   background: rgba(31, 111, 235, 0.12);
 }
 
-#ordersTableStickyHeadTable .order-date-filter-btn {
+#ordersTableStickyHeadTable .orders-filter-heading-btn {
   padding: 2px 6px;
 }
 
@@ -3058,38 +3071,6 @@ th {
 
 #ordersTable .th-status-label {
   flex-shrink: 0;
-}
-
-#ordersTable .status-filter-btn,
-#ordersTableStickyHeadTable .status-filter-btn {
-  padding: 2px;
-}
-
-.status-filter-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  border: none;
-  background: transparent;
-  color: #6b7280;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: color 0.2s, background 0.2s;
-}
-
-.status-filter-btn:hover {
-  color: #1f6feb;
-  background: rgba(31, 111, 235, 0.08);
-}
-
-.status-filter-btn[aria-expanded="true"] {
-  color: #1f6feb;
-  background: rgba(31, 111, 235, 0.12);
-}
-
-.status-filter-icon {
-  display: block;
 }
 
 .status-filter-dropdown {
@@ -3732,6 +3713,10 @@ th {
   }
 
   #ordersTable th.th-order-date-header {
+    padding: 0 2px;
+  }
+
+  #ordersTable th.th-order-filter-heading-cell {
     padding: 0 2px;
   }
 

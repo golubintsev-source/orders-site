@@ -989,7 +989,7 @@ function orderMatchesOrderDateRange(order, fromYmd, toYmd) {
 
 export function applyFiltersAndRender() {
   renderOrders(getFilteredOrders());
-  syncOrderDateFilterButtonActiveState();
+  syncOrdersFilterHeadingButtonsState();
   // Сигнал UI-коду: фильтры (статусы/типы) изменились и таблица перерисована.
   // Это нужно, чтобы синхронизировать внешние быстрые переключатели.
   document.dispatchEvent(new CustomEvent("orders-filters-updated"));
@@ -1423,11 +1423,29 @@ function syncOrderDateFilterInputsFromState() {
   if (toEl) toEl.value = state.orderDateFilterTo || "";
 }
 
-function syncOrderDateFilterButtonActiveState() {
-  const btn = document.getElementById("orderDateFilterBtn");
-  if (!btn) return;
-  const active = Boolean(state.orderDateFilterFrom || state.orderDateFilterTo);
-  btn.classList.toggle("order-date-filter-btn--active", active);
+function syncOrdersFilterHeadingButtonsState() {
+  const dateBtn = document.getElementById("orderDateFilterBtn");
+  if (dateBtn) {
+    dateBtn.classList.toggle(
+      "orders-filter-heading-btn--active",
+      Boolean(state.orderDateFilterFrom || state.orderDateFilterTo)
+    );
+  }
+  const typeBtn = document.getElementById("orderTypeFilterBtn");
+  if (typeBtn) {
+    typeBtn.classList.toggle(
+      "orders-filter-heading-btn--active",
+      (state.orderTypeFilterSelected?.length || 0) > 0
+    );
+  }
+  const paidBtn = document.getElementById("paidFilterBtn");
+  if (paidBtn) {
+    paidBtn.classList.toggle("orders-filter-heading-btn--active", (state.paidFilterSelected?.length || 0) > 0);
+  }
+  const statusBtn = document.getElementById("statusFilterBtn");
+  if (statusBtn) {
+    statusBtn.classList.toggle("orders-filter-heading-btn--active", (state.statusFilterSelected?.length || 0) > 0);
+  }
 }
 
 function renderPaidFilterDropdown() {
@@ -1560,7 +1578,7 @@ export function initOrderDateFilter() {
       syncOrderDateFilterInputsFromState();
       const rect = getFilterDropdownAnchorRect(
         btn,
-        "#ordersTableStickyHeadTable thead button.order-date-filter-btn"
+        "#ordersTableStickyHeadTable thead th.th-order-date-header .orders-filter-heading-btn"
       );
       dropdown.style.position = "fixed";
       dropdown.style.zIndex = "1200";
@@ -1600,7 +1618,7 @@ export function initOrderDateFilter() {
     });
   }
 
-  syncOrderDateFilterButtonActiveState();
+  syncOrdersFilterHeadingButtonsState();
 }
 
 export function initStatusFilter() {
@@ -1620,7 +1638,7 @@ export function initStatusFilter() {
       renderStatusFilterDropdown();
       const rect = getFilterDropdownAnchorRect(
         btn,
-        "#ordersTableStickyHeadTable thead button.status-filter-btn:not(.order-type-filter-btn):not(.paid-filter-btn)"
+        "#ordersTableStickyHeadTable thead th.th-status-header .orders-filter-heading-btn"
       );
       dropdown.style.position = "fixed";
       dropdown.style.zIndex = "1200";

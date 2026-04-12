@@ -189,7 +189,7 @@ export function initOrdersTableStickyHeader() {
         document.getElementById("paidFilterBtn")?.click();
         return;
       }
-      const statusBtn = e.target.closest(".status-filter-btn");
+      const statusBtn = e.target.closest(".orders-status-column-filter-btn");
       if (statusBtn && wrap.contains(statusBtn)) {
         e.preventDefault();
         e.stopPropagation();
@@ -197,12 +197,15 @@ export function initOrdersTableStickyHeader() {
         document.getElementById("statusFilterBtn")?.click();
         return;
       }
-      const dateBtn = e.target.closest(".order-date-filter-btn");
-      if (dateBtn && wrap.contains(dateBtn)) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        document.getElementById("orderDateFilterBtn")?.click();
+      const dateTh = e.target.closest("th.th-order-date-header");
+      if (dateTh && wrap.contains(dateTh)) {
+        const dateBtn = dateTh.querySelector(".orders-filter-heading-btn");
+        if (dateBtn && (e.target === dateBtn || dateBtn.contains(e.target))) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          document.getElementById("orderDateFilterBtn")?.click();
+        }
       }
     },
     true
