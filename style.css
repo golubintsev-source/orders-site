@@ -2967,18 +2967,8 @@ th {
   white-space: nowrap;
 }
 
-.orders-filter-heading-btn--with-icon {
-  gap: 4px;
-}
-
 .orders-filter-heading-label {
   flex-shrink: 0;
-}
-
-.orders-filter-heading-icon {
-  display: block;
-  flex-shrink: 0;
-  color: inherit;
 }
 
 .orders-filter-heading-btn:hover {
