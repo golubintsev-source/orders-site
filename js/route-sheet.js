@@ -27,7 +27,20 @@ const VOLGOGRAD_CENTER = [48.708, 44.513];
 const VOLGOGRAD_ZOOM_DEFAULT = 11;
 const NOMINATIM_DELAY_MS = 1100;
 
+function normalizeAddrForOfficeCompare(s) {
+  return String(s).trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Постоянная метка офиса (координаты по OSM / Nominatim для здания). */
+const ROUTE_SHEET_OFFICE_ADDRESS = "Автотранспортная улица, 29Ж";
+const ROUTE_SHEET_OFFICE_ADDR_NORM = normalizeAddrForOfficeCompare(ROUTE_SHEET_OFFICE_ADDRESS);
+const ROUTE_SHEET_OFFICE_LAT = 48.6903978;
+const ROUTE_SHEET_OFFICE_LON = 44.4336316;
+/** Тот же файл, что на форме входа (`login.html`). */
+const ROUTE_SHEET_LOGIN_LOGO_PATH = "./img/logo.png";
+
 let routeDeliveryMap = null;
+let routeDeliveryOfficeLayer = null;
 let routeDeliveryMarkersLayer = null;
 let routeDeliveryMapGeneration = 0;
 const nominatimCache = new Map();
@@ -192,6 +205,32 @@ async function geocodeAddressVolgograd(address) {
   return coords;
 }
 
+function isRouteSheetOfficeAddress(raw) {
+  return normalizeAddrForOfficeCompare(raw) === ROUTE_SHEET_OFFICE_ADDR_NORM;
+}
+
+function routeSheetOfficeLatLng(L) {
+  return L.latLng(ROUTE_SHEET_OFFICE_LAT, ROUTE_SHEET_OFFICE_LON);
+}
+
+function addRouteSheetOfficeMarker(L) {
+  if (!routeDeliveryOfficeLayer) return;
+  const latlng = routeSheetOfficeLatLng(L);
+  const html = `<div class="route-sheet-map-office-wrap"><img class="route-sheet-map-office-logo" src="${escapeAttr(ROUTE_SHEET_LOGIN_LOGO_PATH)}" alt="" width="36" height="36" decoding="async" /></div>`;
+  const icon = L.divIcon({
+    className: "route-sheet-map-divicon-root route-sheet-map-office-divicon",
+    html,
+    iconSize: [44, 44],
+    iconAnchor: [22, 44],
+    popupAnchor: [0, -40],
+  });
+  const m = L.marker(latlng, { icon, zIndexOffset: -200 });
+  m.bindPopup(
+    `<div class="route-sheet-map-popup-order"><strong>${escapeHtml(ROUTE_SHEET_OFFICE_ADDRESS)}</strong><br><span class="route-sheet-map-popup-addr">Волгоград</span></div>`,
+  );
+  m.addTo(routeDeliveryOfficeLayer);
+}
+
 function ensureRouteDeliveryMap() {
   const L = globalThis.L;
   const el = document.getElementById("routeSheetDeliveryMap");
@@ -202,6 +241,8 @@ function ensureRouteDeliveryMap() {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(routeDeliveryMap);
+  routeDeliveryOfficeLayer = L.layerGroup().addTo(routeDeliveryMap);
+  addRouteSheetOfficeMarker(L);
   routeDeliveryMarkersLayer = L.layerGroup().addTo(routeDeliveryMap);
 }
 
