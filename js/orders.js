@@ -25,7 +25,13 @@ import {
   clearExistingOrderFilesInForm,
   renderExistingOrderFilesInForm,
 } from "./files.js";
-import { formatAmount, formatOrderIdTypeChip, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY } from "./format.js";
+import {
+  formatAmount,
+  formatAmountWholeRubles,
+  formatOrderIdTypeChip,
+  tryParseRublesInteger,
+  MSG_SUM_INTEGER_ONLY,
+} from "./format.js";
 import { applyOrdersTableMobileFit } from "./ordersTableMobileFit.js";
 import {
   canMutateOrders,
@@ -1236,14 +1242,17 @@ function renderOrdersTotals(orders) {
   const sumConstruction = sumOrderNumericField(orders, "construction_count");
 
   const fmt = (n) => (count ? formatAmount(n) : "");
+  const fmtMoneyInt = (n) => (count ? formatAmountWholeRubles(n) : "");
+  const fmtAreaM2 = (n) =>
+    count && Number.isFinite(n) ? formatAmount(Number(n.toFixed(2))) : "";
 
   row.innerHTML = `
     <td class="td-orders-totals-count">${String(count)}</td>
-    <td class="td-money">${fmt(sumAmount)}</td>
-    <td class="td-money">${fmt(sumPrepayment)}</td>
-    <td class="td-money">${fmt(sumRemaining)}</td>
-    <td class="td-area-m2">${fmt(sumArea)}</td>
-    <td class="td-money td-installer-payment">${fmt(sumInstaller)}</td>
+    <td class="td-money">${fmtMoneyInt(sumAmount)}</td>
+    <td class="td-money">${fmtMoneyInt(sumPrepayment)}</td>
+    <td class="td-money">${fmtMoneyInt(sumRemaining)}</td>
+    <td class="td-area-m2">${fmtAreaM2(sumArea)}</td>
+    <td class="td-money td-installer-payment">${fmtMoneyInt(sumInstaller)}</td>
     <td>${fmt(sumMosquito)}</td>
     <td>${fmt(sumConstruction)}</td>
   `;
