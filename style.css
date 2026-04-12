@@ -2140,6 +2140,7 @@ button:active {
 
 #ordersTotalsTable.orders-totals-table {
   border-collapse: collapse;
+  border-spacing: 0;
   width: max-content;
   max-width: 100%;
 }
@@ -2147,7 +2148,7 @@ button:active {
 #ordersTotalsTable th,
 #ordersTotalsTable td {
   box-sizing: border-box;
-  padding: 3px 4px;
+  padding: 3px 0;
   font-size: 12px;
   vertical-align: middle;
   white-space: nowrap;
@@ -2174,7 +2175,7 @@ button:active {
 
   #ordersTotalsTable th,
   #ordersTotalsTable td {
-    padding: 2px 3px;
+    padding: 2px 0;
     font-size: 11px;
   }
 }
