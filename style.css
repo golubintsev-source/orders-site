@@ -2138,11 +2138,13 @@ button:active {
   padding: 0 0 4px 0;
 }
 
+/* Перекрываем глобальное `table { width:100%; min-width:900px }` — иначе «Итого» тянется на 900px+ и между столбцами остаётся пустота при text-align:right */
 #ordersTotalsTable.orders-totals-table {
   border-collapse: collapse;
   border-spacing: 0;
   width: max-content;
   max-width: 100%;
+  min-width: 0;
 }
 
 #ordersTotalsTable th,
