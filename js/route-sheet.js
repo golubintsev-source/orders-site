@@ -345,13 +345,13 @@ function routeSheetOfficeLatLng(L) {
 function addRouteSheetOfficeMarker(L) {
   if (!routeDeliveryOfficeLayer) return;
   const latlng = routeSheetOfficeLatLng(L);
-  const html = `<div class="route-sheet-map-office-wrap"><img class="route-sheet-map-office-logo" src="${escapeAttr(ROUTE_SHEET_LOGIN_LOGO_PATH)}" alt="" width="36" height="36" decoding="async" /></div>`;
+  const html = `<div class="route-sheet-map-office-wrap"><img class="route-sheet-map-office-logo" src="${escapeAttr(ROUTE_SHEET_LOGIN_LOGO_PATH)}" alt="" width="10" height="10" decoding="async" /></div>`;
   const icon = L.divIcon({
     className: "route-sheet-map-divicon-root route-sheet-map-office-divicon",
     html,
-    iconSize: [44, 44],
-    iconAnchor: [22, 44],
-    popupAnchor: [0, -40],
+    iconSize: [10, 10],
+    iconAnchor: [5, 10],
+    popupAnchor: [0, -10],
   });
   const m = L.marker(latlng, { icon, zIndexOffset: -200 });
   m.bindPopup(
