@@ -2931,6 +2931,109 @@ th {
   padding: 3px 2px;
 }
 
+#ordersTable th.th-order-date-header,
+#ordersTableStickyHeadTable th.th-order-date-header {
+  padding: 0 2px;
+  vertical-align: middle;
+}
+
+.order-date-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f6feb;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+
+.order-date-filter-btn:hover {
+  background: rgba(31, 111, 235, 0.08);
+}
+
+.order-date-filter-btn[aria-expanded="true"] {
+  color: #1f6feb;
+  background: rgba(31, 111, 235, 0.12);
+}
+
+.order-date-filter-btn--active:not([aria-expanded="true"]) {
+  color: #1f6feb;
+  background: rgba(31, 111, 235, 0.12);
+}
+
+#ordersTableStickyHeadTable .order-date-filter-btn {
+  padding: 2px 6px;
+}
+
+.order-date-filter-dropdown {
+  padding: 10px 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.order-date-filter-dropdown-inner {
+  padding: 0 10px;
+}
+
+.order-date-filter-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.order-date-filter-label {
+  flex: 0 0 1.75rem;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.order-date-filter-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.order-date-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.order-date-filter-action-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  cursor: pointer;
+}
+
+.order-date-filter-action-btn:hover {
+  background: #f3f4f6;
+}
+
+.order-date-filter-action-btn--primary {
+  border-color: #1f6feb;
+  background: rgba(31, 111, 235, 0.08);
+  color: #1f6feb;
+  font-weight: 600;
+}
+
 #ordersTable .th-status-header-inner {
   display: flex;
   align-items: center;
@@ -3618,6 +3721,10 @@ th {
   #ordersTable th.th-order-date,
   #ordersTable td.td-order-date {
     padding: 3px 2px;
+  }
+
+  #ordersTable th.th-order-date-header {
+    padding: 0 2px;
   }
 
   #ordersTable th.th-paid,

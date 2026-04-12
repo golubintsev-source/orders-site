@@ -947,11 +947,49 @@ export function getFilteredOrders() {
     });
   }
 
+  const df = state.orderDateFilterFrom;
+  const dt = state.orderDateFilterTo;
+  if (df || dt) {
+    list = list.filter((order) => orderMatchesOrderDateRange(order, df, dt));
+  }
+
   return list;
+}
+
+/** Календарная дата заказа YYYY-MM-DD в локальной зоне (для сравнения с input type=date). */
+function getOrderCalendarYmd(order) {
+  const raw = order.order_date;
+  if (raw == null || raw === "") return null;
+  const s = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const [yy, mm, dd] = s.slice(0, 10).split("-").map(Number);
+    const d = new Date(yy, mm - 1, dd);
+    if (Number.isNaN(d.getTime())) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function orderMatchesOrderDateRange(order, fromYmd, toYmd) {
+  const ymd = getOrderCalendarYmd(order);
+  if (!ymd) return false;
+  let from = fromYmd || null;
+  let to = toYmd || null;
+  if (from && to && from > to) {
+    const t = from;
+    from = to;
+    to = t;
+  }
+  if (from && ymd < from) return false;
+  if (to && ymd > to) return false;
+  return true;
 }
 
 export function applyFiltersAndRender() {
   renderOrders(getFilteredOrders());
+  syncOrderDateFilterButtonActiveState();
   // Сигнал UI-коду: фильтры (статусы/типы) изменились и таблица перерисована.
   // Это нужно, чтобы синхронизировать внешние быстрые переключатели.
   document.dispatchEvent(new CustomEvent("orders-filters-updated"));
@@ -1371,6 +1409,27 @@ function closePaidFilterDropdown() {
   if (btn) btn.setAttribute("aria-expanded", "false");
 }
 
+function closeOrderDateFilterDropdown() {
+  const btn = document.getElementById("orderDateFilterBtn");
+  const dropdown = document.getElementById("orderDateFilterDropdown");
+  if (dropdown) dropdown.style.display = "none";
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
+function syncOrderDateFilterInputsFromState() {
+  const fromEl = document.getElementById("orderDateFilterFromInput");
+  const toEl = document.getElementById("orderDateFilterToInput");
+  if (fromEl) fromEl.value = state.orderDateFilterFrom || "";
+  if (toEl) toEl.value = state.orderDateFilterTo || "";
+}
+
+function syncOrderDateFilterButtonActiveState() {
+  const btn = document.getElementById("orderDateFilterBtn");
+  if (!btn) return;
+  const active = Boolean(state.orderDateFilterFrom || state.orderDateFilterTo);
+  btn.classList.toggle("order-date-filter-btn--active", active);
+}
+
 function renderPaidFilterDropdown() {
   const container = document.getElementById("paidFilterCheckboxes");
   if (!container) return;
@@ -1418,6 +1477,7 @@ function bindTableFilterDocClose() {
     closeStatusFilterDropdown();
     closeOrderTypeFilterDropdown();
     closePaidFilterDropdown();
+    closeOrderDateFilterDropdown();
   });
 }
 
@@ -1481,6 +1541,68 @@ function getFilterDropdownAnchorRect(originalBtn, cloneButtonSelector) {
   return br;
 }
 
+export function initOrderDateFilter() {
+  const btn = document.getElementById("orderDateFilterBtn");
+  const dropdown = document.getElementById("orderDateFilterDropdown");
+  const applyBtn = document.getElementById("orderDateFilterApplyBtn");
+  const resetBtn = document.getElementById("orderDateFilterResetBtn");
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = dropdown.style.display === "block";
+    if (isOpen) {
+      closeOrderDateFilterDropdown();
+    } else {
+      closeStatusFilterDropdown();
+      closeOrderTypeFilterDropdown();
+      closePaidFilterDropdown();
+      syncOrderDateFilterInputsFromState();
+      const rect = getFilterDropdownAnchorRect(
+        btn,
+        "#ordersTableStickyHeadTable thead button.order-date-filter-btn"
+      );
+      dropdown.style.position = "fixed";
+      dropdown.style.zIndex = "1200";
+      dropdown.style.top = rect.bottom + 4 + "px";
+      dropdown.style.left = rect.left + "px";
+      dropdown.style.display = "block";
+      btn.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  bindTableFilterDocClose();
+
+  dropdown.addEventListener("click", (e) => e.stopPropagation());
+
+  if (applyBtn) {
+    applyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const fromEl = document.getElementById("orderDateFilterFromInput");
+      const toEl = document.getElementById("orderDateFilterToInput");
+      const fromVal = (fromEl?.value || "").trim() || null;
+      const toVal = (toEl?.value || "").trim() || null;
+      state.orderDateFilterFrom = fromVal;
+      state.orderDateFilterTo = toVal;
+      closeOrderDateFilterDropdown();
+      applyFiltersAndRender();
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.orderDateFilterFrom = null;
+      state.orderDateFilterTo = null;
+      syncOrderDateFilterInputsFromState();
+      closeOrderDateFilterDropdown();
+      applyFiltersAndRender();
+    });
+  }
+
+  syncOrderDateFilterButtonActiveState();
+}
+
 export function initStatusFilter() {
   const btn = document.getElementById("statusFilterBtn");
   const dropdown = document.getElementById("statusFilterDropdown");
@@ -1494,6 +1616,7 @@ export function initStatusFilter() {
     } else {
       closeOrderTypeFilterDropdown();
       closePaidFilterDropdown();
+      closeOrderDateFilterDropdown();
       renderStatusFilterDropdown();
       const rect = getFilterDropdownAnchorRect(
         btn,
@@ -1526,6 +1649,7 @@ export function initOrderTypeFilter() {
     } else {
       closeStatusFilterDropdown();
       closePaidFilterDropdown();
+      closeOrderDateFilterDropdown();
       renderOrderTypeFilterDropdown();
       const rect = getFilterDropdownAnchorRect(
         btn,
@@ -1558,6 +1682,7 @@ export function initPaidFilter() {
     } else {
       closeStatusFilterDropdown();
       closeOrderTypeFilterDropdown();
+      closeOrderDateFilterDropdown();
       renderPaidFilterDropdown();
       const rect = getFilterDropdownAnchorRect(
         btn,

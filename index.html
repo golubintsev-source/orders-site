@@ -511,6 +511,22 @@
       <div id="paidFilterDropdown" class="status-filter-dropdown" role="dialog" aria-label="Фильтр по оплате" style="display: none;">
         <div class="status-filter-dropdown-inner" id="paidFilterCheckboxes"></div>
       </div>
+      <div id="orderDateFilterDropdown" class="status-filter-dropdown order-date-filter-dropdown" role="dialog" aria-label="Фильтр по дате заказа" style="display: none;">
+        <div class="status-filter-dropdown-inner order-date-filter-dropdown-inner">
+          <div class="order-date-filter-field">
+            <label class="order-date-filter-label" for="orderDateFilterFromInput">С</label>
+            <input type="date" id="orderDateFilterFromInput" class="order-date-filter-input" />
+          </div>
+          <div class="order-date-filter-field">
+            <label class="order-date-filter-label" for="orderDateFilterToInput">По</label>
+            <input type="date" id="orderDateFilterToInput" class="order-date-filter-input" />
+          </div>
+          <div class="order-date-filter-actions">
+            <button type="button" class="order-date-filter-action-btn order-date-filter-action-btn--primary" id="orderDateFilterApplyBtn">Выбрать</button>
+            <button type="button" class="order-date-filter-action-btn" id="orderDateFilterResetBtn">Сбросить</button>
+          </div>
+        </div>
+      </div>
       <div id="ordersTableScrollTop" class="orders-table-scroll-top" aria-hidden="true">
         <div id="ordersTableScrollSpacer" class="orders-table-scroll-spacer"></div>
       </div>
@@ -537,7 +553,11 @@
                   </button>
                 </div>
               </th>
-              <th class="th-order-date">Дата</th>
+              <th class="th-order-date th-order-date-header">
+                <button type="button" class="order-date-filter-btn" id="orderDateFilterBtn" title="Фильтр по дате заказа" aria-haspopup="true" aria-expanded="false">
+                  <span class="order-date-filter-btn-text">Дата</span>
+                </button>
+              </th>
               <th class="th-orders-col-150">
                 <div class="th-status-header-inner">
                   <span class="th-status-label">Клиент</span>

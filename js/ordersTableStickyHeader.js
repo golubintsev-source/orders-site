@@ -195,6 +195,14 @@ export function initOrdersTableStickyHeader() {
         e.stopPropagation();
         e.stopImmediatePropagation();
         document.getElementById("statusFilterBtn")?.click();
+        return;
+      }
+      const dateBtn = e.target.closest(".order-date-filter-btn");
+      if (dateBtn && wrap.contains(dateBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        document.getElementById("orderDateFilterBtn")?.click();
       }
     },
     true
