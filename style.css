@@ -2611,6 +2611,47 @@ table {
   z-index: 0;
 }
 
+.route-sheet-map .route-sheet-map-divicon-root {
+  background: transparent !important;
+  border: none !important;
+}
+
+.route-sheet-map-marker {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  pointer-events: auto;
+}
+
+.route-sheet-map-marker-dot {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid #1d4ed8;
+  background: #3b82f6;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.route-sheet-map-marker-label {
+  flex-shrink: 0;
+  max-width: 220px;
+  padding: 1px 5px 2px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
 .route-sheet-map .leaflet-popup-content {
   margin: 10px 12px;
   font-size: 13px;

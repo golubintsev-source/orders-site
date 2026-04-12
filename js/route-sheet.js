@@ -219,6 +219,13 @@ function setRouteDeliveryMapStatus(text, warn) {
   statusEl.classList.toggle("route-sheet-map-status--warn", Boolean(warn));
 }
 
+function deliveryMapLabelText(ordersAtAddress) {
+  return ordersAtAddress
+    .map((o) => (o.id != null ? formatOrderIdTypeChip(o.id, o.order_type) : ""))
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function buildDeliveryPopupHtml(ordersAtAddress) {
   return ordersAtAddress
     .map((o) => {
@@ -229,6 +236,20 @@ function buildDeliveryPopupHtml(ordersAtAddress) {
       return `<div class="route-sheet-map-popup-order"><strong>${num}</strong> — ${client}<br><span class="route-sheet-map-popup-addr">${addr}</span></div>`;
     })
     .join("");
+}
+
+function deliveryMapMarkerIcon(L, ordersHere) {
+  const labelRaw = deliveryMapLabelText(ordersHere);
+  const labelHtml = escapeHtml(labelRaw || "—");
+  const html = `<div class="route-sheet-map-marker"><span class="route-sheet-map-marker-dot" aria-hidden="true"></span><span class="route-sheet-map-marker-label">${labelHtml}</span></div>`;
+  const approxW = Math.min(280, 22 + Math.max(56, labelRaw.length * 7.5));
+  return L.divIcon({
+    className: "route-sheet-map-divicon-root",
+    html,
+    iconSize: [approxW, 26],
+    iconAnchor: [8, 13],
+    popupAnchor: [0, -12],
+  });
 }
 
 function scheduleInvalidateRouteDeliveryMap() {
@@ -289,12 +310,8 @@ async function updateRouteSheetDeliveryMap(deliveryRows) {
     const ordersHere = byAddress.get(addr.toLowerCase()) || [];
     const latlng = L.latLng(coords.lat, coords.lon);
     latLngs.push(latlng);
-    const marker = L.circleMarker(latlng, {
-      radius: 9,
-      color: "#1d4ed8",
-      weight: 2,
-      fillColor: "#3b82f6",
-      fillOpacity: 0.85,
+    const marker = L.marker(latlng, {
+      icon: deliveryMapMarkerIcon(L, ordersHere),
     });
     marker.bindPopup(buildDeliveryPopupHtml(ordersHere));
     marker.addTo(routeDeliveryMarkersLayer);
