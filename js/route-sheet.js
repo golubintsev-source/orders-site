@@ -41,6 +41,11 @@ const VOLGOGRAD_CENTER = [48.708, 44.513];
 const VOLGOGRAD_ZOOM_DEFAULT = 11;
 const NOMINATIM_DELAY_MS = 1100;
 
+/** Nominatim viewbox: min_lon, max_lat, max_lon, min_lat — границы города Волгоград (relation). */
+const NOMINATIM_VIEWBOX_VOLGOGRAD_CITY = "44.1087686,48.8890717,44.6874279,48.4070531";
+/** Границы Волгоградской области (fallback, если в городе не найдено). */
+const NOMINATIM_VIEWBOX_VOLGOGRAD_OBLAST = "41.1681048,51.2476078,47.4317029,47.4437326";
+
 function normalizeAddrForOfficeCompare(s) {
   return String(s).trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -290,44 +295,79 @@ async function fillDeliveryDistanceColumn(deliveryRows, gen) {
   });
 }
 
-function nominatimQueryForAddress(address) {
+function geocodeNominatimCacheKey(raw) {
+  return `v2|${String(raw).trim().toLowerCase()}`;
+}
+
+/** Запрос 1: только внутри города Волгоград (viewbox + bounded). */
+function nominatimQueryCityPhase(address) {
   const t = String(address).trim();
   if (!t) return "";
   const lower = t.toLowerCase();
-  if (lower.includes("волгоград")) return `${t}, Россия`;
-  return `${t}, Волгоград, Россия`;
+  if (lower.includes("волгоградск") && lower.includes("област")) return `${t}, Россия`;
+  if (lower.includes("волгоград") && !lower.includes("област")) return `${t}, Россия`;
+  return `${t}, город Волгоград, Россия`;
+}
+
+/** Запрос 2: область, если в городе не найдено. */
+function nominatimQueryOblastPhase(address) {
+  const t = String(address).trim();
+  if (!t) return "";
+  return `${t}, Волгоградская область, Россия`;
+}
+
+function coordsFromNominatimHit(hit) {
+  if (!hit) return null;
+  const lat = Number.parseFloat(hit.lat);
+  const lon = Number.parseFloat(hit.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return { lat, lon };
+}
+
+async function nominatimSearchRequest(params) {
+  const url = `https://nominatim.openstreetmap.org/search?${params}`;
+  const res = await fetch(url, { headers: { "Accept-Language": "ru,en" } });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return Array.isArray(data) ? data : null;
 }
 
 /**
- * Геокодирование адреса (Nominatim). Кэш и пауза между запросами — по правилам использования API.
+ * Геокодирование (Nominatim): сначала строго в границах города Волгоград, иначе — в границах Волгоградской области.
+ * Кэш с префиксом v2| — после смены логики старые значения не подхватываются.
  * @returns {Promise<{ lat: number, lon: number } | null>}
  */
 async function geocodeAddressVolgograd(address) {
   const raw = String(address).trim();
   if (!raw) return null;
-  const key = raw.toLowerCase();
+  const key = geocodeNominatimCacheKey(raw);
   if (nominatimCache.has(key)) return nominatimCache.get(key);
 
-  const q = nominatimQueryForAddress(raw);
-  const params = new URLSearchParams({ q, format: "json", limit: "1", countrycodes: "ru" });
-  const url = `https://nominatim.openstreetmap.org/search?${params}`;
-  const res = await fetch(url, { headers: { "Accept-Language": "ru,en" } });
-  if (!res.ok) {
+  const base = new URLSearchParams({ format: "json", limit: "1", countrycodes: "ru" });
+
+  const cityParams = new URLSearchParams(base);
+  cityParams.set("q", nominatimQueryCityPhase(raw));
+  cityParams.set("viewbox", NOMINATIM_VIEWBOX_VOLGOGRAD_CITY);
+  cityParams.set("bounded", "1");
+
+  let data = await nominatimSearchRequest(cityParams);
+  let hit = data?.[0] ?? null;
+
+  if (!hit) {
+    await sleep(NOMINATIM_DELAY_MS);
+    const oblastParams = new URLSearchParams(base);
+    oblastParams.set("q", nominatimQueryOblastPhase(raw));
+    oblastParams.set("viewbox", NOMINATIM_VIEWBOX_VOLGOGRAD_OBLAST);
+    oblastParams.set("bounded", "1");
+    data = await nominatimSearchRequest(oblastParams);
+    hit = data?.[0] ?? null;
+  }
+
+  const coords = coordsFromNominatimHit(hit);
+  if (!coords) {
     nominatimCache.set(key, null);
     return null;
   }
-  const data = await res.json();
-  if (!Array.isArray(data) || !data[0]) {
-    nominatimCache.set(key, null);
-    return null;
-  }
-  const lat = Number.parseFloat(data[0].lat);
-  const lon = Number.parseFloat(data[0].lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    nominatimCache.set(key, null);
-    return null;
-  }
-  const coords = { lat, lon };
   nominatimCache.set(key, coords);
   return coords;
 }
