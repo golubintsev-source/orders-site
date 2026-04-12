@@ -2,6 +2,7 @@ import { state } from "./state.js";
 import { isOrderEditLockedForUserLite, isOrderHiddenFromUserLite, isUserLite } from "./roles.js";
 import { formatOrderIdTypeChip, formatDateShortRU } from "./format.js";
 import { closeOrderIdActionsMenu, openOrderIdActionsMenu } from "./ui.js";
+import { supabaseClient } from "./config.js";
 
 const MAIN_ORDER_TYPES = new Set(["Окна", "Подоконники", "Аллюминий", "Сетки/мелочь"]);
 const SHOP_TYPE = "Магазин";
@@ -327,6 +328,55 @@ function geocodeNominatimCacheKey(normalizedQuery) {
   return `v3|${String(normalizedQuery).trim().toLowerCase()}`;
 }
 
+/** Ключ строки в `route_sheet_address_geo` (совпадает с нормализацией кэша Nominatim). */
+function routeSheetGeoDbKeyFromDisplayAddress(displayAddr) {
+  const searchAddr = addressForNominatimSearch(String(displayAddr).trim());
+  const k = String(searchAddr).trim().toLowerCase();
+  return k || null;
+}
+
+async function fetchRouteSheetAddressGeoFromDb(addressKey) {
+  try {
+    const { data, error } = await supabaseClient
+      .from("route_sheet_address_geo")
+      .select("lat, lon, km_office")
+      .eq("address_key", addressKey)
+      .maybeSingle();
+    if (error) {
+      console.warn("route_sheet_address_geo:", error.message);
+      return null;
+    }
+    if (!data) return null;
+    const lat = Number(data.lat);
+    const lon = Number(data.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    const km = data.km_office == null ? null : Number(data.km_office);
+    return {
+      lat,
+      lon,
+      km_office: km != null && Number.isFinite(km) ? km : null,
+    };
+  } catch (e) {
+    console.warn("route_sheet_address_geo:", e);
+    return null;
+  }
+}
+
+async function persistRouteSheetAddressGeo(addressKey, lat, lon, kmOffice) {
+  if (!addressKey || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  const payload = {
+    address_key: addressKey,
+    lat,
+    lon,
+    km_office: kmOffice != null && Number.isFinite(kmOffice) ? kmOffice : null,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabaseClient.from("route_sheet_address_geo").upsert(payload, {
+    onConflict: "address_key",
+  });
+  if (error) console.warn("route_sheet_address_geo upsert:", error.message);
+}
+
 /** Для Nominatim: убрать квартиру/этаж после первого «-» (и сам дефис). Полный адрес в таблице не меняется. */
 function addressForNominatimSearch(raw) {
   const t = String(raw).trim();
@@ -611,14 +661,34 @@ async function runDeliveryPipeline(deliveryRows, gen) {
       }
 
       let coords = null;
-      try {
-        coords = await geocodeAddressVolgograd(displayAddr);
-      } catch (e) {
-        console.error("Nominatim:", e);
-        setRouteDeliveryMapStatus(
-          `Ошибка сети (${x} из ${Y}): запрос адреса. ${truncateForStatus(displayAddr, 56)}`,
-          true,
-        );
+      let km = null;
+      const dbKey = routeSheetGeoDbKeyFromDisplayAddress(displayAddr);
+      let fromDbFull = false;
+
+      if (dbKey) {
+        const cached = await fetchRouteSheetAddressGeoFromDb(dbKey);
+        if (gen !== routeDeliveryPipelineGeneration) return;
+        if (cached) {
+          coords = { lat: cached.lat, lon: cached.lon };
+          const memKey = geocodeNominatimCacheKey(addressForNominatimSearch(displayAddr));
+          nominatimCache.set(memKey, coords);
+          if (cached.km_office != null) {
+            km = cached.km_office;
+            fromDbFull = true;
+          }
+        }
+      }
+
+      if (!coords) {
+        try {
+          coords = await geocodeAddressVolgograd(displayAddr);
+        } catch (e) {
+          console.error("Nominatim:", e);
+          setRouteDeliveryMapStatus(
+            `Ошибка сети (${x} из ${Y}): запрос адреса. ${truncateForStatus(displayAddr, 56)}`,
+            true,
+          );
+        }
       }
       if (gen !== routeDeliveryPipelineGeneration) return;
 
@@ -646,24 +716,31 @@ async function runDeliveryPipeline(deliveryRows, gen) {
         setRouteDeliveryMapStatus(`Ошибка отображения точки (${x} из ${Y}).`, true);
       }
 
-      let km = null;
-      try {
-        km = await osrmDrivingDistanceKm(
-          ROUTE_SHEET_OFFICE_LON,
-          ROUTE_SHEET_OFFICE_LAT,
-          coords.lon,
-          coords.lat,
-        );
-      } catch (e) {
-        console.error("OSRM:", e);
-        setRouteDeliveryMapStatus(`Ошибка маршрута км (${x} из ${Y}).`, true);
+      if (km == null) {
+        try {
+          km = await osrmDrivingDistanceKm(
+            ROUTE_SHEET_OFFICE_LON,
+            ROUTE_SHEET_OFFICE_LAT,
+            coords.lon,
+            coords.lat,
+          );
+        } catch (e) {
+          console.error("OSRM:", e);
+          setRouteDeliveryMapStatus(`Ошибка маршрута км (${x} из ${Y}).`, true);
+        }
       }
       if (gen !== routeDeliveryPipelineGeneration) return;
       if (km == null) failedOsrm.push(displayAddr);
       for (const o of ordersHere) deliveryKmByOrderId.set(o.id, km);
       updateKmCellsForOrders(ordersHere);
 
-      if (i < orderedKeys.length - 1) await sleep(NOMINATIM_DELAY_MS);
+      if (dbKey && !fromDbFull) {
+        void persistRouteSheetAddressGeo(dbKey, coords.lat, coords.lon, km).catch((e) =>
+          console.warn("route_sheet_address_geo upsert:", e),
+        );
+      }
+
+      if (i < orderedKeys.length - 1 && !fromDbFull) await sleep(NOMINATIM_DELAY_MS);
     }
 
     if (gen !== routeDeliveryPipelineGeneration) return;
