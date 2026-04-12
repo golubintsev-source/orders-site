@@ -29,6 +29,7 @@ import {
   formatAmount,
   formatAmountWholeRubles,
   formatOrderIdTypeChip,
+  formatDateShortRU,
   tryParseRublesInteger,
   MSG_SUM_INTEGER_ONLY,
 } from "./format.js";
@@ -1022,18 +1023,6 @@ function formatDateDDMMYYYY(dateStr) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return dateStr;
   const [, y, m, d] = s.match(/(\d{4})-(\d{2})-(\d{2})/);
   return `${d}.${m}.${y}`;
-}
-
-function formatDateShortRU(dateStr) {
-  if (!dateStr) return "";
-  try {
-    const d = new Date(dateStr);
-    if (Number.isNaN(d.getTime())) return "";
-    const months = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
-    return `${d.getDate()} ${months[d.getMonth()]}`;
-  } catch {
-    return "";
-  }
 }
 
 /** Колонка «Монтаж»: при включённом монтаже без даты показываем «есть». */

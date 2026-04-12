@@ -2736,6 +2736,12 @@ table {
   white-space: nowrap;
 }
 
+.route-sheet-table th.route-sheet-col-date,
+.route-sheet-table td.route-sheet-col-date {
+  min-width: 4.25rem;
+  white-space: nowrap;
+}
+
 .route-sheet-table th.route-sheet-col-phone,
 .route-sheet-table td.route-sheet-col-phone {
   min-width: 12.5rem;

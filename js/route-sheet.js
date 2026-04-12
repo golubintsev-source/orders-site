@@ -1,6 +1,6 @@
 import { state } from "./state.js";
 import { isOrderEditLockedForUserLite, isOrderHiddenFromUserLite, isUserLite } from "./roles.js";
-import { formatOrderIdTypeChip } from "./format.js";
+import { formatOrderIdTypeChip, formatDateShortRU } from "./format.js";
 import { closeOrderIdActionsMenu, openOrderIdActionsMenu } from "./ui.js";
 
 const MAIN_ORDER_TYPES = new Set(["Окна", "Подоконники", "Аллюминий", "Сетки/мелочь"]);
@@ -23,6 +23,7 @@ const HEADERS_MAIN = [
 /** Экспорт таблицы «Доставка» — с километражем от офиса. */
 const HEADERS_DELIVERY = [
   "Номер",
+  "Дата",
   "Клиент",
   "Адрес",
   "км",
@@ -614,8 +615,10 @@ function ordersVisibleOnRouteSheet() {
 /**
  * @param {object} order
  * @param {string} [kmDisplay] если передано — колонка «км» (таблица «Доставка»); иначе без колонки («Самовывоз»).
+ * @param {{ includeShipDate?: boolean }} [opts] колонка «Дата» (отправка) только для таблицы «Доставка».
  */
-function rowMainHtml(order, kmDisplay) {
+function rowMainHtml(order, kmDisplay, opts = {}) {
+  const { includeShipDate = false } = opts;
   const mosk =
     order.area_m2 != null && order.area_m2 !== "" ? escapeHtml(String(order.area_m2)) : "";
   const konst =
@@ -626,8 +629,12 @@ function rowMainHtml(order, kmDisplay) {
     kmDisplay === undefined
       ? ""
       : `<td class="route-sheet-col-km">${escapeHtml(String(kmDisplay))}</td>`;
+  const dateTd = includeShipDate
+    ? `<td class="route-sheet-col-date">${escapeHtml(formatDateShortRU(order.delivery_date))}</td>`
+    : "";
   return `<tr>
     ${orderIdCellHtml(order)}
+    ${dateTd}
     <td>${escapeHtml(order.client ?? "")}</td>
     <td>${escapeHtml(order.address ?? "")}</td>
     ${kmTd}
@@ -695,12 +702,12 @@ export function loadRouteSheet() {
 
   if (isRouteSheetSectionActive()) {
     const gen = ++routeDeliveryPipelineGeneration;
-    tbodyDelivery.innerHTML = deliveryRows.map((o) => rowMainHtml(o, "…")).join("");
+    tbodyDelivery.innerHTML = deliveryRows.map((o) => rowMainHtml(o, "…", { includeShipDate: true })).join("");
     void runDeliveryPipeline(deliveryRows, gen);
   } else {
     routeDeliveryPipelineGeneration += 1;
     deliveryKmByOrderId.clear();
-    tbodyDelivery.innerHTML = deliveryRows.map((o) => rowMainHtml(o, "—")).join("");
+    tbodyDelivery.innerHTML = deliveryRows.map((o) => rowMainHtml(o, "—", { includeShipDate: true })).join("");
   }
 }
 
@@ -761,6 +768,7 @@ function rowDeliveryMainValues(order) {
   const kmCell = km != null && Number.isFinite(km) ? Math.round(km * 10) / 10 : "";
   return [
     order.id != null ? formatOrderIdTypeChip(order.id, order.order_type) : "",
+    formatDateShortRU(order.delivery_date),
     order.client ?? "",
     order.address ?? "",
     kmCell,

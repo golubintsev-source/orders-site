@@ -74,6 +74,19 @@ export function formatOrderIdTypeChip(orderId, orderType) {
   return letter ? `${base}_${letter}` : base;
 }
 
+/** Короткая дата для таблиц: «13 апр» (как в списке заказов). */
+export function formatDateShortRU(dateStr) {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return "";
+    const months = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+    return `${d.getDate()} ${months[d.getMonth()]}`;
+  } catch {
+    return "";
+  }
+}
+
 /** Дата и время: «13 апр 11:10», «4 мар 7:45» (локальное время). */
 export function formatTaskDateRu(iso) {
   if (!iso) return "—";
