@@ -2171,6 +2171,12 @@ button:active {
   text-align: right;
 }
 
+/* Подложка значений — как #ordersTable .status-value у «Клиент» */
+#ordersTotalsTable tbody .status-value {
+  padding: 3px 6px;
+  font-size: 13px;
+}
+
 #ordersTable col.orders-col-150 {
   width: 100px;
   min-width: 100px;

@@ -1246,15 +1246,22 @@ function renderOrdersTotals(orders) {
   const fmtAreaM2 = (n) =>
     count && Number.isFinite(n) ? formatAmount(Number(n.toFixed(2))) : "";
 
+  /** Серая подложка как у «Клиент» в #ordersTable (.status-value). */
+  const totalsCellSpan = (raw) => {
+    const s = String(raw ?? "").trim();
+    if (!s) return "";
+    return `<span class="status-value">${escapeHtml(s)}</span>`;
+  };
+
   row.innerHTML = `
-    <td class="td-orders-totals-count">${String(count)}</td>
-    <td class="td-money">${fmtMoneyInt(sumAmount)}</td>
-    <td class="td-money">${fmtMoneyInt(sumPrepayment)}</td>
-    <td class="td-money">${fmtMoneyInt(sumRemaining)}</td>
-    <td class="td-area-m2">${fmtAreaM2(sumArea)}</td>
-    <td class="td-money td-installer-payment">${fmtMoneyInt(sumInstaller)}</td>
-    <td>${fmt(sumMosquito)}</td>
-    <td>${fmt(sumConstruction)}</td>
+    <td class="td-orders-totals-count">${totalsCellSpan(String(count))}</td>
+    <td class="td-money">${totalsCellSpan(fmtMoneyInt(sumAmount))}</td>
+    <td class="td-money">${totalsCellSpan(fmtMoneyInt(sumPrepayment))}</td>
+    <td class="td-money">${totalsCellSpan(fmtMoneyInt(sumRemaining))}</td>
+    <td class="td-area-m2">${totalsCellSpan(fmtAreaM2(sumArea))}</td>
+    <td class="td-money td-installer-payment">${totalsCellSpan(fmtMoneyInt(sumInstaller))}</td>
+    <td>${totalsCellSpan(fmt(sumMosquito))}</td>
+    <td>${totalsCellSpan(fmt(sumConstruction))}</td>
   `;
 }
 
