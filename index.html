@@ -130,6 +130,9 @@
       </div>
     </div>
 
+    <!-- Вне .content-section: иначе при скрытии «Заказы» меню не видно (напр. маршрутный лист). -->
+    <div id="orderIdActionsMenu" class="section-nav-dropdown-panel order-id-actions-menu" hidden role="menu" aria-label="Действия по заказу"></div>
+
     <section id="section-new" class="content-section">
       <div class="card">
 
@@ -502,7 +505,6 @@
       </div>
 
       <div id="cellTooltip" class="cell-tooltip" aria-hidden="true"></div>
-      <div id="orderIdActionsMenu" class="section-nav-dropdown-panel order-id-actions-menu" hidden role="menu" aria-label="Действия по заказу"></div>
       <div id="statusFilterDropdown" class="status-filter-dropdown" role="dialog" aria-label="Фильтр по статусу" style="display: none;">
         <div class="status-filter-dropdown-inner" id="statusFilterCheckboxes"></div>
       </div>
