@@ -97,7 +97,7 @@ export function closeOrderIdActionsMenu() {
   }
 }
 
-function openOrderIdActionsMenu(idTd) {
+export function openOrderIdActionsMenu(idTd) {
   const menu = document.getElementById("orderIdActionsMenu");
   if (!menu || !idTd) return;
 

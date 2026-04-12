@@ -1,6 +1,7 @@
 import { state } from "./state.js";
-import { isOrderHiddenFromUserLite, isUserLite } from "./roles.js";
+import { isOrderEditLockedForUserLite, isOrderHiddenFromUserLite, isUserLite } from "./roles.js";
 import { formatOrderIdTypeChip } from "./format.js";
+import { closeOrderIdActionsMenu, openOrderIdActionsMenu } from "./ui.js";
 
 const MAIN_ORDER_TYPES = new Set(["Окна", "Подоконники", "Аллюминий", "Сетки/мелочь"]);
 const SHOP_TYPE = "Магазин";
@@ -8,7 +9,7 @@ const DELIVERY_SHIP = "Доставка";
 const DELIVERY_PICKUP = "Самовывоз";
 
 const HEADERS_MAIN = [
-  "Заказ",
+  "Номер",
   "Клиент",
   "Адрес",
   "Описание",
@@ -19,13 +20,44 @@ const HEADERS_MAIN = [
   "Телефон",
 ];
 
-const HEADERS_SHOP = ["Заказ", "Клиент", "Адрес", "Описание", "Телефон"];
+const HEADERS_SHOP = ["Номер", "Клиент", "Адрес", "Описание", "Телефон"];
 
 function escapeHtml(s) {
   if (s == null) return "";
   const div = document.createElement("div");
   div.textContent = String(s);
   return div.innerHTML;
+}
+
+function escapeAttr(s) {
+  if (s == null || s === "") return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+/** Первая колонка: как в таблице «Заказы» — чип номера и меню по клику. */
+function orderIdCellHtml(order) {
+  const phone = order.phone ?? "";
+  const filesCount = state.filesCountMap[order.id] || 0;
+  const hasPhone = Boolean((phone || "").trim());
+  const orderIdChipClasses = ["status-value", "order-id-chip"];
+  if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
+  if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
+  if (isOrderEditLockedForUserLite(order)) orderIdChipClasses.push("order-id-chip--lock-user-lite");
+  const tasksHighlight =
+    order.tasks_highlight === true ||
+    order.tasks_highlight === 1 ||
+    order.tasks_highlight === "1";
+  if (tasksHighlight) orderIdChipClasses.push("order-id-chip--highlight-tasks");
+  const orderNumberDisplay =
+    order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";
+  return `<td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}" data-lock-edit-user-lite="${isOrderEditLockedForUserLite(order) ? "1" : "0"}">
+    <span class="${orderIdChipClasses.join(" ")}">
+      ${orderNumberDisplay}
+    </span>
+  </td>`;
 }
 
 function getTomorrowIsoDate() {
@@ -106,7 +138,6 @@ function ordersVisibleOnRouteSheet() {
 }
 
 function rowMainHtml(order) {
-  const chip = formatOrderIdTypeChip(order.id, order.order_type);
   const mosk =
     order.area_m2 != null && order.area_m2 !== "" ? escapeHtml(String(order.area_m2)) : "";
   const konst =
@@ -114,7 +145,7 @@ function rowMainHtml(order) {
       ? escapeHtml(String(order.construction_count))
       : "";
   return `<tr>
-    <td>${escapeHtml(chip)}</td>
+    ${orderIdCellHtml(order)}
     <td>${escapeHtml(order.client ?? "")}</td>
     <td>${escapeHtml(order.address ?? "")}</td>
     <td>${escapeHtml(order.description ?? "")}</td>
@@ -127,9 +158,8 @@ function rowMainHtml(order) {
 }
 
 function rowShopHtml(order) {
-  const chip = formatOrderIdTypeChip(order.id, order.order_type);
   return `<tr>
-    <td>${escapeHtml(chip)}</td>
+    ${orderIdCellHtml(order)}
     <td>${escapeHtml(order.client ?? "")}</td>
     <td>${escapeHtml(order.address ?? "")}</td>
     <td>${escapeHtml(order.description ?? "")}</td>
@@ -143,6 +173,8 @@ export function loadRouteSheet() {
   const tbodyPickup = document.querySelector("#routeSheetTablePickup tbody");
   const tbodyShop = document.querySelector("#routeSheetTableShop tbody");
   if (!tbodyDelivery || !tbodyPickup || !tbodyShop) return;
+
+  closeOrderIdActionsMenu();
 
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid) {
@@ -274,6 +306,18 @@ export function initRouteSheetSection() {
     const onChange = () => loadRouteSheet();
     fromEl.addEventListener("change", onChange);
     toEl.addEventListener("change", onChange);
+  }
+
+  const routeSheetSection = document.getElementById("section-route-sheet");
+  if (routeSheetSection && !routeSheetSection.dataset.routeSheetOrderIdMenuBound) {
+    routeSheetSection.dataset.routeSheetOrderIdMenuBound = "1";
+    routeSheetSection.addEventListener("click", (e) => {
+      const idTd = e.target.closest("td.td-order-id");
+      if (!idTd || !routeSheetSection.contains(idTd)) return;
+      e.stopPropagation();
+      e.preventDefault();
+      openOrderIdActionsMenu(idTd);
+    });
   }
 
   const deliveryBtn = document.getElementById("routeSheetExportDeliveryBtn");

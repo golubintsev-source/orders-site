@@ -2698,27 +2698,37 @@ th {
 }
 
 /* ID в таблице — клик открывает меню действий */
-#ordersTable td.td-order-id {
+#ordersTable td.td-order-id,
+.route-sheet-table td.td-order-id {
   cursor: pointer;
 }
 
+.route-sheet-table td.td-order-id .status-value.order-id-chip {
+  padding: 3px 6px;
+  font-size: 13px;
+}
+
 /* Номер заказа: серая подложка; файлы — синяя полоса слева; телефон — зелёная справа; выделение задач — красная сверху */
-#ordersTable td.td-order-id .order-id-chip.order-id-chip--has-files {
+#ordersTable td.td-order-id .order-id-chip.order-id-chip--has-files,
+.route-sheet-table td.td-order-id .order-id-chip.order-id-chip--has-files {
   border-left: 4px solid #1f6feb;
   padding-left: 6px;
 }
 
-#ordersTable td.td-order-id .order-id-chip.order-id-chip--has-phone {
+#ordersTable td.td-order-id .order-id-chip.order-id-chip--has-phone,
+.route-sheet-table td.td-order-id .order-id-chip.order-id-chip--has-phone {
   border-right: 4px solid #059669;
   padding-right: 6px;
 }
 
-#ordersTable td.td-order-id .order-id-chip.order-id-chip--highlight-tasks {
+#ordersTable td.td-order-id .order-id-chip.order-id-chip--highlight-tasks,
+.route-sheet-table td.td-order-id .order-id-chip.order-id-chip--highlight-tasks {
   border-top: 4px solid #dc2626;
 }
 
 /* Редактирование закрыто для user_lite — подложка чуть темнее обычной (#f3f4f6), но светлее прежнего «тёмно-серого» */
-#ordersTable td.td-order-id .order-id-chip.order-id-chip--lock-user-lite {
+#ordersTable td.td-order-id .order-id-chip.order-id-chip--lock-user-lite,
+.route-sheet-table td.td-order-id .order-id-chip.order-id-chip--lock-user-lite {
   background: #d1d5db;
   color: #374151;
 }
