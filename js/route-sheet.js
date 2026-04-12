@@ -58,6 +58,11 @@ const ROUTE_SHEET_OFFICE_ADDR_NORM = normalizeAddrForOfficeCompare(ROUTE_SHEET_O
 const ROUTE_SHEET_OFFICE_LAT = 48.6903978;
 const ROUTE_SHEET_OFFICE_LON = 44.4336316;
 
+/** Участок без проезда: маршрут не должен заходить в радиус (м) от точки — берём альтернативу OSRM или наименее «близкий» вариант. */
+const OSRM_DETOUR_BLOCK_LAT = 48.689037;
+const OSRM_DETOUR_BLOCK_LON = 44.434921;
+const OSRM_DETOUR_BLOCK_RADIUS_M = 30;
+
 let routeDeliveryMap = null;
 let routeDeliveryOfficeLayer = null;
 /** Линия маршрута офис → точка (OSRM), под маркерами доставки. */
@@ -206,46 +211,117 @@ function truncateForStatus(s, maxLen) {
   return `${t.slice(0, Math.max(0, maxLen - 1))}…`;
 }
 
-/** Одна пара точек: офис → адрес (км по дорогам, OSRM). */
-async function osrmDrivingDistanceKm(fromLon, fromLat, toLon, toLat) {
-  try {
-    const coordStr = `${fromLon},${fromLat};${toLon},${toLat}`;
-    const url = `https://router.project-osrm.org/table/v1/driving/${coordStr}?sources=0&destinations=1&annotations=distance`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json.code !== "Ok" || !Array.isArray(json.distances) || !Array.isArray(json.distances[0])) return null;
-    const meters = json.distances[0][0];
-    if (meters == null || !Number.isFinite(meters)) return null;
-    return meters / 1000;
-  } catch {
-    return null;
+function metersPerDegreeLat() {
+  return 111_320;
+}
+
+function metersPerDegreeLonAt(lat) {
+  return 111_320 * Math.cos((lat * Math.PI) / 180);
+}
+
+/** Расстояние от точки P до отрезка A–B в метрах (локальная плоскость, достаточно для ~30 м). */
+function pointSegmentDistanceMeters(latA, lonA, latB, lonB, latP, lonP) {
+  const mLon = metersPerDegreeLonAt((latA + latB + latP) / 3);
+  const mLat = metersPerDegreeLat();
+  const ax = lonA * mLon;
+  const ay = latA * mLat;
+  const bx = lonB * mLon;
+  const by = latB * mLat;
+  const px = lonP * mLon;
+  const py = latP * mLat;
+  const vx = bx - ax;
+  const vy = by - ay;
+  const len2 = vx * vx + vy * vy;
+  if (len2 < 1e-12) return Math.hypot(px - ax, py - ay);
+  const wx = px - ax;
+  const wy = py - ay;
+  const t = (vx * wx + vy * wy) / len2;
+  if (t <= 0) return Math.hypot(px - ax, py - ay);
+  if (t >= 1) return Math.hypot(px - bx, py - by);
+  return Math.hypot(px - (ax + t * vx), py - (ay + t * vy));
+}
+
+function polylineMinDistanceToPointMeters(latLngs, latP, lonP) {
+  let min = Infinity;
+  for (let i = 0; i < latLngs.length - 1; i++) {
+    const [lat1, lon1] = latLngs[i];
+    const [lat2, lon2] = latLngs[i + 1];
+    const d = pointSegmentDistanceMeters(lat1, lon1, lat2, lon2, latP, lonP);
+    if (d < min) min = d;
   }
+  return min;
+}
+
+function routeGeometryToLatLngs(route) {
+  const coords = route?.geometry?.coordinates;
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  const latLngs = coords.map((c) => {
+    const lon = Number(c[0]);
+    const lat = Number(c[1]);
+    return Number.isFinite(lat) && Number.isFinite(lon) ? /** @type {[number, number]} */ ([lat, lon]) : null;
+  }).filter((x) => x != null);
+  return latLngs.length >= 2 ? latLngs : null;
 }
 
 /**
- * Геометрия маршрута по дорогам (OSRM route): массив [lat, lng] для Leaflet.
+ * Из ответа OSRM выбрать маршрут, который не заходит в круг `OSRM_DETOUR_BLOCK_*`.
+ * Если все заходят — вариант с наибольшим отступом от точки (минимальный «проезд» через зону).
+ */
+function pickOsrmRouteAvoidingDetourBlock(routes) {
+  if (!Array.isArray(routes) || !routes.length) return null;
+  /** @type {{ latLngs: Array<[number, number]>, distanceM: number, minD: number }[]} */
+  const scored = [];
+  for (const r of routes) {
+    const latLngs = routeGeometryToLatLngs(r);
+    if (!latLngs) continue;
+    const distanceM = Number(r.distance);
+    if (!Number.isFinite(distanceM)) continue;
+    const minD = polylineMinDistanceToPointMeters(latLngs, OSRM_DETOUR_BLOCK_LAT, OSRM_DETOUR_BLOCK_LON);
+    scored.push({ latLngs, distanceM: distanceM, minD });
+  }
+  if (!scored.length) return null;
+  const clear = scored.find((s) => s.minD >= OSRM_DETOUR_BLOCK_RADIUS_M);
+  if (clear) return { latLngs: clear.latLngs, distanceMeters: clear.distanceM };
+  scored.sort((a, b) => b.minD - a.minD);
+  return { latLngs: scored[0].latLngs, distanceMeters: scored[0].distanceM };
+}
+
+/** Офис → точка: маршрут OSRM (с альтернативами) + км по выбранной геометрии. */
+async function osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat) {
+  const coordStr = `${fromLon},${fromLat};${toLon},${toLat}`;
+  const base = `https://router.project-osrm.org/route/v1/driving/${coordStr}`;
+  const urls = [
+    `${base}?overview=full&geometries=geojson&alternatives=2`,
+    `${base}?overview=full&geometries=geojson`,
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!res.ok) continue;
+      const json = await res.json();
+      if (json.code !== "Ok" || !Array.isArray(json.routes) || !json.routes.length) continue;
+      return pickOsrmRouteAvoidingDetourBlock(json.routes);
+    } catch {
+      /* следующий URL */
+    }
+  }
+  return null;
+}
+
+/** Одна пара точек: офис → адрес (км по дорогам, OSRM route, с обходом закрытого участка). */
+async function osrmDrivingDistanceKm(fromLon, fromLat, toLon, toLat) {
+  const picked = await osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat);
+  if (!picked) return null;
+  return picked.distanceMeters / 1000;
+}
+
+/**
+ * Геометрия маршрута по дорогам (OSRM): массив [lat, lng] для Leaflet.
  * @returns {Promise<Array<[number, number]>|null>}
  */
 async function osrmDrivingRouteLatLngs(fromLon, fromLat, toLon, toLat) {
-  try {
-    const coordStr = `${fromLon},${fromLat};${toLon},${toLat}`;
-    const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json.code !== "Ok" || !Array.isArray(json.routes) || !json.routes[0]) return null;
-    const coords = json.routes[0].geometry?.coordinates;
-    if (!Array.isArray(coords) || coords.length < 2) return null;
-    const latLngs = coords.map((c) => {
-      const lon = Number(c[0]);
-      const lat = Number(c[1]);
-      return Number.isFinite(lat) && Number.isFinite(lon) ? /** @type {[number, number]} */ ([lat, lon]) : null;
-    }).filter((x) => x != null);
-    return latLngs.length >= 2 ? latLngs : null;
-  } catch {
-    return null;
-  }
+  const picked = await osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat);
+  return picked?.latLngs ?? null;
 }
 
 function invalidateRoadRouteDraw() {
