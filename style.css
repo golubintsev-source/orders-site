@@ -2954,6 +2954,17 @@ table {
   display: none;
 }
 
+/* Таблица «Доставка», столбец «Описание» — фикс. ширина на iPhone (как в блоке шапки). */
+@media (max-width: 768px) and (hover: none) and (pointer: coarse) {
+  #routeSheetTableDelivery th:nth-child(6),
+  #routeSheetTableDelivery td:nth-child(6) {
+    width: 150px;
+    min-width: 150px;
+    max-width: 150px;
+    box-sizing: border-box;
+  }
+}
+
 .route-sheet-table th.route-sheet-col-km,
 .route-sheet-table td.route-sheet-col-km {
   min-width: 6.75rem;
