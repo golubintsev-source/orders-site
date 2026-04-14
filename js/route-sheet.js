@@ -928,8 +928,8 @@ function deliveryMapMarkerIconNumbered(L, ordersHere, sequenceNum) {
   const labelRaw = deliveryMapLabelText(ordersHere);
   const labelHtml = escapeHtml(labelRaw || "—");
   const seqStr = escapeHtml(String(sequenceNum));
-  const html = `<div class="route-sheet-map-marker"><span class="route-sheet-map-marker-seq">${seqStr}</span><span class="route-sheet-map-marker-dot" aria-hidden="true"></span><span class="route-sheet-map-marker-label">${labelHtml}</span></div>`;
-  const approxW = Math.min(280, 40 + Math.max(56, labelRaw.length * 7.5));
+  const html = `<div class="route-sheet-map-marker route-sheet-map-marker--route-seq"><span class="route-sheet-map-marker-seq">${seqStr}</span><span class="route-sheet-map-marker-label">${labelHtml}</span></div>`;
+  const approxW = Math.min(280, 28 + Math.max(56, labelRaw.length * 7.5));
   return L.divIcon({
     className: "route-sheet-map-divicon-root",
     html,
