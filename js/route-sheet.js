@@ -1281,7 +1281,10 @@ function syncRouteSheetDeliveryAddressTitles() {
     const full = cell.getAttribute("data-fulltext");
     if (!full) return;
     const chip = cell.querySelector(".status-value");
-    const truncated = chip ? chip.scrollWidth > chip.clientWidth + 0.5 : cell.scrollWidth > cell.clientWidth + 0.5;
+    const truncated =
+      chip && chip.scrollWidth > chip.clientWidth + 0.5
+        ? true
+        : cell.scrollWidth > cell.clientWidth + 0.5;
     if (truncated) cell.setAttribute("title", full);
     else cell.removeAttribute("title");
   });

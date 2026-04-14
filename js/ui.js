@@ -738,10 +738,11 @@ export function bindUIEvents() {
     }, 0);
   }
 
+  /** Чип внутри ячейки может не отражать обрезку (inline-block в колонке таблицы); дублируем проверку по `td`. */
   function isOrdersTableCellTruncated(td) {
     if (!td) return false;
     const chip = td.querySelector(".status-value");
-    if (chip) return chip.scrollWidth > chip.clientWidth + 0.5;
+    if (chip && chip.scrollWidth > chip.clientWidth + 0.5) return true;
     return td.scrollWidth > td.clientWidth + 0.5;
   }
 
