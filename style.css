@@ -2624,12 +2624,12 @@ table {
 }
 
 .route-sheet-col-address {
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .route-sheet-col-address .route-sheet-address-line {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-start;
   gap: 6px;
 }
