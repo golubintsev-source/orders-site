@@ -664,30 +664,25 @@ export function bindUIEvents() {
   let tooltipHideClick = null;
   let tooltipHideKey = null;
 
-  function isOrdersTableCellTruncated(td) {
-    if (!td) return false;
-    const chip = td.querySelector(".status-value");
-    if (chip) return chip.scrollWidth > chip.clientWidth + 0.5;
-    return td.scrollWidth > td.clientWidth + 0.5;
-  }
-
-  function showCellTooltip(td) {
-    if (!cellTooltip || !td) return;
-    if (!isOrdersTableCellTruncated(td)) return;
-    const raw = td.getAttribute("data-fulltext") || td.getAttribute("title");
-    if (!raw) return;
+  function decodeDataFulltext(raw) {
+    if (!raw) return "";
     const decodeEl = document.createElement("div");
     decodeEl.innerHTML = raw;
-    const text = decodeEl.textContent || raw;
+    return decodeEl.textContent || raw;
+  }
+
+  function showFloatingCellTooltip(anchorEl, text) {
+    if (!cellTooltip || !anchorEl || !text) return;
     if (tooltipHideClick) {
       document.removeEventListener("click", tooltipHideClick);
       document.removeEventListener("touchend", tooltipHideClick);
       document.removeEventListener("keydown", tooltipHideKey);
+      tooltipHideClick = tooltipHideKey = null;
     }
     cellTooltip.textContent = text;
     cellTooltip.classList.add("visible");
     cellTooltip.setAttribute("aria-hidden", "false");
-    const rect = td.getBoundingClientRect();
+    const rect = anchorEl.getBoundingClientRect();
     cellTooltip.style.left = Math.min(rect.left, window.innerWidth - 330) + "px";
     cellTooltip.style.top = rect.top - 8 + "px";
     cellTooltip.style.transform = "translateY(-100%)";
@@ -708,6 +703,36 @@ export function bindUIEvents() {
       document.addEventListener("touchend", tooltipHideClick);
       document.addEventListener("keydown", tooltipHideKey);
     }, 150);
+  }
+
+  function isOrdersTableCellTruncated(td) {
+    if (!td) return false;
+    const chip = td.querySelector(".status-value");
+    if (chip) return chip.scrollWidth > chip.clientWidth + 0.5;
+    return td.scrollWidth > td.clientWidth + 0.5;
+  }
+
+  function isRouteSheetDeliveryClampTruncated(el) {
+    if (!el) return false;
+    return el.scrollHeight > el.clientHeight + 1;
+  }
+
+  function showCellTooltip(td) {
+    if (!cellTooltip || !td) return;
+    if (!isOrdersTableCellTruncated(td)) return;
+    const raw = td.getAttribute("data-fulltext") || td.getAttribute("title");
+    if (!raw) return;
+    const text = decodeDataFulltext(raw);
+    showFloatingCellTooltip(td, text);
+  }
+
+  function showRouteSheetDeliveryClampTooltip(innerEl) {
+    if (!cellTooltip || !innerEl) return;
+    if (!isRouteSheetDeliveryClampTruncated(innerEl)) return;
+    const raw = innerEl.getAttribute("data-fulltext");
+    if (!raw) return;
+    const text = decodeDataFulltext(raw);
+    showFloatingCellTooltip(innerEl, text);
   }
 
   if (ordersTable) {
@@ -755,6 +780,18 @@ export function bindUIEvents() {
 
     ordersTable.addEventListener("click", (e) => {
       handleRowClick(e);
+    });
+  }
+
+  const routeSheetDeliveryTable = document.getElementById("routeSheetTableDelivery");
+  if (routeSheetDeliveryTable) {
+    routeSheetDeliveryTable.addEventListener("click", (e) => {
+      if (e.target.closest("button, a, .btn-icon, input, select, textarea, label")) return;
+      const inner = e.target.closest(".route-sheet-delivery-clamp-inner[data-fulltext]");
+      if (!inner || !routeSheetDeliveryTable.contains(inner)) return;
+      if (!isRouteSheetDeliveryClampTruncated(inner)) return;
+      e.stopPropagation();
+      showRouteSheetDeliveryClampTooltip(inner);
     });
   }
 

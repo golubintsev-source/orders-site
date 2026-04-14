@@ -2954,7 +2954,7 @@ table {
   display: none;
 }
 
-/* Таблица «Доставка», столбец «Описание» — фикс. ширина на iPhone (как в блоке шапки). */
+/* Таблица «Доставка» на iPhone: «Описание» 150px; «Клиент», «Адрес», «Описание» — не более 2 строк + … */
 @media (max-width: 768px) and (hover: none) and (pointer: coarse) {
   #routeSheetTableDelivery th:nth-child(6),
   #routeSheetTableDelivery td:nth-child(6) {
@@ -2962,6 +2962,19 @@ table {
     min-width: 150px;
     max-width: 150px;
     box-sizing: border-box;
+  }
+
+  #routeSheetTableDelivery td.route-sheet-delivery-client .route-sheet-delivery-clamp-inner,
+  #routeSheetTableDelivery td.route-sheet-col-address .route-sheet-delivery-clamp-inner,
+  #routeSheetTableDelivery td.route-sheet-delivery-description .route-sheet-delivery-clamp-inner {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 }
 

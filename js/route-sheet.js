@@ -136,10 +136,16 @@ function orderIdCellHtml(order) {
   </td>`;
 }
 
-function deliveryAddressCellHtml(order) {
+function deliveryAddressCellHtml(order, opts = {}) {
+  const { withDeliveryFullTextAttr = false } = opts;
+  const addr = order.address ?? "";
+  const textCls = withDeliveryFullTextAttr
+    ? "route-sheet-address-text route-sheet-delivery-clamp-inner"
+    : "route-sheet-address-text";
+  const dataAttr = withDeliveryFullTextAttr ? ` data-fulltext="${escapeAttr(String(addr))}"` : "";
   const saved = orderHasSavedCoordinates(order);
   const houseCls = saved ? "route-sheet-address-geo-open route-sheet-address-geo-open--saved" : "route-sheet-address-geo-open";
-  return `<td class="route-sheet-col-address"><span class="route-sheet-address-line"><span class="route-sheet-address-text">${escapeHtml(order.address ?? "")}</span><button type="button" class="${houseCls}" aria-label="Координаты на карте" data-order-id="${order.id ?? ""}">${ROUTE_SHEET_HOUSE_SVG}</button></span></td>`;
+  return `<td class="route-sheet-col-address"><span class="route-sheet-address-line"><span class="${textCls}"${dataAttr}>${escapeHtml(addr)}</span><button type="button" class="${houseCls}" aria-label="Координаты на карте" data-order-id="${order.id ?? ""}">${ROUTE_SHEET_HOUSE_SVG}</button></span></td>`;
 }
 
 function getTomorrowIsoDate() {
@@ -1294,12 +1300,20 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
       : includeRemainder
         ? `<td class="route-sheet-col-remainder">${escapeHtml("-")}</td>`
         : "";
-  const clientTd = `<td>${escapeHtml(order.client ?? "")}</td>`;
-  const addressTd = includeAddressGeoBtn ? deliveryAddressCellHtml(order) : `<td>${escapeHtml(order.address ?? "")}</td>`;
-  const descriptionTd =
-    includeShipDate
-      ? `<td>${escapeHtml(routeSheetDeliveryDescriptionFullPlain(order))}</td>`
-      : `<td>${escapeHtml(order.description ?? "")}</td>`;
+  const clientPlain = order.client ?? "";
+  const clientTd = includeShipDate
+    ? `<td class="route-sheet-delivery-client"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(clientPlain))}">${escapeHtml(clientPlain)}</span></td>`
+    : `<td>${escapeHtml(clientPlain)}</td>`;
+  const addressTd = includeAddressGeoBtn
+    ? deliveryAddressCellHtml(order, { withDeliveryFullTextAttr: includeShipDate })
+    : `<td>${escapeHtml(order.address ?? "")}</td>`;
+  let descriptionTd;
+  if (includeShipDate) {
+    const descDeliveryPlain = routeSheetDeliveryDescriptionFullPlain(order);
+    descriptionTd = `<td class="route-sheet-delivery-description"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(descDeliveryPlain))}">${escapeHtml(descDeliveryPlain)}</span></td>`;
+  } else {
+    descriptionTd = `<td>${escapeHtml(order.description ?? "")}</td>`;
+  }
   const hiddenExtra = includeShipDate ? ' class="route-sheet-col-delivery-hidden"' : "";
   return `<tr>
     ${orderIdCellHtml(order)}
