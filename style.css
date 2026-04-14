@@ -2957,6 +2957,7 @@ table {
 /* «Доставка»: сокращённые «Клиент» / «Адрес» / «Описание» — как td.td-calc-comment в «Расчётах» (клик, touchend, Enter/Пробел). */
 #routeSheetTableDelivery .route-sheet-delivery-clamp-inner[data-fulltext][role="button"] {
   cursor: pointer;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   outline: none;
 }
