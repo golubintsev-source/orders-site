@@ -13,12 +13,14 @@ let calculationsRowsCache = [];
 /** Непустая строка — поиск активен (кнопка «Отменить»). */
 let appliedCalculationsSearchQuery = null;
 
-function formatDateShort(iso) {
+/** «16 мар 08:11» — локальное время. */
+function formatCalcTimeRu(iso) {
   if (!iso) return "";
   try {
     const d = new Date(iso);
     const months = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
-    return `${d.getDate()} ${months[d.getMonth()]}`;
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getDate()} ${months[d.getMonth()]} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   } catch {
     return iso;
   }
@@ -194,7 +196,7 @@ function rowMatchesCalculationsSearch(row, needleLower) {
   const displayComment = getCalcDisplayComment(row.comment);
   const rawComment = row.comment ?? "";
   const parts = [
-    formatDateShort(row.created_at),
+    formatCalcTimeRu(row.created_at),
     row.created_at || "",
     String(row.from_place ?? ""),
     String(row.to_place ?? ""),
@@ -310,7 +312,7 @@ function renderCalculationsTableFromCache() {
     const tr = document.createElement("tr");
     if (isOrderDeltaRow) tr.classList.add("calc-row-system");
     tr.innerHTML = `
-      <td><span class="status-value">${escapeHtml(formatDateShort(row.created_at))}</span></td>
+      <td><span class="status-value">${escapeHtml(formatCalcTimeRu(row.created_at))}</span></td>
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
       <td class="td-money"><span class="status-value">${escapeHtml(formatAmount(row.amount))}</span></td>
