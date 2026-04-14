@@ -2632,6 +2632,7 @@ table {
   text-align: left;
 }
 
+/* Значение «км» — та же серая подложка, что у «Статус» в #ordersTable (.status-value). */
 #routeSheetTableDelivery td.route-sheet-col-km .route-sheet-km-chip.status-value {
   display: inline-block;
   max-width: 100%;
@@ -2639,6 +2640,13 @@ table {
   padding: 3px 6px;
   font-size: 13px;
   line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  background: #f3f4f6;
+  color: #374151;
+  border-radius: 6px;
 }
 
 #routeSheetTableDelivery td.route-sheet-col-km .route-sheet-km-chip.status-value:hover {
