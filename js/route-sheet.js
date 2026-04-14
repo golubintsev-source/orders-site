@@ -1629,6 +1629,13 @@ function initRouteSheetAddressGeoPopover() {
   });
 
   const saveBtn = document.getElementById("routeSheetAddressGeoSaveBtn");
+  const cancelBtn = document.getElementById("routeSheetAddressGeoCancelBtn");
+  if (cancelBtn && !cancelBtn.dataset.routeSheetAddressGeoBound) {
+    cancelBtn.dataset.routeSheetAddressGeoBound = "1";
+    cancelBtn.addEventListener("click", () => {
+      closeRouteSheetAddressGeoPopover();
+    });
+  }
 
   if (saveBtn && !saveBtn.dataset.routeSheetAddressGeoBound) {
     saveBtn.dataset.routeSheetAddressGeoBound = "1";

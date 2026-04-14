@@ -2693,10 +2693,38 @@ table {
   border-radius: 6px;
 }
 
+.route-sheet-address-geo-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .route-sheet-address-geo-action-btn {
-  align-self: flex-start;
   padding: 6px 12px;
   font-size: 13px;
+}
+
+.route-sheet-address-geo-cancel-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #374151;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.route-sheet-address-geo-cancel-btn:hover {
+  background: #e5e7eb;
+}
+
+.route-sheet-address-geo-cancel-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .route-sheet-address-geo-error {
