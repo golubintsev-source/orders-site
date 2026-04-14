@@ -365,6 +365,48 @@ function polylineMinDistanceToPointMeters(latLngs, latP, lonP) {
   return min;
 }
 
+/**
+ * Расстояние вдоль полилинии от её начала до ближайшей к (latP,lonP) точки на линии (метры).
+ * Нужно для порядка подписей 1, 2, 3… по фактическому ходу маршрута (OSRM waypoints могут быть в порядке ввода).
+ */
+function distanceAlongPolylineToClosestPointMeters(latLngs, latP, lonP) {
+  if (!Array.isArray(latLngs) || latLngs.length < 2) return 0;
+  let bestAlong = 0;
+  let bestDist = Infinity;
+  let cumAtSegStart = 0;
+  for (let i = 0; i < latLngs.length - 1; i++) {
+    const [lat1, lon1] = latLngs[i];
+    const [lat2, lon2] = latLngs[i + 1];
+    const mLon = metersPerDegreeLonAt((lat1 + lat2 + latP) / 3);
+    const mLat = metersPerDegreeLat();
+    const segLen = Math.hypot((lon2 - lon1) * mLon, (lat2 - lat1) * mLat);
+    const dist = pointSegmentDistanceMeters(lat1, lon1, lat2, lon2, latP, lonP);
+    const ax = lon1 * mLon;
+    const ay = lat1 * mLat;
+    const bx = lon2 * mLon;
+    const by = lat2 * mLat;
+    const px = lonP * mLon;
+    const py = latP * mLat;
+    const vx = bx - ax;
+    const vy = by - ay;
+    const len2 = vx * vx + vy * vy;
+    let t = 0;
+    if (len2 > 1e-18) {
+      t = ((px - ax) * vx + (py - ay) * vy) / len2;
+      t = Math.max(0, Math.min(1, t));
+    }
+    const along = cumAtSegStart + t * segLen;
+    if (dist < bestDist - 1e-6) {
+      bestDist = dist;
+      bestAlong = along;
+    } else if (Math.abs(dist - bestDist) <= 1e-6 && along < bestAlong) {
+      bestAlong = along;
+    }
+    cumAtSegStart += segLen;
+  }
+  return bestAlong;
+}
+
 function routeGeometryToLatLngs(route) {
   const coords = route?.geometry?.coordinates;
   if (!Array.isArray(coords) || coords.length < 2) return null;
@@ -623,7 +665,7 @@ async function composeDeliveryRoute() {
 
     clearRouteDeliveryMapLayersOnly();
 
-    const { latLngs, distanceM: distM, waypoints } = picked;
+    const { latLngs, distanceM: distM } = picked;
 
     L.polyline(latLngs, {
       color: "#1d4ed8",
@@ -633,11 +675,17 @@ async function composeDeliveryRoute() {
       lineCap: "round",
     }).addTo(routeDeliveryRouteLayer);
 
+    /** Порядок 1…n по ходу синей линии (OSRM waypoints при N>5 не всегда в порядке объезда). */
+    const ordered = stopsSnapshot
+      .map((stop, idx) => ({
+        stop,
+        idx,
+        along: distanceAlongPolylineToClosestPointMeters(latLngs, stop.lat, stop.lon),
+      }))
+      .sort((a, b) => (a.along !== b.along ? a.along - b.along : a.idx - b.idx));
+
     let seq = 0;
-    for (const wp of waypoints) {
-      const widx = Number(wp.waypoint_index);
-      if (!Number.isFinite(widx) || widx <= 0) continue;
-      const stop = stopsSnapshot[widx - 1];
+    for (const { stop } of ordered) {
       if (!stop?.ordersHere) continue;
       seq += 1;
       const latlng = L.latLng(stop.lat, stop.lon);
