@@ -139,7 +139,7 @@ function deliveryAddressCellHtml(order, opts = {}) {
   const chipClasses = ["status-value", "route-sheet-address-chip"];
   if (withDeliveryFullTextAttr) chipClasses.push("route-sheet-delivery-clamp-inner");
   const dataAttr = withDeliveryFullTextAttr ? ` data-fulltext="${escapeAttr(String(addr))}"` : "";
-  return `<td class="route-sheet-col-address"><button type="button" class="${chipClasses.join(" ")}" data-order-id="${order.id ?? ""}"${dataAttr} aria-label="Координаты на карте">${escapeHtml(addr)}</button></td>`;
+  return `<td class="route-sheet-col-address"><span class="${chipClasses.join(" ")}"${dataAttr}>${escapeHtml(addr)}</span></td>`;
 }
 
 function getTomorrowIsoDate() {
@@ -1271,7 +1271,7 @@ function ordersVisibleOnRouteSheet() {
 /**
  * @param {object} order
  * @param {string} [kmDisplay] если передано — колонка «км» (таблица «Доставка»); иначе без колонки («Самовывоз»).
- * @param {{ includeShipDate?: boolean, includeRemainder?: boolean, includeAddressGeoBtn?: boolean }} [opts] «Дата», «Остаток», домик у адреса — только «Доставка».
+ * @param {{ includeShipDate?: boolean, includeRemainder?: boolean, includeAddressGeoBtn?: boolean }} [opts] «Дата», «Остаток», адрес как чип — только «Доставка».
  */
 function rowMainHtml(order, kmDisplay, opts = {}) {
   const { includeShipDate = false, includeRemainder = false, includeAddressGeoBtn = false } = opts;
@@ -1284,7 +1284,7 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
   const kmTd =
     kmDisplay === undefined
       ? ""
-      : `<td class="route-sheet-col-km">${escapeHtml(String(kmDisplay))}</td>`;
+      : `<td class="route-sheet-col-km" data-order-id="${order.id ?? ""}">${escapeHtml(String(kmDisplay))}</td>`;
   const dateTd = includeShipDate
     ? `<td class="route-sheet-col-date">${escapeHtml(formatDateShortRU(order.delivery_date))}</td>`
     : "";
@@ -1544,11 +1544,11 @@ function closeRouteSheetAddressGeoPopover() {
   routeSheetAddressGeoPopoverState.previousCoordinates = "";
 }
 
-function positionRouteSheetAddressGeoPopover(anchorBtn) {
+function positionRouteSheetAddressGeoPopover(anchorEl) {
   const pop = document.getElementById("routeSheetAddressGeoPopover");
-  if (!pop || !anchorBtn) return;
-  const tr = anchorBtn.closest("tr");
-  const rect = (tr || anchorBtn).getBoundingClientRect();
+  if (!pop || !anchorEl) return;
+  const tr = anchorEl.closest("tr");
+  const rect = (tr || anchorEl).getBoundingClientRect();
   pop.hidden = false;
   const margin = 8;
   const w = pop.getBoundingClientRect().width || 320;
@@ -1563,8 +1563,8 @@ function positionRouteSheetAddressGeoPopover(anchorBtn) {
   pop.style.top = `${Math.round(top)}px`;
 }
 
-function openRouteSheetAddressGeoPopover(anchorBtn) {
-  const orderIdRaw = anchorBtn.getAttribute("data-order-id");
+function openRouteSheetAddressGeoPopover(anchorEl) {
+  const orderIdRaw = anchorEl.getAttribute("data-order-id");
   const orderId = orderIdRaw != null && orderIdRaw !== "" ? Number(orderIdRaw) : NaN;
   if (!Number.isFinite(orderId)) return;
 
@@ -1579,7 +1579,7 @@ function openRouteSheetAddressGeoPopover(anchorBtn) {
   const inp = document.getElementById("routeSheetAddressGeoInput");
   if (inp) inp.value = routeSheetAddressGeoPopoverState.previousCoordinates;
 
-  positionRouteSheetAddressGeoPopover(anchorBtn);
+  positionRouteSheetAddressGeoPopover(anchorEl);
   routeSheetAddressGeoIgnoreScrollUntil = Date.now() + 800;
   if (inp) {
     try {
@@ -1594,7 +1594,7 @@ function routeSheetAddressGeoOutsideClick(e) {
   const pop = document.getElementById("routeSheetAddressGeoPopover");
   if (!pop || pop.hidden) return;
   if (pop.contains(e.target)) return;
-  if (e.target.closest?.(".route-sheet-address-chip")) return;
+  if (e.target.closest?.("#routeSheetTableDelivery td.route-sheet-col-km[data-order-id]")) return;
   closeRouteSheetAddressGeoPopover();
 }
 
@@ -1618,11 +1618,11 @@ function initRouteSheetAddressGeoPopover() {
   section.dataset.routeSheetAddressGeoBound = "1";
 
   section.addEventListener("click", (e) => {
-    const btn = e.target.closest(".route-sheet-address-chip");
-    if (!btn || !section.contains(btn)) return;
+    const kmTd = e.target.closest("#routeSheetTableDelivery td.route-sheet-col-km[data-order-id]");
+    if (!kmTd || !section.contains(kmTd)) return;
     e.preventDefault();
     e.stopPropagation();
-    openRouteSheetAddressGeoPopover(btn);
+    openRouteSheetAddressGeoPopover(kmTd);
   });
 
   const saveBtn = document.getElementById("routeSheetAddressGeoSaveBtn");

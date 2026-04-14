@@ -2627,14 +2627,13 @@ table {
   vertical-align: middle;
 }
 
-/* Таблица «Доставка», адрес: серая подложка как .status-value в «Заказы»; клик — попап координат. */
+/* Таблица «Доставка», адрес: серая подложка как .status-value в «Заказы». */
 #routeSheetTableDelivery .route-sheet-col-address .route-sheet-address-chip.status-value {
   display: block;
   width: 100%;
   max-width: 100%;
   margin: 0;
   box-sizing: border-box;
-  border: none;
   font: inherit;
   font-size: 13px;
   line-height: 1.35;
@@ -2642,18 +2641,13 @@ table {
   white-space: normal;
   word-break: break-word;
   padding: 3px 6px;
+}
+
+/* «км» — открытие попапа координат по клику. */
+#routeSheetTableDelivery td.route-sheet-col-km[data-order-id] {
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-}
-
-#routeSheetTableDelivery .route-sheet-col-address .route-sheet-address-chip.status-value:hover {
-  background: #e5e7eb;
-}
-
-#routeSheetTableDelivery .route-sheet-col-address .route-sheet-address-chip.status-value:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
 }
 
 .route-sheet-address-geo-popover {
