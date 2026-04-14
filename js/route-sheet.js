@@ -887,7 +887,7 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
     includeRemainder && !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
       ? `<td class="route-sheet-col-remainder">${escapeHtml(formatAmount(order.remaining_amount))}</td>`
       : includeRemainder
-        ? `<td class="route-sheet-col-remainder"></td>`
+        ? `<td class="route-sheet-col-remainder">${escapeHtml("-")}</td>`
         : "";
   return `<tr>
     ${orderIdCellHtml(order)}
@@ -1038,7 +1038,7 @@ function rowDeliveryMainValues(order) {
     order.description ?? "",
     !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
       ? formatAmount(order.remaining_amount)
-      : "",
+      : "-",
     order.area_m2 != null && order.area_m2 !== "" ? String(order.area_m2) : "",
     order.construction_count != null && order.construction_count !== "" ? String(order.construction_count) : "",
     boolDaNet(order.installation),
