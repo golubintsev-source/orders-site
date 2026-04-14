@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS route_sheet_address_geo (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE route_sheet_address_geo IS 'Нормализованный ключ адреса (как поиск без «-кв…») → координаты и км от офиса; повторные запросы без Nominatim/OSRM.';
-COMMENT ON COLUMN route_sheet_address_geo.address_key IS 'trim(lower(адрес_до_первого_дефиса)) — см. addressForNominatimSearch в route-sheet.js';
+COMMENT ON TABLE route_sheet_address_geo IS 'Нормализованный ключ полной строки адреса → координаты и км от офиса; повторные запросы без Nominatim/OSRM.';
+COMMENT ON COLUMN route_sheet_address_geo.address_key IS 'trim(lower(полная_строка_адреса)) — см. addressForNominatimSearch в route-sheet.js';
 COMMENT ON COLUMN route_sheet_address_geo.km_office IS 'Дистанция по дорогам от офиса, км; NULL если координаты есть, а OSRM не вернул дистанцию';
 
 CREATE INDEX IF NOT EXISTS idx_route_sheet_address_geo_updated ON route_sheet_address_geo (updated_at DESC);

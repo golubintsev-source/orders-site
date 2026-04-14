@@ -419,7 +419,7 @@ function updateKmCellsForOrders(orders) {
 }
 
 function geocodeNominatimCacheKey(normalizedQuery) {
-  return `v3|${String(normalizedQuery).trim().toLowerCase()}`;
+  return `v4|${String(normalizedQuery).trim().toLowerCase()}`;
 }
 
 /** Ключ строки в `route_sheet_address_geo` (совпадает с нормализацией кэша Nominatim). */
@@ -471,13 +471,9 @@ async function persistRouteSheetAddressGeo(addressKey, lat, lon, kmOffice) {
   if (error) console.warn("route_sheet_address_geo upsert:", error.message);
 }
 
-/** Для Nominatim: убрать квартиру/этаж после первого «-» (и сам дефис). Полный адрес в таблице не меняется. */
+/** Строка для запроса к Nominatim и ключей кэша — вся строка адреса (без усечения после «-»). */
 function addressForNominatimSearch(raw) {
-  const t = String(raw).trim();
-  if (!t) return "";
-  const i = t.indexOf("-");
-  if (i === -1) return t;
-  return t.slice(0, i).trim();
+  return String(raw).trim();
 }
 
 /** Запрос 1: только внутри города Волгоград (viewbox + bounded). */
@@ -515,7 +511,7 @@ async function nominatimSearchRequest(params) {
 
 /**
  * Геокодирование (Nominatim): сначала строго в границах города Волгоград, иначе — в границах Волгоградской области.
- * Кэш с префиксом v3| — после смены логики старые значения не подхватываются.
+ * Кэш с префиксом v4| — после смены логики старые значения не подхватываются.
  * @returns {Promise<{ lat: number, lon: number } | null>}
  */
 async function geocodeAddressVolgograd(address) {
