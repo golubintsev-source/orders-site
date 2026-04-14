@@ -1291,7 +1291,7 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
   const kmTd =
     kmDisplay === undefined
       ? ""
-      : `<td class="route-sheet-col-km" data-order-id="${order.id ?? ""}"><span class="status-value route-sheet-km-chip">${escapeHtml(String(kmDisplay))}</span></td>`;
+      : `<td class="route-sheet-col-km" data-order-id="${order.id ?? ""}">${escapeHtml(String(kmDisplay))}</td>`;
   const dateTd = includeShipDate
     ? `<td class="route-sheet-col-date">${escapeHtml(formatDateShortRU(order.delivery_date))}</td>`
     : "";

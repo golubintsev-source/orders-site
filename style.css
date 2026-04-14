@@ -2627,36 +2627,32 @@ table {
   vertical-align: middle;
 }
 
-/* «Доставка»: заголовок «км» — слева; значение в сером чипе как статус в «Заказы»; клик — попап координат. */
+/* «Доставка»: заголовок «км» — слева; ячейка со значением — серая подложка как «Статус» в «Заказы»; клик — попап координат. */
 #routeSheetTableDelivery th.route-sheet-col-km {
   text-align: left;
 }
 
-/* Значение «км» — та же серая подложка, что у «Статус» в #ordersTable (.status-value). */
-#routeSheetTableDelivery td.route-sheet-col-km .route-sheet-km-chip.status-value {
-  display: inline-block;
-  max-width: 100%;
+/*
+ * Значение «км»: серая подложка на всей ячейке (как .status-value у «Статус» в #ordersTable).
+ * Раньше фон был на вложенном span — при узком числе плашка почти не была видна.
+ */
+#routeSheetTableDelivery td.route-sheet-col-km[data-order-id] {
   box-sizing: border-box;
-  padding: 3px 6px;
+  background: #f3f4f6;
+  color: #374151;
+  border-radius: 6px;
   font-size: 13px;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  vertical-align: middle;
-  background: #f3f4f6;
-  color: #374151;
-  border-radius: 6px;
-}
-
-#routeSheetTableDelivery td.route-sheet-col-km .route-sheet-km-chip.status-value:hover {
-  background: #e5e7eb;
-}
-
-#routeSheetTableDelivery td.route-sheet-col-km[data-order-id] {
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+#routeSheetTableDelivery td.route-sheet-col-km[data-order-id]:hover {
+  background: #e5e7eb;
 }
 
 .route-sheet-address-geo-popover {
