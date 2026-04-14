@@ -2652,6 +2652,12 @@ table {
   color: #2563eb;
   cursor: pointer;
   line-height: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.route-sheet-address-geo-open svg {
+  pointer-events: none;
 }
 
 .route-sheet-address-geo-open:hover {

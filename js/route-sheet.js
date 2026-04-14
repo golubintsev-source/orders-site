@@ -95,6 +95,9 @@ const routeSheetAddressGeoPopoverState = {
   previousCoordinates: "",
 };
 
+/** На iOS фокус в поле ввода вызывает прокрутку; `routeSheetAddressGeoScrollClose` не должен закрывать попап в этот момент. */
+let routeSheetAddressGeoIgnoreScrollUntil = 0;
+
 function escapeHtml(s) {
   if (s == null) return "";
   const div = document.createElement("div");
@@ -1561,7 +1564,14 @@ function openRouteSheetAddressGeoPopover(anchorBtn) {
   if (inp) inp.value = routeSheetAddressGeoPopoverState.previousCoordinates;
 
   positionRouteSheetAddressGeoPopover(anchorBtn);
-  inp?.focus();
+  routeSheetAddressGeoIgnoreScrollUntil = Date.now() + 800;
+  if (inp) {
+    try {
+      inp.focus({ preventScroll: true });
+    } catch {
+      inp.focus();
+    }
+  }
 }
 
 function routeSheetAddressGeoOutsideClick(e) {
@@ -1582,6 +1592,7 @@ function routeSheetAddressGeoKeydown(e) {
 function routeSheetAddressGeoScrollClose() {
   const pop = document.getElementById("routeSheetAddressGeoPopover");
   if (!pop || pop.hidden) return;
+  if (Date.now() < routeSheetAddressGeoIgnoreScrollUntil) return;
   closeRouteSheetAddressGeoPopover();
 }
 
