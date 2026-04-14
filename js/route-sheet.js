@@ -197,14 +197,22 @@ function routeSheetDeliveryDescriptionAppendixPlain(order) {
       : "";
   const mont = boolDaNet(order.installation);
   const otk = boolDaNet(order.reveals);
-  return `(м2 - ${m2}; Моск.- ${mosk}; Конст.- ${konst}; Монтаж- ${mont}; Откосы- ${otk};)`;
+  const parts = [];
+  if (m2) parts.push(`м2 - ${m2}`);
+  if (mosk) parts.push(`Моск.- ${mosk}`);
+  if (konst) parts.push(`Конст.- ${konst}`);
+  if (mont === "да") parts.push(`Монтаж- ${mont}`);
+  if (otk === "да") parts.push(`Откосы- ${otk}`);
+  if (parts.length === 0) return "";
+  return `(${parts.join("; ")};)`;
 }
 
 /** Полный текст описания для «Доставка»: основной текст + хвост в скобках. */
 function routeSheetDeliveryDescriptionFullPlain(order) {
   const base = (order.description ?? "").trim();
   const appendix = routeSheetDeliveryDescriptionAppendixPlain(order);
-  return base ? `${base} ${appendix}` : appendix;
+  if (base && appendix) return `${base} ${appendix}`;
+  return base || appendix;
 }
 
 function sortByDeliveryThenId(a, b) {
