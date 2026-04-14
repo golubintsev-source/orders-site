@@ -2742,6 +2742,13 @@ table {
   white-space: nowrap;
 }
 
+.route-sheet-table th.route-sheet-col-remainder,
+.route-sheet-table td.route-sheet-col-remainder {
+  min-width: 4.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .route-sheet-table th.route-sheet-col-phone,
 .route-sheet-table td.route-sheet-col-phone {
   min-width: 12.5rem;

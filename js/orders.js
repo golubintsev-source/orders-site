@@ -1054,7 +1054,7 @@ function formatRevealsDateCell(order) {
 }
 
 /** Оплачено = "да", если заполнено "Кому остаток" ИЛИ Остаток = 0. */
-function isOrderPaid(order) {
+export function isOrderPaid(order) {
   const remainingToRaw = (order.remaining_to || "").trim();
   const paidByRemainingTo = remainingToRaw !== "" && remainingToRaw !== "—";
 

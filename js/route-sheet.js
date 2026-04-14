@@ -1,6 +1,7 @@
 import { state } from "./state.js";
 import { isOrderEditLockedForUserLite, isOrderHiddenFromUserLite, isUserLite } from "./roles.js";
-import { formatOrderIdTypeChip, formatDateShortRU } from "./format.js";
+import { formatOrderIdTypeChip, formatDateShortRU, formatAmount } from "./format.js";
+import { isOrderPaid } from "./orders.js";
 import { closeOrderIdActionsMenu, openOrderIdActionsMenu } from "./ui.js";
 import { supabaseClient } from "./config.js";
 
@@ -29,6 +30,7 @@ const HEADERS_DELIVERY = [
   "Адрес",
   "км",
   "Описание",
+  "Остаток",
   "Моск.",
   "Конст.",
   "Монтаж",
@@ -864,10 +866,10 @@ function ordersVisibleOnRouteSheet() {
 /**
  * @param {object} order
  * @param {string} [kmDisplay] если передано — колонка «км» (таблица «Доставка»); иначе без колонки («Самовывоз»).
- * @param {{ includeShipDate?: boolean }} [opts] колонка «Дата» (отправка) только для таблицы «Доставка».
+ * @param {{ includeShipDate?: boolean, includeRemainder?: boolean }} [opts] «Дата» и «Остаток» — только таблица «Доставка».
  */
 function rowMainHtml(order, kmDisplay, opts = {}) {
-  const { includeShipDate = false } = opts;
+  const { includeShipDate = false, includeRemainder = false } = opts;
   const mosk =
     order.area_m2 != null && order.area_m2 !== "" ? escapeHtml(String(order.area_m2)) : "";
   const konst =
@@ -881,6 +883,12 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
   const dateTd = includeShipDate
     ? `<td class="route-sheet-col-date">${escapeHtml(formatDateShortRU(order.delivery_date))}</td>`
     : "";
+  const remainderTd =
+    includeRemainder && !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
+      ? `<td class="route-sheet-col-remainder">${escapeHtml(formatAmount(order.remaining_amount))}</td>`
+      : includeRemainder
+        ? `<td class="route-sheet-col-remainder"></td>`
+        : "";
   return `<tr>
     ${orderIdCellHtml(order)}
     ${dateTd}
@@ -888,6 +896,7 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
     <td>${escapeHtml(order.address ?? "")}</td>
     ${kmTd}
     <td>${escapeHtml(order.description ?? "")}</td>
+    ${remainderTd}
     <td>${mosk}</td>
     <td>${konst}</td>
     <td>${escapeHtml(boolDaNet(order.installation))}</td>
@@ -951,13 +960,17 @@ export function loadRouteSheet() {
 
   if (isRouteSheetSectionActive()) {
     const gen = ++routeDeliveryPipelineGeneration;
-    tbodyDelivery.innerHTML = deliveryRows.map((o) => rowMainHtml(o, "…", { includeShipDate: true })).join("");
+    tbodyDelivery.innerHTML = deliveryRows
+      .map((o) => rowMainHtml(o, "…", { includeShipDate: true, includeRemainder: true }))
+      .join("");
     void runDeliveryPipeline(deliveryRows, gen);
   } else {
     routeDeliveryPipelineGeneration += 1;
     deliveryKmByOrderId.clear();
     clearRouteDeliveryMarkersAndRoadRoute();
-    tbodyDelivery.innerHTML = deliveryRows.map((o) => rowMainHtml(o, "—", { includeShipDate: true })).join("");
+    tbodyDelivery.innerHTML = deliveryRows
+      .map((o) => rowMainHtml(o, "—", { includeShipDate: true, includeRemainder: true }))
+      .join("");
   }
 }
 
@@ -1023,6 +1036,9 @@ function rowDeliveryMainValues(order) {
     order.address ?? "",
     kmCell,
     order.description ?? "",
+    !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
+      ? formatAmount(order.remaining_amount)
+      : "",
     order.area_m2 != null && order.area_m2 !== "" ? String(order.area_m2) : "",
     order.construction_count != null && order.construction_count !== "" ? String(order.construction_count) : "",
     boolDaNet(order.installation),
