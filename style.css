@@ -2857,6 +2857,10 @@ table {
   font-size: 13px;
 }
 
+#routeSheetTableDelivery .route-sheet-col-delivery-hidden {
+  display: none;
+}
+
 .route-sheet-table th.route-sheet-col-km,
 .route-sheet-table td.route-sheet-col-km {
   min-width: 6.75rem;

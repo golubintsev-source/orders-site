@@ -1045,6 +1045,7 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
     includeShipDate
       ? `<td>${escapeHtml(routeSheetDeliveryDescriptionFullPlain(order))}</td>`
       : `<td>${escapeHtml(order.description ?? "")}</td>`;
+  const hiddenExtra = includeShipDate ? ' class="route-sheet-col-delivery-hidden"' : "";
   return `<tr>
     ${orderIdCellHtml(order)}
     ${dateTd}
@@ -1053,10 +1054,10 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
     ${kmTd}
     ${descriptionTd}
     ${remainderTd}
-    <td>${mosk}</td>
-    <td>${konst}</td>
-    <td>${escapeHtml(boolDaNet(order.installation))}</td>
-    <td>${escapeHtml(boolDaNet(order.reveals))}</td>
+    <td${hiddenExtra}>${mosk}</td>
+    <td${hiddenExtra}>${konst}</td>
+    <td${hiddenExtra}>${escapeHtml(boolDaNet(order.installation))}</td>
+    <td${hiddenExtra}>${escapeHtml(boolDaNet(order.reveals))}</td>
     <td class="route-sheet-col-phone">${escapeHtml(order.phone ?? "")}</td>
   </tr>`;
 }
