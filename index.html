@@ -784,6 +784,37 @@
           </label>
         </div>
         <p id="routeSheetMessage" class="route-sheet-message"></p>
+        <div
+          id="routeSheetAddressGeoPopover"
+          class="route-sheet-address-geo-popover"
+          hidden
+          role="dialog"
+          aria-label="Адрес по координатам"
+        >
+          <div class="route-sheet-address-geo-popover-inner">
+            <label class="route-sheet-address-geo-label" for="routeSheetAddressGeoInput">Координаты</label>
+            <input
+              type="text"
+              id="routeSheetAddressGeoInput"
+              class="route-sheet-address-geo-input"
+              placeholder="48.753016, 44.495766"
+              autocomplete="off"
+            />
+            <button type="button" id="routeSheetAddressGeoResolveBtn" class="btn-primary route-sheet-address-geo-action-btn">
+              Определить адрес
+            </button>
+            <div id="routeSheetAddressGeoResult" class="route-sheet-address-geo-result" hidden></div>
+            <button
+              type="button"
+              id="routeSheetAddressGeoReplaceBtn"
+              class="btn-primary route-sheet-address-geo-action-btn route-sheet-address-geo-replace-btn"
+              hidden
+            >
+              Заменить адрес
+            </button>
+            <p id="routeSheetAddressGeoError" class="route-sheet-address-geo-error" hidden></p>
+          </div>
+        </div>
         <div class="table-wrap route-sheet-table-wrap">
           <table id="routeSheetTableDelivery" class="route-sheet-table">
             <thead>

@@ -2555,6 +2555,104 @@ table {
   background: #fff;
 }
 
+.route-sheet-col-address {
+  vertical-align: top;
+}
+
+.route-sheet-col-address .route-sheet-address-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.route-sheet-address-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.route-sheet-address-geo-open {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 2px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #2563eb;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.route-sheet-address-geo-open:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.route-sheet-address-geo-open:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.route-sheet-address-geo-popover {
+  position: fixed;
+  z-index: 12000;
+  min-width: min(100vw - 24px, 320px);
+  max-width: min(100vw - 16px, 400px);
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+}
+
+.route-sheet-address-geo-popover-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.route-sheet-address-geo-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+}
+
+.route-sheet-address-geo-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+}
+
+.route-sheet-address-geo-action-btn {
+  align-self: flex-start;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.route-sheet-address-geo-result {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #111827;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.route-sheet-address-geo-error {
+  margin: 0;
+  font-size: 12px;
+  color: #b91c1c;
+}
+
 .route-sheet-message {
   margin: 0 0 2px;
   padding: 0;

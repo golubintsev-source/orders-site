@@ -1,8 +1,9 @@
 import { state } from "./state.js";
-import { isOrderEditLockedForUserLite, isOrderHiddenFromUserLite, isUserLite } from "./roles.js";
+import { isOrderEditLockedForUserLite, isOrderHiddenFromUserLite, isUserLite, canMutateOrders } from "./roles.js";
 import { formatOrderIdTypeChip, formatDateShortRU, formatAmount } from "./format.js";
-import { isOrderPaid } from "./orders.js";
+import { isOrderPaid, loadOrders } from "./orders.js";
 import { closeOrderIdActionsMenu, openOrderIdActionsMenu } from "./ui.js";
+import { setMessage } from "./dom.js";
 import { supabaseClient } from "./config.js";
 
 const MAIN_ORDER_TYPES = new Set(["Окна", "Подоконники", "Аллюминий", "Сетки/мелочь"]);
@@ -78,6 +79,17 @@ let routeRoadDrawGeneration = 0;
 const deliveryKmByOrderId = new Map();
 const nominatimCache = new Map();
 
+/** Иконка «дом» у адреса в таблице «Доставка». */
+const ROUTE_SHEET_HOUSE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`;
+
+/** Состояние попапа «координаты → адрес» у строки доставки. */
+const routeSheetAddressGeoPopoverState = {
+  orderId: null,
+  replaceAllowed: false,
+  resolvedAddress: null,
+  previousAddress: "",
+};
+
 function escapeHtml(s) {
   if (s == null) return "";
   const div = document.createElement("div");
@@ -114,6 +126,10 @@ function orderIdCellHtml(order) {
       ${orderNumberDisplay}
     </span>
   </td>`;
+}
+
+function deliveryAddressCellHtml(order) {
+  return `<td class="route-sheet-col-address"><span class="route-sheet-address-line"><span class="route-sheet-address-text">${escapeHtml(order.address ?? "")}</span><button type="button" class="route-sheet-address-geo-open" aria-label="Адрес по координатам" data-order-id="${order.id ?? ""}">${ROUTE_SHEET_HOUSE_SVG}</button></span></td>`;
 }
 
 function getTomorrowIsoDate() {
@@ -866,10 +882,10 @@ function ordersVisibleOnRouteSheet() {
 /**
  * @param {object} order
  * @param {string} [kmDisplay] если передано — колонка «км» (таблица «Доставка»); иначе без колонки («Самовывоз»).
- * @param {{ includeShipDate?: boolean, includeRemainder?: boolean }} [opts] «Дата» и «Остаток» — только таблица «Доставка».
+ * @param {{ includeShipDate?: boolean, includeRemainder?: boolean, includeAddressGeoBtn?: boolean }} [opts] «Дата», «Остаток», домик у адреса — только «Доставка».
  */
 function rowMainHtml(order, kmDisplay, opts = {}) {
-  const { includeShipDate = false, includeRemainder = false } = opts;
+  const { includeShipDate = false, includeRemainder = false, includeAddressGeoBtn = false } = opts;
   const mosk =
     order.area_m2 != null && order.area_m2 !== "" ? escapeHtml(String(order.area_m2)) : "";
   const konst =
@@ -889,11 +905,13 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
       : includeRemainder
         ? `<td class="route-sheet-col-remainder">${escapeHtml("-")}</td>`
         : "";
+  const clientTd = `<td>${escapeHtml(order.client ?? "")}</td>`;
+  const addressTd = includeAddressGeoBtn ? deliveryAddressCellHtml(order) : `<td>${escapeHtml(order.address ?? "")}</td>`;
   return `<tr>
     ${orderIdCellHtml(order)}
     ${dateTd}
-    <td>${escapeHtml(order.client ?? "")}</td>
-    <td>${escapeHtml(order.address ?? "")}</td>
+    ${clientTd}
+    ${addressTd}
     ${kmTd}
     <td>${escapeHtml(order.description ?? "")}</td>
     ${remainderTd}
@@ -961,7 +979,13 @@ export function loadRouteSheet() {
   if (isRouteSheetSectionActive()) {
     const gen = ++routeDeliveryPipelineGeneration;
     tbodyDelivery.innerHTML = deliveryRows
-      .map((o) => rowMainHtml(o, "…", { includeShipDate: true, includeRemainder: true }))
+      .map((o) =>
+        rowMainHtml(o, "…", {
+          includeShipDate: true,
+          includeRemainder: true,
+          includeAddressGeoBtn: true,
+        }),
+      )
       .join("");
     void runDeliveryPipeline(deliveryRows, gen);
   } else {
@@ -969,7 +993,13 @@ export function loadRouteSheet() {
     deliveryKmByOrderId.clear();
     clearRouteDeliveryMarkersAndRoadRoute();
     tbodyDelivery.innerHTML = deliveryRows
-      .map((o) => rowMainHtml(o, "—", { includeShipDate: true, includeRemainder: true }))
+      .map((o) =>
+        rowMainHtml(o, "—", {
+          includeShipDate: true,
+          includeRemainder: true,
+          includeAddressGeoBtn: true,
+        }),
+      )
       .join("");
   }
 }
@@ -1089,6 +1119,225 @@ export function exportRouteSheetShopExcel() {
   exportSheet(HEADERS_SHOP, rows, "Магазин", "marshrutnyy_list_magazin");
 }
 
+function parseLatLonCommaInput(raw) {
+  const s = String(raw ?? "").trim();
+  const m = s.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lon = Number(m[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return { lat, lon };
+}
+
+/** Обратное геокодирование (Nominatim), с задержкой как у прямого поиска. */
+async function nominatimReverseGeocode(lat, lon) {
+  await sleep(NOMINATIM_DELAY_MS);
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`;
+  const res = await fetch(url, { headers: { "Accept-Language": "ru,en" } });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const name = data?.display_name;
+  return name != null && String(name).trim() !== "" ? String(name).trim() : null;
+}
+
+function clearRouteSheetAddressGeoPopoverFields() {
+  const inp = document.getElementById("routeSheetAddressGeoInput");
+  if (inp) inp.value = "";
+  const resEl = document.getElementById("routeSheetAddressGeoResult");
+  if (resEl) {
+    resEl.hidden = true;
+    resEl.textContent = "";
+  }
+  const repl = document.getElementById("routeSheetAddressGeoReplaceBtn");
+  if (repl) repl.hidden = true;
+  const err = document.getElementById("routeSheetAddressGeoError");
+  if (err) {
+    err.hidden = true;
+    err.textContent = "";
+  }
+  routeSheetAddressGeoPopoverState.resolvedAddress = null;
+}
+
+function closeRouteSheetAddressGeoPopover() {
+  const pop = document.getElementById("routeSheetAddressGeoPopover");
+  if (pop) pop.hidden = true;
+  clearRouteSheetAddressGeoPopoverFields();
+  routeSheetAddressGeoPopoverState.orderId = null;
+  routeSheetAddressGeoPopoverState.replaceAllowed = false;
+  routeSheetAddressGeoPopoverState.previousAddress = "";
+}
+
+function positionRouteSheetAddressGeoPopover(anchorBtn) {
+  const pop = document.getElementById("routeSheetAddressGeoPopover");
+  if (!pop || !anchorBtn) return;
+  const tr = anchorBtn.closest("tr");
+  const rect = (tr || anchorBtn).getBoundingClientRect();
+  pop.hidden = false;
+  const margin = 8;
+  const w = pop.getBoundingClientRect().width || 320;
+  let left = rect.left;
+  left = Math.max(margin, Math.min(left, window.innerWidth - w - margin));
+  pop.style.left = `${Math.round(left)}px`;
+  let top = rect.bottom + 6;
+  const h = pop.getBoundingClientRect().height;
+  if (top + h + margin > window.innerHeight) {
+    top = Math.max(margin, rect.top - h - 6);
+  }
+  pop.style.top = `${Math.round(top)}px`;
+}
+
+function openRouteSheetAddressGeoPopover(anchorBtn) {
+  const orderIdRaw = anchorBtn.getAttribute("data-order-id");
+  const orderId = orderIdRaw != null && orderIdRaw !== "" ? Number(orderIdRaw) : NaN;
+  if (!Number.isFinite(orderId)) return;
+
+  const order = (state.allOrders || []).find((o) => Number(o.id) === orderId);
+  clearRouteSheetAddressGeoPopoverFields();
+  routeSheetAddressGeoPopoverState.orderId = orderId;
+  routeSheetAddressGeoPopoverState.previousAddress = order?.address != null ? String(order.address) : "";
+  routeSheetAddressGeoPopoverState.replaceAllowed =
+    Boolean(order) && canMutateOrders() && !isOrderEditLockedForUserLite(order);
+
+  positionRouteSheetAddressGeoPopover(anchorBtn);
+  document.getElementById("routeSheetAddressGeoInput")?.focus();
+}
+
+function routeSheetAddressGeoOutsideClick(e) {
+  const pop = document.getElementById("routeSheetAddressGeoPopover");
+  if (!pop || pop.hidden) return;
+  if (pop.contains(e.target)) return;
+  if (e.target.closest?.(".route-sheet-address-geo-open")) return;
+  closeRouteSheetAddressGeoPopover();
+}
+
+function routeSheetAddressGeoKeydown(e) {
+  if (e.key !== "Escape") return;
+  const pop = document.getElementById("routeSheetAddressGeoPopover");
+  if (!pop || pop.hidden) return;
+  closeRouteSheetAddressGeoPopover();
+}
+
+function routeSheetAddressGeoScrollClose() {
+  const pop = document.getElementById("routeSheetAddressGeoPopover");
+  if (!pop || pop.hidden) return;
+  closeRouteSheetAddressGeoPopover();
+}
+
+function initRouteSheetAddressGeoPopover() {
+  const section = document.getElementById("section-route-sheet");
+  if (!section || section.dataset.routeSheetAddressGeoBound) return;
+  section.dataset.routeSheetAddressGeoBound = "1";
+
+  section.addEventListener("click", (e) => {
+    const btn = e.target.closest(".route-sheet-address-geo-open");
+    if (!btn || !section.contains(btn)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openRouteSheetAddressGeoPopover(btn);
+  });
+
+  const resolveBtn = document.getElementById("routeSheetAddressGeoResolveBtn");
+  const replaceBtn = document.getElementById("routeSheetAddressGeoReplaceBtn");
+
+  if (resolveBtn && !resolveBtn.dataset.routeSheetAddressGeoBound) {
+    resolveBtn.dataset.routeSheetAddressGeoBound = "1";
+    resolveBtn.addEventListener("click", async () => {
+      const errEl = document.getElementById("routeSheetAddressGeoError");
+      const resEl = document.getElementById("routeSheetAddressGeoResult");
+      const repl = document.getElementById("routeSheetAddressGeoReplaceBtn");
+      const inp = document.getElementById("routeSheetAddressGeoInput");
+      if (errEl) {
+        errEl.hidden = true;
+        errEl.textContent = "";
+      }
+      if (resEl) {
+        resEl.hidden = true;
+        resEl.textContent = "";
+      }
+      if (repl) repl.hidden = true;
+      routeSheetAddressGeoPopoverState.resolvedAddress = null;
+
+      const parsed = parseLatLonCommaInput(inp?.value ?? "");
+      if (!parsed) {
+        if (errEl) {
+          errEl.textContent = "Укажите координаты в формате «широта, долгота», например 48.753016, 44.495766";
+          errEl.hidden = false;
+        }
+        return;
+      }
+
+      resolveBtn.disabled = true;
+      try {
+        const addr = await nominatimReverseGeocode(parsed.lat, parsed.lon);
+        if (!addr) {
+          if (errEl) {
+            errEl.textContent = "Не удалось определить адрес по этим координатам.";
+            errEl.hidden = false;
+          }
+          return;
+        }
+        routeSheetAddressGeoPopoverState.resolvedAddress = addr;
+        if (resEl) {
+          resEl.textContent = addr;
+          resEl.hidden = false;
+        }
+        if (repl) repl.hidden = !routeSheetAddressGeoPopoverState.replaceAllowed;
+      } catch (e) {
+        console.warn("nominatim reverse:", e);
+        if (errEl) {
+          errEl.textContent = "Ошибка запроса к сервису адресов. Попробуйте позже.";
+          errEl.hidden = false;
+        }
+      } finally {
+        resolveBtn.disabled = false;
+      }
+    });
+  }
+
+  if (replaceBtn && !replaceBtn.dataset.routeSheetAddressGeoBound) {
+    replaceBtn.dataset.routeSheetAddressGeoBound = "1";
+    replaceBtn.addEventListener("click", async () => {
+      const oid = routeSheetAddressGeoPopoverState.orderId;
+      const nextAddr = routeSheetAddressGeoPopoverState.resolvedAddress;
+      if (!Number.isFinite(oid) || !nextAddr) return;
+
+      replaceBtn.disabled = true;
+      try {
+        const { error } = await supabaseClient.from("orders").update({ address: nextAddr }).eq("id", oid);
+        if (error) {
+          console.error("route-sheet address update:", error);
+          setMessage(`Не удалось сохранить адрес: ${error.message || ""}`.trim(), "#d32f2f");
+          return;
+        }
+        if (state.currentUser?.email) {
+          const prev = routeSheetAddressGeoPopoverState.previousAddress || "—";
+          const { error: histError } = await supabaseClient.from("order_history").insert([
+            {
+              order_id: oid,
+              user_email: state.currentUser.email,
+              comment: `Адрес: ${prev} → ${nextAddr}`,
+            },
+          ]);
+          if (histError) console.warn("order_history:", histError.message);
+        }
+        closeRouteSheetAddressGeoPopover();
+        setMessage("Адрес заказа обновлён", "#2e7d32");
+        await loadOrders();
+      } finally {
+        replaceBtn.disabled = false;
+      }
+    });
+  }
+
+  if (!document.documentElement.dataset.routeSheetAddressGeoDocBound) {
+    document.documentElement.dataset.routeSheetAddressGeoDocBound = "1";
+    document.addEventListener("click", routeSheetAddressGeoOutsideClick);
+    document.addEventListener("keydown", routeSheetAddressGeoKeydown);
+    window.addEventListener("scroll", routeSheetAddressGeoScrollClose, true);
+  }
+}
+
 export function initRouteSheetSection() {
   const shopSection = document.getElementById("routeSheetShopSection");
   if (shopSection) shopSection.hidden = isUserLite();
@@ -1135,5 +1384,6 @@ export function initRouteSheetSection() {
     shopBtn.addEventListener("click", () => exportRouteSheetShopExcel());
   }
 
+  initRouteSheetAddressGeoPopover();
   loadRouteSheet();
 }
