@@ -82,12 +82,11 @@ const nominatimCache = new Map();
 /** Иконка «дом» у адреса в таблице «Доставка». */
 const ROUTE_SHEET_HOUSE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`;
 
-/** Состояние попапа «координаты → адрес» у строки доставки. */
+/** Состояние попапа координат у строки доставки. */
 const routeSheetAddressGeoPopoverState = {
   orderId: null,
-  replaceAllowed: false,
-  resolvedAddress: null,
-  previousAddress: "",
+  saveAllowed: false,
+  previousCoordinates: "",
 };
 
 function escapeHtml(s) {
@@ -129,7 +128,9 @@ function orderIdCellHtml(order) {
 }
 
 function deliveryAddressCellHtml(order) {
-  return `<td class="route-sheet-col-address"><span class="route-sheet-address-line"><span class="route-sheet-address-text">${escapeHtml(order.address ?? "")}</span><button type="button" class="route-sheet-address-geo-open" aria-label="Адрес по координатам" data-order-id="${order.id ?? ""}">${ROUTE_SHEET_HOUSE_SVG}</button></span></td>`;
+  const saved = orderHasSavedCoordinates(order);
+  const houseCls = saved ? "route-sheet-address-geo-open route-sheet-address-geo-open--saved" : "route-sheet-address-geo-open";
+  return `<td class="route-sheet-col-address"><span class="route-sheet-address-line"><span class="route-sheet-address-text">${escapeHtml(order.address ?? "")}</span><button type="button" class="${houseCls}" aria-label="Координаты на карте" data-order-id="${order.id ?? ""}">${ROUTE_SHEET_HOUSE_SVG}</button></span></td>`;
 }
 
 function getTomorrowIsoDate() {
@@ -214,6 +215,39 @@ function sleep(ms) {
 
 function addressNormKeyFromOrder(order) {
   return String(order.address ?? "").trim().toLowerCase();
+}
+
+/** Парсинг строки «48.753016, 44.495766» (широта, долгота). */
+function parseLatLonCommaInput(raw) {
+  const s = String(raw ?? "").trim();
+  const m = s.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lon = Number(m[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return { lat, lon };
+}
+
+function formatCoordinatesForStorage(parsed) {
+  const sLat = Number(parsed.lat.toFixed(7));
+  const sLon = Number(parsed.lon.toFixed(7));
+  return `${sLat}, ${sLon}`;
+}
+
+/** У заказа заданы сохранённые координаты (валидная строка). */
+function orderHasSavedCoordinates(order) {
+  return parseLatLonCommaInput(order?.coordinates) != null;
+}
+
+/**
+ * Группировка точек на карте: при сохранённых координатах — по ним, иначе по нормализованному адресу.
+ */
+function deliveryPipelineGroupKey(order) {
+  const parsed = parseLatLonCommaInput(order?.coordinates);
+  if (parsed) return `coord:${parsed.lat},${parsed.lon}`;
+  const a = addressNormKeyFromOrder(order);
+  return a ? `addr:${a}` : "";
 }
 
 function formatKmCellDisplay(km) {
@@ -686,12 +720,12 @@ async function runDeliveryPipeline(deliveryRows, gen) {
     clearRouteDeliveryMarkersAndRoadRoute();
     deliveryKmByOrderId.clear();
 
-    const noAddrOrders = deliveryRows.filter((o) => addressNormKeyFromOrder(o) === "");
-    for (const o of noAddrOrders) deliveryKmByOrderId.set(o.id, null);
-    updateKmCellsForOrders(noAddrOrders);
+    const noGeoOrders = deliveryRows.filter((o) => deliveryPipelineGroupKey(o) === "");
+    for (const o of noGeoOrders) deliveryKmByOrderId.set(o.id, null);
+    updateKmCellsForOrders(noGeoOrders);
 
-    const withAddr = deliveryRows.filter((o) => String(o.address ?? "").trim() !== "");
-    if (withAddr.length === 0) {
+    const withGeo = deliveryRows.filter((o) => deliveryPipelineGroupKey(o) !== "");
+    if (withGeo.length === 0) {
       routeDeliveryMap.setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
       setRouteDeliveryMapStatus("");
       scheduleInvalidateRouteDeliveryMap();
@@ -699,20 +733,22 @@ async function runDeliveryPipeline(deliveryRows, gen) {
     }
 
     const officeLL = routeSheetOfficeLatLng(L);
-    const withAddrForMap = withAddr.filter((o) => !isRouteSheetOfficeAddress(o.address));
+    const withAddrForMap = withGeo.filter(
+      (o) => orderHasSavedCoordinates(o) || !isRouteSheetOfficeAddress(o.address),
+    );
 
     /** @type {Map<string, object[]>} */
-    const byAddress = new Map();
-    for (const o of withAddr) {
-      const k = addressNormKeyFromOrder(o);
-      if (!byAddress.has(k)) byAddress.set(k, []);
-      byAddress.get(k).push(o);
+    const byGroup = new Map();
+    for (const o of withGeo) {
+      const k = deliveryPipelineGroupKey(o);
+      if (!byGroup.has(k)) byGroup.set(k, []);
+      byGroup.get(k).push(o);
     }
 
     const orderedKeys = [];
     const keySeen = new Set();
     for (const o of deliveryRows) {
-      const k = addressNormKeyFromOrder(o);
+      const k = deliveryPipelineGroupKey(o);
       if (k === "" || keySeen.has(k)) continue;
       keySeen.add(k);
       orderedKeys.push(k);
@@ -723,11 +759,11 @@ async function runDeliveryPipeline(deliveryRows, gen) {
     const latLngs = [];
 
     if (withAddrForMap.length === 0) {
-      for (const o of withAddr) {
+      for (const o of withGeo) {
         if (isRouteSheetOfficeAddress(o.address)) deliveryKmByOrderId.set(o.id, 0);
         else deliveryKmByOrderId.set(o.id, null);
       }
-      updateKmCellsForOrders(withAddr);
+      updateKmCellsForOrders(withGeo);
       routeDeliveryMap.setView(officeLL, 15);
       setRouteDeliveryMapStatus("");
       scheduleInvalidateRouteDeliveryMap();
@@ -737,9 +773,51 @@ async function runDeliveryPipeline(deliveryRows, gen) {
     for (let i = 0; i < orderedKeys.length; i++) {
       if (gen !== routeDeliveryPipelineGeneration) return;
       const key = orderedKeys[i];
-      const ordersHere = byAddress.get(key) || [];
-      const displayAddr = (ordersHere[0]?.address ?? "").trim();
+      const ordersHere = byGroup.get(key) || [];
+      const first = ordersHere[0];
+      const coordParsed = parseLatLonCommaInput(first?.coordinates);
+      const displayAddr = (first?.address ?? "").trim();
       const x = i + 1;
+
+      if (coordParsed) {
+        setRouteDeliveryMapStatus(`Точка ${x} из ${Y}: координаты`, false);
+        const coords = { lat: coordParsed.lat, lon: coordParsed.lon };
+        const latlng = L.latLng(coords.lat, coords.lon);
+        latLngs.push(latlng);
+        try {
+          const marker = L.marker(latlng, {
+            icon: deliveryMapMarkerIcon(L, ordersHere),
+          });
+          marker.bindPopup(buildDeliveryPopupHtml(ordersHere));
+          marker.on("popupopen", () => {
+            void showDeliveryRoadRouteFromOffice(marker.getLatLng());
+          });
+          marker.addTo(routeDeliveryMarkersLayer);
+        } catch (e) {
+          console.error("Leaflet marker:", e);
+          setRouteDeliveryMapStatus(`Ошибка отображения точки (${x} из ${Y}).`, true);
+        }
+
+        let km = null;
+        try {
+          km = await osrmDrivingDistanceKm(
+            ROUTE_SHEET_OFFICE_LON,
+            ROUTE_SHEET_OFFICE_LAT,
+            coords.lon,
+            coords.lat,
+          );
+        } catch (e) {
+          console.error("OSRM:", e);
+          setRouteDeliveryMapStatus(`Ошибка маршрута км (${x} из ${Y}).`, true);
+        }
+        if (gen !== routeDeliveryPipelineGeneration) return;
+        if (km == null) failedOsrm.push(displayAddr || "координаты");
+        for (const o of ordersHere) deliveryKmByOrderId.set(o.id, km);
+        updateKmCellsForOrders(ordersHere);
+        if (i < orderedKeys.length - 1) await sleep(250);
+        continue;
+      }
+
       setRouteDeliveryMapStatus(`Ищем адрес ${x} из ${Y}: ${truncateForStatus(displayAddr, 72)}`, false);
 
       if (isRouteSheetOfficeAddress(displayAddr)) {
@@ -1115,44 +1193,14 @@ export function exportRouteSheetShopExcel() {
   exportSheet(HEADERS_SHOP, rows, "Магазин", "marshrutnyy_list_magazin");
 }
 
-function parseLatLonCommaInput(raw) {
-  const s = String(raw ?? "").trim();
-  const m = s.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
-  if (!m) return null;
-  const lat = Number(m[1]);
-  const lon = Number(m[2]);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
-  return { lat, lon };
-}
-
-/** Обратное геокодирование (Nominatim), с задержкой как у прямого поиска. */
-async function nominatimReverseGeocode(lat, lon) {
-  await sleep(NOMINATIM_DELAY_MS);
-  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`;
-  const res = await fetch(url, { headers: { "Accept-Language": "ru,en" } });
-  if (!res.ok) return null;
-  const data = await res.json();
-  const name = data?.display_name;
-  return name != null && String(name).trim() !== "" ? String(name).trim() : null;
-}
-
 function clearRouteSheetAddressGeoPopoverFields() {
   const inp = document.getElementById("routeSheetAddressGeoInput");
   if (inp) inp.value = "";
-  const resEl = document.getElementById("routeSheetAddressGeoResult");
-  if (resEl) {
-    resEl.hidden = true;
-    resEl.textContent = "";
-  }
-  const repl = document.getElementById("routeSheetAddressGeoReplaceBtn");
-  if (repl) repl.hidden = true;
   const err = document.getElementById("routeSheetAddressGeoError");
   if (err) {
     err.hidden = true;
     err.textContent = "";
   }
-  routeSheetAddressGeoPopoverState.resolvedAddress = null;
 }
 
 function closeRouteSheetAddressGeoPopover() {
@@ -1160,8 +1208,8 @@ function closeRouteSheetAddressGeoPopover() {
   if (pop) pop.hidden = true;
   clearRouteSheetAddressGeoPopoverFields();
   routeSheetAddressGeoPopoverState.orderId = null;
-  routeSheetAddressGeoPopoverState.replaceAllowed = false;
-  routeSheetAddressGeoPopoverState.previousAddress = "";
+  routeSheetAddressGeoPopoverState.saveAllowed = false;
+  routeSheetAddressGeoPopoverState.previousCoordinates = "";
 }
 
 function positionRouteSheetAddressGeoPopover(anchorBtn) {
@@ -1191,12 +1239,16 @@ function openRouteSheetAddressGeoPopover(anchorBtn) {
   const order = (state.allOrders || []).find((o) => Number(o.id) === orderId);
   clearRouteSheetAddressGeoPopoverFields();
   routeSheetAddressGeoPopoverState.orderId = orderId;
-  routeSheetAddressGeoPopoverState.previousAddress = order?.address != null ? String(order.address) : "";
-  routeSheetAddressGeoPopoverState.replaceAllowed =
+  routeSheetAddressGeoPopoverState.previousCoordinates =
+    order?.coordinates != null && String(order.coordinates).trim() !== "" ? String(order.coordinates).trim() : "";
+  routeSheetAddressGeoPopoverState.saveAllowed =
     Boolean(order) && canMutateOrders() && !isOrderEditLockedForUserLite(order);
 
+  const inp = document.getElementById("routeSheetAddressGeoInput");
+  if (inp) inp.value = routeSheetAddressGeoPopoverState.previousCoordinates;
+
   positionRouteSheetAddressGeoPopover(anchorBtn);
-  document.getElementById("routeSheetAddressGeoInput")?.focus();
+  inp?.focus();
 }
 
 function routeSheetAddressGeoOutsideClick(e) {
@@ -1233,95 +1285,72 @@ function initRouteSheetAddressGeoPopover() {
     openRouteSheetAddressGeoPopover(btn);
   });
 
-  const resolveBtn = document.getElementById("routeSheetAddressGeoResolveBtn");
-  const replaceBtn = document.getElementById("routeSheetAddressGeoReplaceBtn");
+  const saveBtn = document.getElementById("routeSheetAddressGeoSaveBtn");
 
-  if (resolveBtn && !resolveBtn.dataset.routeSheetAddressGeoBound) {
-    resolveBtn.dataset.routeSheetAddressGeoBound = "1";
-    resolveBtn.addEventListener("click", async () => {
+  if (saveBtn && !saveBtn.dataset.routeSheetAddressGeoBound) {
+    saveBtn.dataset.routeSheetAddressGeoBound = "1";
+    saveBtn.addEventListener("click", async () => {
       const errEl = document.getElementById("routeSheetAddressGeoError");
-      const resEl = document.getElementById("routeSheetAddressGeoResult");
-      const repl = document.getElementById("routeSheetAddressGeoReplaceBtn");
       const inp = document.getElementById("routeSheetAddressGeoInput");
       if (errEl) {
         errEl.hidden = true;
         errEl.textContent = "";
       }
-      if (resEl) {
-        resEl.hidden = true;
-        resEl.textContent = "";
-      }
-      if (repl) repl.hidden = true;
-      routeSheetAddressGeoPopoverState.resolvedAddress = null;
 
-      const parsed = parseLatLonCommaInput(inp?.value ?? "");
-      if (!parsed) {
+      if (!routeSheetAddressGeoPopoverState.saveAllowed) {
         if (errEl) {
-          errEl.textContent = "Укажите координаты в формате «широта, долгота», например 48.753016, 44.495766";
+          errEl.textContent = "Нет прав на сохранение координат для этого заказа.";
           errEl.hidden = false;
         }
         return;
       }
 
-      resolveBtn.disabled = true;
-      try {
-        const addr = await nominatimReverseGeocode(parsed.lat, parsed.lon);
-        if (!addr) {
+      const oid = routeSheetAddressGeoPopoverState.orderId;
+      if (!Number.isFinite(oid)) return;
+
+      const raw = (inp?.value ?? "").trim();
+      let payload = /** @type {{ coordinates: string | null }} */ ({ coordinates: null });
+
+      if (raw === "") {
+        payload = { coordinates: null };
+      } else {
+        const parsed = parseLatLonCommaInput(raw);
+        if (!parsed) {
           if (errEl) {
-            errEl.textContent = "Не удалось определить адрес по этим координатам.";
+            errEl.textContent =
+              "Укажите координаты в формате «широта, долгота», например 48.753016, 44.495766, или очистите поле.";
             errEl.hidden = false;
           }
           return;
         }
-        routeSheetAddressGeoPopoverState.resolvedAddress = addr;
-        if (resEl) {
-          resEl.textContent = addr;
-          resEl.hidden = false;
-        }
-        if (repl) repl.hidden = !routeSheetAddressGeoPopoverState.replaceAllowed;
-      } catch (e) {
-        console.warn("nominatim reverse:", e);
-        if (errEl) {
-          errEl.textContent = "Ошибка запроса к сервису адресов. Попробуйте позже.";
-          errEl.hidden = false;
-        }
-      } finally {
-        resolveBtn.disabled = false;
+        payload = { coordinates: formatCoordinatesForStorage(parsed) };
       }
-    });
-  }
 
-  if (replaceBtn && !replaceBtn.dataset.routeSheetAddressGeoBound) {
-    replaceBtn.dataset.routeSheetAddressGeoBound = "1";
-    replaceBtn.addEventListener("click", async () => {
-      const oid = routeSheetAddressGeoPopoverState.orderId;
-      const nextAddr = routeSheetAddressGeoPopoverState.resolvedAddress;
-      if (!Number.isFinite(oid) || !nextAddr) return;
-
-      replaceBtn.disabled = true;
+      saveBtn.disabled = true;
       try {
-        const { error } = await supabaseClient.from("orders").update({ address: nextAddr }).eq("id", oid);
+        const { error } = await supabaseClient.from("orders").update(payload).eq("id", oid);
         if (error) {
-          console.error("route-sheet address update:", error);
-          setMessage(`Не удалось сохранить адрес: ${error.message || ""}`.trim(), "#d32f2f");
+          console.error("route-sheet coordinates update:", error);
+          setMessage(`Не удалось сохранить координаты: ${error.message || ""}`.trim(), "#d32f2f");
           return;
         }
         if (state.currentUser?.email) {
-          const prev = routeSheetAddressGeoPopoverState.previousAddress || "—";
+          const prev = routeSheetAddressGeoPopoverState.previousCoordinates || "—";
+          const next = payload.coordinates ?? "—";
           const { error: histError } = await supabaseClient.from("order_history").insert([
             {
               order_id: oid,
               user_email: state.currentUser.email,
-              comment: `Адрес: ${prev} → ${nextAddr}`,
+              comment: `Координаты: ${prev} → ${next}`,
             },
           ]);
           if (histError) console.warn("order_history:", histError.message);
         }
         closeRouteSheetAddressGeoPopover();
-        setMessage("Адрес заказа обновлён", "#2e7d32");
+        setMessage("Координаты сохранены", "#2e7d32");
         await loadOrders();
       } finally {
-        replaceBtn.disabled = false;
+        saveBtn.disabled = false;
       }
     });
   }

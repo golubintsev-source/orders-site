@@ -2591,9 +2591,22 @@ table {
   color: #1d4ed8;
 }
 
+.route-sheet-address-geo-open.route-sheet-address-geo-open--saved {
+  color: #7c3aed;
+}
+
+.route-sheet-address-geo-open.route-sheet-address-geo-open--saved:hover {
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
 .route-sheet-address-geo-open:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 1px;
+}
+
+.route-sheet-address-geo-open.route-sheet-address-geo-open--saved:focus-visible {
+  outline-color: #7c3aed;
 }
 
 .route-sheet-address-geo-popover {
@@ -2634,17 +2647,6 @@ table {
   align-self: flex-start;
   padding: 6px 12px;
   font-size: 13px;
-}
-
-.route-sheet-address-geo-result {
-  margin: 0;
-  padding: 8px 10px;
-  font-size: 13px;
-  line-height: 1.35;
-  color: #111827;
-  background: #f9fafb;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
 }
 
 .route-sheet-address-geo-error {
