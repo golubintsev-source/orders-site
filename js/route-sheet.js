@@ -75,7 +75,7 @@ let routeDeliveryMarkersLayer = null;
 let routeDeliveryPipelineGeneration = 0;
 /** Отмена отрисовки маршрута при новом клике / сбросе карты. */
 let routeRoadDrawGeneration = 0;
-/** Км от офиса по `order.id` (число км или null). */
+/** Км и сторона света (Юг/Север) относительно офиса по `order.id`. */
 const deliveryKmByOrderId = new Map();
 const nominatimCache = new Map();
 
@@ -274,11 +274,42 @@ function deliveryPipelineGroupKey(order) {
   return a ? `addr:${a}` : "";
 }
 
-function formatKmCellDisplay(km) {
+/** Юг — точка южнее офиса (меньше широта); Север — севернее. При совпадении широты подпись не добавляем. */
+function deliveryHemisphereFromLat(lat) {
+  if (!Number.isFinite(lat)) return null;
+  const eps = 1e-6;
+  const d = lat - ROUTE_SHEET_OFFICE_LAT;
+  if (Math.abs(d) <= eps) return null;
+  return d < 0 ? "Юг" : "Север";
+}
+
+/**
+ * @param {number | null | undefined} km
+ * @param {number | null | undefined} latForHem широта точки доставки (для Юг/Север)
+ * @returns {{ km: number, hem: string | null } | null}
+ */
+function makeDeliveryKmEntry(km, latForHem) {
+  if (km == null || !Number.isFinite(km)) return null;
+  const hem = Number.isFinite(latForHem) ? deliveryHemisphereFromLat(latForHem) : null;
+  return { km, hem };
+}
+
+/** @param {null | { km: number, hem: string | null } | number} entry */
+function formatKmCellDisplay(entry) {
+  if (entry == null) return "—";
+  if (typeof entry === "number") {
+    if (!Number.isFinite(entry)) return "—";
+    const rounded = Math.round(entry * 10) / 10;
+    if (rounded === 0) return "0";
+    return String(rounded).replace(".", ",");
+  }
+  const km = entry.km;
   if (km == null || !Number.isFinite(km)) return "—";
   const rounded = Math.round(km * 10) / 10;
-  if (rounded === 0) return "0";
-  return String(rounded).replace(".", ",");
+  const numStr = rounded === 0 ? "0" : String(rounded).replace(".", ",");
+  const hem = entry.hem;
+  if (hem) return `${numStr} (${hem})`;
+  return numStr;
 }
 
 function truncateForStatus(s, maxLen) {
@@ -471,8 +502,8 @@ function updateKmCellsForOrders(orders) {
     const td = tr.querySelector("td.route-sheet-col-km");
     if (!td) continue;
     const order = orders.find((o) => String(o.id ?? "") === oid);
-    const km = order != null ? deliveryKmByOrderId.get(order.id) : undefined;
-    td.textContent = formatKmCellDisplay(km);
+    const cell = order != null ? deliveryKmByOrderId.get(order.id) : undefined;
+    td.textContent = formatKmCellDisplay(cell);
   }
 }
 
@@ -745,7 +776,7 @@ async function runDeliveryPipeline(deliveryRows, gen) {
     deliveryKmByOrderId.clear();
 
     const noGeoOrders = deliveryRows.filter((o) => deliveryPipelineGroupKey(o) === "");
-    for (const o of noGeoOrders) deliveryKmByOrderId.set(o.id, null);
+    for (const o of noGeoOrders) deliveryKmByOrderId.set(o.id, /** @type {null} */ (null));
     updateKmCellsForOrders(noGeoOrders);
 
     const withGeo = deliveryRows.filter((o) => deliveryPipelineGroupKey(o) !== "");
@@ -784,8 +815,9 @@ async function runDeliveryPipeline(deliveryRows, gen) {
 
     if (withAddrForMap.length === 0) {
       for (const o of withGeo) {
-        if (isRouteSheetOfficeAddress(o.address)) deliveryKmByOrderId.set(o.id, 0);
-        else deliveryKmByOrderId.set(o.id, null);
+        if (isRouteSheetOfficeAddress(o.address)) {
+          deliveryKmByOrderId.set(o.id, makeDeliveryKmEntry(0, ROUTE_SHEET_OFFICE_LAT));
+        } else deliveryKmByOrderId.set(o.id, null);
       }
       updateKmCellsForOrders(withGeo);
       routeDeliveryMap.setView(officeLL, 15);
@@ -836,7 +868,8 @@ async function runDeliveryPipeline(deliveryRows, gen) {
         }
         if (gen !== routeDeliveryPipelineGeneration) return;
         if (km == null) failedOsrm.push(displayAddr || "координаты");
-        for (const o of ordersHere) deliveryKmByOrderId.set(o.id, km);
+        const kmEntry = makeDeliveryKmEntry(km, coords.lat);
+        for (const o of ordersHere) deliveryKmByOrderId.set(o.id, kmEntry);
         updateKmCellsForOrders(ordersHere);
         if (i < orderedKeys.length - 1) await sleep(250);
         continue;
@@ -845,7 +878,9 @@ async function runDeliveryPipeline(deliveryRows, gen) {
       setRouteDeliveryMapStatus(`Ищем адрес ${x} из ${Y}: ${truncateForStatus(displayAddr, 72)}`, false);
 
       if (isRouteSheetOfficeAddress(displayAddr)) {
-        for (const o of ordersHere) deliveryKmByOrderId.set(o.id, 0);
+        for (const o of ordersHere) {
+          deliveryKmByOrderId.set(o.id, makeDeliveryKmEntry(0, ROUTE_SHEET_OFFICE_LAT));
+        }
         updateKmCellsForOrders(ordersHere);
         latLngs.push(officeLL);
         if (i < orderedKeys.length - 1) await sleep(NOMINATIM_DELAY_MS);
@@ -886,7 +921,7 @@ async function runDeliveryPipeline(deliveryRows, gen) {
 
       if (!coords) {
         failedGeocode.push(displayAddr);
-        for (const o of ordersHere) deliveryKmByOrderId.set(o.id, null);
+        for (const o of ordersHere) deliveryKmByOrderId.set(o.id, /** @type {null} */ (null));
         updateKmCellsForOrders(ordersHere);
         if (i < orderedKeys.length - 1) await sleep(NOMINATIM_DELAY_MS);
         continue;
@@ -923,7 +958,8 @@ async function runDeliveryPipeline(deliveryRows, gen) {
       }
       if (gen !== routeDeliveryPipelineGeneration) return;
       if (km == null) failedOsrm.push(displayAddr);
-      for (const o of ordersHere) deliveryKmByOrderId.set(o.id, km);
+      const kmEntryAddr = makeDeliveryKmEntry(km, coords.lat);
+      for (const o of ordersHere) deliveryKmByOrderId.set(o.id, kmEntryAddr);
       updateKmCellsForOrders(ordersHere);
 
       if (dbKey && !fromDbFull) {
@@ -1159,8 +1195,8 @@ function rowMainValues(order) {
 }
 
 function rowDeliveryMainValues(order) {
-  const km = deliveryKmByOrderId.get(order.id);
-  const kmCell = km != null && Number.isFinite(km) ? Math.round(km * 10) / 10 : "";
+  const kmEntry = deliveryKmByOrderId.get(order.id);
+  const kmCell = formatKmCellDisplay(kmEntry);
   return [
     order.id != null ? formatOrderIdTypeChip(order.id, order.order_type) : "",
     formatDateShortRU(order.delivery_date),

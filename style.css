@@ -2859,8 +2859,8 @@ table {
 
 .route-sheet-table th.route-sheet-col-km,
 .route-sheet-table td.route-sheet-col-km {
-  min-width: 3.25rem;
-  width: 3.25rem;
+  min-width: 6.75rem;
+  width: 6.75rem;
   text-align: right;
   white-space: nowrap;
 }
