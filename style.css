@@ -2627,23 +2627,24 @@ table {
   vertical-align: middle;
 }
 
-/* Таблица «Доставка», адрес: серая подложка как .status-value в «Заказы». */
-#routeSheetTableDelivery .route-sheet-col-address .route-sheet-address-chip.status-value {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  margin: 0;
-  box-sizing: border-box;
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.35;
+/* «Доставка»: заголовок «км» — слева; значение в сером чипе как статус в «Заказы»; клик — попап координат. */
+#routeSheetTableDelivery th.route-sheet-col-km {
   text-align: left;
-  white-space: normal;
-  word-break: break-word;
-  padding: 3px 6px;
 }
 
-/* «км» — открытие попапа координат по клику. */
+#routeSheetTableDelivery td.route-sheet-col-km .route-sheet-km-chip.status-value {
+  display: inline-block;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+#routeSheetTableDelivery td.route-sheet-col-km .route-sheet-km-chip.status-value:hover {
+  background: #e5e7eb;
+}
+
 #routeSheetTableDelivery td.route-sheet-col-km[data-order-id] {
   cursor: pointer;
   touch-action: manipulation;
@@ -2921,7 +2922,34 @@ table {
   display: none;
 }
 
-/* Таблица «Доставка» на iPhone: «Клиент», «Адрес» — 100px; «Описание» 150px; перенос не более 2 строк + … */
+/* «Доставка»: адрес и описание — не более двух строк с «…» (как одна логика для обеих колонок). */
+#routeSheetTableDelivery td.route-sheet-delivery-address .route-sheet-delivery-clamp-inner[data-fulltext],
+#routeSheetTableDelivery td.route-sheet-delivery-description .route-sheet-delivery-clamp-inner[data-fulltext] {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#routeSheetTableDelivery td.route-sheet-delivery-address .route-sheet-delivery-clamp-inner,
+#routeSheetTableDelivery td.route-sheet-delivery-description .route-sheet-delivery-clamp-inner {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Таблица «Доставка» на iPhone: «Клиент», «Адрес» — 100px; «Описание» 150px; «Клиент» — не более 2 строк + … */
 @media (max-width: 768px) and (hover: none) and (pointer: coarse) {
   #routeSheetTableDelivery th:nth-child(3),
   #routeSheetTableDelivery td:nth-child(3),
@@ -2941,16 +2969,12 @@ table {
     box-sizing: border-box;
   }
 
-  #routeSheetTableDelivery td.route-sheet-delivery-client .route-sheet-delivery-clamp-inner[data-fulltext],
-  #routeSheetTableDelivery td.route-sheet-col-address .route-sheet-delivery-clamp-inner[data-fulltext],
-  #routeSheetTableDelivery td.route-sheet-delivery-description .route-sheet-delivery-clamp-inner[data-fulltext] {
+  #routeSheetTableDelivery td.route-sheet-delivery-client .route-sheet-delivery-clamp-inner[data-fulltext] {
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
 
-  #routeSheetTableDelivery td.route-sheet-delivery-client .route-sheet-delivery-clamp-inner,
-  #routeSheetTableDelivery td.route-sheet-col-address .route-sheet-delivery-clamp-inner,
-  #routeSheetTableDelivery td.route-sheet-delivery-description .route-sheet-delivery-clamp-inner {
+  #routeSheetTableDelivery td.route-sheet-delivery-client .route-sheet-delivery-clamp-inner {
     display: -webkit-box;
     -webkit-box-orient: vertical;
     line-clamp: 2;

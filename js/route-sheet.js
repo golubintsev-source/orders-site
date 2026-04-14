@@ -136,10 +136,13 @@ function orderIdCellHtml(order) {
 function deliveryAddressCellHtml(order, opts = {}) {
   const { withDeliveryFullTextAttr = false } = opts;
   const addr = order.address ?? "";
-  const chipClasses = ["status-value", "route-sheet-address-chip"];
-  if (withDeliveryFullTextAttr) chipClasses.push("route-sheet-delivery-clamp-inner");
-  const dataAttr = withDeliveryFullTextAttr ? ` data-fulltext="${escapeAttr(String(addr))}"` : "";
-  return `<td class="route-sheet-col-address"><span class="${chipClasses.join(" ")}"${dataAttr}>${escapeHtml(addr)}</span></td>`;
+  const tdClass = withDeliveryFullTextAttr
+    ? "route-sheet-col-address route-sheet-delivery-address"
+    : "route-sheet-col-address";
+  if (!withDeliveryFullTextAttr) {
+    return `<td class="${tdClass}">${escapeHtml(addr)}</td>`;
+  }
+  return `<td class="${tdClass}"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(addr))}">${escapeHtml(addr)}</span></td>`;
 }
 
 function getTomorrowIsoDate() {
@@ -1284,7 +1287,7 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
   const kmTd =
     kmDisplay === undefined
       ? ""
-      : `<td class="route-sheet-col-km" data-order-id="${order.id ?? ""}">${escapeHtml(String(kmDisplay))}</td>`;
+      : `<td class="route-sheet-col-km" data-order-id="${order.id ?? ""}"><span class="status-value route-sheet-km-chip">${escapeHtml(String(kmDisplay))}</span></td>`;
   const dateTd = includeShipDate
     ? `<td class="route-sheet-col-date">${escapeHtml(formatDateShortRU(order.delivery_date))}</td>`
     : "";
