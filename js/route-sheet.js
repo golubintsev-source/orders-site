@@ -137,16 +137,11 @@ function orderIdCellHtml(order) {
   </td>`;
 }
 
-function deliveryAddressCellHtml(order, opts = {}) {
-  const { withDeliveryFullTextAttr = false } = opts;
+/** Колонка «Адрес» в таблице «Доставка» — как `td.td-order-address` в #ordersTable. */
+function deliveryAddressCellHtml(order) {
   const addr = order.address ?? "";
-  const tdClass = withDeliveryFullTextAttr
-    ? "route-sheet-col-address route-sheet-delivery-address"
-    : "route-sheet-col-address";
-  if (!withDeliveryFullTextAttr) {
-    return `<td class="${tdClass}">${escapeHtml(addr)}</td>`;
-  }
-  return `<td class="${tdClass}"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(addr))}"${ROUTE_SHEET_DELIVERY_CLAMP_ACTIVABLE}>${escapeHtml(addr)}</span></td>`;
+  const addrStr = String(addr);
+  return `<td class="td-order-address route-sheet-col-address" data-fulltext="${escapeAttr(addrStr)}">${addrStr ? `<span class="status-value">${escapeHtml(addrStr)}</span>` : ""}</td>`;
 }
 
 function getTomorrowIsoDate() {
@@ -1275,10 +1270,24 @@ function ordersVisibleOnRouteSheet() {
   return (state.allOrders || []).filter((o) => !isOrderHiddenFromUserLite(o));
 }
 
+/** Подсказка при наведении на обрезанный адрес — как в `renderOrders` для `td.td-order-address`. */
+function syncRouteSheetDeliveryAddressTitles() {
+  const tbody = document.querySelector("#routeSheetTableDelivery tbody");
+  if (!tbody) return;
+  tbody.querySelectorAll("td.td-order-address").forEach((cell) => {
+    const full = cell.getAttribute("data-fulltext");
+    if (!full) return;
+    const chip = cell.querySelector(".status-value");
+    const truncated = chip ? chip.scrollWidth > chip.clientWidth + 0.5 : cell.scrollWidth > cell.clientWidth + 0.5;
+    if (truncated) cell.setAttribute("title", full);
+    else cell.removeAttribute("title");
+  });
+}
+
 /**
  * @param {object} order
  * @param {string} [kmDisplay] если передано — колонка «км» (таблица «Доставка»); иначе без колонки («Самовывоз»).
- * @param {{ includeShipDate?: boolean, includeRemainder?: boolean, includeAddressGeoBtn?: boolean }} [opts] «Дата», «Остаток», адрес как чип — только «Доставка».
+ * @param {{ includeShipDate?: boolean, includeRemainder?: boolean, includeAddressGeoBtn?: boolean }} [opts] «Дата», «Остаток», адрес как в «Заказах» — только «Доставка».
  */
 function rowMainHtml(order, kmDisplay, opts = {}) {
   const { includeShipDate = false, includeRemainder = false, includeAddressGeoBtn = false } = opts;
@@ -1306,7 +1315,7 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
     ? `<td class="route-sheet-delivery-client"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(clientPlain))}"${ROUTE_SHEET_DELIVERY_CLAMP_ACTIVABLE}>${escapeHtml(clientPlain)}</span></td>`
     : `<td>${escapeHtml(clientPlain)}</td>`;
   const addressTd = includeAddressGeoBtn
-    ? deliveryAddressCellHtml(order, { withDeliveryFullTextAttr: includeShipDate })
+    ? deliveryAddressCellHtml(order)
     : `<td>${escapeHtml(order.address ?? "")}</td>`;
   let descriptionTd;
   if (includeShipDate) {
@@ -1398,6 +1407,7 @@ export function loadRouteSheet() {
         }),
       )
       .join("");
+    syncRouteSheetDeliveryAddressTitles();
     void runDeliveryPipeline(deliveryRows, gen);
   } else {
     routeDeliveryPipelineGeneration += 1;
@@ -1413,6 +1423,7 @@ export function loadRouteSheet() {
         }),
       )
       .join("");
+    syncRouteSheetDeliveryAddressTitles();
   }
 }
 

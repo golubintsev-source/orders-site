@@ -832,8 +832,25 @@ export function bindUIEvents() {
       showRouteSheetDeliveryClampTooltip(inner);
     }
 
-    /* Только click + keydown, как td.td-calc-comment в «Расчётах». touchend давал двойной цикл с click на iOS. */
-    routeSheetDeliveryTable.addEventListener("click", onRouteSheetDeliveryClampShow);
+    function onRouteSheetDeliveryTablePointer(e) {
+      if (e.type !== "click") return;
+      const addrTd = e.target.closest("td.td-order-address");
+      if (
+        addrTd &&
+        routeSheetDeliveryTable.contains(addrTd) &&
+        addrTd.getAttribute("data-fulltext") &&
+        isOrdersTableCellTruncated(addrTd)
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        showCellTooltip(addrTd);
+        return;
+      }
+      onRouteSheetDeliveryClampShow(e);
+    }
+
+    /* Адрес — как в «Заказах» (клик по обрезанному тексту); остальное — clamp-inner. touchend давал двойной цикл с click на iOS. */
+    routeSheetDeliveryTable.addEventListener("click", onRouteSheetDeliveryTablePointer);
     routeSheetDeliveryTable.addEventListener("keydown", onRouteSheetDeliveryClampShow);
   }
 

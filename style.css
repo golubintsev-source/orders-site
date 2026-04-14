@@ -2250,7 +2250,8 @@ button:active {
 
 #ordersTable td.td-order-client,
 #ordersTable td.td-order-address,
-#ordersTable td.td-order-description {
+#ordersTable td.td-order-description,
+#routeSheetTableDelivery td.td-order-address {
   width: 100px;
   min-width: 100px;
   max-width: 100px;
@@ -2264,7 +2265,8 @@ button:active {
 #ordersTable td.td-order-client[data-fulltext]:not([data-fulltext=""]),
 #ordersTable td.td-order-address[data-fulltext]:not([data-fulltext=""]),
 #ordersTable td.td-order-description[data-fulltext]:not([data-fulltext=""]),
-#ordersTable td.td-order-status[data-fulltext]:not([data-fulltext=""]) {
+#ordersTable td.td-order-status[data-fulltext]:not([data-fulltext=""]),
+#routeSheetTableDelivery td.td-order-address[data-fulltext]:not([data-fulltext=""]) {
   cursor: pointer;
 }
 
@@ -2282,7 +2284,8 @@ button:active {
 #ordersTable td.td-order-client .status-value,
 #ordersTable td.td-order-address .status-value,
 #ordersTable td.td-order-description .status-value,
-#ordersTable td.td-order-status .status-value {
+#ordersTable td.td-order-status .status-value,
+#routeSheetTableDelivery td.td-order-address .status-value {
   display: inline-block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2967,9 +2970,8 @@ table {
   outline-offset: 2px;
 }
 
-/* «Доставка»: адрес и описание — не более двух строк с «…» (как одна логика для обеих колонок). */
+/* «Доставка»: описание — не более двух строк с «…» (адрес — как в «Заказах», одна строка). */
 
-#routeSheetTableDelivery td.route-sheet-delivery-address .route-sheet-delivery-clamp-inner,
 #routeSheetTableDelivery td.route-sheet-delivery-description .route-sheet-delivery-clamp-inner {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -3639,7 +3641,8 @@ th {
   font-size: 13px;
 }
 
-#ordersTable .status-value {
+#ordersTable .status-value,
+#routeSheetTableDelivery td.td-order-address .status-value {
   padding: 3px 6px;
 }
 
