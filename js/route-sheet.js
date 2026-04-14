@@ -92,6 +92,10 @@ const routeSheetAddressGeoPopoverState = {
   previousCoordinates: "",
 };
 
+/** Как «Комментарий» в «Расчётах»: фокус и клавиатура для показа полного текста на iOS. */
+const ROUTE_SHEET_DELIVERY_CLAMP_ACTIVABLE =
+  ' tabindex="0" role="button" aria-label="Показать полный текст"';
+
 /** На iOS фокус в поле ввода вызывает прокрутку; `routeSheetAddressGeoScrollClose` не должен закрывать попап в этот момент. */
 let routeSheetAddressGeoIgnoreScrollUntil = 0;
 
@@ -142,7 +146,7 @@ function deliveryAddressCellHtml(order, opts = {}) {
   if (!withDeliveryFullTextAttr) {
     return `<td class="${tdClass}">${escapeHtml(addr)}</td>`;
   }
-  return `<td class="${tdClass}"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(addr))}">${escapeHtml(addr)}</span></td>`;
+  return `<td class="${tdClass}"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(addr))}"${ROUTE_SHEET_DELIVERY_CLAMP_ACTIVABLE}>${escapeHtml(addr)}</span></td>`;
 }
 
 function getTomorrowIsoDate() {
@@ -1299,7 +1303,7 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
         : "";
   const clientPlain = order.client ?? "";
   const clientTd = includeShipDate
-    ? `<td class="route-sheet-delivery-client"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(clientPlain))}">${escapeHtml(clientPlain)}</span></td>`
+    ? `<td class="route-sheet-delivery-client"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(clientPlain))}"${ROUTE_SHEET_DELIVERY_CLAMP_ACTIVABLE}>${escapeHtml(clientPlain)}</span></td>`
     : `<td>${escapeHtml(clientPlain)}</td>`;
   const addressTd = includeAddressGeoBtn
     ? deliveryAddressCellHtml(order, { withDeliveryFullTextAttr: includeShipDate })
@@ -1307,7 +1311,7 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
   let descriptionTd;
   if (includeShipDate) {
     const descDeliveryPlain = routeSheetDeliveryDescriptionFullPlain(order);
-    descriptionTd = `<td class="route-sheet-delivery-description"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(descDeliveryPlain))}">${escapeHtml(descDeliveryPlain)}</span></td>`;
+    descriptionTd = `<td class="route-sheet-delivery-description"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(descDeliveryPlain))}"${ROUTE_SHEET_DELIVERY_CLAMP_ACTIVABLE}>${escapeHtml(descDeliveryPlain)}</span></td>`;
   } else {
     descriptionTd = `<td>${escapeHtml(order.description ?? "")}</td>`;
   }

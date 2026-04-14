@@ -712,47 +712,6 @@ export function bindUIEvents() {
     return td.scrollWidth > td.clientWidth + 0.5;
   }
 
-  function isRouteSheetDeliveryClampTruncated(el) {
-    if (!el) return false;
-    const clientH = el.clientHeight;
-    if (clientH <= 0) return false;
-    if (el.scrollHeight > clientH + 1) return true;
-    /*
-     * Safari / iOS: у блока с -webkit-line-clamp часто scrollHeight не больше clientHeight,
-     * даже при визуальном «…». Сравниваем высоту без clamp (клон с той же шириной и шрифтом).
-     */
-    const w = el.getBoundingClientRect().width;
-    if (w <= 1) return false;
-    const cs = getComputedStyle(el);
-    const clone = el.cloneNode(true);
-    clone.removeAttribute("data-fulltext");
-    clone.removeAttribute("class");
-    clone.style.position = "absolute";
-    clone.style.left = "-99999px";
-    clone.style.top = "0";
-    clone.style.visibility = "hidden";
-    clone.style.pointerEvents = "none";
-    clone.style.display = "block";
-    clone.style.boxSizing = cs.boxSizing || "border-box";
-    clone.style.width = `${w}px`;
-    clone.style.overflow = "visible";
-    clone.style.overflowWrap = cs.overflowWrap;
-    clone.style.wordBreak = cs.wordBreak;
-    clone.style.whiteSpace = "normal";
-    clone.style.fontSize = cs.fontSize;
-    clone.style.lineHeight = cs.lineHeight;
-    clone.style.fontWeight = cs.fontWeight;
-    clone.style.fontFamily = cs.fontFamily;
-    clone.style.fontStyle = cs.fontStyle;
-    clone.style.letterSpacing = cs.letterSpacing;
-    clone.style.padding = cs.padding;
-    clone.style.border = cs.border;
-    document.body.appendChild(clone);
-    const naturalH = clone.offsetHeight;
-    document.body.removeChild(clone);
-    return naturalH > clientH + 1;
-  }
-
   function showCellTooltip(td) {
     if (!cellTooltip || !td) return;
     if (!isOrdersTableCellTruncated(td)) return;
@@ -764,10 +723,10 @@ export function bindUIEvents() {
 
   function showRouteSheetDeliveryClampTooltip(innerEl) {
     if (!cellTooltip || !innerEl) return;
-    if (!isRouteSheetDeliveryClampTruncated(innerEl)) return;
     const raw = innerEl.getAttribute("data-fulltext");
-    if (!raw) return;
+    if (!raw || !String(raw).trim()) return;
     const text = decodeDataFulltext(raw);
+    if (!String(text).trim()) return;
     showFloatingCellTooltip(innerEl, text);
   }
 
@@ -821,18 +780,28 @@ export function bindUIEvents() {
 
   const routeSheetDeliveryTable = document.getElementById("routeSheetTableDelivery");
   if (routeSheetDeliveryTable) {
-    routeSheetDeliveryTable.addEventListener("click", (e) => {
+    function routeSheetDeliveryClampInnerFromEvent(e) {
       const raw = e.target;
       const el = raw && raw.nodeType === Node.TEXT_NODE ? raw.parentElement : raw;
-      if (!el || typeof el.closest !== "function") return;
-      if (el.closest("button, a, .btn-icon, input, select, textarea, label")) return;
+      if (!el || typeof el.closest !== "function") return null;
+      if (el.closest("button, a, .btn-icon, input, select, textarea, label")) return null;
       const inner = el.closest(".route-sheet-delivery-clamp-inner[data-fulltext]");
-      if (!inner || !routeSheetDeliveryTable.contains(inner)) return;
-      if (!isRouteSheetDeliveryClampTruncated(inner)) return;
+      if (!inner || !routeSheetDeliveryTable.contains(inner)) return null;
+      if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return null;
+      return inner;
+    }
+
+    function onRouteSheetDeliveryClampShow(e) {
+      const inner = routeSheetDeliveryClampInnerFromEvent(e);
+      if (!inner) return;
       e.preventDefault();
       e.stopPropagation();
       showRouteSheetDeliveryClampTooltip(inner);
-    });
+    }
+
+    routeSheetDeliveryTable.addEventListener("click", onRouteSheetDeliveryClampShow);
+    routeSheetDeliveryTable.addEventListener("touchend", onRouteSheetDeliveryClampShow, { passive: false });
+    routeSheetDeliveryTable.addEventListener("keydown", onRouteSheetDeliveryClampShow);
   }
 
   const orderIdActionsMenu = document.getElementById("orderIdActionsMenu");
