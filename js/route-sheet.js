@@ -85,9 +85,6 @@ let routeRoadDrawGeneration = 0;
 const deliveryKmByOrderId = new Map();
 const nominatimCache = new Map();
 
-/** Иконка «дом» у адреса в таблице «Доставка». */
-const ROUTE_SHEET_HOUSE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`;
-
 /** Состояние попапа координат у строки доставки. */
 const routeSheetAddressGeoPopoverState = {
   orderId: null,
@@ -139,13 +136,10 @@ function orderIdCellHtml(order) {
 function deliveryAddressCellHtml(order, opts = {}) {
   const { withDeliveryFullTextAttr = false } = opts;
   const addr = order.address ?? "";
-  const textCls = withDeliveryFullTextAttr
-    ? "route-sheet-address-text route-sheet-delivery-clamp-inner"
-    : "route-sheet-address-text";
+  const chipClasses = ["status-value", "route-sheet-address-chip"];
+  if (withDeliveryFullTextAttr) chipClasses.push("route-sheet-delivery-clamp-inner");
   const dataAttr = withDeliveryFullTextAttr ? ` data-fulltext="${escapeAttr(String(addr))}"` : "";
-  const saved = orderHasSavedCoordinates(order);
-  const houseCls = saved ? "route-sheet-address-geo-open route-sheet-address-geo-open--saved" : "route-sheet-address-geo-open";
-  return `<td class="route-sheet-col-address"><span class="route-sheet-address-line"><span class="${textCls}"${dataAttr}>${escapeHtml(addr)}</span><button type="button" class="${houseCls}" aria-label="Координаты на карте" data-order-id="${order.id ?? ""}">${ROUTE_SHEET_HOUSE_SVG}</button></span></td>`;
+  return `<td class="route-sheet-col-address"><button type="button" class="${chipClasses.join(" ")}" data-order-id="${order.id ?? ""}"${dataAttr} aria-label="Координаты на карте">${escapeHtml(addr)}</button></td>`;
 }
 
 function getTomorrowIsoDate() {
@@ -1600,7 +1594,7 @@ function routeSheetAddressGeoOutsideClick(e) {
   const pop = document.getElementById("routeSheetAddressGeoPopover");
   if (!pop || pop.hidden) return;
   if (pop.contains(e.target)) return;
-  if (e.target.closest?.(".route-sheet-address-geo-open")) return;
+  if (e.target.closest?.(".route-sheet-address-chip")) return;
   closeRouteSheetAddressGeoPopover();
 }
 
@@ -1624,7 +1618,7 @@ function initRouteSheetAddressGeoPopover() {
   section.dataset.routeSheetAddressGeoBound = "1";
 
   section.addEventListener("click", (e) => {
-    const btn = e.target.closest(".route-sheet-address-geo-open");
+    const btn = e.target.closest(".route-sheet-address-chip");
     if (!btn || !section.contains(btn)) return;
     e.preventDefault();
     e.stopPropagation();

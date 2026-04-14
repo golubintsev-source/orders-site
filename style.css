@@ -2627,60 +2627,33 @@ table {
   vertical-align: middle;
 }
 
-.route-sheet-col-address .route-sheet-address-line {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-}
-
-.route-sheet-address-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.route-sheet-address-geo-open {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* Таблица «Доставка», адрес: серая подложка как .status-value в «Заказы»; клик — попап координат. */
+#routeSheetTableDelivery .route-sheet-col-address .route-sheet-address-chip.status-value {
+  display: block;
+  width: 100%;
+  max-width: 100%;
   margin: 0;
-  padding: 2px;
+  box-sizing: border-box;
   border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #2563eb;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  word-break: break-word;
+  padding: 3px 6px;
   cursor: pointer;
-  line-height: 0;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-.route-sheet-address-geo-open svg {
-  pointer-events: none;
+#routeSheetTableDelivery .route-sheet-col-address .route-sheet-address-chip.status-value:hover {
+  background: #e5e7eb;
 }
 
-.route-sheet-address-geo-open:hover {
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-.route-sheet-address-geo-open.route-sheet-address-geo-open--saved {
-  color: #7c3aed;
-}
-
-.route-sheet-address-geo-open.route-sheet-address-geo-open--saved:hover {
-  background: #f5f3ff;
-  color: #6d28d9;
-}
-
-.route-sheet-address-geo-open:focus-visible {
+#routeSheetTableDelivery .route-sheet-col-address .route-sheet-address-chip.status-value:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 1px;
-}
-
-.route-sheet-address-geo-open.route-sheet-address-geo-open--saved:focus-visible {
-  outline-color: #7c3aed;
 }
 
 .route-sheet-address-geo-popover {
@@ -2990,6 +2963,7 @@ table {
     -webkit-line-clamp: 2;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: normal;
     overflow-wrap: break-word;
     word-break: break-word;
   }
