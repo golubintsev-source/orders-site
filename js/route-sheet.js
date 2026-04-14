@@ -174,6 +174,30 @@ function boolDaNet(v) {
   return v === true || v === 1 || v === "1" ? "да" : "нет";
 }
 
+/** Хвост в скобках для колонки «Описание» в таблице «Доставка» (как в форме заказа: м², Моск., Конст., монтаж, откосы). */
+function routeSheetDeliveryDescriptionAppendixPlain(order) {
+  const m2 =
+    order.area_m2 != null && order.area_m2 !== "" ? String(order.area_m2).trim() : "";
+  const mosk =
+    order.mosquito_nets != null && order.mosquito_nets !== ""
+      ? String(order.mosquito_nets).trim()
+      : "";
+  const konst =
+    order.construction_count != null && order.construction_count !== ""
+      ? String(order.construction_count).trim()
+      : "";
+  const mont = boolDaNet(order.installation);
+  const otk = boolDaNet(order.reveals);
+  return `(м2 - ${m2}; Моск.- ${mosk}; Конст.- ${konst}; Монтаж- ${mont}; Откосы- ${otk};)`;
+}
+
+/** Полный текст описания для «Доставка»: основной текст + хвост в скобках. */
+function routeSheetDeliveryDescriptionFullPlain(order) {
+  const base = (order.description ?? "").trim();
+  const appendix = routeSheetDeliveryDescriptionAppendixPlain(order);
+  return base ? `${base} ${appendix}` : appendix;
+}
+
 function sortByDeliveryThenId(a, b) {
   const ka = deliveryDateKey(a) || "";
   const kb = deliveryDateKey(b) || "";
@@ -981,13 +1005,17 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
         : "";
   const clientTd = `<td>${escapeHtml(order.client ?? "")}</td>`;
   const addressTd = includeAddressGeoBtn ? deliveryAddressCellHtml(order) : `<td>${escapeHtml(order.address ?? "")}</td>`;
+  const descriptionTd =
+    includeShipDate
+      ? `<td>${escapeHtml(routeSheetDeliveryDescriptionFullPlain(order))}</td>`
+      : `<td>${escapeHtml(order.description ?? "")}</td>`;
   return `<tr>
     ${orderIdCellHtml(order)}
     ${dateTd}
     ${clientTd}
     ${addressTd}
     ${kmTd}
-    <td>${escapeHtml(order.description ?? "")}</td>
+    ${descriptionTd}
     ${remainderTd}
     <td>${mosk}</td>
     <td>${konst}</td>
@@ -1139,7 +1167,7 @@ function rowDeliveryMainValues(order) {
     order.client ?? "",
     order.address ?? "",
     kmCell,
-    order.description ?? "",
+    routeSheetDeliveryDescriptionFullPlain(order),
     !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
       ? formatAmount(order.remaining_amount)
       : "-",
