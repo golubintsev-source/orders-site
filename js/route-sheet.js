@@ -741,7 +741,10 @@ function updateKmCellsForOrders(orders) {
     if (!td) continue;
     const order = orders.find((o) => String(o.id ?? "") === oid);
     const cell = order != null ? deliveryKmByOrderId.get(order.id) : undefined;
-    td.textContent = formatKmCellDisplay(cell);
+    const chip = td.querySelector(".status-value");
+    const text = formatKmCellDisplay(cell);
+    if (chip) chip.textContent = text;
+    else td.textContent = text;
   }
 }
 
@@ -1300,7 +1303,7 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
   const kmTd =
     kmDisplay === undefined
       ? ""
-      : `<td class="route-sheet-col-km" data-order-id="${order.id ?? ""}">${escapeHtml(String(kmDisplay))}</td>`;
+      : `<td class="route-sheet-col-km" data-order-id="${order.id ?? ""}"><span class="status-value">${escapeHtml(String(kmDisplay))}</span></td>`;
   const dateTd = includeShipDate
     ? `<td class="route-sheet-col-date">${escapeHtml(formatDateShortRU(order.delivery_date))}</td>`
     : "";

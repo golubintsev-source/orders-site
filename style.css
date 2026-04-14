@@ -2285,7 +2285,8 @@ button:active {
 #ordersTable td.td-order-address .status-value,
 #ordersTable td.td-order-description .status-value,
 #ordersTable td.td-order-status .status-value,
-#routeSheetTableDelivery td.td-order-address .status-value {
+#routeSheetTableDelivery td.td-order-address .status-value,
+#routeSheetTableDelivery td.route-sheet-col-km .status-value {
   display: inline-block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2630,31 +2631,19 @@ table {
   vertical-align: middle;
 }
 
-/* «Доставка»: заголовок «км» — слева; ячейка со значением — серая подложка как «Статус» в «Заказы»; клик — попап координат. */
+/* «Доставка»: заголовок «км» — слева; значение — .status-value как «Статус» в «Заказы»; клик — попап координат. */
 #routeSheetTableDelivery th.route-sheet-col-km {
   text-align: left;
 }
 
-/*
- * Значение «км»: серая подложка на всей ячейке (как .status-value у «Статус» в #ordersTable).
- * Раньше фон был на вложенном span — при узком числе плашка почти не была видна.
- */
 #routeSheetTableDelivery td.route-sheet-col-km[data-order-id] {
   box-sizing: border-box;
-  background: #f3f4f6;
-  color: #374151;
-  border-radius: 6px;
-  font-size: 13px;
-  line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-#routeSheetTableDelivery td.route-sheet-col-km[data-order-id]:hover {
+#routeSheetTableDelivery td.route-sheet-col-km[data-order-id] .status-value:hover {
   background: #e5e7eb;
 }
 
@@ -3642,7 +3631,8 @@ th {
 }
 
 #ordersTable .status-value,
-#routeSheetTableDelivery td.td-order-address .status-value {
+#routeSheetTableDelivery td.td-order-address .status-value,
+#routeSheetTableDelivery td.route-sheet-col-km .status-value {
   padding: 3px 6px;
 }
 
