@@ -746,9 +746,24 @@ export function bindUIEvents() {
     return td.scrollWidth > td.clientWidth + 0.5;
   }
 
+  /**
+   * Геометрическая обрезка (scrollWidth) обычно достаточна; в `#routeSheetTableDelivery` у `td.td-order-address`
+   * она часто даёт ложный «не обрезано» при видимом «…» (текст в DOM полный, как и `data-fulltext`).
+   * Тогда по клику показываем подсказку, если `data-fulltext` непустой.
+   */
+  function shouldShowOrderCellFulltextTooltip(td) {
+    if (!td) return false;
+    if (isOrdersTableCellTruncated(td)) return true;
+    if (td.closest("#routeSheetTableDelivery") && td.matches("td.td-order-address")) {
+      const raw = td.getAttribute("data-fulltext");
+      return Boolean(raw && String(decodeDataFulltext(raw)).trim());
+    }
+    return false;
+  }
+
   function showCellTooltip(td) {
     if (!cellTooltip || !td) return;
-    if (!isOrdersTableCellTruncated(td)) return;
+    if (!shouldShowOrderCellFulltextTooltip(td)) return;
     const raw = td.getAttribute("data-fulltext") || td.getAttribute("title");
     if (!raw) return;
     const text = decodeDataFulltext(raw);
@@ -788,7 +803,7 @@ export function bindUIEvents() {
       const tdTip = e.target.closest(
         "td.td-order-client, td.td-order-address, td.td-order-description, td.td-order-status"
       );
-      if (tdTip && tdTip.getAttribute("data-fulltext") && isOrdersTableCellTruncated(tdTip)) {
+      if (tdTip && tdTip.getAttribute("data-fulltext") && shouldShowOrderCellFulltextTooltip(tdTip)) {
         showCellTooltip(tdTip);
         return;
       }
@@ -840,7 +855,7 @@ export function bindUIEvents() {
         addrTd &&
         routeSheetDeliveryTable.contains(addrTd) &&
         addrTd.getAttribute("data-fulltext") &&
-        isOrdersTableCellTruncated(addrTd)
+        shouldShowOrderCellFulltextTooltip(addrTd)
       ) {
         e.preventDefault();
         e.stopPropagation();
