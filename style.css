@@ -2954,8 +2954,18 @@ table {
   display: none;
 }
 
-/* Таблица «Доставка» на iPhone: «Описание» 150px; «Клиент», «Адрес», «Описание» — не более 2 строк + … */
+/* Таблица «Доставка» на iPhone: «Клиент», «Адрес» — 100px; «Описание» 150px; перенос не более 2 строк + … */
 @media (max-width: 768px) and (hover: none) and (pointer: coarse) {
+  #routeSheetTableDelivery th:nth-child(3),
+  #routeSheetTableDelivery td:nth-child(3),
+  #routeSheetTableDelivery th:nth-child(4),
+  #routeSheetTableDelivery td:nth-child(4) {
+    width: 100px;
+    min-width: 100px;
+    max-width: 100px;
+    box-sizing: border-box;
+  }
+
   #routeSheetTableDelivery th:nth-child(6),
   #routeSheetTableDelivery td:nth-child(6) {
     width: 150px;
