@@ -2,7 +2,6 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
 import { isOrderHiddenFromUserLite } from "./roles.js";
-import { editOrder } from "./orders.js";
 import { setDbUnavailableBannerVisible } from "./dbHealth.js";
 
 function escapeHtml(s) {
@@ -68,17 +67,4 @@ export async function loadAllChanges() {
   if (lines.length === 0 && msg) {
     msg.textContent = "Пока нет записей об изменениях.";
   }
-}
-
-export function initAllChangesSection() {
-  const table = document.getElementById("allChangesTable");
-  if (!table) return;
-  table.addEventListener("click", (e) => {
-    const tr = e.target.closest("tbody tr");
-    if (!tr || !table.contains(tr)) return;
-    const raw = tr.getAttribute("data-order-id");
-    const id = raw ? Number(raw) : NaN;
-    if (Number.isNaN(id)) return;
-    void editOrder(id);
-  });
 }

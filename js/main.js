@@ -6,7 +6,6 @@ import { initBalanceSection } from "./balance.js";
 import { initRouteSheetSection } from "./route-sheet.js";
 import { loadSettings } from "./settings.js";
 import { initOrderTasksSection } from "./tasks.js";
-import { initAllChangesSection } from "./all-changes.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { setMessage } from "./dom.js";
 import { initOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
@@ -43,7 +42,6 @@ async function init() {
     await loadSettings();
     await loadOrders();
     initOrderTasksSection();
-    initAllChangesSection();
     resetFormMode();
     if (canAccessSection("calculations")) {
       await initCalculationsSection();

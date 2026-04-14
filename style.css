@@ -1364,9 +1364,6 @@ h2 {
   box-shadow: none;
   border-bottom: 1px solid #e7ebf0;
 }
-#allChangesTable tbody tr.all-changes-row {
-  cursor: pointer;
-}
 #allChangesTable tbody td:nth-child(-n+3) {
   white-space: nowrap;
 }
