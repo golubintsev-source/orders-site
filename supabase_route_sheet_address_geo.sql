@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS route_sheet_address_geo (
   lon double precision NOT NULL,
   km_office double precision,
   updated_at timestamptz NOT NULL DEFAULT now()
-);
+)
 
 COMMENT ON TABLE route_sheet_address_geo IS 'Нормализованный ключ полной строки адреса → координаты и км от офиса; повторные запросы без Nominatim/OSRM.';
 COMMENT ON COLUMN route_sheet_address_geo.address_key IS 'trim(lower(полная_строка_адреса)) — см. addressForNominatimSearch в route-sheet.js';
