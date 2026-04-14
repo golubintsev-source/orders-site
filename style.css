@@ -2555,6 +2555,35 @@ table {
   background: #fff;
 }
 
+.route-sheet-th-address {
+  white-space: nowrap;
+}
+
+.route-sheet-yandex-maps-head-link {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  vertical-align: middle;
+  line-height: 0;
+  border-radius: 4px;
+}
+
+.route-sheet-yandex-maps-head-link:hover {
+  opacity: 0.88;
+}
+
+.route-sheet-yandex-maps-head-link:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.route-sheet-yandex-maps-head-pin {
+  display: block;
+  width: 18px;
+  height: auto;
+  vertical-align: middle;
+}
+
 .route-sheet-col-address {
   vertical-align: top;
 }
