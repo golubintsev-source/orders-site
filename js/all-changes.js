@@ -11,6 +11,23 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+/** Фильтрация строк таблицы по подстроке (без учёта регистра), по всем видимым ячейкам. */
+function applyAllChangesFilter() {
+  const input = document.getElementById("allChangesSearchInput");
+  const tbody = document.querySelector("#allChangesTable tbody");
+  if (!tbody) return;
+  const q = (input?.value ?? "").trim().toLowerCase();
+  const rows = tbody.querySelectorAll("tr.all-changes-row");
+  for (const tr of rows) {
+    if (!q) {
+      tr.hidden = false;
+      continue;
+    }
+    const haystack = (tr.textContent ?? "").toLowerCase();
+    tr.hidden = !haystack.includes(q);
+  }
+}
+
 /** Первые 5 символов логина (без «…»). */
 function formatLoginFive(raw) {
   if (raw == null || raw === "") return "—";
@@ -67,4 +84,19 @@ export async function loadAllChanges() {
   if (lines.length === 0 && msg) {
     msg.textContent = "Пока нет записей об изменениях.";
   }
+
+  applyAllChangesFilter();
+}
+
+export function initAllChangesSection() {
+  const btn = document.getElementById("allChangesSearchBtn");
+  const input = document.getElementById("allChangesSearchInput");
+  if (!btn || !input) return;
+  btn.addEventListener("click", () => applyAllChangesFilter());
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      applyAllChangesFilter();
+    }
+  });
 }
