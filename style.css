@@ -2974,6 +2974,13 @@ table {
     box-sizing: border-box;
   }
 
+  #routeSheetTableDelivery td.route-sheet-delivery-client .route-sheet-delivery-clamp-inner[data-fulltext],
+  #routeSheetTableDelivery td.route-sheet-col-address .route-sheet-delivery-clamp-inner[data-fulltext],
+  #routeSheetTableDelivery td.route-sheet-delivery-description .route-sheet-delivery-clamp-inner[data-fulltext] {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   #routeSheetTableDelivery td.route-sheet-delivery-client .route-sheet-delivery-clamp-inner,
   #routeSheetTableDelivery td.route-sheet-col-address .route-sheet-delivery-clamp-inner,
   #routeSheetTableDelivery td.route-sheet-delivery-description .route-sheet-delivery-clamp-inner {
