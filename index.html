@@ -846,7 +846,13 @@
           </table>
         </div>
         <div class="route-sheet-map-block" aria-label="Карта доставки по Волгограду">
-          <h4 class="route-sheet-map-heading">Карта: адреса доставки (Волгоград)</h4>
+          <div class="route-sheet-map-heading-row">
+            <h4 class="route-sheet-map-heading">Карта: адреса доставки (Волгоград)</h4>
+            <button type="button" id="routeSheetComposeRouteBtn" class="btn-primary route-sheet-compose-route-btn">
+              Составить маршрут
+            </button>
+            <span id="routeSheetRouteTimeEstimate" class="route-sheet-route-time-estimate" hidden></span>
+          </div>
           <p id="routeSheetDeliveryMapStatus" class="route-sheet-map-status" hidden></p>
           <div id="routeSheetDeliveryMap" class="route-sheet-map" role="region"></div>
         </div>

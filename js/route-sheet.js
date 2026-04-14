@@ -71,6 +71,12 @@ let routeDeliveryOfficeLayer = null;
 /** Линия маршрута офис → точка (OSRM), под маркерами доставки. */
 let routeDeliveryRouteLayer = null;
 let routeDeliveryMarkersLayer = null;
+/** Остановки доставки (не у офиса) в порядке обхода таблицы — для OSRM Trip и кнопки «Составить маршрут». */
+let routeDeliveryTripStops = [];
+/** Показан полный маршрут: не подменять линией «офис → точка» при открытии попапа. */
+let routeDeliveryComposedRouteActive = false;
+/** Отмена асинхронного составления маршрута. */
+let routeDeliveryComposeGeneration = 0;
 /** Одна очередь: карта доставки + км; инкремент отменяет текущий проход. */
 let routeDeliveryPipelineGeneration = 0;
 /** Отмена отрисовки маршрута при новом клике / сбросе карты. */
@@ -431,6 +437,43 @@ async function osrmDrivingRouteLatLngs(fromLon, fromLat, toLon, toLat) {
   return picked?.latLngs ?? null;
 }
 
+/**
+ * Оптимальный порядок объезда: старт — первая точка (офис), без возврата.
+ * @returns {Promise<{ latLngs: Array<[number, number]>, distanceM: number, waypoints: object[] } | null>}
+ */
+async function osrmTripDrivingResolved(officeLon, officeLat, stops) {
+  if (!stops?.length) return null;
+  const parts = [`${officeLon},${officeLat}`];
+  for (const s of stops) {
+    parts.push(`${s.lon},${s.lat}`);
+  }
+  const coordStr = parts.join(";");
+  const url = `https://router.project-osrm.org/trip/v1/driving/${coordStr}?source=first&roundtrip=false&destination=any&overview=full&geometries=geojson`;
+  try {
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.code !== "Ok" || !Array.isArray(json.trips) || !json.trips.length) return null;
+    const trip = json.trips[0];
+    const latLngs = routeGeometryToLatLngs(trip);
+    if (!latLngs?.length) return null;
+    const distanceM = Number(trip.distance);
+    if (!Number.isFinite(distanceM)) return null;
+    const waypoints = Array.isArray(json.waypoints) ? json.waypoints : [];
+    return { latLngs, distanceM: distanceM, waypoints };
+  } catch (e) {
+    console.error("OSRM trip:", e);
+    return null;
+  }
+}
+
+function bindDeliveryMarkerPopupOpenRoute(marker) {
+  marker.on("popupopen", () => {
+    if (routeDeliveryComposedRouteActive) return;
+    void showDeliveryRoadRouteFromOffice(marker.getLatLng());
+  });
+}
+
 function invalidateRoadRouteDraw() {
   routeRoadDrawGeneration += 1;
 }
@@ -439,16 +482,62 @@ function clearRouteDeliveryRoadRouteLayer() {
   routeDeliveryRouteLayer?.clearLayers();
 }
 
-function clearRouteDeliveryMarkersAndRoadRoute() {
+function clearRouteDeliveryTripTimeEstimate() {
+  const el = document.getElementById("routeSheetRouteTimeEstimate");
+  if (!el) return;
+  el.textContent = "";
+  el.hidden = true;
+}
+
+function setRouteDeliveryTripTimeEstimate(text) {
+  const el = document.getElementById("routeSheetRouteTimeEstimate");
+  if (!el) return;
+  if (!text) {
+    clearRouteDeliveryTripTimeEstimate();
+    return;
+  }
+  el.textContent = text;
+  el.hidden = false;
+}
+
+/** Расстояние по дорогам (OSRM), м → примерное время при 20 км/ч. */
+function formatApproxTravelTimeAt20Kmh(distanceMeters) {
+  if (!Number.isFinite(distanceMeters) || distanceMeters < 0) return "";
+  const km = distanceMeters / 1000;
+  const hours = km / 20;
+  const totalMin = Math.max(1, Math.round(hours * 60));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  const suffix = " (20 км/ч)";
+  if (h === 0) return `≈ ${m} мин${suffix}`;
+  if (m === 0) return `≈ ${h} ч${suffix}`;
+  return `≈ ${h} ч ${m} мин${suffix}`;
+}
+
+function isStopFarFromOfficeLatLon(lat, lon) {
+  const L = globalThis.L;
+  if (!L || !Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  return routeSheetOfficeLatLng(L).distanceTo(L.latLng(lat, lon)) >= 35;
+}
+
+function clearRouteDeliveryMapLayersOnly() {
   invalidateRoadRouteDraw();
   routeDeliveryMarkersLayer?.clearLayers();
   clearRouteDeliveryRoadRouteLayer();
+}
+
+function clearRouteDeliveryMarkersAndRoadRoute() {
+  clearRouteDeliveryMapLayersOnly();
+  routeDeliveryTripStops = [];
+  routeDeliveryComposedRouteActive = false;
+  clearRouteDeliveryTripTimeEstimate();
 }
 
 /** По клику на маркер доставки: линия офис → точка по OSRM. */
 async function showDeliveryRoadRouteFromOffice(destLatLng) {
   const L = globalThis.L;
   if (!L || !routeDeliveryRouteLayer || !destLatLng) return;
+  if (routeDeliveryComposedRouteActive) return;
   const officeLL = routeSheetOfficeLatLng(L);
   if (officeLL.distanceTo(destLatLng) < 35) {
     invalidateRoadRouteDraw();
@@ -488,6 +577,94 @@ async function showDeliveryRoadRouteFromOffice(destLatLng) {
     lineJoin: "round",
     lineCap: "round",
   }).addTo(routeDeliveryRouteLayer);
+}
+
+function setComposeRouteButtonBusy(busy) {
+  const btn = document.getElementById("routeSheetComposeRouteBtn");
+  if (!btn) return;
+  btn.disabled = Boolean(busy);
+  btn.setAttribute("aria-busy", busy ? "true" : "false");
+}
+
+async function composeDeliveryRoute() {
+  const L = globalThis.L;
+  if (!L || !routeDeliveryMap || !routeDeliveryRouteLayer || !routeDeliveryMarkersLayer) {
+    setRouteDeliveryMapStatus("Карта ещё не готова. Подождите загрузки точек.", true);
+    return;
+  }
+
+  const stopsSnapshot = routeDeliveryTripStops.map((s) => ({
+    lat: s.lat,
+    lon: s.lon,
+    ordersHere: s.ordersHere,
+  }));
+  if (!stopsSnapshot.length) {
+    setRouteDeliveryMapStatus(
+      "Нет адресов для маршрута: укажите координаты или дождитесь окончания загрузки карты.",
+      true,
+    );
+    return;
+  }
+
+  const myGen = ++routeDeliveryComposeGeneration;
+  setComposeRouteButtonBusy(true);
+
+  try {
+    const picked = await osrmTripDrivingResolved(
+      ROUTE_SHEET_OFFICE_LON,
+      ROUTE_SHEET_OFFICE_LAT,
+      stopsSnapshot,
+    );
+    if (myGen !== routeDeliveryComposeGeneration) return;
+    if (!picked) {
+      setRouteDeliveryMapStatus("Не удалось составить маршрут по дорогам. Попробуйте позже.", true);
+      return;
+    }
+
+    clearRouteDeliveryMapLayersOnly();
+
+    const { latLngs, distanceM: distM, waypoints } = picked;
+
+    L.polyline(latLngs, {
+      color: "#1d4ed8",
+      weight: 5,
+      opacity: 0.9,
+      lineJoin: "round",
+      lineCap: "round",
+    }).addTo(routeDeliveryRouteLayer);
+
+    let seq = 0;
+    for (const wp of waypoints) {
+      const widx = Number(wp.waypoint_index);
+      if (!Number.isFinite(widx) || widx <= 0) continue;
+      const stop = stopsSnapshot[widx - 1];
+      if (!stop?.ordersHere) continue;
+      seq += 1;
+      const latlng = L.latLng(stop.lat, stop.lon);
+      const marker = L.marker(latlng, {
+        icon: deliveryMapMarkerIconNumbered(L, stop.ordersHere, seq),
+      });
+      marker.bindPopup(buildDeliveryPopupHtml(stop.ordersHere));
+      bindDeliveryMarkerPopupOpenRoute(marker);
+      marker.addTo(routeDeliveryMarkersLayer);
+    }
+
+    routeDeliveryComposedRouteActive = true;
+    setRouteDeliveryTripTimeEstimate(formatApproxTravelTimeAt20Kmh(distM));
+
+    const b = L.latLngBounds(latLngs);
+    b.extend(routeSheetOfficeLatLng(L));
+    routeDeliveryMap.fitBounds(b, { padding: [32, 32], maxZoom: 15 });
+    setRouteDeliveryMapStatus("");
+    scheduleInvalidateRouteDeliveryMap();
+  } catch (e) {
+    console.error("composeDeliveryRoute:", e);
+    if (myGen === routeDeliveryComposeGeneration) {
+      setRouteDeliveryMapStatus("Ошибка при составлении маршрута.", true);
+    }
+  } finally {
+    setComposeRouteButtonBusy(false);
+  }
 }
 
 function updateKmCellsForOrders(orders) {
@@ -674,6 +851,7 @@ function addRouteSheetOfficeMarker(L) {
     `<div class="route-sheet-map-popup-order"><strong>${escapeHtml(ROUTE_SHEET_OFFICE_ADDRESS)}</strong><br><span class="route-sheet-map-popup-addr">Волгоград</span></div>`,
   );
   m.on("popupopen", () => {
+    if (routeDeliveryComposedRouteActive) return;
     invalidateRoadRouteDraw();
     clearRouteDeliveryRoadRouteLayer();
   });
@@ -746,6 +924,21 @@ function deliveryMapMarkerIcon(L, ordersHere) {
   });
 }
 
+function deliveryMapMarkerIconNumbered(L, ordersHere, sequenceNum) {
+  const labelRaw = deliveryMapLabelText(ordersHere);
+  const labelHtml = escapeHtml(labelRaw || "—");
+  const seqStr = escapeHtml(String(sequenceNum));
+  const html = `<div class="route-sheet-map-marker"><span class="route-sheet-map-marker-seq">${seqStr}</span><span class="route-sheet-map-marker-dot" aria-hidden="true"></span><span class="route-sheet-map-marker-label">${labelHtml}</span></div>`;
+  const approxW = Math.min(280, 40 + Math.max(56, labelRaw.length * 7.5));
+  return L.divIcon({
+    className: "route-sheet-map-divicon-root",
+    html,
+    iconSize: [approxW, 26],
+    iconAnchor: [8, 13],
+    popupAnchor: [0, -12],
+  });
+}
+
 function scheduleInvalidateRouteDeliveryMap() {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
@@ -772,6 +965,7 @@ async function runDeliveryPipeline(deliveryRows, gen) {
     if (!routeDeliveryMap || !routeDeliveryMarkersLayer) return;
     if (gen !== routeDeliveryPipelineGeneration) return;
 
+    routeDeliveryComposeGeneration += 1;
     clearRouteDeliveryMarkersAndRoadRoute();
     deliveryKmByOrderId.clear();
 
@@ -845,10 +1039,11 @@ async function runDeliveryPipeline(deliveryRows, gen) {
             icon: deliveryMapMarkerIcon(L, ordersHere),
           });
           marker.bindPopup(buildDeliveryPopupHtml(ordersHere));
-          marker.on("popupopen", () => {
-            void showDeliveryRoadRouteFromOffice(marker.getLatLng());
-          });
+          bindDeliveryMarkerPopupOpenRoute(marker);
           marker.addTo(routeDeliveryMarkersLayer);
+          if (isStopFarFromOfficeLatLon(coords.lat, coords.lon)) {
+            routeDeliveryTripStops.push({ lat: coords.lat, lon: coords.lon, ordersHere });
+          }
         } catch (e) {
           console.error("Leaflet marker:", e);
           setRouteDeliveryMapStatus(`Ошибка отображения точки (${x} из ${Y}).`, true);
@@ -934,10 +1129,11 @@ async function runDeliveryPipeline(deliveryRows, gen) {
           icon: deliveryMapMarkerIcon(L, ordersHere),
         });
         marker.bindPopup(buildDeliveryPopupHtml(ordersHere));
-        marker.on("popupopen", () => {
-          void showDeliveryRoadRouteFromOffice(marker.getLatLng());
-        });
+        bindDeliveryMarkerPopupOpenRoute(marker);
         marker.addTo(routeDeliveryMarkersLayer);
+        if (isStopFarFromOfficeLatLon(coords.lat, coords.lon)) {
+          routeDeliveryTripStops.push({ lat: coords.lat, lon: coords.lon, ordersHere });
+        }
       } catch (e) {
         console.error("Leaflet marker:", e);
         setRouteDeliveryMapStatus(`Ошибка отображения точки (${x} из ${Y}).`, true);
@@ -1088,6 +1284,7 @@ export function loadRouteSheet() {
     tbodyPickup.innerHTML = "";
     tbodyShop.innerHTML = "";
     routeDeliveryPipelineGeneration += 1;
+    routeDeliveryComposeGeneration += 1;
     deliveryKmByOrderId.clear();
     clearRouteDeliveryMarkersAndRoadRoute();
     setRouteDeliveryMapStatus("");
@@ -1099,6 +1296,7 @@ export function loadRouteSheet() {
     tbodyPickup.innerHTML = "";
     tbodyShop.innerHTML = "";
     routeDeliveryPipelineGeneration += 1;
+    routeDeliveryComposeGeneration += 1;
     deliveryKmByOrderId.clear();
     clearRouteDeliveryMarkersAndRoadRoute();
     setRouteDeliveryMapStatus("");
@@ -1129,6 +1327,7 @@ export function loadRouteSheet() {
     void runDeliveryPipeline(deliveryRows, gen);
   } else {
     routeDeliveryPipelineGeneration += 1;
+    routeDeliveryComposeGeneration += 1;
     deliveryKmByOrderId.clear();
     clearRouteDeliveryMarkersAndRoadRoute();
     tbodyDelivery.innerHTML = deliveryRows
@@ -1229,6 +1428,7 @@ function rowShopValues(order) {
 /** При уходе с раздела — отменить фоновое геокодирование и очистить маркеры. */
 export function bumpRouteDeliveryMapGeneration() {
   routeDeliveryPipelineGeneration += 1;
+  routeDeliveryComposeGeneration += 1;
   deliveryKmByOrderId.clear();
   clearRouteDeliveryMarkersAndRoadRoute();
   setRouteDeliveryMapStatus("");
@@ -1472,6 +1672,12 @@ export function initRouteSheetSection() {
   if (shopBtn && !shopBtn.dataset.routeSheetBound) {
     shopBtn.dataset.routeSheetBound = "1";
     shopBtn.addEventListener("click", () => exportRouteSheetShopExcel());
+  }
+
+  const composeRouteBtn = document.getElementById("routeSheetComposeRouteBtn");
+  if (composeRouteBtn && !composeRouteBtn.dataset.routeSheetBound) {
+    composeRouteBtn.dataset.routeSheetBound = "1";
+    composeRouteBtn.addEventListener("click", () => void composeDeliveryRoute());
   }
 
   initRouteSheetAddressGeoPopover();

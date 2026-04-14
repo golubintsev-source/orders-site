@@ -2713,11 +2713,40 @@ table {
   margin: 12px 0 14px;
 }
 
+.route-sheet-map-heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 6px;
+}
+
 .route-sheet-map-heading {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 13px;
   font-weight: 700;
   color: #111827;
+  flex: 1 1 auto;
+  min-width: min(100%, 12rem);
+}
+
+.route-sheet-compose-route-btn {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  font-size: 12px;
+  line-height: 1.25;
+  border-radius: 8px;
+}
+
+.route-sheet-route-time-estimate {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.route-sheet-route-time-estimate[hidden] {
+  display: none !important;
 }
 
 .route-sheet-map-status {
@@ -2786,6 +2815,25 @@ table {
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.route-sheet-map-marker-seq {
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  background: #1d4ed8;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
 }
 
 /* Маркер главного офиса: флажок с «домиком» + шест + красная точка */
