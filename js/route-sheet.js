@@ -226,8 +226,8 @@ function routeSheetDeliveryDescriptionAppendixPlain(order) {
   const otk = boolDaNet(order.reveals);
   const parts = [];
   if (m2) parts.push(`${m2} м2`);
-  if (mosk) parts.push(`Моск.- ${mosk}`);
-  if (konst) parts.push(`Конст.- ${konst}`);
+  if (mosk) parts.push(`Моск. ${mosk}`);
+  if (konst) parts.push(`Конст. ${konst}`);
   if (mont === "да") parts.push("Монтаж");
   if (otk === "да") parts.push("Откосы");
   if (parts.length === 0) return "";
