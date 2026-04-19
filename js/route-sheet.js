@@ -62,11 +62,10 @@ const ROUTE_SHEET_OFFICE_LAT = 48.6903978;
 const ROUTE_SHEET_OFFICE_LON = 44.4336316;
 
 /**
- * С офиса нет выезда на юг к сетке Качуевской / Ивановского (OSRM ошибочно строит так); реальный выезд — на север по Автотранспортной.
- * Маршрут офис → адрес: офис → точка на Автотранспортной севернее здания → адрес (два запроса OSRM, склейка линии).
+ * Точка 0 (48.693407, 44.436808): при старте с главного офиса — сначала маршрут офис → точка 0, затем точка 0 → цель (два OSRM route).
  */
-const ROUTE_SHEET_NORTH_EXIT_ON_AVTOTRANSPORTNAYA_LAT = 48.6916;
-const ROUTE_SHEET_NORTH_EXIT_ON_AVTOTRANSPORTNAYA_LON = 44.43358;
+const ROUTE_SHEET_OFFICE_ROUTE_HUB0_LAT = 48.693407;
+const ROUTE_SHEET_OFFICE_ROUTE_HUB0_LON = 44.436808;
 /** Не делить на два сегмента, если цель почти у офиса. */
 const ROUTE_SHEET_OFFICE_DEPART_MIN_M = 45;
 
@@ -493,16 +492,16 @@ async function osrmFetchDrivingRouteOnce(fromLon, fromLat, toLon, toLat) {
 }
 
 /**
- * Маршрут по дорогам (OSRM). Старт с офиса: сначала выезд на север по Автотранспортной (via), затем к цели.
+ * Маршрут по дорогам (OSRM). Старт с офиса: офис → точка 0 → цель.
  * @returns {Promise<{ latLngs: Array<[number, number]>, distanceMeters: number } | null>}
  */
 async function osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat) {
-  const vLat = ROUTE_SHEET_NORTH_EXIT_ON_AVTOTRANSPORTNAYA_LAT;
-  const vLon = ROUTE_SHEET_NORTH_EXIT_ON_AVTOTRANSPORTNAYA_LON;
+  const hLat = ROUTE_SHEET_OFFICE_ROUTE_HUB0_LAT;
+  const hLon = ROUTE_SHEET_OFFICE_ROUTE_HUB0_LON;
   const destFar = approxDistanceMeters(fromLat, fromLon, toLat, toLon) >= ROUTE_SHEET_OFFICE_DEPART_MIN_M;
   if (isRouteSheetOfficeDepartLonLat(fromLon, fromLat) && destFar) {
-    const leg1 = await osrmFetchDrivingRouteOnce(fromLon, fromLat, vLon, vLat);
-    const leg2 = await osrmFetchDrivingRouteOnce(vLon, vLat, toLon, toLat);
+    const leg1 = await osrmFetchDrivingRouteOnce(fromLon, fromLat, hLon, hLat);
+    const leg2 = await osrmFetchDrivingRouteOnce(hLon, hLat, toLon, toLat);
     if (leg1?.latLngs?.length && leg2?.latLngs?.length) {
       const merged = mergeAdjacentRoutePolylines([leg1.latLngs, leg2.latLngs]);
       if (merged?.length) {
