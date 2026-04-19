@@ -210,7 +210,7 @@ function boolDaNet(v) {
   return v === true || v === 1 || v === "1" ? "да" : "нет";
 }
 
-/** Хвост в скобках для колонки «Описание» в таблице «Доставка» (как в форме заказа: м², Моск., Конст., монтаж, откосы). */
+/** Хвост в скобках для колонки «Описание» в таблице «Доставка» (площадь, Моск., Конст., при флаге — короткие «Монтаж» / «Откосы»). */
 function routeSheetDeliveryDescriptionAppendixPlain(order) {
   const m2 =
     order.area_m2 != null && order.area_m2 !== "" ? String(order.area_m2).trim() : "";
@@ -225,11 +225,11 @@ function routeSheetDeliveryDescriptionAppendixPlain(order) {
   const mont = boolDaNet(order.installation);
   const otk = boolDaNet(order.reveals);
   const parts = [];
-  if (m2) parts.push(`м2 - ${m2}`);
+  if (m2) parts.push(`${m2} м2`);
   if (mosk) parts.push(`Моск.- ${mosk}`);
   if (konst) parts.push(`Конст.- ${konst}`);
-  if (mont === "да") parts.push(`Монтаж- ${mont}`);
-  if (otk === "да") parts.push(`Откосы- ${otk}`);
+  if (mont === "да") parts.push("Монтаж");
+  if (otk === "да") parts.push("Откосы");
   if (parts.length === 0) return "";
   return `(${parts.join("; ")};)`;
 }
