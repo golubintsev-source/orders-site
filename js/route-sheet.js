@@ -159,11 +159,14 @@ function orderIdCellHtml(order) {
   </td>`;
 }
 
-/** Колонка «Адрес» в таблице «Доставка» — как `td.td-order-address` в #ordersTable. */
+/** Колонка «Адрес» в таблице «Доставка» — как `td.td-order-address` в #ordersTable; клик по значению — полный текст (см. `onRouteSheetDeliveryTablePointer` в ui.js). */
 function deliveryAddressCellHtml(order) {
   const addr = order.address ?? "";
   const addrStr = String(addr);
-  return `<td class="td-order-address route-sheet-col-address" data-fulltext="${escapeAttr(addrStr)}">${addrStr ? `<span class="status-value">${escapeHtml(addrStr)}</span>` : ""}</td>`;
+  const inner = addrStr
+    ? `<span class="status-value route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(addrStr)}"${ROUTE_SHEET_DELIVERY_CLAMP_ACTIVABLE}>${escapeHtml(addrStr)}</span>`
+    : "";
+  return `<td class="td-order-address route-sheet-col-address" data-fulltext="${escapeAttr(addrStr)}">${inner}</td>`;
 }
 
 function getTomorrowIsoDate() {

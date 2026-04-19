@@ -850,6 +850,20 @@ export function bindUIEvents() {
 
     function onRouteSheetDeliveryTablePointer(e) {
       if (e.type !== "click") return;
+      const addrInner = e.target.closest(
+        "#routeSheetTableDelivery td.td-order-address .route-sheet-delivery-clamp-inner[data-fulltext]",
+      );
+      if (addrInner && routeSheetDeliveryTable.contains(addrInner)) {
+        if (e.target.closest("button, a, .btn-icon, input, select, textarea, label")) return;
+        const raw = addrInner.getAttribute("data-fulltext");
+        if (!raw) return;
+        const text = decodeDataFulltext(raw);
+        if (!String(text).trim()) return;
+        e.preventDefault();
+        e.stopPropagation();
+        showFloatingCellTooltip(addrInner, text);
+        return;
+      }
       const addrTd = e.target.closest("td.td-order-address");
       if (
         addrTd &&
