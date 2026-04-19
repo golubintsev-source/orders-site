@@ -845,6 +845,51 @@ function setComposeRouteButtonBusy(busy) {
   btn.setAttribute("aria-busy", busy ? "true" : "false");
 }
 
+/**
+ * После «Составить маршрут»: строки «Доставка» — в порядке объезда (как нумерация на карте).
+ * Заказы вне trip (офис/рядом и т.п.) остаются внизу в прежнем относительном порядке.
+ * @param {Array<{ stop: { ordersHere?: object[] }, idx: number, along: number }>} orderedStops
+ */
+function reorderRouteSheetDeliveryTbodyByOrderedStops(orderedStops) {
+  const tbody = document.querySelector("#routeSheetTableDelivery tbody");
+  if (!tbody || !Array.isArray(orderedStops) || !orderedStops.length) return;
+
+  const routedOrderIds = [];
+  const seenId = new Set();
+  for (const { stop } of orderedStops) {
+    if (!stop?.ordersHere) continue;
+    for (const o of stop.ordersHere) {
+      const sid = o.id != null ? String(o.id) : "";
+      if (!sid || seenId.has(sid)) continue;
+      seenId.add(sid);
+      routedOrderIds.push(sid);
+    }
+  }
+  if (!routedOrderIds.length) return;
+
+  const rowsByOrderId = new Map();
+  const allTrs = [];
+  for (const tr of tbody.querySelectorAll("tr")) {
+    allTrs.push(tr);
+    const oid = String(tr.querySelector("td.td-order-id")?.getAttribute("data-order-id") ?? "");
+    if (oid) rowsByOrderId.set(oid, tr);
+  }
+
+  const routedSet = new Set(routedOrderIds);
+  const tail = [];
+  for (const tr of allTrs) {
+    const oid = String(tr.querySelector("td.td-order-id")?.getAttribute("data-order-id") ?? "");
+    if (!oid || !routedSet.has(oid)) tail.push(tr);
+  }
+
+  for (const sid of routedOrderIds) {
+    const tr = rowsByOrderId.get(sid);
+    if (tr) tbody.appendChild(tr);
+  }
+  for (const tr of tail) tbody.appendChild(tr);
+  syncRouteSheetDeliveryAddressTitles();
+}
+
 async function composeDeliveryRoute() {
   const L = globalThis.L;
   if (!L || !routeDeliveryMap || !routeDeliveryRouteLayer || !routeDeliveryMarkersLayer) {
@@ -920,6 +965,8 @@ async function composeDeliveryRoute() {
       bindDeliveryMarkerPopupOpenRoute(marker);
       marker.addTo(routeDeliveryMarkersLayer);
     }
+
+    reorderRouteSheetDeliveryTbodyByOrderedStops(ordered);
 
     routeDeliveryComposedRouteActive = true;
     setRouteDeliveryTripTimeEstimate(
