@@ -267,6 +267,31 @@ function filterMainOrdersByShipment(orders, fromKey, toKey, shipment) {
   return filterMainOrders(orders, fromKey, toKey).filter((o) => (o.delivery || "").trim() === shipment);
 }
 
+/**
+ * Порядок заказов для выгрузки: как строки в таблице «Доставка» на экране
+ * (после «Составить маршрут» — порядок объезда), затем остальные из list по sortByDeliveryThenId.
+ * @param {object[]} list
+ */
+function ordersDeliveryListInExportOrder(list) {
+  if (!list.length) return list;
+  const tbody = document.querySelector("#routeSheetTableDelivery tbody");
+  const byId = new Map(list.map((o) => [String(o.id ?? ""), o]));
+  const out = [];
+  const used = new Set();
+  if (tbody) {
+    for (const tr of tbody.querySelectorAll("tr")) {
+      const oid = String(tr.querySelector("td.td-order-id")?.getAttribute("data-order-id") ?? "");
+      if (!oid) continue;
+      const o = byId.get(oid);
+      if (!o || used.has(oid)) continue;
+      used.add(oid);
+      out.push(o);
+    }
+  }
+  const tail = list.filter((o) => !used.has(String(o.id ?? ""))).sort(sortByDeliveryThenId);
+  return out.concat(tail);
+}
+
 function filterShopOrders(orders, fromKey, toKey) {
   return orders
     .filter((o) => (o.order_type || "").trim() === SHOP_TYPE && isInDateRange(o, fromKey, toKey))
@@ -1195,6 +1220,8 @@ function ensureRouteDeliveryMap() {
   routeDeliveryMap = L.map(el, {
     scrollWheelZoom: false,
     attributionControl: false,
+    /** Canvas вместо SVG для линий — html2canvas меньше смещает маршрут относительно тайлов/маркеров. */
+    preferCanvas: true,
   }).setView(VOLGOGRAD_CENTER, VOLGOGRAD_ZOOM_DEFAULT);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
@@ -1750,6 +1777,8 @@ function scaleCanvasToFitMax(source, maxW, maxH) {
   out.height = h;
   const ctx = out.getContext("2d");
   if (!ctx) return source;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(source, 0, 0, w, h);
   return out;
 }
@@ -1813,10 +1842,14 @@ function waitForVisibleTilesLoaded(map, timeoutMs) {
   });
 }
 
+/** Высота карты при снимке для Excel (больше CSS — выше детализация после масштабирования под A4). */
+const ROUTE_MAP_EXCEL_CAPTURE_MIN_HEIGHT_PX = 560;
+
 /**
  * Снимок блока карты Leaflet для вставки в Excel (тайлы с crossOrigin).
  * @returns {Promise<HTMLCanvasElement | null>}
  */
+
 async function captureRouteDeliveryMapCanvasForExcel() {
   const L = globalThis.L;
   const html2canvas = globalThis.html2canvas;
@@ -1824,14 +1857,32 @@ async function captureRouteDeliveryMapCanvasForExcel() {
   if (!L || !html2canvas || !el || !routeDeliveryMap) return null;
 
   routeDeliveryMap.closePopup?.();
+
+  const prev = {
+    width: el.style.width,
+    height: el.style.height,
+    minHeight: el.style.minHeight,
+    maxHeight: el.style.maxHeight,
+  };
+  const rect = el.getBoundingClientRect();
+  const wPx = Math.max(360, Math.round(rect.width));
+  const hPx = Math.max(ROUTE_MAP_EXCEL_CAPTURE_MIN_HEIGHT_PX, Math.round(rect.height));
+  el.style.width = `${wPx}px`;
+  el.style.height = `${hPx}px`;
+  el.style.minHeight = `${hPx}px`;
+  el.style.maxHeight = "none";
+
   routeDeliveryMap.invalidateSize(false);
   await new Promise((r) => {
     routeDeliveryMap.whenReady(r);
   });
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  await waitForVisibleTilesLoaded(routeDeliveryMap, 2800);
+  await waitForVisibleTilesLoaded(routeDeliveryMap, 3200);
+  await sleep(120);
 
-  const h2cScale = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+  const dpr = window.devicePixelRatio || 1;
+  const h2cScale = Math.min(3, Math.max(2, Math.round(dpr * 1.75)));
+
   let shot;
   try {
     shot = await html2canvas(el, {
@@ -1840,10 +1891,21 @@ async function captureRouteDeliveryMapCanvasForExcel() {
       backgroundColor: "#ffffff",
       scale: h2cScale,
       logging: false,
+      ignoreElements: (node) =>
+        node instanceof Element && Boolean(node.closest(".leaflet-control-container")),
     });
   } catch {
-    return null;
+    shot = null;
+  } finally {
+    el.style.width = prev.width;
+    el.style.height = prev.height;
+    el.style.minHeight = prev.minHeight;
+    el.style.maxHeight = prev.maxHeight;
+    routeDeliveryMap.invalidateSize(false);
+    scheduleInvalidateRouteDeliveryMap();
   }
+
+  if (!shot) return null;
   const { maxW, maxH } = routeSheetMapImageMaxPxForA4();
   return scaleCanvasToFitMax(shot, maxW, maxH);
 }
@@ -1968,7 +2030,8 @@ export async function exportRouteSheetDeliveryExcel() {
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid || fromKey > toKey) return;
   const list = filterMainOrdersByShipment(ordersVisibleOnRouteSheet(), fromKey, toKey, DELIVERY_SHIP);
-  const rows = list.map(rowDeliveryMainValues);
+  const orderedList = ordersDeliveryListInExportOrder(list);
+  const rows = orderedList.map(rowDeliveryMainValues);
   const msgEl = document.getElementById("routeSheetMessage");
   const exportBtn = document.getElementById("routeSheetExportDeliveryBtn");
 
