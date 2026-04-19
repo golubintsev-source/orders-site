@@ -72,11 +72,25 @@ const ROUTE_SHEET_OFFICE_ROUTE_HUB00_LON = 44.453772;
 /** Не делить на сегменты через хабы, если цель почти у офиса. */
 const ROUTE_SHEET_OFFICE_DEPART_MIN_M = 45;
 
+/**
+ * Запрет пересечения при построении синих маршрутов (офис → точка, «Составить маршрут», км по OSRM):
+ * отрезок на карте — красная линия. Подгоните координаты под ваш участок (концы отрезка в WGS‑84).
+ * Если концы совпадают или отрезок короче ~8 м, проверка отключена.
+ */
+const ROUTE_DELIVERY_NO_CROSS_LINE = {
+  lat1: 48.7045,
+  lon1: 44.421,
+  lat2: 48.684,
+  lon2: 44.4495,
+};
+
 function isRouteSheetOfficeDepartLonLat(lon, lat) {
   return Math.abs(lat - ROUTE_SHEET_OFFICE_LAT) < 2e-4 && Math.abs(lon - ROUTE_SHEET_OFFICE_LON) < 2e-4;
 }
 
 let routeDeliveryMap = null;
+/** Красная линия «нельзя пересекать» — под офисом и маршрутом. */
+let routeDeliveryBarrierLayer = null;
 let routeDeliveryOfficeLayer = null;
 /** Линия маршрута офис → точка (OSRM), под маркерами доставки. */
 let routeDeliveryRouteLayer = null;
@@ -461,6 +475,76 @@ function approxDistanceMeters(lat1, lon1, lat2, lon2) {
   return Math.hypot((lat2 - lat1) * mLat, (lon2 - lon1) * mLon);
 }
 
+/** @returns {{ lat1: number, lon1: number, lat2: number, lon2: number } | null} */
+function deliveryNoCrossBarrierLonLatPair() {
+  const a = ROUTE_DELIVERY_NO_CROSS_LINE;
+  if (!a) return null;
+  const lat1 = Number(a.lat1);
+  const lon1 = Number(a.lon1);
+  const lat2 = Number(a.lat2);
+  const lon2 = Number(a.lon2);
+  if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return null;
+  if (approxDistanceMeters(lat1, lon1, lat2, lon2) < 8) return null;
+  return { lat1, lon1, lat2, lon2 };
+}
+
+/**
+ * Пересечение отрезков A–B и C–D в локальной плоскости (м), включая концы.
+ * Параллельные отрезки без учёта совпадения — как «нет пересечения» (для маршрутов редко).
+ */
+function segmentsIntersectInclusivePlane(ax, ay, bx, by, cx, cy, dx, dy, eps = 1e-7) {
+  const rx = bx - ax;
+  const ry = by - ay;
+  const sx = dx - cx;
+  const sy = dy - cy;
+  const denom = rx * sy - ry * sx;
+  const qpx = cx - ax;
+  const qpy = cy - ay;
+  const scale = Math.max(1, Math.abs(rx) + Math.abs(ry) + Math.abs(sx) + Math.abs(sy));
+  if (Math.abs(denom) < eps * scale) return false;
+  const t = (qpx * sy - qpy * sx) / denom;
+  const u = (qpx * ry - qpy * rx) / denom;
+  return t >= -eps && t <= 1 + eps && u >= -eps && u <= 1 + eps;
+}
+
+function segmentPairIntersectsLatLon(aLat, aLon, bLat, bLon, cLat, cLon, dLat, dLon) {
+  const refLat = (aLat + bLat + cLat + dLat) / 4;
+  const mLon = metersPerDegreeLonAt(refLat);
+  const mLat = metersPerDegreeLat();
+  const ax = aLon * mLon;
+  const ay = aLat * mLat;
+  const bx = bLon * mLon;
+  const by = bLat * mLat;
+  const cx = cLon * mLon;
+  const cy = cLat * mLat;
+  const dx = dLon * mLon;
+  const dy = dLat * mLat;
+  return segmentsIntersectInclusivePlane(ax, ay, bx, by, cx, cy, dx, dy);
+}
+
+/**
+ * Есть ли у полилинии [[lat,lon],…] пересечение с запретным отрезком.
+ * @param {Array<[number, number]>} latLngs
+ * @param {{ lat1: number, lon1: number, lat2: number, lon2: number }} barrier
+ */
+function polylineIntersectsBarrierSegment(latLngs, barrier) {
+  if (!barrier || !Array.isArray(latLngs) || latLngs.length < 2) return false;
+  const { lat1, lon1, lat2, lon2 } = barrier;
+  for (let i = 0; i < latLngs.length - 1; i++) {
+    const p = latLngs[i];
+    const q = latLngs[i + 1];
+    if (!Array.isArray(p) || !Array.isArray(q) || p.length < 2 || q.length < 2) continue;
+    const [plat1, plon1] = p;
+    const [plat2, plon2] = q;
+    if (
+      segmentPairIntersectsLatLon(plat1, plon1, plat2, plon2, lat1, lon1, lat2, lon2)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Один запрос OSRM route: среди альтернатив выбирается кратчайший по distance.
  * @returns {Promise<{ latLngs: Array<[number, number]>, distanceMeters: number } | null>}
@@ -478,12 +562,14 @@ async function osrmFetchDrivingRouteOnce(fromLon, fromLat, toLon, toLat) {
       if (!res.ok) continue;
       const json = await res.json();
       if (json.code !== "Ok" || !Array.isArray(json.routes) || !json.routes.length) continue;
+      const barrier = deliveryNoCrossBarrierLonLatPair();
       /** @type {{ latLngs: Array<[number, number]>, distanceMeters: number } | null} */
       let best = null;
       for (const r of json.routes) {
         const latLngs = routeGeometryToLatLngs(r);
         const distanceM = Number(r.distance);
         if (!latLngs || !Number.isFinite(distanceM)) continue;
+        if (barrier && polylineIntersectsBarrierSegment(latLngs, barrier)) continue;
         if (!best || distanceM < best.distanceMeters) best = { latLngs, distanceMeters: distanceM };
       }
       if (best) return best;
@@ -511,10 +597,13 @@ async function osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat) {
     if (leg1?.latLngs?.length && leg2?.latLngs?.length && leg3?.latLngs?.length) {
       const merged = mergeAdjacentRoutePolylines([leg1.latLngs, leg2.latLngs, leg3.latLngs]);
       if (merged?.length) {
-        return {
-          latLngs: merged,
-          distanceMeters: leg1.distanceMeters + leg2.distanceMeters + leg3.distanceMeters,
-        };
+        const barrier = deliveryNoCrossBarrierLonLatPair();
+        if (!barrier || !polylineIntersectsBarrierSegment(merged, barrier)) {
+          return {
+            latLngs: merged,
+            distanceMeters: leg1.distanceMeters + leg2.distanceMeters + leg3.distanceMeters,
+          };
+        }
       }
     }
   }
@@ -560,6 +649,8 @@ async function osrmTripDrivingResolved(officeLon, officeLat, stops) {
     const distanceM = Number(trip.distance);
     if (!Number.isFinite(distanceM)) return null;
     const waypoints = Array.isArray(json.waypoints) ? json.waypoints : [];
+    const barrier = deliveryNoCrossBarrierLonLatPair();
+    const tripCrossesBarrier = Boolean(barrier && polylineIntersectsBarrierSegment(tripLatLngs, barrier));
 
     /** Порядок посещения из trip; дальше — сегменты `route` с alternatives и обходом закрытых участков. */
     const visitOrdered = waypoints
@@ -573,6 +664,7 @@ async function osrmTripDrivingResolved(officeLon, officeLat, stops) {
       .sort((a, b) => (a.order !== b.order ? a.order - b.order : a.inputIdx - b.inputIdx));
 
     if (visitOrdered.length < 2) {
+      if (tripCrossesBarrier) return null;
       return { latLngs: tripLatLngs, distanceM, waypoints };
     }
 
@@ -584,6 +676,7 @@ async function osrmTripDrivingResolved(officeLon, officeLat, stops) {
       const b = visitOrdered[i + 1];
       const leg = await osrmFetchDrivingRoutesResolved(a.lon, a.lat, b.lon, b.lat);
       if (!leg?.latLngs?.length) {
+        if (tripCrossesBarrier) return null;
         return { latLngs: tripLatLngs, distanceM, waypoints };
       }
       segmentPolylines.push(leg.latLngs);
@@ -592,9 +685,16 @@ async function osrmTripDrivingResolved(officeLon, officeLat, stops) {
 
     const merged = mergeAdjacentRoutePolylines(segmentPolylines);
     if (!merged?.length) {
+      if (tripCrossesBarrier) return null;
       return { latLngs: tripLatLngs, distanceM, waypoints };
     }
-    return { latLngs: merged, distanceM: stitchedDm, waypoints };
+    if (!barrier || !polylineIntersectsBarrierSegment(merged, barrier)) {
+      return { latLngs: merged, distanceM: stitchedDm, waypoints };
+    }
+    if (!tripCrossesBarrier) {
+      return { latLngs: tripLatLngs, distanceM, waypoints };
+    }
+    return null;
   } catch (e) {
     console.error("OSRM trip:", e);
     return null;
@@ -700,7 +800,12 @@ async function showDeliveryRoadRouteFromOffice(destLatLng) {
 
   if (myGen !== routeRoadDrawGeneration) return;
   if (!pts?.length) {
-    setRouteDeliveryMapStatus("Маршрут по дорогам не найден.", true);
+    setRouteDeliveryMapStatus(
+      deliveryNoCrossBarrierLonLatPair()
+        ? "Маршрут не найден без пересечения красной линии на карте."
+        : "Маршрут по дорогам не найден.",
+      true,
+    );
     return;
   }
 
@@ -751,7 +856,12 @@ async function composeDeliveryRoute() {
     );
     if (myGen !== routeDeliveryComposeGeneration) return;
     if (!picked) {
-      setRouteDeliveryMapStatus("Не удалось составить маршрут по дорогам. Попробуйте позже.", true);
+      setRouteDeliveryMapStatus(
+        deliveryNoCrossBarrierLonLatPair()
+          ? "Не удалось составить маршрут без пересечения красной линии. Попробуйте позже или измените точки."
+          : "Не удалось составить маршрут по дорогам. Попробуйте позже.",
+        true,
+      );
       return;
     }
 
@@ -968,6 +1078,25 @@ function routeSheetOfficeLatLng(L) {
   return L.latLng(ROUTE_SHEET_OFFICE_LAT, ROUTE_SHEET_OFFICE_LON);
 }
 
+function addRouteDeliveryNoCrossLine(L) {
+  if (!routeDeliveryBarrierLayer) return;
+  const b = deliveryNoCrossBarrierLonLatPair();
+  if (!b) return;
+  L.polyline(
+    [
+      [b.lat1, b.lon1],
+      [b.lat2, b.lon2],
+    ],
+    {
+      color: "#b91c1c",
+      weight: 5,
+      opacity: 0.92,
+      lineCap: "round",
+      lineJoin: "round",
+    },
+  ).addTo(routeDeliveryBarrierLayer);
+}
+
 function addRouteSheetOfficeMarker(L) {
   if (!routeDeliveryOfficeLayer) return;
   const latlng = routeSheetOfficeLatLng(L);
@@ -1014,6 +1143,8 @@ function ensureRouteDeliveryMap() {
     maxZoom: 19,
     attribution: "",
   }).addTo(routeDeliveryMap);
+  routeDeliveryBarrierLayer = L.layerGroup().addTo(routeDeliveryMap);
+  addRouteDeliveryNoCrossLine(L);
   routeDeliveryOfficeLayer = L.layerGroup().addTo(routeDeliveryMap);
   addRouteSheetOfficeMarker(L);
   routeDeliveryRouteLayer = L.layerGroup().addTo(routeDeliveryMap);
