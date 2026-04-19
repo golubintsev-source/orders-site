@@ -62,11 +62,14 @@ const ROUTE_SHEET_OFFICE_LAT = 48.6903978;
 const ROUTE_SHEET_OFFICE_LON = 44.4336316;
 
 /**
- * Точка 0 (48.693407, 44.436808): при старте с главного офиса — сначала маршрут офис → точка 0, затем точка 0 → цель (два OSRM route).
+ * При старте с главного офиса: офис → точка 0 → точка 00 → цель (цепочка OSRM route).
+ * Точка 0: 48.693407, 44.436808. Точка 00: 48.687273, 44.453772.
  */
 const ROUTE_SHEET_OFFICE_ROUTE_HUB0_LAT = 48.693407;
 const ROUTE_SHEET_OFFICE_ROUTE_HUB0_LON = 44.436808;
-/** Не делить на два сегмента, если цель почти у офиса. */
+const ROUTE_SHEET_OFFICE_ROUTE_HUB00_LAT = 48.687273;
+const ROUTE_SHEET_OFFICE_ROUTE_HUB00_LON = 44.453772;
+/** Не делить на сегменты через хабы, если цель почти у офиса. */
 const ROUTE_SHEET_OFFICE_DEPART_MIN_M = 45;
 
 function isRouteSheetOfficeDepartLonLat(lon, lat) {
@@ -492,22 +495,25 @@ async function osrmFetchDrivingRouteOnce(fromLon, fromLat, toLon, toLat) {
 }
 
 /**
- * Маршрут по дорогам (OSRM). Старт с офиса: офис → точка 0 → цель.
+ * Маршрут по дорогам (OSRM). Старт с офиса: офис → точка 0 → точка 00 → цель.
  * @returns {Promise<{ latLngs: Array<[number, number]>, distanceMeters: number } | null>}
  */
 async function osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat) {
-  const hLat = ROUTE_SHEET_OFFICE_ROUTE_HUB0_LAT;
-  const hLon = ROUTE_SHEET_OFFICE_ROUTE_HUB0_LON;
+  const h0Lat = ROUTE_SHEET_OFFICE_ROUTE_HUB0_LAT;
+  const h0Lon = ROUTE_SHEET_OFFICE_ROUTE_HUB0_LON;
+  const h00Lat = ROUTE_SHEET_OFFICE_ROUTE_HUB00_LAT;
+  const h00Lon = ROUTE_SHEET_OFFICE_ROUTE_HUB00_LON;
   const destFar = approxDistanceMeters(fromLat, fromLon, toLat, toLon) >= ROUTE_SHEET_OFFICE_DEPART_MIN_M;
   if (isRouteSheetOfficeDepartLonLat(fromLon, fromLat) && destFar) {
-    const leg1 = await osrmFetchDrivingRouteOnce(fromLon, fromLat, hLon, hLat);
-    const leg2 = await osrmFetchDrivingRouteOnce(hLon, hLat, toLon, toLat);
-    if (leg1?.latLngs?.length && leg2?.latLngs?.length) {
-      const merged = mergeAdjacentRoutePolylines([leg1.latLngs, leg2.latLngs]);
+    const leg1 = await osrmFetchDrivingRouteOnce(fromLon, fromLat, h0Lon, h0Lat);
+    const leg2 = await osrmFetchDrivingRouteOnce(h0Lon, h0Lat, h00Lon, h00Lat);
+    const leg3 = await osrmFetchDrivingRouteOnce(h00Lon, h00Lat, toLon, toLat);
+    if (leg1?.latLngs?.length && leg2?.latLngs?.length && leg3?.latLngs?.length) {
+      const merged = mergeAdjacentRoutePolylines([leg1.latLngs, leg2.latLngs, leg3.latLngs]);
       if (merged?.length) {
         return {
           latLngs: merged,
-          distanceMeters: leg1.distanceMeters + leg2.distanceMeters,
+          distanceMeters: leg1.distanceMeters + leg2.distanceMeters + leg3.distanceMeters,
         };
       }
     }
