@@ -1576,12 +1576,16 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
   const dateTd = includeShipDate
     ? `<td class="route-sheet-col-date">${escapeHtml(formatDateShortRU(order.delivery_date))}</td>`
     : "";
-  const remainderTd =
-    includeRemainder && !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
+  const remainderShowAmount =
+    boolDaNet(order.installation) !== "да" &&
+    !isOrderPaid(order) &&
+    order.remaining_amount != null &&
+    order.remaining_amount !== "";
+  const remainderTd = includeRemainder
+    ? remainderShowAmount
       ? `<td class="route-sheet-col-remainder">${escapeHtml(formatAmount(order.remaining_amount))}</td>`
-      : includeRemainder
-        ? `<td class="route-sheet-col-remainder">${escapeHtml("-")}</td>`
-        : "";
+      : `<td class="route-sheet-col-remainder">${escapeHtml("-")}</td>`
+    : "";
   const clientPlain = order.client ?? "";
   const clientTd = includeShipDate
     ? `<td class="route-sheet-delivery-client"><span class="route-sheet-delivery-clamp-inner" data-fulltext="${escapeAttr(String(clientPlain))}"${ROUTE_SHEET_DELIVERY_CLAMP_ACTIVABLE}>${escapeHtml(clientPlain)}</span></td>`
@@ -1928,9 +1932,11 @@ function rowDeliveryMainValues(order) {
     order.address ?? "",
     kmCell,
     routeSheetDeliveryDescriptionFullPlain(order),
-    !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
-      ? formatAmount(order.remaining_amount)
-      : "-",
+    boolDaNet(order.installation) === "да"
+      ? "-"
+      : !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
+        ? formatAmount(order.remaining_amount)
+        : "-",
     order.area_m2 != null && order.area_m2 !== "" ? String(order.area_m2) : "",
     order.construction_count != null && order.construction_count !== "" ? String(order.construction_count) : "",
     boolDaNet(order.installation),
