@@ -32,10 +32,6 @@ const HEADERS_DELIVERY = [
   "км",
   "Описание",
   "Остаток",
-  "Моск.",
-  "Конст.",
-  "Монтаж",
-  "Откосы",
   "Телефон",
 ];
 
@@ -1999,10 +1995,6 @@ function rowDeliveryMainValues(order) {
       : !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
         ? formatAmount(order.remaining_amount)
         : "-",
-    order.area_m2 != null && order.area_m2 !== "" ? String(order.area_m2) : "",
-    order.construction_count != null && order.construction_count !== "" ? String(order.construction_count) : "",
-    boolDaNet(order.installation),
-    boolDaNet(order.reveals),
     order.phone ?? "",
   ];
 }
