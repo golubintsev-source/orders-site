@@ -62,41 +62,17 @@ const ROUTE_SHEET_OFFICE_LAT = 48.6903978;
 const ROUTE_SHEET_OFFICE_LON = 44.4336316;
 
 /**
- * Участки без проезда (OSRM считает дорогой, фактически проезда нет): маршрут не должен подходить к точке ближе radiusM.
- * Берём альтернативу route (alternatives) или при trip — пошаговый route по порядку visit.
+ * С офиса нет выезда на юг к сетке Качуевской / Ивановского (OSRM ошибочно строит так); реальный выезд — на север по Автотранспортной.
+ * Маршрут офис → адрес: офис → точка на Автотранспортной севернее здания → адрес (два запроса OSRM, склейка линии).
  */
-const OSRM_ROAD_DETOUR_BLOCKS = [
-  { lat: 48.689037, lon: 44.434921, radiusM: 30 },
-  /** ул. Ивановского, севернее пересечения с ул. Качуевской (Волгоград). */
-  { lat: 48.6861, lon: 44.4326, radiusM: 70 },
-  /**
-   * Песчанокопская — «проезд» к Университетскому проспекту (OSRM рисует, фактически проезда нет).
-   * Точка на короткой ветке OSRM офис → Шауляйская и аналогичные рейсы на юг/восток.
-   */
-  { lat: 48.68371, lon: 44.44603, radiusM: 75 },
-];
+const ROUTE_SHEET_NORTH_EXIT_ON_AVTOTRANSPORTNAYA_LAT = 48.6916;
+const ROUTE_SHEET_NORTH_EXIT_ON_AVTOTRANSPORTNAYA_LON = 44.43358;
+/** Не делить на два сегмента, если цель почти у офиса. */
+const ROUTE_SHEET_OFFICE_DEPART_MIN_M = 45;
 
-/**
- * OSRM вставляет одно ребро «через речку Ельшанка» (у Качуевской) во все варианты driving — в данных OSM это связность, на месте проезда нет.
- * Концы сегмента (polyline) подобраны по ответу router.project-osrm.org; сегмент заменяется на обходную ломаную (при необходимости подправьте точки).
- */
-const OSRM_ELSHANKA_FAKE_NORTH = { lat: 48.687932, lon: 44.434914 };
-const OSRM_ELSHANKA_FAKE_SOUTH = { lat: 48.686569, lon: 44.433931 };
-const OSRM_ELSHANKA_FAKE_MATCH_EPS_M = 22;
-const OSRM_ELSHANKA_FAKE_MIN_SEGMENT_M = 95;
-/** [lat, lon] — обход на восток и обратно к южной сети улиц (без «прыжка» через воду). */
-const OSRM_ELSHANKA_RIVER_BYPASS_LATLNG = [
-  [48.687932, 44.434914],
-  [48.68804, 44.43635],
-  [48.68772, 44.4378],
-  [48.6872, 44.43905],
-  [48.68642, 44.43945],
-  [48.68555, 44.4389],
-  [48.6854, 44.4375],
-  [48.68575, 44.4359],
-  [48.6861, 44.43495],
-  [48.686569, 44.433931],
-];
+function isRouteSheetOfficeDepartLonLat(lon, lat) {
+  return Math.abs(lat - ROUTE_SHEET_OFFICE_LAT) < 2e-4 && Math.abs(lon - ROUTE_SHEET_OFFICE_LON) < 2e-4;
+}
 
 let routeDeliveryMap = null;
 let routeDeliveryOfficeLayer = null;
@@ -399,17 +375,6 @@ function pointSegmentDistanceMeters(latA, lonA, latB, lonB, latP, lonP) {
   return Math.hypot(px - (ax + t * vx), py - (ay + t * vy));
 }
 
-function polylineMinDistanceToPointMeters(latLngs, latP, lonP) {
-  let min = Infinity;
-  for (let i = 0; i < latLngs.length - 1; i++) {
-    const [lat1, lon1] = latLngs[i];
-    const [lat2, lon2] = latLngs[i + 1];
-    const d = pointSegmentDistanceMeters(lat1, lon1, lat2, lon2, latP, lonP);
-    if (d < min) min = d;
-  }
-  return min;
-}
-
 /**
  * Расстояние вдоль полилинии от её начала до ближайшей к (latP,lonP) точки на линии (метры).
  * Нужно для порядка подписей 1, 2, 3… по фактическому ходу маршрута (OSRM waypoints могут быть в порядке ввода).
@@ -463,115 +428,6 @@ function routeGeometryToLatLngs(route) {
   return latLngs.length >= 2 ? latLngs : null;
 }
 
-function haversineMeters(lat1, lon1, lat2, lon2) {
-  const R = 6_371_000;
-  const φ1 = (lat1 * Math.PI) / 180;
-  const φ2 = (lat2 * Math.PI) / 180;
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function nearAnchorMeters(lat, lon, anchor) {
-  return haversineMeters(lat, lon, anchor.lat, anchor.lon);
-}
-
-function polylineLengthHaversineMeters(pts) {
-  if (!Array.isArray(pts) || pts.length < 2) return 0;
-  let s = 0;
-  for (let i = 0; i < pts.length - 1; i++) {
-    s += haversineMeters(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]);
-  }
-  return s;
-}
-
-function segmentIsElshankaPhantomBridge(lat1, lon1, lat2, lon2) {
-  const segM = haversineMeters(lat1, lon1, lat2, lon2);
-  if (segM < OSRM_ELSHANKA_FAKE_MIN_SEGMENT_M) return false;
-  const eps = OSRM_ELSHANKA_FAKE_MATCH_EPS_M;
-  const n = OSRM_ELSHANKA_FAKE_NORTH;
-  const s = OSRM_ELSHANKA_FAKE_SOUTH;
-  const fwd = nearAnchorMeters(lat1, lon1, n) < eps && nearAnchorMeters(lat2, lon2, s) < eps;
-  const rev = nearAnchorMeters(lat1, lon1, s) < eps && nearAnchorMeters(lat2, lon2, n) < eps;
-  return fwd || rev;
-}
-
-/** Обход в направлении сегмента (север→юг или юг→север). */
-function bypassPolylineForElshankaOrientation(lat1, lon1, lat2, lon2) {
-  const eps = OSRM_ELSHANKA_FAKE_MATCH_EPS_M;
-  const n = OSRM_ELSHANKA_FAKE_NORTH;
-  const raw = OSRM_ELSHANKA_RIVER_BYPASS_LATLNG;
-  const fwd = nearAnchorMeters(lat1, lon1, n) < eps && nearAnchorMeters(lat2, lon2, OSRM_ELSHANKA_FAKE_SOUTH) < eps;
-  if (fwd) return raw;
-  return [...raw].reverse();
-}
-
-/** Заменяет фантомный сегмент Ельшанка на обход; при отсутствии совпадений возвращает копию исходной ломаной. */
-function spliceElshankaPhantomBridge(latLngs) {
-  if (!Array.isArray(latLngs) || latLngs.length < 2) return latLngs;
-  /** @type {Array<[number, number]>} */
-  const out = [];
-  let i = 0;
-  while (i < latLngs.length) {
-    if (i < latLngs.length - 1) {
-      const [lat1, lon1] = latLngs[i];
-      const [lat2, lon2] = latLngs[i + 1];
-      if (segmentIsElshankaPhantomBridge(lat1, lon1, lat2, lon2)) {
-        const bypass = bypassPolylineForElshankaOrientation(lat1, lon1, lat2, lon2);
-        const last = out[out.length - 1];
-        let k0 = 0;
-        if (
-          out.length &&
-          last &&
-          Math.abs(last[0] - bypass[0][0]) < 1e-7 &&
-          Math.abs(last[1] - bypass[0][1]) < 1e-7
-        ) {
-          k0 = 1;
-        }
-        for (let k = k0; k < bypass.length; k++) out.push(bypass[k]);
-        i += 2;
-        continue;
-      }
-    }
-    out.push(latLngs[i]);
-    i += 1;
-  }
-  return out.length >= 2 ? out : latLngs;
-}
-
-function applyOsrmRouteRealityPatches(latLngs) {
-  return spliceElshankaPhantomBridge(latLngs);
-}
-
-/**
- * Правки геометрии поверх ответа OSRM; distanceM масштабируется по отношению длины ломаной (haversine), чтобы км оставались соразмерны.
- * @returns {{ latLngs: Array<[number, number]>, distanceMeters: number }}
- */
-function osrmRouteApplyRealityPatches(latLngs, distanceMeters) {
-  const patched = applyOsrmRouteRealityPatches(latLngs);
-  const beforeLen = polylineLengthHaversineMeters(latLngs);
-  const afterLen = polylineLengthHaversineMeters(patched);
-  let dM = distanceMeters;
-  if (Number.isFinite(distanceMeters) && beforeLen > 2 && afterLen > 2 && Math.abs(afterLen - beforeLen) > 3) {
-    dM = distanceMeters * (afterLen / beforeLen);
-  }
-  return { latLngs: patched, distanceMeters: dM };
-}
-
-/** Минимальный запас до ближайшего «запретного» круга (м): <0 — линия заходит в зону). */
-function polylineMinMarginToDetourBlocksMeters(latLngs, blocks) {
-  if (!Array.isArray(blocks) || !blocks.length) return Infinity;
-  if (!Array.isArray(latLngs) || latLngs.length < 2) return -Infinity;
-  let minMargin = Infinity;
-  for (const b of blocks) {
-    const minD = polylineMinDistanceToPointMeters(latLngs, b.lat, b.lon);
-    minMargin = Math.min(minMargin, minD - b.radiusM);
-  }
-  return Number.isFinite(minMargin) ? minMargin : -Infinity;
-}
-
 /** Склейка сегментов [lat,lng] в одну линию без дублирования стыков. */
 function mergeAdjacentRoutePolylines(segments) {
   if (!Array.isArray(segments) || !segments.length) return null;
@@ -597,42 +453,21 @@ function mergeAdjacentRoutePolylines(segments) {
   return out.length >= 2 ? out : null;
 }
 
-/**
- * Из ответа OSRM выбрать маршрут, который не заходит в круги `OSRM_ROAD_DETOUR_BLOCKS`.
- * Если все заходят — вариант с наибольшим запасом до зон.
- */
-function pickOsrmRouteAvoidingDetourBlocks(routes) {
-  if (!Array.isArray(routes) || !routes.length) return null;
-  /** @type {{ latLngs: Array<[number, number]>, distanceM: number, minMargin: number }[]} */
-  const scored = [];
-  for (const r of routes) {
-    const latLngs = routeGeometryToLatLngs(r);
-    if (!latLngs) continue;
-    const distanceM = Number(r.distance);
-    if (!Number.isFinite(distanceM)) continue;
-    const minMargin = polylineMinMarginToDetourBlocksMeters(latLngs, OSRM_ROAD_DETOUR_BLOCKS);
-    scored.push({ latLngs, distanceM, minMargin });
-  }
-  if (!scored.length) return null;
-  const clearRoutes = scored.filter((s) => s.minMargin >= 0);
-  if (clearRoutes.length) {
-    clearRoutes.sort((a, b) => a.distanceM - b.distanceM);
-    const best = clearRoutes[0];
-    return { latLngs: best.latLngs, distanceMeters: best.distanceM };
-  }
-  /** Все варианты OSRM заезжают в зону — берём самый длинный (часто реальный объезд по магистрали). */
-  scored.sort((a, b) => b.distanceM - a.distanceM);
-  const longest = scored[0];
-  return { latLngs: longest.latLngs, distanceMeters: longest.distanceM };
+function approxDistanceMeters(lat1, lon1, lat2, lon2) {
+  const mLat = metersPerDegreeLat();
+  const mLon = metersPerDegreeLonAt((lat1 + lat2) / 2);
+  return Math.hypot((lat2 - lat1) * mLat, (lon2 - lon1) * mLon);
 }
 
-/** Офис → точка: маршрут OSRM (с альтернативами) + км по выбранной геометрии. */
-async function osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat) {
+/**
+ * Один запрос OSRM route: среди альтернатив выбирается кратчайший по distance.
+ * @returns {Promise<{ latLngs: Array<[number, number]>, distanceMeters: number } | null>}
+ */
+async function osrmFetchDrivingRouteOnce(fromLon, fromLat, toLon, toLat) {
   const coordStr = `${fromLon},${fromLat};${toLon},${toLat}`;
   const base = `https://router.project-osrm.org/route/v1/driving/${coordStr}`;
   const urls = [
     `${base}?overview=full&geometries=geojson&alternatives=3`,
-    `${base}?overview=full&geometries=geojson&alternatives=2`,
     `${base}?overview=full&geometries=geojson`,
   ];
   for (const url of urls) {
@@ -641,9 +476,15 @@ async function osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat) {
       if (!res.ok) continue;
       const json = await res.json();
       if (json.code !== "Ok" || !Array.isArray(json.routes) || !json.routes.length) continue;
-      const picked = pickOsrmRouteAvoidingDetourBlocks(json.routes);
-      if (!picked) continue;
-      return osrmRouteApplyRealityPatches(picked.latLngs, picked.distanceMeters);
+      /** @type {{ latLngs: Array<[number, number]>, distanceMeters: number } | null} */
+      let best = null;
+      for (const r of json.routes) {
+        const latLngs = routeGeometryToLatLngs(r);
+        const distanceM = Number(r.distance);
+        if (!latLngs || !Number.isFinite(distanceM)) continue;
+        if (!best || distanceM < best.distanceMeters) best = { latLngs, distanceMeters: distanceM };
+      }
+      if (best) return best;
     } catch {
       /* следующий URL */
     }
@@ -651,7 +492,31 @@ async function osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat) {
   return null;
 }
 
-/** Одна пара точек: офис → адрес (км по дорогам, OSRM route, с обходом закрытого участка). */
+/**
+ * Маршрут по дорогам (OSRM). Старт с офиса: сначала выезд на север по Автотранспортной (via), затем к цели.
+ * @returns {Promise<{ latLngs: Array<[number, number]>, distanceMeters: number } | null>}
+ */
+async function osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat) {
+  const vLat = ROUTE_SHEET_NORTH_EXIT_ON_AVTOTRANSPORTNAYA_LAT;
+  const vLon = ROUTE_SHEET_NORTH_EXIT_ON_AVTOTRANSPORTNAYA_LON;
+  const destFar = approxDistanceMeters(fromLat, fromLon, toLat, toLon) >= ROUTE_SHEET_OFFICE_DEPART_MIN_M;
+  if (isRouteSheetOfficeDepartLonLat(fromLon, fromLat) && destFar) {
+    const leg1 = await osrmFetchDrivingRouteOnce(fromLon, fromLat, vLon, vLat);
+    const leg2 = await osrmFetchDrivingRouteOnce(vLon, vLat, toLon, toLat);
+    if (leg1?.latLngs?.length && leg2?.latLngs?.length) {
+      const merged = mergeAdjacentRoutePolylines([leg1.latLngs, leg2.latLngs]);
+      if (merged?.length) {
+        return {
+          latLngs: merged,
+          distanceMeters: leg1.distanceMeters + leg2.distanceMeters,
+        };
+      }
+    }
+  }
+  return osrmFetchDrivingRouteOnce(fromLon, fromLat, toLon, toLat);
+}
+
+/** Одна пара точек: офис → адрес (км по дорогам, OSRM). */
 async function osrmDrivingDistanceKm(fromLon, fromLat, toLon, toLat) {
   const picked = await osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat);
   if (!picked) return null;
@@ -703,8 +568,7 @@ async function osrmTripDrivingResolved(officeLon, officeLat, stops) {
       .sort((a, b) => (a.order !== b.order ? a.order - b.order : a.inputIdx - b.inputIdx));
 
     if (visitOrdered.length < 2) {
-      const p = osrmRouteApplyRealityPatches(tripLatLngs, distanceM);
-      return { latLngs: p.latLngs, distanceM: p.distanceMeters, waypoints };
+      return { latLngs: tripLatLngs, distanceM, waypoints };
     }
 
     /** @type {Array<[number, number]>[]} */
@@ -715,8 +579,7 @@ async function osrmTripDrivingResolved(officeLon, officeLat, stops) {
       const b = visitOrdered[i + 1];
       const leg = await osrmFetchDrivingRoutesResolved(a.lon, a.lat, b.lon, b.lat);
       if (!leg?.latLngs?.length) {
-        const p0 = osrmRouteApplyRealityPatches(tripLatLngs, distanceM);
-        return { latLngs: p0.latLngs, distanceM: p0.distanceMeters, waypoints };
+        return { latLngs: tripLatLngs, distanceM, waypoints };
       }
       segmentPolylines.push(leg.latLngs);
       stitchedDm += leg.distanceMeters;
@@ -724,11 +587,9 @@ async function osrmTripDrivingResolved(officeLon, officeLat, stops) {
 
     const merged = mergeAdjacentRoutePolylines(segmentPolylines);
     if (!merged?.length) {
-      const p1 = osrmRouteApplyRealityPatches(tripLatLngs, distanceM);
-      return { latLngs: p1.latLngs, distanceM: p1.distanceMeters, waypoints };
+      return { latLngs: tripLatLngs, distanceM, waypoints };
     }
-    const p2 = osrmRouteApplyRealityPatches(merged, stitchedDm);
-    return { latLngs: p2.latLngs, distanceM: p2.distanceMeters, waypoints };
+    return { latLngs: merged, distanceM: stitchedDm, waypoints };
   } catch (e) {
     console.error("OSRM trip:", e);
     return null;
