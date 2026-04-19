@@ -988,9 +988,13 @@ async function persistRouteSheetAddressGeo(addressKey, lat, lon, kmOffice) {
   if (error) console.warn("route_sheet_address_geo upsert:", error.message);
 }
 
-/** Строка для запроса к Nominatim и ключей кэша — вся строка адреса (без усечения после «-»). */
+/** Строка для запроса к Nominatim и ключей кэша: часть до «//» (после часто пишут квартиру и т.п.). */
 function addressForNominatimSearch(raw) {
-  return String(raw).trim();
+  const t = String(raw).trim();
+  if (!t) return "";
+  const cut = t.indexOf("//");
+  if (cut === -1) return t;
+  return t.slice(0, cut).trim();
 }
 
 /** Запрос 1: только внутри города Волгоград (viewbox + bounded). */
