@@ -13,14 +13,14 @@ let calculationsRowsCache = [];
 /** Непустая строка — поиск активен (кнопка «Отменить»). */
 let appliedCalculationsSearchQuery = null;
 
-/** «16 мар 08:11» — локальное время. */
+/** «16 мар 08:11:05» — локальное время. */
 function formatCalcTimeRu(iso) {
   if (!iso) return "";
   try {
     const d = new Date(iso);
     const months = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
     const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getDate()} ${months[d.getMonth()]} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${d.getDate()} ${months[d.getMonth()]} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   } catch {
     return iso;
   }
