@@ -2632,7 +2632,8 @@ table {
 }
 
 /* «Доставка»: заголовок «км» — слева; значение — .status-value как «Статус» в «Заказы»; клик — попап координат. */
-#routeSheetTableDelivery th.route-sheet-col-km {
+#routeSheetTableDelivery th.route-sheet-col-km,
+#routeSheetTableDelivery td.route-sheet-col-km {
   text-align: left;
 }
 
