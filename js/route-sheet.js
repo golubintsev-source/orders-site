@@ -61,10 +61,15 @@ const ROUTE_SHEET_OFFICE_ADDR_NORM = normalizeAddrForOfficeCompare(ROUTE_SHEET_O
 const ROUTE_SHEET_OFFICE_LAT = 48.6903978;
 const ROUTE_SHEET_OFFICE_LON = 44.4336316;
 
-/** Участок без проезда: маршрут не должен заходить в радиус (м) от точки — берём альтернативу OSRM или наименее «близкий» вариант. */
-const OSRM_DETOUR_BLOCK_LAT = 48.689037;
-const OSRM_DETOUR_BLOCK_LON = 44.434921;
-const OSRM_DETOUR_BLOCK_RADIUS_M = 30;
+/**
+ * Участки без проезда (OSRM считает дорогой, фактически проезда нет): маршрут не должен подходить к точке ближе radiusM.
+ * Берём альтернативу route (alternatives) или при trip — пошаговый route по порядку visit.
+ */
+const OSRM_ROAD_DETOUR_BLOCKS = [
+  { lat: 48.689037, lon: 44.434921, radiusM: 30 },
+  /** ул. Ивановского, севернее пересечения с ул. Качуевской (Волгоград). */
+  { lat: 48.6861, lon: 44.4326, radiusM: 70 },
+];
 
 let routeDeliveryMap = null;
 let routeDeliveryOfficeLayer = null;
@@ -431,26 +436,63 @@ function routeGeometryToLatLngs(route) {
   return latLngs.length >= 2 ? latLngs : null;
 }
 
+/** Минимальный запас до ближайшего «запретного» круга (м): <0 — линия заходит в зону). */
+function polylineMinMarginToDetourBlocksMeters(latLngs, blocks) {
+  if (!Array.isArray(blocks) || !blocks.length) return Infinity;
+  if (!Array.isArray(latLngs) || latLngs.length < 2) return -Infinity;
+  let minMargin = Infinity;
+  for (const b of blocks) {
+    const minD = polylineMinDistanceToPointMeters(latLngs, b.lat, b.lon);
+    minMargin = Math.min(minMargin, minD - b.radiusM);
+  }
+  return Number.isFinite(minMargin) ? minMargin : -Infinity;
+}
+
+/** Склейка сегментов [lat,lng] в одну линию без дублирования стыков. */
+function mergeAdjacentRoutePolylines(segments) {
+  if (!Array.isArray(segments) || !segments.length) return null;
+  /** @type {Array<[number, number]>} */
+  const out = [];
+  const eps = 1e-7;
+  for (const seg of segments) {
+    if (!Array.isArray(seg) || seg.length < 2) continue;
+    if (out.length === 0) {
+      for (const p of seg) out.push(p);
+      continue;
+    }
+    const last = out[out.length - 1];
+    const first = seg[0];
+    const dup =
+      Array.isArray(last) &&
+      Array.isArray(first) &&
+      Math.abs(last[0] - first[0]) < eps &&
+      Math.abs(last[1] - first[1]) < eps;
+    const rest = dup ? seg.slice(1) : seg;
+    for (const p of rest) out.push(p);
+  }
+  return out.length >= 2 ? out : null;
+}
+
 /**
- * Из ответа OSRM выбрать маршрут, который не заходит в круг `OSRM_DETOUR_BLOCK_*`.
- * Если все заходят — вариант с наибольшим отступом от точки (минимальный «проезд» через зону).
+ * Из ответа OSRM выбрать маршрут, который не заходит в круги `OSRM_ROAD_DETOUR_BLOCKS`.
+ * Если все заходят — вариант с наибольшим запасом до зон.
  */
-function pickOsrmRouteAvoidingDetourBlock(routes) {
+function pickOsrmRouteAvoidingDetourBlocks(routes) {
   if (!Array.isArray(routes) || !routes.length) return null;
-  /** @type {{ latLngs: Array<[number, number]>, distanceM: number, minD: number }[]} */
+  /** @type {{ latLngs: Array<[number, number]>, distanceM: number, minMargin: number }[]} */
   const scored = [];
   for (const r of routes) {
     const latLngs = routeGeometryToLatLngs(r);
     if (!latLngs) continue;
     const distanceM = Number(r.distance);
     if (!Number.isFinite(distanceM)) continue;
-    const minD = polylineMinDistanceToPointMeters(latLngs, OSRM_DETOUR_BLOCK_LAT, OSRM_DETOUR_BLOCK_LON);
-    scored.push({ latLngs, distanceM: distanceM, minD });
+    const minMargin = polylineMinMarginToDetourBlocksMeters(latLngs, OSRM_ROAD_DETOUR_BLOCKS);
+    scored.push({ latLngs, distanceM, minMargin });
   }
   if (!scored.length) return null;
-  const clear = scored.find((s) => s.minD >= OSRM_DETOUR_BLOCK_RADIUS_M);
+  const clear = scored.find((s) => s.minMargin >= 0);
   if (clear) return { latLngs: clear.latLngs, distanceMeters: clear.distanceM };
-  scored.sort((a, b) => b.minD - a.minD);
+  scored.sort((a, b) => b.minMargin - a.minMargin);
   return { latLngs: scored[0].latLngs, distanceMeters: scored[0].distanceM };
 }
 
@@ -468,7 +510,7 @@ async function osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat) {
       if (!res.ok) continue;
       const json = await res.json();
       if (json.code !== "Ok" || !Array.isArray(json.routes) || !json.routes.length) continue;
-      return pickOsrmRouteAvoidingDetourBlock(json.routes);
+      return pickOsrmRouteAvoidingDetourBlocks(json.routes);
     } catch {
       /* следующий URL */
     }
@@ -510,12 +552,46 @@ async function osrmTripDrivingResolved(officeLon, officeLat, stops) {
     const json = await res.json();
     if (json.code !== "Ok" || !Array.isArray(json.trips) || !json.trips.length) return null;
     const trip = json.trips[0];
-    const latLngs = routeGeometryToLatLngs(trip);
-    if (!latLngs?.length) return null;
+    const tripLatLngs = routeGeometryToLatLngs(trip);
+    if (!tripLatLngs?.length) return null;
     const distanceM = Number(trip.distance);
     if (!Number.isFinite(distanceM)) return null;
     const waypoints = Array.isArray(json.waypoints) ? json.waypoints : [];
-    return { latLngs, distanceM: distanceM, waypoints };
+
+    /** Порядок посещения из trip; дальше — сегменты `route` с alternatives и обходом закрытых участков. */
+    const visitOrdered = waypoints
+      .map((w, inputIdx) => ({
+        inputIdx,
+        order: Number(w.waypoint_index),
+        lon: Array.isArray(w.location) ? Number(w.location[0]) : NaN,
+        lat: Array.isArray(w.location) ? Number(w.location[1]) : NaN,
+      }))
+      .filter((x) => Number.isFinite(x.order) && Number.isFinite(x.lon) && Number.isFinite(x.lat))
+      .sort((a, b) => (a.order !== b.order ? a.order - b.order : a.inputIdx - b.inputIdx));
+
+    if (visitOrdered.length < 2) {
+      return { latLngs: tripLatLngs, distanceM, waypoints };
+    }
+
+    /** @type {Array<[number, number]>[]} */
+    const segmentPolylines = [];
+    let stitchedDm = 0;
+    for (let i = 0; i < visitOrdered.length - 1; i++) {
+      const a = visitOrdered[i];
+      const b = visitOrdered[i + 1];
+      const leg = await osrmFetchDrivingRoutesResolved(a.lon, a.lat, b.lon, b.lat);
+      if (!leg?.latLngs?.length) {
+        return { latLngs: tripLatLngs, distanceM, waypoints };
+      }
+      segmentPolylines.push(leg.latLngs);
+      stitchedDm += leg.distanceMeters;
+    }
+
+    const merged = mergeAdjacentRoutePolylines(segmentPolylines);
+    if (!merged?.length) {
+      return { latLngs: tripLatLngs, distanceM, waypoints };
+    }
+    return { latLngs: merged, distanceM: stitchedDm, waypoints };
   } catch (e) {
     console.error("OSRM trip:", e);
     return null;
