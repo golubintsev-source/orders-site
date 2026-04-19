@@ -74,7 +74,7 @@ const ROUTE_SHEET_OFFICE_DEPART_MIN_M = 45;
 
 /**
  * Запрет пересечения при построении синих маршрутов (офис → точка, «Составить маршрут», км по OSRM):
- * отрезок на карте — красная линия. Подгоните координаты под ваш участок (концы отрезка в WGS‑84).
+ * невидимый отрезок в WGS‑84 (на карте не рисуется). Подгоните координаты под ваш участок.
  * Если концы совпадают или отрезок короче ~8 м, проверка отключена.
  */
 const ROUTE_DELIVERY_NO_CROSS_LINE = {
@@ -89,8 +89,6 @@ function isRouteSheetOfficeDepartLonLat(lon, lat) {
 }
 
 let routeDeliveryMap = null;
-/** Красная линия «нельзя пересекать» — под офисом и маршрутом. */
-let routeDeliveryBarrierLayer = null;
 let routeDeliveryOfficeLayer = null;
 /** Линия маршрута офис → точка (OSRM), под маркерами доставки. */
 let routeDeliveryRouteLayer = null;
@@ -1078,25 +1076,6 @@ function routeSheetOfficeLatLng(L) {
   return L.latLng(ROUTE_SHEET_OFFICE_LAT, ROUTE_SHEET_OFFICE_LON);
 }
 
-function addRouteDeliveryNoCrossLine(L) {
-  if (!routeDeliveryBarrierLayer) return;
-  const b = deliveryNoCrossBarrierLonLatPair();
-  if (!b) return;
-  L.polyline(
-    [
-      [b.lat1, b.lon1],
-      [b.lat2, b.lon2],
-    ],
-    {
-      color: "#b91c1c",
-      weight: 5,
-      opacity: 0.92,
-      lineCap: "round",
-      lineJoin: "round",
-    },
-  ).addTo(routeDeliveryBarrierLayer);
-}
-
 function addRouteSheetOfficeMarker(L) {
   if (!routeDeliveryOfficeLayer) return;
   const latlng = routeSheetOfficeLatLng(L);
@@ -1143,8 +1122,6 @@ function ensureRouteDeliveryMap() {
     maxZoom: 19,
     attribution: "",
   }).addTo(routeDeliveryMap);
-  routeDeliveryBarrierLayer = L.layerGroup().addTo(routeDeliveryMap);
-  addRouteDeliveryNoCrossLine(L);
   routeDeliveryOfficeLayer = L.layerGroup().addTo(routeDeliveryMap);
   addRouteSheetOfficeMarker(L);
   routeDeliveryRouteLayer = L.layerGroup().addTo(routeDeliveryMap);
