@@ -717,16 +717,29 @@ function clearRouteDeliveryRoadRouteLayer() {
   routeDeliveryRouteLayer?.clearLayers();
 }
 
+const ROUTE_SHEET_COMPOSE_PENDING_CLASS = "route-sheet-route-time-estimate--composing";
+
 function clearRouteDeliveryTripTimeEstimate() {
   const el = document.getElementById("routeSheetRouteTimeEstimate");
   if (!el) return;
+  el.classList.remove(ROUTE_SHEET_COMPOSE_PENDING_CLASS);
   el.textContent = "";
   el.hidden = true;
+}
+
+function setRouteDeliveryTripComposePending(myGen) {
+  const el = document.getElementById("routeSheetRouteTimeEstimate");
+  if (!el) return;
+  if (myGen !== routeDeliveryComposeGeneration) return;
+  el.textContent = "составляем маршрут";
+  el.classList.add(ROUTE_SHEET_COMPOSE_PENDING_CLASS);
+  el.hidden = false;
 }
 
 function setRouteDeliveryTripTimeEstimate(text) {
   const el = document.getElementById("routeSheetRouteTimeEstimate");
   if (!el) return;
+  el.classList.remove(ROUTE_SHEET_COMPOSE_PENDING_CLASS);
   if (!text) {
     clearRouteDeliveryTripTimeEstimate();
     return;
@@ -854,6 +867,7 @@ async function composeDeliveryRoute() {
 
   const myGen = ++routeDeliveryComposeGeneration;
   setComposeRouteButtonBusy(true);
+  setRouteDeliveryTripComposePending(myGen);
 
   try {
     const picked = await osrmTripDrivingResolved(
@@ -863,6 +877,7 @@ async function composeDeliveryRoute() {
     );
     if (myGen !== routeDeliveryComposeGeneration) return;
     if (!picked) {
+      clearRouteDeliveryTripTimeEstimate();
       setRouteDeliveryMapStatus(
         deliveryNoCrossBarrierLonLatPair()
           ? "Не удалось составить маршрут без пересечения красной линии. Попробуйте позже или измените точки."
@@ -919,6 +934,7 @@ async function composeDeliveryRoute() {
   } catch (e) {
     console.error("composeDeliveryRoute:", e);
     if (myGen === routeDeliveryComposeGeneration) {
+      clearRouteDeliveryTripTimeEstimate();
       setRouteDeliveryMapStatus("Ошибка при составлении маршрута.", true);
     }
   } finally {

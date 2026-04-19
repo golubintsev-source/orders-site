@@ -2783,6 +2783,11 @@ table {
   white-space: nowrap;
 }
 
+.route-sheet-route-time-estimate.route-sheet-route-time-estimate--composing {
+  font-weight: 400;
+  color: #9ca3af;
+}
+
 .route-sheet-route-time-estimate[hidden] {
   display: none !important;
 }
