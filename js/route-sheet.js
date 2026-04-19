@@ -1136,6 +1136,7 @@ function ensureRouteDeliveryMap() {
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: "",
+    crossOrigin: true,
   }).addTo(routeDeliveryMap);
   routeDeliveryOfficeLayer = L.layerGroup().addTo(routeDeliveryMap);
   addRouteSheetOfficeMarker(L);
@@ -1658,6 +1659,173 @@ function applyAutoColumnWidths(ws, aoa) {
   ws["!cols"] = cols;
 }
 
+/** Макс. размер картинки карты в пикселях при 96 dpi (~поля печати A4). */
+function routeSheetMapImageMaxPxForA4() {
+  const margin = 0.9;
+  const wMm = 210 * margin;
+  const hMm = 297 * margin;
+  const pxPerMm = 96 / 25.4;
+  return { maxW: Math.round(wMm * pxPerMm), maxH: Math.round(hMm * pxPerMm) };
+}
+
+/**
+ * Вписывает canvas в прямоугольник, сохраняя пропорции (для печати на A4).
+ * @param {HTMLCanvasElement} source
+ * @param {number} maxW
+ * @param {number} maxH
+ */
+function scaleCanvasToFitMax(source, maxW, maxH) {
+  const scale = Math.min(maxW / source.width, maxH / source.height, 1);
+  const w = Math.max(1, Math.round(source.width * scale));
+  const h = Math.max(1, Math.round(source.height * scale));
+  const out = document.createElement("canvas");
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext("2d");
+  if (!ctx) return source;
+  ctx.drawImage(source, 0, 0, w, h);
+  return out;
+}
+
+function getExcelJsConstructor() {
+  return globalThis.ExcelJS ?? globalThis.exceljs?.default ?? globalThis.exceljs;
+}
+
+function columnCharWidthsFromAoa(aoa) {
+  if (!aoa.length) return [];
+  const numCols = Math.max(0, ...aoa.map((row) => row.length));
+  const widths = [];
+  for (let c = 0; c < numCols; c++) {
+    let maxLen = 0;
+    for (const row of aoa) {
+      const v = row[c];
+      if (v == null || v === "") continue;
+      maxLen = Math.max(maxLen, String(v).length);
+    }
+    widths.push(Math.min(Math.max(maxLen + 2, 8), 255));
+  }
+  return widths;
+}
+
+function triggerXlsxDownload(buffer, filename) {
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Ждёт завершения загрузки тайлов текущего вида (или таймаут).
+ * @param {*} map
+ * @param {number} timeoutMs
+ */
+function waitForVisibleTilesLoaded(map, timeoutMs) {
+  return new Promise((resolve) => {
+    const done = () => resolve();
+    const t = window.setTimeout(done, timeoutMs);
+    let tileLayer = null;
+    map.eachLayer((ly) => {
+      if (ly instanceof globalThis.L.TileLayer) tileLayer = ly;
+    });
+    if (!tileLayer || !tileLayer.isLoading || !tileLayer.isLoading()) {
+      window.clearTimeout(t);
+      return done();
+    }
+    tileLayer.once("load", () => {
+      window.clearTimeout(t);
+      done();
+    });
+  });
+}
+
+/**
+ * Снимок блока карты Leaflet для вставки в Excel (тайлы с crossOrigin).
+ * @returns {Promise<HTMLCanvasElement | null>}
+ */
+async function captureRouteDeliveryMapCanvasForExcel() {
+  const L = globalThis.L;
+  const html2canvas = globalThis.html2canvas;
+  const el = document.getElementById("routeSheetDeliveryMap");
+  if (!L || !html2canvas || !el || !routeDeliveryMap) return null;
+
+  routeDeliveryMap.closePopup?.();
+  routeDeliveryMap.invalidateSize(false);
+  await new Promise((r) => {
+    routeDeliveryMap.whenReady(r);
+  });
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await waitForVisibleTilesLoaded(routeDeliveryMap, 2800);
+
+  const h2cScale = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+  let shot;
+  try {
+    shot = await html2canvas(el, {
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      scale: h2cScale,
+      logging: false,
+    });
+  } catch {
+    return null;
+  }
+  const { maxW, maxH } = routeSheetMapImageMaxPxForA4();
+  return scaleCanvasToFitMax(shot, maxW, maxH);
+}
+
+/**
+ * @param {string[]} headers
+ * @param {unknown[][]} rows
+ * @param {HTMLCanvasElement | null} mapCanvas
+ */
+async function exportRouteSheetDeliveryWorkbookExcelJs(headers, rows, mapCanvas) {
+  const ExcelJS = getExcelJsConstructor();
+  if (!ExcelJS) throw new Error("ExcelJS missing");
+
+  const aoa = [headers, ...rows];
+  const colWidths = columnCharWidthsFromAoa(aoa);
+
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Доставка", {
+    pageSetup: { paperSize: 9, orientation: "portrait" },
+  });
+
+  worksheet.addRow(headers);
+  for (const r of rows) worksheet.addRow(r);
+
+  for (let i = 0; i < colWidths.length; i++) {
+    worksheet.getColumn(i + 1).width = colWidths[i];
+  }
+
+  if (mapCanvas) {
+    const dataUrl = mapCanvas.toDataURL("image/png");
+    const comma = dataUrl.indexOf(",");
+    const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+    const imageId = workbook.addImage({ base64, extension: "png" });
+    worksheet.addRow([]);
+    const titleRow = worksheet.addRow(["Карта маршрута"]);
+    if (titleRow) titleRow.font = { bold: true };
+    const last = worksheet.lastRow;
+    const tlRow = last ? last.number : 0;
+    worksheet.addImage(imageId, {
+      tl: { col: 0, row: tlRow },
+      ext: { width: mapCanvas.width, height: mapCanvas.height },
+      editAs: "oneCell",
+    });
+  }
+
+  const buf = await workbook.xlsx.writeBuffer();
+  triggerXlsxDownload(buf, `marshrutnyy_list_dostavka_${excelFileNameTimestamp()}.xlsx`);
+}
+
 function exportSheet(headers, rows, sheetName, filePrefix) {
   const XLSX = globalThis.XLSX;
   if (XLSX == null) {
@@ -1727,12 +1895,53 @@ export function bumpRouteDeliveryMapGeneration() {
   setRouteDeliveryMapStatus("");
 }
 
-export function exportRouteSheetDeliveryExcel() {
+export async function exportRouteSheetDeliveryExcel() {
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid || fromKey > toKey) return;
   const list = filterMainOrdersByShipment(ordersVisibleOnRouteSheet(), fromKey, toKey, DELIVERY_SHIP);
   const rows = list.map(rowDeliveryMainValues);
-  exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka");
+  const msgEl = document.getElementById("routeSheetMessage");
+  const exportBtn = document.getElementById("routeSheetExportDeliveryBtn");
+
+  const ExcelJS = getExcelJsConstructor();
+  const html2canvas = globalThis.html2canvas;
+  if (!ExcelJS || !html2canvas) {
+    exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka");
+    if (msgEl) {
+      msgEl.textContent =
+        "Карта в файл не добавлена: не загрузились модули Excel/снимок экрана. Обновите страницу.";
+    }
+    return;
+  }
+
+  if (exportBtn) exportBtn.disabled = true;
+  if (msgEl) msgEl.textContent = "Готовим Excel с картой…";
+
+  try {
+    ensureRouteDeliveryMap();
+    const mapCanvas = await captureRouteDeliveryMapCanvasForExcel();
+    await exportRouteSheetDeliveryWorkbookExcelJs(HEADERS_DELIVERY, rows, mapCanvas);
+    if (msgEl) {
+      if (!mapCanvas) {
+        msgEl.textContent =
+          "Таблица сохранена; снимок карты не получился (часто помогает обновить страницу после изменений на карте).";
+      } else if (!routeDeliveryComposedRouteActive) {
+        msgEl.textContent =
+          "Файл сохранён. Маршрут на карте не был составлен — в файле текущий вид карты (без линии маршрута).";
+      } else {
+        msgEl.textContent = "";
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka");
+    if (msgEl) {
+      msgEl.textContent =
+        "Не удалось встроить карту; выгружена только таблица. Обновите страницу или нажмите «Составить маршрут» и повторите.";
+    }
+  } finally {
+    if (exportBtn) exportBtn.disabled = false;
+  }
 }
 
 export function exportRouteSheetPickupExcel() {
@@ -1971,7 +2180,7 @@ export function initRouteSheetSection() {
   const shopBtn = document.getElementById("routeSheetExportShopBtn");
   if (deliveryBtn && !deliveryBtn.dataset.routeSheetBound) {
     deliveryBtn.dataset.routeSheetBound = "1";
-    deliveryBtn.addEventListener("click", () => exportRouteSheetDeliveryExcel());
+    deliveryBtn.addEventListener("click", () => void exportRouteSheetDeliveryExcel());
   }
   if (pickupBtn && !pickupBtn.dataset.routeSheetBound) {
     pickupBtn.dataset.routeSheetBound = "1";
