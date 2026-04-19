@@ -732,15 +732,21 @@ function setRouteDeliveryTripTimeEstimate(text) {
   el.hidden = false;
 }
 
-/** Расстояние по дорогам (OSRM), м → примерное время при 20 км/ч. */
-function formatApproxTravelTimeAt20Kmh(distanceMeters) {
+/** Расстояние по дорогам (OSRM), м + 30 мин выгрузки на точку → примерное время при 20 км/ч. */
+function formatApproxTravelTimeAt20Kmh(distanceMeters, deliveryStopCount = 0) {
   if (!Number.isFinite(distanceMeters) || distanceMeters < 0) return "";
-  const km = distanceMeters / 1000;
-  const hours = km / 20;
-  const totalMin = Math.max(1, Math.round(hours * 60));
+  const stops =
+    Number.isFinite(deliveryStopCount) && deliveryStopCount > 0
+      ? Math.floor(deliveryStopCount)
+      : 0;
+  const travelMin =
+    distanceMeters > 0 ? Math.max(1, Math.round((distanceMeters / 1000 / 20) * 60)) : 0;
+  const unloadMin = stops * 30;
+  const totalMin = travelMin + unloadMin;
+  if (totalMin <= 0) return "";
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  const suffix = " (20 км/ч)";
+  const suffix = " (20 км/ч, 30 мин точка)";
   if (h === 0) return `≈ ${m} мин${suffix}`;
   if (m === 0) return `≈ ${h} ч${suffix}`;
   return `≈ ${h} ч ${m} мин${suffix}`;
@@ -898,7 +904,9 @@ async function composeDeliveryRoute() {
     }
 
     routeDeliveryComposedRouteActive = true;
-    setRouteDeliveryTripTimeEstimate(formatApproxTravelTimeAt20Kmh(distM));
+    setRouteDeliveryTripTimeEstimate(
+      formatApproxTravelTimeAt20Kmh(distM, stopsSnapshot.length),
+    );
 
     const b = L.latLngBounds(latLngs);
     b.extend(routeSheetOfficeLatLng(L));
