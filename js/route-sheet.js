@@ -78,10 +78,10 @@ const ROUTE_SHEET_OFFICE_DEPART_MIN_M = 45;
  * Если концы совпадают или отрезок короче ~8 м, проверка отключена.
  */
 const ROUTE_DELIVERY_NO_CROSS_LINE = {
-  lat1: 48.7045,
-  lon1: 44.421,
-  lat2: 48.684,
-  lon2: 44.4495,
+  lat1: 48.690542,
+  lon1: 44.430296,
+  lat2: 48.687906,
+  lon2: 44.442845,
 };
 
 function isRouteSheetOfficeDepartLonLat(lon, lat) {
