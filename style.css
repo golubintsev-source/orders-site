@@ -3625,6 +3625,17 @@ th {
   display: block;
 }
 
+.cell-tooltip.cell-tooltip--order-row-wide {
+  max-width: min(96vw, 920px);
+  white-space: normal;
+  word-break: break-word;
+}
+
+.orders-order-date-tooltip-warn {
+  color: #fca5a5;
+  font-weight: 600;
+}
+
 /* ===== статус ===== */
 .status-value {
   display: inline-block;

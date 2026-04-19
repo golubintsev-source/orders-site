@@ -43,6 +43,7 @@ import {
   canShowEditButtonForOrder,
   setLockEditForUserLite,
   RUBLE_INTEGER_ORDER_FIELD_IDS,
+  buildOrderRowFullTooltipHtml,
 } from "./orders.js";
 import { mergeNewAttachmentsOnChange } from "./files.js";
 import { initClientAutocomplete } from "./clientAutocomplete.js";
@@ -671,15 +672,28 @@ export function bindUIEvents() {
     return decodeEl.textContent || raw;
   }
 
-  function showFloatingCellTooltip(anchorEl, text) {
-    if (!cellTooltip || !anchorEl || !text) return;
+  function showFloatingCellTooltip(anchorEl, text, opts) {
+    opts = opts || {};
+    const useHtml = Boolean(opts.html);
+    if (!cellTooltip || !anchorEl || (!text && !useHtml)) return;
     if (tooltipHideClick) {
       document.removeEventListener("click", tooltipHideClick);
       document.removeEventListener("touchend", tooltipHideClick);
       document.removeEventListener("keydown", tooltipHideKey);
       tooltipHideClick = tooltipHideKey = null;
     }
-    cellTooltip.textContent = text;
+    cellTooltip.classList.remove("cell-tooltip--order-row-wide");
+    if (opts.tooltipClass) {
+      opts.tooltipClass
+        .split(/\s+/)
+        .filter(Boolean)
+        .forEach((c) => cellTooltip.classList.add(c));
+    }
+    if (useHtml) {
+      cellTooltip.innerHTML = text;
+    } else {
+      cellTooltip.textContent = text;
+    }
     cellTooltip.classList.add("visible");
     cellTooltip.setAttribute("aria-hidden", "false");
     /*
@@ -716,6 +730,15 @@ export function bindUIEvents() {
     function hide() {
       cellTooltip.classList.remove("visible");
       cellTooltip.setAttribute("aria-hidden", "true");
+      cellTooltip.textContent = "";
+      cellTooltip.innerHTML = "";
+      cellTooltip.classList.remove("cell-tooltip--order-row-wide");
+      if (opts.tooltipClass) {
+        opts.tooltipClass
+          .split(/\s+/)
+          .filter(Boolean)
+          .forEach((c) => cellTooltip.classList.remove(c));
+      }
       cellTooltip.style.visibility = "";
       cellTooltip.style.left = "";
       cellTooltip.style.top = "";
@@ -798,6 +821,25 @@ export function bindUIEvents() {
         e.preventDefault();
         openOrderIdActionsMenu(idTd);
         return;
+      }
+
+      const dateTd = e.target.closest("td.td-order-date");
+      if (dateTd && tr && tr.contains(dateTd)) {
+        const idCell = tr.querySelector("td.td-order-id[data-order-id]");
+        const rawId = idCell?.getAttribute("data-order-id");
+        const orderId = rawId != null && rawId !== "" ? Number(rawId) : NaN;
+        const orderRow =
+          Number.isFinite(orderId) && state.allOrders.find((o) => Number(o.id) === orderId);
+        if (orderRow) {
+          e.preventDefault();
+          e.stopPropagation();
+          const html = buildOrderRowFullTooltipHtml(orderRow);
+          showFloatingCellTooltip(dateTd, html, {
+            html: true,
+            tooltipClass: "cell-tooltip--order-row-wide",
+          });
+          return;
+        }
       }
 
       const tdTip = e.target.closest(

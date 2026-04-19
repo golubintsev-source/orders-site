@@ -1208,6 +1208,22 @@ export function getOrderRowValuesForExcel(order) {
   ];
 }
 
+/** Индексы как в ORDERS_EXCEL_HEADERS / getOrderRowValuesForExcel: «Опл.», «Остаток». */
+const ORDER_ROW_DATE_TOOLTIP_RED_INDEXES = new Set([3, 10]);
+
+/** HTML для всплывающей подсказки по клику на дату заказа: все поля через « | »; Опл. и Остаток — красным. */
+export function buildOrderRowFullTooltipHtml(order) {
+  const values = getOrderRowValuesForExcel(order);
+  return values
+    .map((v, i) => {
+      const escaped = escapeHtml(String(v ?? ""));
+      return ORDER_ROW_DATE_TOOLTIP_RED_INDEXES.has(i)
+        ? `<span class="orders-order-date-tooltip-warn">${escaped}</span>`
+        : escaped;
+    })
+    .join(" | ");
+}
+
 function sumOrderNumericField(orders, fieldName) {
   let sum = 0;
   for (const order of orders) {
