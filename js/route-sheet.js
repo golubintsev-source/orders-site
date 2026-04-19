@@ -69,6 +69,11 @@ const OSRM_ROAD_DETOUR_BLOCKS = [
   { lat: 48.689037, lon: 44.434921, radiusM: 30 },
   /** ул. Ивановского, севернее пересечения с ул. Качуевской (Волгоград). */
   { lat: 48.6861, lon: 44.4326, radiusM: 70 },
+  /**
+   * Песчанокопская — «проезд» к Университетскому проспекту (OSRM рисует, фактически проезда нет).
+   * Точка на короткой ветке OSRM офис → Шауляйская и аналогичные рейсы на юг/восток.
+   */
+  { lat: 48.68371, lon: 44.44603, radiusM: 75 },
 ];
 
 let routeDeliveryMap = null;
@@ -490,10 +495,16 @@ function pickOsrmRouteAvoidingDetourBlocks(routes) {
     scored.push({ latLngs, distanceM, minMargin });
   }
   if (!scored.length) return null;
-  const clear = scored.find((s) => s.minMargin >= 0);
-  if (clear) return { latLngs: clear.latLngs, distanceMeters: clear.distanceM };
-  scored.sort((a, b) => b.minMargin - a.minMargin);
-  return { latLngs: scored[0].latLngs, distanceMeters: scored[0].distanceM };
+  const clearRoutes = scored.filter((s) => s.minMargin >= 0);
+  if (clearRoutes.length) {
+    clearRoutes.sort((a, b) => a.distanceM - b.distanceM);
+    const best = clearRoutes[0];
+    return { latLngs: best.latLngs, distanceMeters: best.distanceM };
+  }
+  /** Все варианты OSRM заезжают в зону — берём самый длинный (часто реальный объезд по магистрали). */
+  scored.sort((a, b) => b.distanceM - a.distanceM);
+  const longest = scored[0];
+  return { latLngs: longest.latLngs, distanceMeters: longest.distanceM };
 }
 
 /** Офис → точка: маршрут OSRM (с альтернативами) + км по выбранной геометрии. */
@@ -501,6 +512,7 @@ async function osrmFetchDrivingRoutesResolved(fromLon, fromLat, toLon, toLat) {
   const coordStr = `${fromLon},${fromLat};${toLon},${toLat}`;
   const base = `https://router.project-osrm.org/route/v1/driving/${coordStr}`;
   const urls = [
+    `${base}?overview=full&geometries=geojson&alternatives=3`,
     `${base}?overview=full&geometries=geojson&alternatives=2`,
     `${base}?overview=full&geometries=geojson`,
   ];
