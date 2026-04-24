@@ -3766,6 +3766,23 @@ th {
   background: #4b5563;
 }
 
+.upload-btn--secondary {
+  background: #9ca3af;
+}
+
+.upload-btn--secondary:hover {
+  background: #6b7280;
+}
+
+.clipboard-paste-hint {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.clipboard-paste-hint:empty {
+  display: none;
+}
+
 .file-upload-text {
   font-size: 13px;
   color: #6b7280;

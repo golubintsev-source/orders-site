@@ -5,6 +5,7 @@ import { formatOrderIdTypeChip } from "./format.js";
 import {
   attachmentsInput,
   fileUploadText,
+  clipboardPasteHint,
   selectedFiles,
   filesModal,
   filesModalBody,
@@ -239,14 +240,11 @@ function openCropModalForAttachment(file) {
 }
 
 /**
- * Обработчик change у input[type=file]: новый выбор добавляется к уже выбранным.
- * Для фото JPEG/PNG/WebP и т.п. открывается обрезка (если подключён Cropper.js).
+ * Добавить файлы в список к загрузке (обрезка для фото — как при выборе с диска).
+ * @param {File[]} picked
  */
-export async function mergeNewAttachmentsOnChange() {
-  if (!attachmentsInput) return;
-  const picked = Array.from(attachmentsInput.files || []);
-  if (picked.length === 0) return;
-  attachmentsInput.value = "";
+async function mergeNewAttachmentFiles(picked) {
+  if (!picked.length) return;
 
   for (const file of picked) {
     let toAdd = file;
@@ -265,6 +263,59 @@ export async function mergeNewAttachmentsOnChange() {
 
   applyPendingToAttachmentsInput();
   renderSelectedFiles();
+}
+
+/**
+ * Обработчик change у input[type=file]: новый выбор добавляется к уже выбранным.
+ * Для фото JPEG/PNG/WebP и т.п. открывается обрезка (если подключён Cropper.js).
+ */
+export async function mergeNewAttachmentsOnChange() {
+  if (!attachmentsInput) return;
+  const picked = Array.from(attachmentsInput.files || []);
+  if (picked.length === 0) return;
+  attachmentsInput.value = "";
+
+  await mergeNewAttachmentFiles(picked);
+}
+
+/**
+ * Вставка первого изображения из буфера обмена в список вложений формы (как после «Загрузить»).
+ * @returns {Promise<"ok" | "empty">} empty — в буфере нет изображения или чтение недоступно
+ */
+export async function pasteImageFromClipboardIntoAttachments() {
+  if (typeof navigator.clipboard?.read !== "function") {
+    return "empty";
+  }
+  let items;
+  try {
+    items = await navigator.clipboard.read();
+  } catch (e) {
+    console.warn("Чтение буфера обмена:", e);
+    return "empty";
+  }
+  for (const item of items) {
+    const types = item.types || [];
+    for (const type of types) {
+      if (!type.startsWith("image/")) continue;
+      let blob;
+      try {
+        blob = await item.getType(type);
+      } catch (e) {
+        console.warn("clipboard.getType:", e);
+        continue;
+      }
+      if (!blob || blob.size === 0) continue;
+      const subRaw = (type.split("/")[1] || "png").split("+")[0] || "png";
+      const sub = /^[a-z0-9]+$/i.test(subRaw) ? subRaw.toLowerCase() : "png";
+      const file = new File([blob], `clipboard.${sub}`, {
+        type,
+        lastModified: Date.now(),
+      });
+      await mergeNewAttachmentFiles([file]);
+      return "ok";
+    }
+  }
+  return "empty";
 }
 
 export function renderSelectedFiles() {
@@ -356,8 +407,9 @@ export function resetFileUpload() {
   }
   selectedPreviewBlobUrls = [];
   if (attachmentsInput) attachmentsInput.value = "";
-  fileUploadText.textContent = "";
-  selectedFiles.innerHTML = "";
+  if (fileUploadText) fileUploadText.textContent = "";
+  if (clipboardPasteHint) clipboardPasteHint.textContent = "";
+  if (selectedFiles) selectedFiles.innerHTML = "";
 }
 
 /** Скрыть блок уже загруженных файлов (режим «Новая заявка»). */

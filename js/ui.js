@@ -5,6 +5,8 @@ import {
   cancelEditBtnTop,
   clientSearch,
   selectFilesBtn,
+  pasteClipboardImageBtn,
+  clipboardPasteHint,
   attachmentsInput,
   closeFilesModal,
   filesModal,
@@ -45,7 +47,7 @@ import {
   RUBLE_INTEGER_ORDER_FIELD_IDS,
   buildOrderRowFullTooltipHtml,
 } from "./orders.js";
-import { mergeNewAttachmentsOnChange } from "./files.js";
+import { mergeNewAttachmentsOnChange, pasteImageFromClipboardIntoAttachments } from "./files.js";
 import { initClientAutocomplete } from "./clientAutocomplete.js";
 import {
   saveInstallerRate,
@@ -620,7 +622,20 @@ export function bindUIEvents() {
 
   if (selectFilesBtn) {
     selectFilesBtn.addEventListener("click", () => {
+      if (clipboardPasteHint) clipboardPasteHint.textContent = "";
       attachmentsInput.click();
+    });
+  }
+
+  if (pasteClipboardImageBtn) {
+    pasteClipboardImageBtn.addEventListener("click", () => {
+      if (clipboardPasteHint) clipboardPasteHint.textContent = "";
+      void (async () => {
+        const result = await pasteImageFromClipboardIntoAttachments();
+        if (result === "empty" && clipboardPasteHint) {
+          clipboardPasteHint.textContent = "Буфер пуст";
+        }
+      })();
     });
   }
 
