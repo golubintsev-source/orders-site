@@ -108,11 +108,25 @@ const HEADERS_DELIVERY = [
 ];
 
 /**
- * Ширины столбцов «Доставка» в условных единицах Excel (не пиксели): узкие колонки + перенос текста,
- * чтобы таблица умещалась по ширине при печати A4 книжная.
+ * Ширины столбцов «Доставка» в условных единицах Excel: сумма ~под печатную ширину A4 (книжная),
+ * плюс перенос текста. Без «вписать в ширину 1 стр.» — иначе узкие колонки не растягиваются на лист.
  * Индекс совпадает с HEADERS_DELIVERY.
  */
-const ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS = [5, 5, 7, 11, 4, 11, 5, 8];
+const ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS = [11, 10, 14, 19, 8, 19, 10, 12];
+
+const ROUTE_SHEET_DELIVERY_EXCEL_BORDER_THIN = {
+  top: { style: "thin" },
+  left: { style: "thin" },
+  bottom: { style: "thin" },
+  right: { style: "thin" },
+};
+
+/** Светло-серая заливка строки заголовков таблицы «Доставка» в Excel. */
+const ROUTE_SHEET_DELIVERY_EXCEL_HEADER_FILL = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: "FFE8E8E8" },
+};
 
 const HEADERS_SHOP = ["Номер", "Клиент", "Адрес", "Описание", "Телефон"];
 
@@ -2008,9 +2022,6 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(headers, rows, mapCanvas)
     pageSetup: {
       paperSize: 9,
       orientation: "portrait",
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 0,
       margins: {
         left: 0.25,
         right: 0.25,
@@ -2031,7 +2042,11 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(headers, rows, mapCanvas)
     const row = worksheet.getRow(rn);
     row.eachCell((cell) => {
       cell.alignment = wrapTop;
-      if (rn === 1) cell.font = { ...cell.font, bold: true };
+      cell.border = ROUTE_SHEET_DELIVERY_EXCEL_BORDER_THIN;
+      if (rn === 1) {
+        cell.font = { ...cell.font, bold: true };
+        cell.fill = ROUTE_SHEET_DELIVERY_EXCEL_HEADER_FILL;
+      }
     });
   }
 
