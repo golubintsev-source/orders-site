@@ -1,5 +1,6 @@
 import { getFilteredOrders, getOrderRowValuesForExcel, ORDERS_EXCEL_HEADERS } from "./orders.js";
 import { setMessage } from "./dom.js";
+import { downloadXlsxBuffer } from "./xlsxDownload.js";
 
 function excelFileNameTimestamp() {
   const d = new Date();
@@ -39,6 +40,8 @@ export function exportOrdersToExcel() {
   applyAutoColumnWidths(ws, aoa);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Заказы");
-  XLSX.writeFile(wb, `zakazy_${excelFileNameTimestamp()}.xlsx`);
+  const name = `zakazy_${excelFileNameTimestamp()}.xlsx`;
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  downloadXlsxBuffer(out, name);
   setMessage(`Файл Excel: ${orders.length} строк`, "");
 }

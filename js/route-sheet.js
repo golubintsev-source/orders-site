@@ -5,6 +5,7 @@ import { isOrderPaid, loadOrders } from "./orders.js";
 import { closeOrderIdActionsMenu, openOrderIdActionsMenu } from "./ui.js";
 import { setMessage } from "./dom.js";
 import { supabaseClient } from "./config.js";
+import { downloadXlsxBuffer } from "./xlsxDownload.js";
 
 const MAIN_ORDER_TYPES = new Set(["Окна", "Подоконники", "Аллюминий", "Сетки/мелочь"]);
 const SHOP_TYPE = "Магазин";
@@ -1901,21 +1902,6 @@ function getExcelJsConstructor() {
   return globalThis.ExcelJS ?? globalThis.exceljs?.default ?? globalThis.exceljs;
 }
 
-function triggerXlsxDownload(buffer, filename) {
-  const blob = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 /**
  * Ждёт завершения загрузки тайлов текущего вида (или таймаут).
  * @param {*} map
@@ -2073,7 +2059,7 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(headers, rows, mapCanvas)
   }
 
   const buf = await workbook.xlsx.writeBuffer();
-  triggerXlsxDownload(buf, `marshrutnyy_list_dostavka_${excelFileNameTimestamp()}.xlsx`);
+  downloadXlsxBuffer(buf, `marshrutnyy_list_dostavka_${excelFileNameTimestamp()}.xlsx`);
 }
 
 /**
@@ -2100,7 +2086,9 @@ function exportSheet(headers, rows, sheetName, filePrefix, opts = {}) {
   }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  XLSX.writeFile(wb, `${filePrefix}_${excelFileNameTimestamp()}.xlsx`);
+  const xlsxName = `${filePrefix}_${excelFileNameTimestamp()}.xlsx`;
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  downloadXlsxBuffer(out, xlsxName);
 }
 
 function rowMainValues(order) {
