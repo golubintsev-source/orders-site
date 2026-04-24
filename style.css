@@ -2697,6 +2697,48 @@ table {
   background: #f9fafb;
 }
 
+/* Ручная точка доставки: номер + удаление */
+.route-sheet-manual-id-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.route-sheet-manual-delete-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+  vertical-align: middle;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.route-sheet-manual-delete-btn:hover {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.route-sheet-manual-delete-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.route-sheet-manual-delete-icon {
+  display: block;
+}
+
 .route-sheet-date-inline {
   display: inline-flex;
   align-items: center;

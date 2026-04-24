@@ -48,6 +48,16 @@ function persistRouteSheetManualToSession() {
   }
 }
 
+function deleteRouteSheetManualPointById(manualId) {
+  const idStr = String(manualId ?? "").trim();
+  if (!idStr) return false;
+  const idx = routeSheetManualDeliveryOrders.findIndex((o) => String(o.id) === idStr);
+  if (idx < 0) return false;
+  routeSheetManualDeliveryOrders.splice(idx, 1);
+  persistRouteSheetManualToSession();
+  return true;
+}
+
 /**
  * Текст чипа «Номер» для таблицы, карты и Excel: для ручных точек — по введённому номеру и типу.
  */
@@ -200,9 +210,13 @@ function orderIdCellHtml(order) {
   if (order.route_sheet_manual === true) {
     const phone = order.phone ?? "";
     const chipText = routeSheetOrderChipPlain(order) || "—";
-    return `<td class="td-order-id td-order-id--route-sheet-manual" data-order-id="${escapeAttr(String(order.id))}" data-phone="${escapeAttr(phone)}" data-files-count="0" data-lock-edit-user-lite="0">
-    <span class="status-value order-id-chip">
-      ${escapeHtml(chipText)}
+    const mid = escapeAttr(String(order.id));
+    return `<td class="td-order-id td-order-id--route-sheet-manual" data-order-id="${mid}" data-phone="${escapeAttr(phone)}" data-files-count="0" data-lock-edit-user-lite="0">
+    <span class="route-sheet-manual-id-row">
+      <span class="status-value order-id-chip">${escapeHtml(chipText)}</span>
+      <button type="button" class="route-sheet-manual-delete-btn" data-manual-id="${mid}" aria-label="Удалить точку" title="Удалить точку">
+        <svg class="route-sheet-manual-delete-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+      </button>
     </span>
   </td>`;
   }
@@ -2580,6 +2594,17 @@ export function initRouteSheetSection() {
   if (routeSheetSection && !routeSheetSection.dataset.routeSheetOrderIdMenuBound) {
     routeSheetSection.dataset.routeSheetOrderIdMenuBound = "1";
     routeSheetSection.addEventListener("click", (e) => {
+      const delBtn = e.target.closest(".route-sheet-manual-delete-btn");
+      if (delBtn && routeSheetSection.contains(delBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = delBtn.getAttribute("data-manual-id");
+        if (id && deleteRouteSheetManualPointById(id)) {
+          closeRouteSheetAddressGeoPopover();
+          loadRouteSheet();
+        }
+        return;
+      }
       const idTd = e.target.closest("td.td-order-id");
       if (!idTd || !routeSheetSection.contains(idTd)) return;
       if (idTd.classList.contains("td-order-id--route-sheet-manual")) return;
