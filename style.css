@@ -2576,6 +2576,127 @@ table {
   margin-bottom: 2px;
 }
 
+.route-sheet-add-point-open-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-height: 30px;
+  padding: 4px 12px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.route-sheet-add-point-dialog {
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  max-width: min(100vw - 24px, 440px);
+  width: 100%;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
+}
+
+.route-sheet-add-point-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.route-sheet-add-point-dialog-panel {
+  padding: 14px 16px 16px;
+}
+
+.route-sheet-add-point-dialog-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.route-sheet-add-point-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+
+.route-sheet-add-point-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  min-width: 0;
+}
+
+.route-sheet-add-point-field--wide {
+  grid-column: 1 / -1;
+}
+
+.route-sheet-add-point-field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.route-sheet-add-point-field--check .route-sheet-add-point-label {
+  font-weight: 600;
+}
+
+.route-sheet-add-point-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4b5563;
+}
+
+.route-sheet-add-point-input,
+.route-sheet-add-point-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  font-size: 13px;
+  line-height: 1.25;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+}
+
+.route-sheet-add-point-textarea {
+  min-height: 56px;
+  resize: vertical;
+}
+
+.route-sheet-add-point-error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #b91c1c;
+}
+
+.route-sheet-add-point-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  justify-content: flex-end;
+}
+
+.route-sheet-add-point-action-btn {
+  min-height: 34px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.route-sheet-add-point-cancel-btn {
+  min-height: 34px;
+  padding: 6px 14px;
+  font-size: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+}
+
+.route-sheet-add-point-cancel-btn:hover {
+  background: #f9fafb;
+}
+
 .route-sheet-date-inline {
   display: inline-flex;
   align-items: center;

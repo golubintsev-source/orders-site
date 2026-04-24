@@ -1,6 +1,6 @@
 import { state } from "./state.js";
 import { isOrderEditLockedForUserLite, isOrderHiddenFromUserLite, isUserLite, canMutateOrders } from "./roles.js";
-import { formatOrderIdTypeChip, formatDateShortRU, formatAmount } from "./format.js";
+import { formatOrderIdTypeChip, formatDateShortRU, formatAmount, tryParseRublesInteger } from "./format.js";
 import { isOrderPaid, loadOrders } from "./orders.js";
 import { closeOrderIdActionsMenu, openOrderIdActionsMenu } from "./ui.js";
 import { setMessage } from "./dom.js";
@@ -10,6 +10,68 @@ const MAIN_ORDER_TYPES = new Set(["Окна", "Подоконники", "Алл�
 const SHOP_TYPE = "Магазин";
 const DELIVERY_SHIP = "Доставка";
 const DELIVERY_PICKUP = "Самовывоз";
+
+const ROUTE_SHEET_MANUAL_STORAGE_KEY = "routeSheetManualDelivery_v1";
+
+/** Точки доставки, добавленные вручную на маршрутном листе (не заказы в БД). */
+const routeSheetManualDeliveryOrders = [];
+
+function newRouteSheetManualPointId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `rspt-${crypto.randomUUID()}`;
+  }
+  return `rspt-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function loadRouteSheetManualFromSession() {
+  routeSheetManualDeliveryOrders.length = 0;
+  try {
+    const raw = sessionStorage.getItem(ROUTE_SHEET_MANUAL_STORAGE_KEY);
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return;
+    for (const o of arr) {
+      if (o && o.route_sheet_manual === true && o.id != null && String(o.id).startsWith("rspt-")) {
+        routeSheetManualDeliveryOrders.push(o);
+      }
+    }
+  } catch {
+    routeSheetManualDeliveryOrders.length = 0;
+  }
+}
+
+function persistRouteSheetManualToSession() {
+  try {
+    sessionStorage.setItem(ROUTE_SHEET_MANUAL_STORAGE_KEY, JSON.stringify(routeSheetManualDeliveryOrders));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+/**
+ * Текст чипа «Номер» для таблицы, карты и Excel: для ручных точек — по введённому номеру и типу.
+ */
+function routeSheetOrderChipPlain(order) {
+  if (!order) return "";
+  if (order.route_sheet_manual === true) {
+    const raw = String(order.route_sheet_display_no ?? "").trim();
+    if (!raw) return "";
+    const letter = (order.order_type || "").trim().charAt(0);
+    if (/^\d+$/.test(raw)) {
+      const base = raw.padStart(4, "0");
+      return letter ? `${base}_${letter}` : base;
+    }
+    return letter ? `${raw}_${letter}` : raw;
+  }
+  if (order.id == null || order.id === "") return "";
+  return formatOrderIdTypeChip(order.id, order.order_type);
+}
+
+function manualDeliveryOrdersInRange(fromKey, toKey) {
+  return routeSheetManualDeliveryOrders.filter(
+    (o) => o.route_sheet_manual === true && isMainRouteType(o) && isInDateRange(o, fromKey, toKey),
+  );
+}
 
 const HEADERS_MAIN = [
   "Номер",
@@ -105,7 +167,8 @@ const nominatimCache = new Map();
 
 /** Состояние попапа координат у строки доставки. */
 const routeSheetAddressGeoPopoverState = {
-  orderId: null,
+  orderId: /** @type {number | null} */ (null),
+  manualOrderId: /** @type {string | null} */ (null),
   saveAllowed: false,
   previousCoordinates: "",
 };
@@ -134,6 +197,15 @@ function escapeAttr(s) {
 
 /** Первая колонка: как в таблице «Заказы» — чип номера и меню по клику. */
 function orderIdCellHtml(order) {
+  if (order.route_sheet_manual === true) {
+    const phone = order.phone ?? "";
+    const chipText = routeSheetOrderChipPlain(order) || "—";
+    return `<td class="td-order-id td-order-id--route-sheet-manual" data-order-id="${escapeAttr(String(order.id))}" data-phone="${escapeAttr(phone)}" data-files-count="0" data-lock-edit-user-lite="0">
+    <span class="status-value order-id-chip">
+      ${escapeHtml(chipText)}
+    </span>
+  </td>`;
+  }
   const phone = order.phone ?? "";
   const filesCount = state.filesCountMap[order.id] || 0;
   const hasPhone = Boolean((phone || "").trim());
@@ -1246,7 +1318,7 @@ function setRouteDeliveryMapStatus(text, warn) {
 
 function deliveryMapLabelText(ordersAtAddress) {
   return ordersAtAddress
-    .map((o) => (o.id != null ? formatOrderIdTypeChip(o.id, o.order_type) : ""))
+    .map((o) => routeSheetOrderChipPlain(o))
     .filter(Boolean)
     .join(" · ");
 }
@@ -1254,8 +1326,7 @@ function deliveryMapLabelText(ordersAtAddress) {
 function buildDeliveryPopupHtml(ordersAtAddress) {
   return ordersAtAddress
     .map((o) => {
-      const num =
-        o.id != null ? escapeHtml(formatOrderIdTypeChip(o.id, o.order_type)) : "";
+      const num = escapeHtml(routeSheetOrderChipPlain(o) || "");
       const client = escapeHtml(o.client ?? "");
       const addr = escapeHtml(o.address ?? "");
       return `<div class="route-sheet-map-popup-order"><strong>${num}</strong> — ${client}<br><span class="route-sheet-map-popup-addr">${addr}</span></div>`;
@@ -1688,7 +1759,9 @@ export function loadRouteSheet() {
   if (msgEl) msgEl.textContent = "";
 
   const orders = ordersVisibleOnRouteSheet();
-  const deliveryRows = filterMainOrdersByShipment(orders, fromKey, toKey, DELIVERY_SHIP);
+  const deliveryFromDb = filterMainOrdersByShipment(orders, fromKey, toKey, DELIVERY_SHIP);
+  const deliveryManual = manualDeliveryOrdersInRange(fromKey, toKey);
+  const deliveryRows = deliveryFromDb.concat(deliveryManual);
   const pickupRows = filterMainOrdersByShipment(orders, fromKey, toKey, DELIVERY_PICKUP);
   const shop = filterShopOrders(orders, fromKey, toKey);
 
@@ -1984,7 +2057,7 @@ function rowDeliveryMainValues(order) {
   const kmEntry = deliveryKmByOrderId.get(order.id);
   const kmCell = formatKmCellDisplay(kmEntry);
   return [
-    order.id != null ? formatOrderIdTypeChip(order.id, order.order_type) : "",
+    routeSheetOrderChipPlain(order) || "",
     formatDateShortRU(order.delivery_date),
     order.client ?? "",
     order.address ?? "",
@@ -2021,7 +2094,9 @@ export function bumpRouteDeliveryMapGeneration() {
 export async function exportRouteSheetDeliveryExcel() {
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid || fromKey > toKey) return;
-  const list = filterMainOrdersByShipment(ordersVisibleOnRouteSheet(), fromKey, toKey, DELIVERY_SHIP);
+  const base = filterMainOrdersByShipment(ordersVisibleOnRouteSheet(), fromKey, toKey, DELIVERY_SHIP);
+  const manual = manualDeliveryOrdersInRange(fromKey, toKey);
+  const list = base.concat(manual);
   const orderedList = ordersDeliveryListInExportOrder(list);
   const rows = orderedList.map(rowDeliveryMainValues);
   const msgEl = document.getElementById("routeSheetMessage");
@@ -2099,6 +2174,7 @@ function closeRouteSheetAddressGeoPopover() {
   if (pop) pop.hidden = true;
   clearRouteSheetAddressGeoPopoverFields();
   routeSheetAddressGeoPopoverState.orderId = null;
+  routeSheetAddressGeoPopoverState.manualOrderId = null;
   routeSheetAddressGeoPopoverState.saveAllowed = false;
   routeSheetAddressGeoPopoverState.previousCoordinates = "";
 }
@@ -2123,17 +2199,32 @@ function positionRouteSheetAddressGeoPopover(anchorEl) {
 }
 
 function openRouteSheetAddressGeoPopover(anchorEl) {
-  const orderIdRaw = anchorEl.getAttribute("data-order-id");
-  const orderId = orderIdRaw != null && orderIdRaw !== "" ? Number(orderIdRaw) : NaN;
-  if (!Number.isFinite(orderId)) return;
+  const orderIdRaw = anchorEl.getAttribute("data-order-id") || "";
+  if (!orderIdRaw) return;
 
-  const order = (state.allOrders || []).find((o) => Number(o.id) === orderId);
+  let order =
+    routeSheetManualDeliveryOrders.find((o) => String(o.id) === orderIdRaw) || null;
+  if (!order) {
+    const n = Number(orderIdRaw);
+    if (Number.isFinite(n)) {
+      order = (state.allOrders || []).find((o) => Number(o.id) === n) || null;
+    }
+  }
+  if (!order) return;
+
   clearRouteSheetAddressGeoPopoverFields();
-  routeSheetAddressGeoPopoverState.orderId = orderId;
+  if (order.route_sheet_manual === true) {
+    routeSheetAddressGeoPopoverState.orderId = null;
+    routeSheetAddressGeoPopoverState.manualOrderId = String(order.id);
+    routeSheetAddressGeoPopoverState.saveAllowed = true;
+  } else {
+    routeSheetAddressGeoPopoverState.orderId = Number(order.id);
+    routeSheetAddressGeoPopoverState.manualOrderId = null;
+    routeSheetAddressGeoPopoverState.saveAllowed =
+      Boolean(order) && canMutateOrders() && !isOrderEditLockedForUserLite(order);
+  }
   routeSheetAddressGeoPopoverState.previousCoordinates =
     order?.coordinates != null && String(order.coordinates).trim() !== "" ? String(order.coordinates).trim() : "";
-  routeSheetAddressGeoPopoverState.saveAllowed =
-    Boolean(order) && canMutateOrders() && !isOrderEditLockedForUserLite(order);
 
   const inp = document.getElementById("routeSheetAddressGeoInput");
   if (inp) inp.value = routeSheetAddressGeoPopoverState.previousCoordinates;
@@ -2211,9 +2302,6 @@ function initRouteSheetAddressGeoPopover() {
         return;
       }
 
-      const oid = routeSheetAddressGeoPopoverState.orderId;
-      if (!Number.isFinite(oid)) return;
-
       const raw = (inp?.value ?? "").trim();
       let payload = /** @type {{ coordinates: string | null }} */ ({ coordinates: null });
 
@@ -2231,6 +2319,26 @@ function initRouteSheetAddressGeoPopover() {
         }
         payload = { coordinates: formatCoordinatesForStorage(parsed) };
       }
+
+      const manualId = routeSheetAddressGeoPopoverState.manualOrderId;
+      if (manualId) {
+        const mo = routeSheetManualDeliveryOrders.find((o) => String(o.id) === manualId);
+        if (!mo) return;
+        saveBtn.disabled = true;
+        try {
+          mo.coordinates = payload.coordinates != null ? payload.coordinates : "";
+          persistRouteSheetManualToSession();
+          closeRouteSheetAddressGeoPopover();
+          setMessage("Координаты точки обновлены", "#2e7d32");
+          loadRouteSheet();
+        } finally {
+          saveBtn.disabled = false;
+        }
+        return;
+      }
+
+      const oid = routeSheetAddressGeoPopoverState.orderId;
+      if (!Number.isFinite(oid)) return;
 
       saveBtn.disabled = true;
       try {
@@ -2269,7 +2377,188 @@ function initRouteSheetAddressGeoPopover() {
   }
 }
 
+function clearRouteSheetAddPointFormError() {
+  const err = document.getElementById("routeSheetAddPointError");
+  if (err) {
+    err.hidden = true;
+    err.textContent = "";
+  }
+}
+
+function setRouteSheetAddPointFormError(text) {
+  const err = document.getElementById("routeSheetAddPointError");
+  if (err) {
+    err.textContent = text;
+    err.hidden = false;
+  }
+}
+
+function resetRouteSheetAddPointFormDefaults() {
+  const fromEl = document.getElementById("routeSheetDateFrom");
+  const dateEl = document.getElementById("routeSheetAddPointDate");
+  if (dateEl) dateEl.value = (fromEl?.value || "").trim() || getTomorrowIsoDate();
+
+  const ids = [
+    "routeSheetAddPointNo",
+    "routeSheetAddPointClient",
+    "routeSheetAddPointAddress",
+    "routeSheetAddPointCoordinates",
+    "routeSheetAddPointDescription",
+    "routeSheetAddPointRemainder",
+    "routeSheetAddPointAreaM2",
+    "routeSheetAddPointConstruction",
+    "routeSheetAddPointPhone",
+  ];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  }
+  const inst = document.getElementById("routeSheetAddPointInstallation");
+  const rev = document.getElementById("routeSheetAddPointReveals");
+  if (inst) inst.checked = false;
+  if (rev) rev.checked = false;
+  const typeEl = document.getElementById("routeSheetAddPointOrderType");
+  if (typeEl && typeEl.options.length) typeEl.value = "Окна";
+  clearRouteSheetAddPointFormError();
+}
+
+function openRouteSheetAddPointDialog() {
+  const dlg = document.getElementById("routeSheetAddPointDialog");
+  if (!dlg || typeof dlg.showModal !== "function") return;
+  resetRouteSheetAddPointFormDefaults();
+  dlg.showModal();
+  const first = document.getElementById("routeSheetAddPointNo");
+  if (first) {
+    try {
+      first.focus({ preventScroll: true });
+    } catch {
+      first.focus();
+    }
+  }
+}
+
+function closeRouteSheetAddPointDialog() {
+  const dlg = document.getElementById("routeSheetAddPointDialog");
+  if (dlg && typeof dlg.close === "function") dlg.close();
+  clearRouteSheetAddPointFormError();
+}
+
+function confirmRouteSheetAddPoint() {
+  clearRouteSheetAddPointFormError();
+
+  const noEl = document.getElementById("routeSheetAddPointNo");
+  const typeEl = document.getElementById("routeSheetAddPointOrderType");
+  const dateEl = document.getElementById("routeSheetAddPointDate");
+  const clientEl = document.getElementById("routeSheetAddPointClient");
+  const addrEl = document.getElementById("routeSheetAddPointAddress");
+  const coordEl = document.getElementById("routeSheetAddPointCoordinates");
+  const descEl = document.getElementById("routeSheetAddPointDescription");
+  const remEl = document.getElementById("routeSheetAddPointRemainder");
+  const areaEl = document.getElementById("routeSheetAddPointAreaM2");
+  const consEl = document.getElementById("routeSheetAddPointConstruction");
+  const instEl = document.getElementById("routeSheetAddPointInstallation");
+  const revEl = document.getElementById("routeSheetAddPointReveals");
+  const phoneEl = document.getElementById("routeSheetAddPointPhone");
+
+  const displayNo = (noEl?.value ?? "").trim();
+  const deliveryDate = (dateEl?.value ?? "").trim();
+  const address = (addrEl?.value ?? "").trim();
+  const coordsRaw = (coordEl?.value ?? "").trim();
+
+  if (!displayNo) {
+    setRouteSheetAddPointFormError("Укажите номер.");
+    return;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) {
+    setRouteSheetAddPointFormError("Укажите дату доставки.");
+    return;
+  }
+  if (!address && !coordsRaw) {
+    setRouteSheetAddPointFormError("Укажите адрес или координаты.");
+    return;
+  }
+  let coordinates = "";
+  if (coordsRaw) {
+    const parsed = parseLatLonCommaInput(coordsRaw);
+    if (!parsed) {
+      setRouteSheetAddPointFormError(
+        "Координаты: формат «широта, долгота», например 48.753016, 44.495766, либо оставьте поле пустым.",
+      );
+      return;
+    }
+    coordinates = formatCoordinatesForStorage(parsed);
+  }
+
+  const remRaw = (remEl?.value ?? "").trim();
+  let remaining_amount = null;
+  if (remRaw !== "") {
+    const pr = tryParseRublesInteger(remRaw, { allowSign: false });
+    if (!pr.ok || pr.invalidFormat) {
+      setRouteSheetAddPointFormError("Остаток: укажите целое число рублей или оставьте поле пустым.");
+      return;
+    }
+    remaining_amount = pr.value != null ? String(pr.value) : null;
+  }
+
+  const order = {
+    route_sheet_manual: true,
+    id: newRouteSheetManualPointId(),
+    route_sheet_display_no: displayNo,
+    order_type: (typeEl?.value ?? "Окна").trim() || "Окна",
+    delivery: DELIVERY_SHIP,
+    delivery_date: deliveryDate,
+    client: (clientEl?.value ?? "").trim(),
+    address,
+    coordinates,
+    description: (descEl?.value ?? "").trim(),
+    remaining_amount,
+    remaining_to: "",
+    area_m2: (areaEl?.value ?? "").trim(),
+    construction_count: (consEl?.value ?? "").trim(),
+    mosquito_nets: "",
+    installation: Boolean(instEl?.checked),
+    reveals: Boolean(revEl?.checked),
+    phone: (phoneEl?.value ?? "").trim(),
+  };
+
+  routeSheetManualDeliveryOrders.push(order);
+  persistRouteSheetManualToSession();
+  closeRouteSheetAddPointDialog();
+  loadRouteSheet();
+}
+
+function initRouteSheetAddPointDialog() {
+  const dlg = document.getElementById("routeSheetAddPointDialog");
+  const openBtn = document.getElementById("routeSheetAddPointOpenBtn");
+  const cancelBtn = document.getElementById("routeSheetAddPointCancelBtn");
+  const confirmBtn = document.getElementById("routeSheetAddPointConfirmBtn");
+  const typeEl = document.getElementById("routeSheetAddPointOrderType");
+
+  if (!dlg || !openBtn || dlg.dataset.routeSheetAddPointBound) return;
+  dlg.dataset.routeSheetAddPointBound = "1";
+
+  if (typeEl && !typeEl.dataset.routeSheetTypesPopulated) {
+    typeEl.dataset.routeSheetTypesPopulated = "1";
+    typeEl.innerHTML = "";
+    for (const t of MAIN_ORDER_TYPES) {
+      const opt = document.createElement("option");
+      opt.value = t;
+      opt.textContent = t;
+      typeEl.appendChild(opt);
+    }
+    typeEl.value = "Окна";
+  }
+
+  openBtn.addEventListener("click", () => openRouteSheetAddPointDialog());
+  if (cancelBtn) cancelBtn.addEventListener("click", () => closeRouteSheetAddPointDialog());
+  if (confirmBtn) confirmBtn.addEventListener("click", () => confirmRouteSheetAddPoint());
+  dlg.addEventListener("close", () => clearRouteSheetAddPointFormError());
+}
+
 export function initRouteSheetSection() {
+  loadRouteSheetManualFromSession();
+  initRouteSheetAddPointDialog();
+
   const shopSection = document.getElementById("routeSheetShopSection");
   if (shopSection) shopSection.hidden = isUserLite();
 
@@ -2293,6 +2582,7 @@ export function initRouteSheetSection() {
     routeSheetSection.addEventListener("click", (e) => {
       const idTd = e.target.closest("td.td-order-id");
       if (!idTd || !routeSheetSection.contains(idTd)) return;
+      if (idTd.classList.contains("td-order-id--route-sheet-manual")) return;
       e.stopPropagation();
       e.preventDefault();
       openOrderIdActionsMenu(idTd);

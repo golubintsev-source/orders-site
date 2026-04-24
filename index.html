@@ -797,7 +797,80 @@
             <span class="route-sheet-date-prefix">по</span>
             <input type="date" id="routeSheetDateTo" class="route-sheet-date-input" min="2000-01-01" max="2099-12-31" />
           </label>
+          <button type="button" id="routeSheetAddPointOpenBtn" class="btn-primary route-sheet-add-point-open-btn">
+            Добавить точку
+          </button>
         </div>
+        <dialog id="routeSheetAddPointDialog" class="route-sheet-add-point-dialog" aria-labelledby="routeSheetAddPointDialogTitle">
+          <div class="route-sheet-add-point-dialog-panel">
+            <h3 id="routeSheetAddPointDialogTitle" class="route-sheet-add-point-dialog-title">Добавить точку доставки</h3>
+            <div class="route-sheet-add-point-fields">
+              <label class="route-sheet-add-point-field">
+                <span class="route-sheet-add-point-label">Номер</span>
+                <input type="text" id="routeSheetAddPointNo" class="route-sheet-add-point-input" autocomplete="off" />
+              </label>
+              <label class="route-sheet-add-point-field">
+                <span class="route-sheet-add-point-label">Тип</span>
+                <select id="routeSheetAddPointOrderType" class="route-sheet-add-point-input"></select>
+              </label>
+              <label class="route-sheet-add-point-field">
+                <span class="route-sheet-add-point-label">Дата</span>
+                <input type="date" id="routeSheetAddPointDate" class="route-sheet-add-point-input" min="2000-01-01" max="2099-12-31" />
+              </label>
+              <label class="route-sheet-add-point-field route-sheet-add-point-field--wide">
+                <span class="route-sheet-add-point-label">Клиент</span>
+                <input type="text" id="routeSheetAddPointClient" class="route-sheet-add-point-input" autocomplete="off" />
+              </label>
+              <label class="route-sheet-add-point-field route-sheet-add-point-field--wide">
+                <span class="route-sheet-add-point-label">Адрес</span>
+                <input type="text" id="routeSheetAddPointAddress" class="route-sheet-add-point-input" autocomplete="off" />
+              </label>
+              <label class="route-sheet-add-point-field route-sheet-add-point-field--wide">
+                <span class="route-sheet-add-point-label">Координаты (необязательно)</span>
+                <input
+                  type="text"
+                  id="routeSheetAddPointCoordinates"
+                  class="route-sheet-add-point-input"
+                  placeholder="48.753016, 44.495766"
+                  autocomplete="off"
+                />
+              </label>
+              <label class="route-sheet-add-point-field route-sheet-add-point-field--wide">
+                <span class="route-sheet-add-point-label">Описание</span>
+                <textarea id="routeSheetAddPointDescription" class="route-sheet-add-point-textarea" rows="2"></textarea>
+              </label>
+              <label class="route-sheet-add-point-field">
+                <span class="route-sheet-add-point-label">Остаток, ₽</span>
+                <input type="text" id="routeSheetAddPointRemainder" class="route-sheet-add-point-input" inputmode="numeric" autocomplete="off" />
+              </label>
+              <label class="route-sheet-add-point-field">
+                <span class="route-sheet-add-point-label">Моск.</span>
+                <input type="text" id="routeSheetAddPointAreaM2" class="route-sheet-add-point-input" autocomplete="off" />
+              </label>
+              <label class="route-sheet-add-point-field">
+                <span class="route-sheet-add-point-label">Конст.</span>
+                <input type="text" id="routeSheetAddPointConstruction" class="route-sheet-add-point-input" autocomplete="off" />
+              </label>
+              <label class="route-sheet-add-point-field route-sheet-add-point-field--check">
+                <input type="checkbox" id="routeSheetAddPointInstallation" />
+                <span class="route-sheet-add-point-label">Монтаж</span>
+              </label>
+              <label class="route-sheet-add-point-field route-sheet-add-point-field--check">
+                <input type="checkbox" id="routeSheetAddPointReveals" />
+                <span class="route-sheet-add-point-label">Откосы</span>
+              </label>
+              <label class="route-sheet-add-point-field route-sheet-add-point-field--wide">
+                <span class="route-sheet-add-point-label">Телефон</span>
+                <input type="text" id="routeSheetAddPointPhone" class="route-sheet-add-point-input" autocomplete="off" />
+              </label>
+            </div>
+            <p id="routeSheetAddPointError" class="route-sheet-add-point-error" hidden></p>
+            <div class="route-sheet-add-point-actions">
+              <button type="button" id="routeSheetAddPointConfirmBtn" class="btn-primary route-sheet-add-point-action-btn">Добавить точку</button>
+              <button type="button" id="routeSheetAddPointCancelBtn" class="route-sheet-add-point-cancel-btn">Отменить</button>
+            </div>
+          </div>
+        </dialog>
         <p id="routeSheetMessage" class="route-sheet-message"></p>
         <div
           id="routeSheetAddressGeoPopover"
