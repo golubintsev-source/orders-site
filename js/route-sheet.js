@@ -2234,8 +2234,7 @@ function openRouteSheetAddressGeoPopover(anchorEl) {
   } else {
     routeSheetAddressGeoPopoverState.orderId = Number(order.id);
     routeSheetAddressGeoPopoverState.manualOrderId = null;
-    routeSheetAddressGeoPopoverState.saveAllowed =
-      Boolean(order) && canMutateOrders() && !isOrderEditLockedForUserLite(order);
+    routeSheetAddressGeoPopoverState.saveAllowed = Boolean(order) && canMutateOrders();
   }
   routeSheetAddressGeoPopoverState.previousCoordinates =
     order?.coordinates != null && String(order.coordinates).trim() !== "" ? String(order.coordinates).trim() : "";
