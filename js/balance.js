@@ -145,7 +145,7 @@ export async function loadBalance() {
         <th scope="row">${escapeHtml(label)}</th>
         ${PARTICIPANTS.map(
           (p) =>
-            `<td class="td-money">${formatAmountWholeRubles(value(p))}</td>`
+            `<td class="td-money"><span class="status-value">${formatAmountWholeRubles(value(p))}</span></td>`
         ).join("")}
       </tr>
     `

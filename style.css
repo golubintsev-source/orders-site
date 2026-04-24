@@ -1596,6 +1596,12 @@ h2 {
   text-align: right;
 }
 
+/* Суммы — серая подложка как «Статус» в «Заказы» */
+#balanceTable td.td-money .status-value {
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
 #section-settings .settings-rate-row {
   display: flex;
   align-items: center;
