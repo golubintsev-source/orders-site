@@ -107,6 +107,13 @@ const HEADERS_DELIVERY = [
   "Телефон",
 ];
 
+/**
+ * Ширины столбцов «Доставка» в условных единицах Excel (не пиксели): узкие колонки + перенос текста,
+ * чтобы таблица умещалась по ширине при печати A4 книжная.
+ * Индекс совпадает с HEADERS_DELIVERY.
+ */
+const ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS = [5, 5, 7, 11, 4, 11, 5, 8];
+
 const HEADERS_SHOP = ["Номер", "Клиент", "Адрес", "Описание", "Телефон"];
 
 /** Центр Волгограда (OSM). */
@@ -1836,6 +1843,16 @@ function applyAutoColumnWidths(ws, aoa) {
   ws["!cols"] = cols;
 }
 
+/** Узкие столбцы для выгрузки «Доставка» через SheetJS (без стилей переноса в community-формате). */
+function applyDeliveryPrintColumnWidthsXlsx(ws, numCols) {
+  const w = ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS;
+  const cols = [];
+  for (let c = 0; c < numCols; c++) {
+    cols.push({ wch: w[c] ?? 8 });
+  }
+  ws["!cols"] = cols;
+}
+
 /** Макс. размер картинки карты в пикселях при 96 dpi (~поля печати A4). */
 function routeSheetMapImageMaxPxForA4() {
   const margin = 0.9;
@@ -1868,22 +1885,6 @@ function scaleCanvasToFitMax(source, maxW, maxH) {
 
 function getExcelJsConstructor() {
   return globalThis.ExcelJS ?? globalThis.exceljs?.default ?? globalThis.exceljs;
-}
-
-function columnCharWidthsFromAoa(aoa) {
-  if (!aoa.length) return [];
-  const numCols = Math.max(0, ...aoa.map((row) => row.length));
-  const widths = [];
-  for (let c = 0; c < numCols; c++) {
-    let maxLen = 0;
-    for (const row of aoa) {
-      const v = row[c];
-      if (v == null || v === "") continue;
-      maxLen = Math.max(maxLen, String(v).length);
-    }
-    widths.push(Math.min(Math.max(maxLen + 2, 8), 255));
-  }
-  return widths;
 }
 
 function triggerXlsxDownload(buffer, filename) {
@@ -2002,19 +2003,41 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(headers, rows, mapCanvas)
   const ExcelJS = getExcelJsConstructor();
   if (!ExcelJS) throw new Error("ExcelJS missing");
 
-  const aoa = [headers, ...rows];
-  const colWidths = columnCharWidthsFromAoa(aoa);
-
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Доставка", {
-    pageSetup: { paperSize: 9, orientation: "portrait" },
+    pageSetup: {
+      paperSize: 9,
+      orientation: "portrait",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: {
+        left: 0.25,
+        right: 0.25,
+        top: 0.55,
+        bottom: 0.55,
+        header: 0.3,
+        footer: 0.3,
+      },
+    },
   });
 
   worksheet.addRow(headers);
   for (const r of rows) worksheet.addRow(r);
 
-  for (let i = 0; i < colWidths.length; i++) {
-    worksheet.getColumn(i + 1).width = colWidths[i];
+  const wrapTop = { vertical: "top", wrapText: true };
+  const tableRowEnd = 1 + rows.length;
+  for (let rn = 1; rn <= tableRowEnd; rn++) {
+    const row = worksheet.getRow(rn);
+    row.eachCell((cell) => {
+      cell.alignment = wrapTop;
+      if (rn === 1) cell.font = { ...cell.font, bold: true };
+    });
+  }
+
+  const colW = ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS;
+  for (let i = 0; i < headers.length; i++) {
+    worksheet.getColumn(i + 1).width = colW[i] ?? 8;
   }
 
   if (mapCanvas) {
@@ -2038,7 +2061,14 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(headers, rows, mapCanvas)
   triggerXlsxDownload(buf, `marshrutnyy_list_dostavka_${excelFileNameTimestamp()}.xlsx`);
 }
 
-function exportSheet(headers, rows, sheetName, filePrefix) {
+/**
+ * @param {string[]} headers
+ * @param {unknown[][]} rows
+ * @param {string} sheetName
+ * @param {string} filePrefix
+ * @param {{ deliveryPrintLayout?: boolean }} [opts]
+ */
+function exportSheet(headers, rows, sheetName, filePrefix, opts = {}) {
   const XLSX = globalThis.XLSX;
   if (XLSX == null) {
     const msgEl = document.getElementById("routeSheetMessage");
@@ -2047,7 +2077,12 @@ function exportSheet(headers, rows, sheetName, filePrefix) {
   }
   const aoa = [headers, ...rows];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  applyAutoColumnWidths(ws, aoa);
+  const numCols = Math.max(0, ...aoa.map((row) => row.length));
+  if (opts.deliveryPrintLayout) {
+    applyDeliveryPrintColumnWidthsXlsx(ws, numCols);
+  } else {
+    applyAutoColumnWidths(ws, aoa);
+  }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, `${filePrefix}_${excelFileNameTimestamp()}.xlsx`);
@@ -2119,7 +2154,9 @@ export async function exportRouteSheetDeliveryExcel() {
   const ExcelJS = getExcelJsConstructor();
   const html2canvas = globalThis.html2canvas;
   if (!ExcelJS || !html2canvas) {
-    exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka");
+    exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka", {
+      deliveryPrintLayout: true,
+    });
     if (msgEl) {
       msgEl.textContent =
         "Карта в файл не добавлена: не загрузились модули Excel/снимок экрана. Обновите страницу.";
@@ -2147,7 +2184,9 @@ export async function exportRouteSheetDeliveryExcel() {
     }
   } catch (e) {
     console.error(e);
-    exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka");
+    exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka", {
+      deliveryPrintLayout: true,
+    });
     if (msgEl) {
       msgEl.textContent =
         "Не удалось встроить карту; выгружена только таблица. Обновите страницу или нажмите «Составить маршрут» и повторите.";
