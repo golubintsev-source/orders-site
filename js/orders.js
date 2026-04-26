@@ -57,6 +57,8 @@ import {
   buildDisplayRowForPendingOrder,
   insertPayloadFromFormData,
   nextOfflineTempOrderId,
+  nextOfflineTempCalcId,
+  addPendingOfflineCalculation,
   cloneOrderWithoutOfflineMeta,
   sortOrdersWithOfflinePendingFirst,
   isNetworkFetchError,
@@ -272,14 +274,18 @@ function shortLoginByEmail(email) {
   return `${login.slice(0, 5)}..`;
 }
 
-async function writeOrderDeltaCalculations({
+/**
+ * Строки для вставки в calculations (автодельты по суммам/получателям заказа).
+ * Без order_id — как при онлайн-insert; при офлайне каждая строка уходит в очередь pending.
+ */
+function buildOrderDeltaCalculationInsertRows({
   orderId,
   wasEditing,
   initialSums,
   initialParticipants,
   orderData,
 }) {
-  if (!orderId) return;
+  if (!orderId) return [];
 
   const nowIso = new Date().toISOString();
   const timeHHmm = formatTimeHHmmFromIso(nowIso);
@@ -485,18 +491,62 @@ async function writeOrderDeltaCalculations({
     }
   }
 
-  if (rows.length === 0) return;
+  if (rows.length === 0) return [];
 
-  const payload = rows.map((r) => ({
+  return rows.map((r) => ({
     created_at: r.created_at,
     from_place: r.from_place,
     to_place: r.to_place,
     amount: r.amount,
     comment: r.comment,
   }));
+}
+
+async function writeOrderDeltaCalculations({
+  orderId,
+  wasEditing,
+  initialSums,
+  initialParticipants,
+  orderData,
+}) {
+  const payload = buildOrderDeltaCalculationInsertRows({
+    orderId,
+    wasEditing,
+    initialSums,
+    initialParticipants,
+    orderData,
+  });
+  if (payload.length === 0) return;
   const { error } = await supabaseClient.from("calculations").insert(payload);
   if (error) {
     console.error("Автозапись дельт в calculations:", error);
+  }
+}
+
+function queueOrderDeltaCalculationsForOffline({
+  orderTempId,
+  wasEditing,
+  initialSums,
+  initialParticipants,
+  orderData,
+}) {
+  const rows = buildOrderDeltaCalculationInsertRows({
+    orderId: orderTempId,
+    wasEditing,
+    initialSums,
+    initialParticipants,
+    orderData,
+  });
+  for (const insertPayload of rows) {
+    const localId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `calc-delta-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    addPendingOfflineCalculation({
+      localId,
+      tempCalcId: nextOfflineTempCalcId(),
+      insertPayload,
+    });
   }
 }
 
@@ -2639,6 +2689,15 @@ function commitOrderFormToOfflineStorage(orderData, editingOffline) {
     });
     highlightId = state.editingOrderId;
   }
+
+  const orderTempIdForCalcs = editingOffline ? state.editingOrderId : highlightId;
+  queueOrderDeltaCalculationsForOffline({
+    orderTempId: orderTempIdForCalcs,
+    wasEditing: editingOffline,
+    initialSums: editingOffline ? state.initialOrderSums : undefined,
+    initialParticipants: editingOffline ? state.initialOrderParticipants : undefined,
+    orderData,
+  });
 
   state.ordersFromCache = true;
   rebaselineAllOrdersFromStateAndPendingQueue();
