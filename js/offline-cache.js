@@ -6,6 +6,8 @@ const PENDING_ORDERS_KEY = "orders_site_offline_pending_v1";
 const PENDING_TASKS_KEY = "orders_site_offline_pending_tasks_v1";
 const PENDING_HISTORY_KEY = "orders_site_offline_pending_history_v1";
 const PENDING_CALCS_KEY = "orders_site_offline_pending_calcs_v1";
+/** Последний отображаемый список заказов (для F5 без сети, даже если основной snap пуст). */
+const EMERGENCY_ORDERS_KEY = "orders_site_emergency_orders_v1";
 
 const SNAP_VERSION = 1;
 const PENDING_VERSION = 1;
@@ -97,6 +99,34 @@ export function persistServerOrdersForOffline(orders) {
     at: new Date().toISOString(),
     orders: clean,
   });
+}
+
+/**
+ * Сохранить последний отображаемый список заказов (копия объектов).
+ * v2 — полный merged state; v1 — только «серверные» строки (устар.).
+ */
+export function persistEmergencyOrdersView(mergedStateAllOrders) {
+  try {
+    const rows = JSON.parse(JSON.stringify(mergedStateAllOrders || []));
+    writeJson(EMERGENCY_ORDERS_KEY, { version: 2, at: new Date().toISOString(), rows });
+  } catch (e) {
+    console.warn("emergency orders persist:", e);
+  }
+}
+
+/** База для merge с офлайн-очередью: без жёлтых строк (они снова подтянутся из очереди). */
+export function readEmergencyOrdersBaseForMerge() {
+  const o = readJson(EMERGENCY_ORDERS_KEY, null);
+  if (!o) return [];
+  if (o.version === 2 && Array.isArray(o.rows)) {
+    return o.rows
+      .filter((row) => !row.__offlinePendingSync)
+      .map((row) => cloneOrderWithoutOfflineMeta({ ...row }));
+  }
+  if (o.version === 1 && Array.isArray(o.orders)) {
+    return o.orders;
+  }
+  return [];
 }
 
 export function persistSettingsSnapshotFromRows(rows) {

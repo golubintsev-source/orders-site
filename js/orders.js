@@ -60,6 +60,8 @@ import {
   cloneOrderWithoutOfflineMeta,
   sortOrdersWithOfflinePendingFirst,
   isNetworkFetchError,
+  persistEmergencyOrdersView,
+  readEmergencyOrdersBaseForMerge,
 } from "./offline-cache.js";
 
 function refreshOrdersDependentSections() {
@@ -90,6 +92,7 @@ export async function loadOrders() {
     persistServerOrdersForOffline(finalData);
     state.ordersFromCache = false;
     state.allOrders = mergeServerOrdersWithPendingDisplayRows(finalData);
+    persistEmergencyOrdersView(state.allOrders);
     await loadFilesCountMap();
     applyFiltersAndRender();
     updateSectionNavRicherStat();
@@ -106,11 +109,29 @@ export async function loadOrders() {
     setDbUnavailableBannerVisible(true, { cacheMode: true });
     state.ordersFromCache = true;
     state.allOrders = merged;
+    persistEmergencyOrdersView(state.allOrders);
     state.filesCountMap = {};
     applyFiltersAndRender();
     updateSectionNavRicherStat();
     setMessage(
       "Нет связи с базой. Открыта последняя копия с этого устройства; новые заявки сохраняются локально и отправятся при появлении связи.",
+      "#92400e"
+    );
+    refreshOrdersDependentSections();
+    return;
+  }
+
+  const emergMerged = mergeServerOrdersWithPendingDisplayRows(readEmergencyOrdersBaseForMerge());
+  if (emergMerged.length > 0) {
+    setDbUnavailableBannerVisible(true, { cacheMode: true });
+    state.ordersFromCache = true;
+    state.allOrders = emergMerged;
+    persistEmergencyOrdersView(state.allOrders);
+    state.filesCountMap = {};
+    applyFiltersAndRender();
+    updateSectionNavRicherStat();
+    setMessage(
+      "Нет связи с базой. Восстановлен последний сохранённый на этом устройстве список заказов (офлайн-очередь подмешана).",
       "#92400e"
     );
     refreshOrdersDependentSections();
@@ -1048,6 +1069,9 @@ function orderMatchesOrderDateRange(order, fromYmd, toYmd) {
 function rebaselineAllOrdersFromStateAndPendingQueue() {
   const serverLike = state.allOrders.filter((o) => !o.__offlinePendingSync).map((o) => cloneOrderWithoutOfflineMeta({ ...o }));
   state.allOrders = mergeServerOrdersWithPendingDisplayRows(serverLike);
+  persistEmergencyOrdersView(state.allOrders);
+  applyFiltersAndRender();
+  updateSectionNavRicherStat();
 }
 
 export function applyFiltersAndRender() {
@@ -2505,8 +2529,6 @@ export async function deleteOrder(orderId) {
     if (!ok) return;
     removePendingByLocalId(localId);
     rebaselineAllOrdersFromStateAndPendingQueue();
-    applyFiltersAndRender();
-    updateSectionNavRicherStat();
     setMessage("Заявка удалена из локальной очереди", "");
     return;
   }

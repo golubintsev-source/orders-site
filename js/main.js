@@ -1,4 +1,5 @@
 import { checkAuth, loadProfile } from "./auth.js";
+import { state } from "./state.js";
 import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
 import { loadOrders, resetFormMode, editOrder, viewOrder, deleteOrder, applyOrderTypeSelectForRole } from "./orders.js";
 import { initCalculationsSection } from "./calculations.js";
@@ -76,6 +77,13 @@ async function init() {
   } catch (err) {
     console.error("Ошибка инициализации:", err);
     setMessage("Ошибка подключения к базе. Проверьте интернет и настройки Supabase.", "#d32f2f");
+    if (state.currentUser) {
+      try {
+        await loadOrders();
+      } catch (e2) {
+        console.error("Повторная загрузка заказов из кэша:", e2);
+      }
+    }
   }
 }
 
