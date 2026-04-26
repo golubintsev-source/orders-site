@@ -2610,6 +2610,22 @@ button:active {
     padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
   }
 
+  /*
+   * Баннер БД — первый в body; фикс. topbar перекрывал жёлтый блок (iOS Safari).
+   * Пока баннер виден, не дублировать отступ под шапку в .container — иначе огромный зазор до таблицы.
+   */
+  body:has(.topbar) #dbUnavailableBanner:not([hidden]) {
+    margin-top: calc(env(safe-area-inset-top, 0px) + 56px);
+  }
+
+  body:has(#dbUnavailableBanner:not([hidden])) .container:has(.topbar) {
+    padding-top: 3px;
+  }
+
+  body:has(#dbUnavailableBanner:not([hidden])) #section-all > .card {
+    padding-top: 0;
+  }
+
   /* Раздел «Заказы»: ширина как на ПК; колонка таблицы — на всю высоту под topbar (flex, без урезания max-height). */
   .container:has(#section-all.content-section.active) {
     max-width: 1550px;
