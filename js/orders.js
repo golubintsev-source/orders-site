@@ -62,7 +62,37 @@ import {
   isNetworkFetchError,
   persistEmergencyOrdersView,
   readEmergencyOrdersBaseForMerge,
+  raceWithTimeout,
 } from "./offline-cache.js";
+
+function mergedLocalOrdersForOfflineDisplayMeta() {
+  const snap = readSnapshot();
+  const merged = mergeServerOrdersWithPendingDisplayRows(snap?.orders || []);
+  if (merged.length > 0 || readPendingQueue().length > 0) {
+    return { rows: merged, fromSnap: true };
+  }
+  const rows = mergeServerOrdersWithPendingDisplayRows(readEmergencyOrdersBaseForMerge());
+  return { rows, fromSnap: false };
+}
+
+function mergedLocalOrdersForOfflineDisplay() {
+  return mergedLocalOrdersForOfflineDisplayMeta().rows;
+}
+
+/**
+ * Сразу после входа: таблица из localStorage без ожидания сети (Safari/iOS).
+ * Полная синхронизация остаётся в loadOrders().
+ */
+export function paintOrdersFromLocalStorageIfAny() {
+  const rows = mergedLocalOrdersForOfflineDisplay();
+  if (rows.length === 0) return;
+  state.ordersFromCache = true;
+  state.allOrders = rows;
+  state.filesCountMap = state.filesCountMap || {};
+  setDbUnavailableBannerVisible(true, { cacheMode: true });
+  applyFiltersAndRender();
+  updateSectionNavRicherStat();
+}
 
 function refreshOrdersDependentSections() {
   if (getCurrentSectionId() === "tasks-all") {
@@ -82,7 +112,26 @@ export async function loadOrders() {
   const ordersQuery = () =>
     supabaseClient.from("orders").select("*").is("deleted_at", null).order("id", { ascending: false });
 
-  const { data, error } = await ordersQuery();
+  let data = null;
+  let error = null;
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    error = { message: "offline" };
+  } else {
+    try {
+      const res = await raceWithTimeout(ordersQuery());
+      data = res.data;
+      error = res.error;
+    } catch (e) {
+      if (e?.code === "TIMEOUT") {
+        data = null;
+        error = { message: "timeout" };
+      } else {
+        data = null;
+        error = e;
+      }
+    }
+  }
 
   if (!error && data) {
     setDbUnavailableBannerVisible(false);
@@ -101,11 +150,9 @@ export async function loadOrders() {
   }
 
   console.error("Ошибка загрузки:", error);
-  const snap = readSnapshot();
-  const merged = mergeServerOrdersWithPendingDisplayRows(snap?.orders || []);
-  const hasLocalData = merged.length > 0 || readPendingQueue().length > 0;
+  const { rows: merged, fromSnap } = mergedLocalOrdersForOfflineDisplayMeta();
 
-  if (hasLocalData) {
+  if (merged.length > 0) {
     setDbUnavailableBannerVisible(true, { cacheMode: true });
     state.ordersFromCache = true;
     state.allOrders = merged;
@@ -114,24 +161,9 @@ export async function loadOrders() {
     applyFiltersAndRender();
     updateSectionNavRicherStat();
     setMessage(
-      "Нет связи с базой. Открыта последняя копия с этого устройства; новые заявки сохраняются локально и отправятся при появлении связи.",
-      "#92400e"
-    );
-    refreshOrdersDependentSections();
-    return;
-  }
-
-  const emergMerged = mergeServerOrdersWithPendingDisplayRows(readEmergencyOrdersBaseForMerge());
-  if (emergMerged.length > 0) {
-    setDbUnavailableBannerVisible(true, { cacheMode: true });
-    state.ordersFromCache = true;
-    state.allOrders = emergMerged;
-    persistEmergencyOrdersView(state.allOrders);
-    state.filesCountMap = {};
-    applyFiltersAndRender();
-    updateSectionNavRicherStat();
-    setMessage(
-      "Нет связи с базой. Восстановлен последний сохранённый на этом устройстве список заказов (офлайн-очередь подмешана).",
+      fromSnap
+        ? "Нет связи с базой. Открыта последняя копия с этого устройства; новые заявки сохраняются локально и отправятся при появлении связи."
+        : "Нет связи с базой. Восстановлен последний сохранённый на этом устройстве список заказов (офлайн-очередь подмешана).",
       "#92400e"
     );
     refreshOrdersDependentSections();

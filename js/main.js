@@ -1,7 +1,15 @@
-import { checkAuth, loadProfile } from "./auth.js";
+import { checkAuth, loadProfile, hydrateCachedRoleFromStorage } from "./auth.js";
 import { state } from "./state.js";
 import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
-import { loadOrders, resetFormMode, editOrder, viewOrder, deleteOrder, applyOrderTypeSelectForRole } from "./orders.js";
+import {
+  loadOrders,
+  paintOrdersFromLocalStorageIfAny,
+  resetFormMode,
+  editOrder,
+  viewOrder,
+  deleteOrder,
+  applyOrderTypeSelectForRole,
+} from "./orders.js";
 import { initCalculationsSection } from "./calculations.js";
 import { initBalanceSection } from "./balance.js";
 import { initRouteSheetSection } from "./route-sheet.js";
@@ -34,6 +42,12 @@ window.openFilesModal = openFilesModal;
 window.removeFile = removeFile;
 window.toggleOrderRowHighlightById = toggleOrderRowHighlightById;
 
+/** Safari: при возврате из bfcache скрипт init не выполняется повторно — подтянуть таблицу из localStorage. */
+window.addEventListener("pageshow", (e) => {
+  if (!e.persisted) return;
+  void import("./orders.js").then((m) => m.paintOrdersFromLocalStorageIfAny());
+});
+
 /** Если boot-route.js не выполнился (сеть), снять «вечную» скрытость разделов из style.css. */
 function ensureBootOrFallback() {
   if (document.documentElement.hasAttribute("data-route-boot")) return;
@@ -55,14 +69,16 @@ async function init() {
     const user = await checkAuth();
     if (!user) return;
 
-    await loadProfile();
+    hydrateCachedRoleFromStorage();
+    paintOrdersFromLocalStorageIfAny();
+
+    await Promise.all([loadProfile(), loadSettings()]);
     initDbPingIndicator();
     refreshSectionNavAfterProfile();
     applyOrderTypeSelectForRole();
     applyRouteOnLoad();
     ensurePopstateRouting();
 
-    await loadSettings();
     await loadOrders();
     initOrderTasksSection();
     resetFormMode();

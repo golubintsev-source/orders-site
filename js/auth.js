@@ -1,7 +1,38 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { normalizeRole } from "./roles.js";
-import { isNetworkFetchError } from "./offline-cache.js";
+import { isNetworkFetchError, raceWithTimeout } from "./offline-cache.js";
+
+const PROFILE_ROLE_CACHE_KEY = "orders_site_cache_profile_role_v1";
+
+function readCachedRoleRaw() {
+  try {
+    const raw = localStorage.getItem(PROFILE_ROLE_CACHE_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    return o?.role ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedRole(role) {
+  try {
+    localStorage.setItem(
+      PROFILE_ROLE_CACHE_KEY,
+      JSON.stringify({ role: role ?? null, at: new Date().toISOString() }),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Синхронно до loadProfile: корректные фильтры user_lite при ранней отрисовке из localStorage. */
+export function hydrateCachedRoleFromStorage() {
+  const raw = readCachedRoleRaw();
+  if (raw == null) return;
+  state.currentRole = normalizeRole(raw);
+}
 
 /**
  * Вход в приложение без сети: getUser() ходит на Auth API и падает офлайн,
@@ -32,19 +63,30 @@ export async function checkAuth() {
 }
 
 export async function loadProfile() {
-  const { data, error } = await supabaseClient
-    .from("profiles")
-    .select("role")
-    .eq("id", state.currentUser.id)
-    .single();
+  let res;
+  try {
+    res = await raceWithTimeout(
+      supabaseClient.from("profiles").select("role").eq("id", state.currentUser.id).single(),
+    );
+  } catch (e) {
+    if (e?.code === "TIMEOUT") {
+      state.currentRole = normalizeRole(readCachedRoleRaw());
+      return;
+    }
+    console.error("Ошибка загрузки профиля:", e);
+    state.currentRole = normalizeRole(readCachedRoleRaw());
+    return;
+  }
 
+  const { data, error } = res;
   if (error) {
     console.error("Ошибка загрузки профиля:", error);
-    state.currentRole = normalizeRole(null);
+    state.currentRole = normalizeRole(readCachedRoleRaw());
     return;
   }
 
   state.currentRole = normalizeRole(data?.role);
+  writeCachedRole(data?.role);
 }
 
 export async function logout() {
