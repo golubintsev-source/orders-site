@@ -59,6 +59,7 @@ import {
   nextOfflineTempOrderId,
   cloneOrderWithoutOfflineMeta,
   sortOrdersWithOfflinePendingFirst,
+  isNetworkFetchError,
 } from "./offline-cache.js";
 
 function refreshOrdersDependentSections() {
@@ -2537,6 +2538,69 @@ export async function deleteOrder(orderId) {
   await loadOrders();
 }
 
+/** Сохранить заказ только в localStorage (очередь офлайн). editingOffline — правка существующей офлайн-заявки. */
+function commitOrderFormToOfflineStorage(orderData, editingOffline) {
+  const insertPayload = insertPayloadFromFormData(orderData);
+  let highlightId;
+
+  if (!editingOffline) {
+    const localId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const tempId = nextOfflineTempOrderId();
+    const displayRow = buildDisplayRowForPendingOrder(orderData, tempId, localId);
+    addPendingOfflineOrder({ localId, displayRow, insertPayload });
+    const histLocalId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `hist-${Date.now()}`;
+    addPendingOfflineOrderHistory({
+      localId: histLocalId,
+      pending_order_local_id: localId,
+      order_temp_id: tempId,
+      user_email: state.currentUser?.email || "",
+      comment: buildOrderHistoryComment(null, orderData, false),
+    });
+    highlightId = tempId;
+  } else {
+    const cur = state.allOrders.find((x) => x.id === state.editingOrderId);
+    const localId = cur?.__offlineLocalId;
+    if (!localId) {
+      setMessage("Не удалось обновить локальную заявку", "#d32f2f");
+      return;
+    }
+    const displayRow = buildDisplayRowForPendingOrder(orderData, state.editingOrderId, localId);
+    updatePendingOfflineOrder(localId, displayRow, insertPayload);
+    const histLocalId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `hist-${Date.now()}`;
+    addPendingOfflineOrderHistory({
+      localId: histLocalId,
+      pending_order_local_id: localId,
+      order_temp_id: state.editingOrderId,
+      user_email: state.currentUser?.email || "",
+      comment: buildOrderHistoryComment(state.initialOrderSnapshot, orderData, true),
+    });
+    highlightId = state.editingOrderId;
+  }
+
+  state.ordersFromCache = true;
+  rebaselineAllOrdersFromStateAndPendingQueue();
+  resetFormMode();
+  switchSection("all");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => highlightAndFocusSavedOrderRow(highlightId));
+  });
+  setMessage(
+    editingOffline
+      ? "Изменения сохранены на устройстве; отправка в базу при появлении связи."
+      : "Заявка сохранена на устройстве; отправка в базу при появлении связи.",
+    "#92400e"
+  );
+}
+
 export async function submitOrderForm(event) {
   event.preventDefault();
   setOrderFormInvalidDateMessage(false);
@@ -2564,14 +2628,23 @@ export async function submitOrderForm(event) {
         return;
       }
     } else {
-      const { data: lockRow, error: lockErr } = await supabaseClient
-        .from("orders")
-        .select("lock_edit_for_user_lite")
-        .eq("id", state.editingOrderId)
-        .single();
-      if (!lockErr && lockRow && isOrderEditLockedForUserLite(lockRow)) {
-        setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
-        return;
+      try {
+        const { data: lockRow, error: lockErr } = await supabaseClient
+          .from("orders")
+          .select("lock_edit_for_user_lite")
+          .eq("id", state.editingOrderId)
+          .single();
+        if (!lockErr && lockRow && isOrderEditLockedForUserLite(lockRow)) {
+          setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
+          return;
+        }
+      } catch (e) {
+        if (!isNetworkFetchError(e)) throw e;
+        const lockRow = state.allOrders.find((x) => Number(x.id) === Number(state.editingOrderId));
+        if (lockRow && isOrderEditLockedForUserLite(lockRow)) {
+          setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
+          return;
+        }
       }
     }
   }
@@ -2674,64 +2747,7 @@ export async function submitOrderForm(event) {
   const saveLocalEdit = Boolean(state.editingOrderId && isOfflineClientOrderId(state.editingOrderId));
 
   if (saveLocalNew || saveLocalEdit) {
-    const insertPayload = insertPayloadFromFormData(orderData);
-    let highlightId;
-
-    if (saveLocalNew) {
-      const localId =
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      const tempId = nextOfflineTempOrderId();
-      const displayRow = buildDisplayRowForPendingOrder(orderData, tempId, localId);
-      addPendingOfflineOrder({ localId, displayRow, insertPayload });
-      const histLocalId =
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `hist-${Date.now()}`;
-      addPendingOfflineOrderHistory({
-        localId: histLocalId,
-        pending_order_local_id: localId,
-        order_temp_id: tempId,
-        user_email: state.currentUser?.email || "",
-        comment: buildOrderHistoryComment(null, orderData, false),
-      });
-      highlightId = tempId;
-    } else {
-      const cur = state.allOrders.find((x) => x.id === state.editingOrderId);
-      const localId = cur?.__offlineLocalId;
-      if (!localId) {
-        setMessage("Не удалось обновить локальную заявку", "#d32f2f");
-        return;
-      }
-      const displayRow = buildDisplayRowForPendingOrder(orderData, state.editingOrderId, localId);
-      updatePendingOfflineOrder(localId, displayRow, insertPayload);
-      const histLocalId =
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `hist-${Date.now()}`;
-      addPendingOfflineOrderHistory({
-        localId: histLocalId,
-        pending_order_local_id: localId,
-        order_temp_id: state.editingOrderId,
-        user_email: state.currentUser?.email || "",
-        comment: buildOrderHistoryComment(state.initialOrderSnapshot, orderData, true),
-      });
-      highlightId = state.editingOrderId;
-    }
-
-    rebaselineAllOrdersFromStateAndPendingQueue();
-    resetFormMode();
-    switchSection("all");
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => highlightAndFocusSavedOrderRow(highlightId));
-    });
-    setMessage(
-      saveLocalEdit
-        ? "Изменения сохранены на устройстве; отправка в базу при появлении связи."
-        : "Заявка сохранена на устройстве; отправка в базу при появлении связи.",
-      "#92400e"
-    );
+    commitOrderFormToOfflineStorage(orderData, saveLocalEdit);
     return;
   }
 
@@ -2739,31 +2755,41 @@ export async function submitOrderForm(event) {
   let savedOrderId = state.editingOrderId;
   const wasEditing = Boolean(state.editingOrderId);
 
-  if (state.editingOrderId) {
-    const result = await supabaseClient
-      .from("orders")
-      .update(orderData)
-      .eq("id", state.editingOrderId)
-      .select()
-      .single();
+  try {
+    if (state.editingOrderId) {
+      const result = await supabaseClient
+        .from("orders")
+        .update(orderData)
+        .eq("id", state.editingOrderId)
+        .select()
+        .single();
 
-    error = result.error;
+      error = result.error;
 
-    if (!error && result.data) {
-      savedOrderId = result.data.id;
+      if (!error && result.data) {
+        savedOrderId = result.data.id;
+      }
+    } else {
+      const result = await supabaseClient
+        .from("orders")
+        .insert([orderData])
+        .select()
+        .single();
+
+      error = result.error;
+
+      if (!error && result.data) {
+        savedOrderId = result.data.id;
+      }
     }
-  } else {
-    const result = await supabaseClient
-      .from("orders")
-      .insert([orderData])
-      .select()
-      .single();
+  } catch (e) {
+    error = e;
+  }
 
-    error = result.error;
-
-    if (!error && result.data) {
-      savedOrderId = result.data.id;
-    }
+  if (error && !wasEditing && isNetworkFetchError(error)) {
+    setDbUnavailableBannerVisible(true, { cacheMode: true });
+    commitOrderFormToOfflineStorage(orderData, false);
+    return;
   }
 
   if (error) {

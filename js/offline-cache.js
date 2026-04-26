@@ -68,6 +68,20 @@ export function isOfflineDataMode() {
   return false;
 }
 
+/**
+ * Ошибка сети при fetch (Safari: «TypeError: Load failed», Chrome: «Failed to fetch»).
+ * Supabase может вернуть объект error с таким message или бросить исключение.
+ */
+export function isNetworkFetchError(err) {
+  if (err == null) return false;
+  const name = String(err.name || "");
+  const msg = String(err.message != null ? err.message : err);
+  if (name === "TypeError" && /load failed|failed to fetch|networkerror|fetch/i.test(msg)) return true;
+  if (/failed to fetch|networkerror|load failed|network request failed|internet disconnected|err_network/i.test(msg))
+    return true;
+  return false;
+}
+
 export function readSnapshot() {
   const o = readJson(SNAP_KEY, null);
   if (!o || o.version !== SNAP_VERSION) return null;
