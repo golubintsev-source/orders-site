@@ -11,6 +11,7 @@ import {
   nextOfflineTempCalcId,
   removePendingCalcByTempId,
   isOfflineDataMode,
+  raceWithTimeout,
 } from "./offline-cache.js";
 
 let editingId = null;
@@ -362,11 +363,32 @@ export async function loadCalculations() {
   const tbody = document.querySelector("#calculationsTable tbody");
   if (!tbody) return;
 
-  const { data, error } = await supabaseClient
-    .from("calculations")
-    .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+  const calculationsQuery = () =>
+    supabaseClient
+      .from("calculations")
+      .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false });
+
+  let data = null;
+  let error = null;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    error = { message: "offline" };
+  } else {
+    try {
+      const res = await raceWithTimeout(calculationsQuery());
+      data = res.data;
+      error = res.error;
+    } catch (e) {
+      if (e?.code === "TIMEOUT") {
+        data = null;
+        error = { message: "timeout" };
+      } else {
+        data = null;
+        error = e;
+      }
+    }
+  }
 
   if (error) {
     console.error("Ошибка загрузки расчетов:", error);

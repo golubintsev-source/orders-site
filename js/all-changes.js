@@ -3,7 +3,12 @@ import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
 import { isOrderHiddenFromUserLite } from "./roles.js";
 import { setDbUnavailableBannerVisible } from "./dbHealth.js";
-import { readSnapshot, persistOrderHistorySnapshot, mergeOrderHistoryRows } from "./offline-cache.js";
+import {
+  readSnapshot,
+  persistOrderHistorySnapshot,
+  mergeOrderHistoryRows,
+  raceWithTimeout,
+} from "./offline-cache.js";
 
 /** YYYY-MM-DD в локальной календарной дате. */
 function ymdLocal(d = new Date()) {
@@ -101,12 +106,33 @@ export async function loadAllChanges() {
 
   const { startIso, endIso } = readAllChangesDateRangeFromInputs();
 
-  const { data, error } = await supabaseClient
-    .from("order_history")
-    .select("created_at, user_email, comment, order_id")
-    .gte("created_at", startIso)
-    .lte("created_at", endIso)
-    .order("created_at", { ascending: false });
+  const historyQuery = () =>
+    supabaseClient
+      .from("order_history")
+      .select("created_at, user_email, comment, order_id")
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
+      .order("created_at", { ascending: false });
+
+  let data = null;
+  let error = null;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    error = { message: "offline" };
+  } else {
+    try {
+      const res = await raceWithTimeout(historyQuery());
+      data = res.data;
+      error = res.error;
+    } catch (e) {
+      if (e?.code === "TIMEOUT") {
+        data = null;
+        error = { message: "timeout" };
+      } else {
+        data = null;
+        error = e;
+      }
+    }
+  }
 
   if (error) {
     console.error("Ошибка загрузки истории изменений:", error);
