@@ -14,7 +14,7 @@ export const state = {
   initialOrderSnapshot: null,
   allOrders: [],
   filesCountMap: {},
-  /** выбранные статусы для фильтра; пустой массив = показывать все */
+  /** выбранные статусы; пустой = все. При загрузке orders.js выставляется «все кроме Заказ закрыт» */
   statusFilterSelected: [],
   /** выбранные типы заказа (ключи как в ORDER_TYPE_FILTER_KEYS); пустой = все */
   orderTypeFilterSelected: [],
