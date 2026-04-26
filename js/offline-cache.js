@@ -8,8 +8,11 @@ const PENDING_HISTORY_KEY = "orders_site_offline_pending_history_v1";
 const PENDING_CALCS_KEY = "orders_site_offline_pending_calcs_v1";
 /** Последний отображаемый список заказов (для F5 без сети, даже если основной snap пуст). */
 const EMERGENCY_ORDERS_KEY = "orders_site_emergency_orders_v1";
+/** Готовые числа страницы «Баланс» (без пересчёта из расчётов офлайн). */
+const BALANCE_OFFLINE_VIEW_KEY = "orders_site_balance_offline_view_v1";
 
 const SNAP_VERSION = 1;
+const BALANCE_OFFLINE_VIEW_VERSION = 1;
 const PENDING_VERSION = 1;
 
 function readJson(key, fallback) {
@@ -168,6 +171,28 @@ export function persistCalculationsSnapshot(rows) {
     at: new Date().toISOString(),
     calculations: rows || [],
   });
+}
+
+/**
+ * Сохранить отображаемые метрики баланса (после успешной загрузки из БД).
+ * @param {{ balances: Record<string, number>, turnover: Record<string, { hour: number, today: number, m1: number, m2: number, m3: number }> }} payload
+ */
+export function persistBalanceOfflineView(payload) {
+  if (!payload?.balances || !payload?.turnover) return;
+  writeJson(BALANCE_OFFLINE_VIEW_KEY, {
+    version: BALANCE_OFFLINE_VIEW_VERSION,
+    at: new Date().toISOString(),
+    balances: payload.balances,
+    turnover: payload.turnover,
+  });
+}
+
+/** @returns {{ version: number, at: string, balances: Record<string, number>, turnover: Record<string, object> } | null} */
+export function readBalanceOfflineView() {
+  const o = readJson(BALANCE_OFFLINE_VIEW_KEY, null);
+  if (!o || o.version !== BALANCE_OFFLINE_VIEW_VERSION) return null;
+  if (!o.balances || typeof o.balances !== "object" || !o.turnover || typeof o.turnover !== "object") return null;
+  return o;
 }
 
 export function persistOrderTasksSnapshot(rows) {

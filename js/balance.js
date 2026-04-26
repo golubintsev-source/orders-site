@@ -2,7 +2,7 @@ import { supabaseClient } from "./config.js";
 import { isUserLite } from "./roles.js";
 import { formatAmountWholeRubles } from "./format.js";
 import { state } from "./state.js";
-import { readSnapshot, persistCalculationsSnapshot } from "./offline-cache.js";
+import { persistBalanceOfflineView, readBalanceOfflineView } from "./offline-cache.js";
 
 const PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
 const MSK_TZ = "Europe/Moscow";
@@ -57,13 +57,8 @@ function getRecentMskDayKeys(daysCount) {
   return keys;
 }
 
-function renderBalanceFromCalcRows(calcRows, messageEl) {
-  const theadRow = document.querySelector("#balanceTable thead tr");
-  const tbody = document.querySelector("#balanceTable tbody");
-  if (!theadRow || !tbody) return;
-
-  if (messageEl) messageEl.textContent = "";
-
+/** Считает метрики по строкам расчётов (только при успешной загрузке из БД). */
+function computeBalanceMetricsFromCalcRows(calcRows) {
   const balances = Object.fromEntries(PARTICIPANTS.map((p) => [p, 0]));
   const [todayKey, dayM1Key, dayM2Key, dayM3Key] = getRecentMskDayKeys(4);
   const turnover = Object.fromEntries(
@@ -73,13 +68,11 @@ function renderBalanceFromCalcRows(calcRows, messageEl) {
     ])
   );
   const hourAgoMs = Date.now() - 60 * 60 * 1000;
-  for (const row of calcRows) {
+  for (const row of calcRows || []) {
     const amount = toNumber(row.amount);
-    // Откуда => минус, Куда => плюс
     addDelta(balances, row.from_place, -amount);
     addDelta(balances, row.to_place, amount);
 
-    // Сальдо по дням (МСК): те же знаки, что и в основном балансе.
     const dayKey = row.created_at ? mskDayKeyFromDate(new Date(row.created_at)) : "";
     const bucket =
       dayKey === todayKey ? "today"
@@ -113,6 +106,31 @@ function renderBalanceFromCalcRows(calcRows, messageEl) {
     balances[p] += Number.isFinite(n) ? Math.trunc(n) : 0;
   }
 
+  return { balances, turnover };
+}
+
+function isBalanceOfflineDocRenderable(doc) {
+  if (!doc?.balances || !doc?.turnover) return false;
+  for (const p of PARTICIPANTS) {
+    if (!Object.prototype.hasOwnProperty.call(doc.balances, p)) return false;
+    const t = doc.turnover[p];
+    if (!t || typeof t !== "object") return false;
+    for (const k of ["hour", "today", "m1", "m2", "m3"]) {
+      if (typeof t[k] !== "number" || !Number.isFinite(t[k])) return false;
+    }
+    if (typeof doc.balances[p] !== "number" || !Number.isFinite(doc.balances[p])) return false;
+  }
+  return true;
+}
+
+/** Рисует таблицу по уже готовым числам (из БД или из кеша). */
+function paintBalanceTable(balances, turnover, messageEl) {
+  const theadRow = document.querySelector("#balanceTable thead tr");
+  const tbody = document.querySelector("#balanceTable tbody");
+  if (!theadRow || !tbody) return;
+
+  if (messageEl) messageEl.textContent = "";
+
   theadRow.innerHTML =
     '<th scope="col"></th>' +
     PARTICIPANTS.map((p) => `<th scope="col">${escapeHtml(p)}</th>`).join("");
@@ -141,11 +159,34 @@ function renderBalanceFromCalcRows(calcRows, messageEl) {
     .join("");
 }
 
+function tryPaintBalanceFromOfflineCache(messageEl, cacheHint) {
+  const doc = readBalanceOfflineView();
+  if (!doc || !isBalanceOfflineDocRenderable(doc)) return false;
+  paintBalanceTable(doc.balances, doc.turnover, messageEl);
+  if (messageEl) {
+    const savedAt = doc.at ? new Date(doc.at).toLocaleString("ru-RU") : "";
+    messageEl.textContent = savedAt
+      ? `${cacheHint} Сохранено: ${savedAt}.`
+      : cacheHint;
+  }
+  return true;
+}
+
 export async function loadBalance() {
   const messageEl = document.getElementById("balanceMessage");
   const theadRow = document.querySelector("#balanceTable thead tr");
   const tbody = document.querySelector("#balanceTable tbody");
   if (!theadRow || !tbody) return;
+
+  const offlineMsg = "Показаны сохранённые значения баланса (без сети).";
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    if (tryPaintBalanceFromOfflineCache(messageEl, offlineMsg)) return;
+    if (messageEl) {
+      messageEl.textContent = "Нет сети и нет сохранённого баланса. Откройте раздел при подключении к интернету.";
+    }
+    return;
+  }
 
   const calcRes = await supabaseClient
     .from("calculations")
@@ -154,26 +195,18 @@ export async function loadBalance() {
 
   if (calcRes.error) {
     console.error("Ошибка загрузки расчётов для баланса:", calcRes.error);
-    const snap = readSnapshot();
-    const cached = snap?.calculations;
-    if (cached?.length) {
-      if (messageEl) {
-        messageEl.textContent = "Баланс по последней сохранённой на устройстве копии расчётов (сеть недоступна).";
-      }
-      renderBalanceFromCalcRows(cached, null);
-      return;
-    }
-    if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса";
+    if (tryPaintBalanceFromOfflineCache(messageEl, offlineMsg)) return;
+    if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса.";
     return;
   }
 
   const calcRows = calcRes.data || [];
-  persistCalculationsSnapshot(calcRows);
-  renderBalanceFromCalcRows(calcRows, messageEl);
+  const metrics = computeBalanceMetricsFromCalcRows(calcRows);
+  paintBalanceTable(metrics.balances, metrics.turnover, messageEl);
+  persistBalanceOfflineView(metrics);
 }
 
 export async function initBalanceSection() {
   if (isUserLite()) return;
   await loadBalance();
 }
-

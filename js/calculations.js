@@ -24,6 +24,89 @@ let calculationsRowsCache = [];
 /** Непустая строка — поиск активен (кнопка «Отменить»). */
 let appliedCalculationsSearchQuery = null;
 
+/** Применённый период (YYYY-MM-DD, локальный календарь); таблица и запрос к БД. */
+let appliedCalcDateFromYmd = "";
+let appliedCalcDateToYmd = "";
+
+function localDateToYmd(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function defaultCalcDateRangeYmd() {
+  const today = new Date();
+  const toYmd = localDateToYmd(today);
+  const fromBase = new Date(today);
+  fromBase.setDate(fromBase.getDate() - 2);
+  const fromYmd = localDateToYmd(fromBase);
+  return { fromYmd, toYmd };
+}
+
+function localYmdStartMs(ymd) {
+  const [y, mo, d] = String(ymd || "")
+    .split("-")
+    .map((x) => Number(x));
+  if (!y || !mo || !d) return NaN;
+  return new Date(y, mo - 1, d, 0, 0, 0, 0).getTime();
+}
+
+function localYmdEndMs(ymd) {
+  const [y, mo, d] = String(ymd || "")
+    .split("-")
+    .map((x) => Number(x));
+  if (!y || !mo || !d) return NaN;
+  return new Date(y, mo - 1, d, 23, 59, 59, 999).getTime();
+}
+
+function rowCreatedAtInYmdRange(iso, fromYmd, toYmd) {
+  if (!iso || !fromYmd || !toYmd) return false;
+  const t = new Date(iso).getTime();
+  const a = localYmdStartMs(fromYmd);
+  const b = localYmdEndMs(toYmd);
+  if (Number.isNaN(t) || Number.isNaN(a) || Number.isNaN(b)) return false;
+  return t >= a && t <= b;
+}
+
+function filterCalcRowsByDateRange(rows, fromYmd, toYmd) {
+  return (rows || []).filter((r) => rowCreatedAtInYmdRange(r.created_at, fromYmd, toYmd));
+}
+
+/** Выставить поля дат и applied-диапазон по умолчанию (сегодня−2 … сегодня). */
+export function initCalculationsDateRangeDefaults() {
+  const { fromYmd, toYmd } = defaultCalcDateRangeYmd();
+  const fromEl = document.getElementById("calcDateFrom");
+  const toEl = document.getElementById("calcDateTo");
+  if (fromEl) fromEl.value = fromYmd;
+  if (toEl) toEl.value = toYmd;
+  appliedCalcDateFromYmd = fromYmd;
+  appliedCalcDateToYmd = toYmd;
+}
+
+function readCalcPeriodInputs() {
+  const fromEl = document.getElementById("calcDateFrom");
+  const toEl = document.getElementById("calcDateTo");
+  return {
+    fromYmd: (fromEl?.value ?? "").trim(),
+    toYmd: (toEl?.value ?? "").trim(),
+  };
+}
+
+function applyCalculationsPeriodFromInputs() {
+  const { fromYmd, toYmd } = readCalcPeriodInputs();
+  if (!fromYmd || !toYmd) {
+    setMessage("Укажите обе даты периода.", true);
+    return;
+  }
+  if (localYmdStartMs(fromYmd) > localYmdEndMs(toYmd)) {
+    setMessage("Дата «с» не может быть позже даты «по».", true);
+    return;
+  }
+  appliedCalcDateFromYmd = fromYmd;
+  appliedCalcDateToYmd = toYmd;
+  setMessage("");
+  void loadCalculations();
+}
+
 /** «16 мар 08:11:05» — локальное время. */
 function formatCalcTimeRu(iso) {
   if (!iso) return "";
@@ -363,11 +446,25 @@ export async function loadCalculations() {
   const tbody = document.querySelector("#calculationsTable tbody");
   if (!tbody) return;
 
+  if (!appliedCalcDateFromYmd || !appliedCalcDateToYmd) {
+    initCalculationsDateRangeDefaults();
+  }
+
+  const dateFromInput = document.getElementById("calcDateFrom");
+  const dateToInput = document.getElementById("calcDateTo");
+  if (dateFromInput) dateFromInput.value = appliedCalcDateFromYmd;
+  if (dateToInput) dateToInput.value = appliedCalcDateToYmd;
+
+  const fromIso = new Date(localYmdStartMs(appliedCalcDateFromYmd)).toISOString();
+  const toIso = new Date(localYmdEndMs(appliedCalcDateToYmd)).toISOString();
+
   const calculationsQuery = () =>
     supabaseClient
       .from("calculations")
       .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
       .is("deleted_at", null)
+      .gte("created_at", fromIso)
+      .lte("created_at", toIso)
       .order("created_at", { ascending: false });
 
   let data = null;
@@ -393,14 +490,24 @@ export async function loadCalculations() {
   if (error) {
     console.error("Ошибка загрузки расчетов:", error);
     setMessage("Показана копия с устройства; локальные несинхронизированные строки — с жёлтой заливкой.", true);
-    calculationsRowsCache = mergeCalculationRows(readSnapshot()?.calculations || []);
+    const merged = mergeCalculationRows(readSnapshot()?.calculations || []);
+    calculationsRowsCache = filterCalcRowsByDateRange(
+      merged,
+      appliedCalcDateFromYmd,
+      appliedCalcDateToYmd
+    );
     renderCalculationsTableFromCache();
     return;
   }
 
   setMessage("");
-  calculationsRowsCache = mergeCalculationRows(data || []);
-  persistCalculationsSnapshot(data || []);
+  const merged = mergeCalculationRows(data || []);
+  calculationsRowsCache = filterCalcRowsByDateRange(
+    merged,
+    appliedCalcDateFromYmd,
+    appliedCalcDateToYmd
+  );
+  persistCalculationsSnapshot(calculationsRowsCache);
   renderCalculationsTableFromCache();
 }
 
@@ -606,6 +713,12 @@ function setupCalculationsForm() {
     amountEl.addEventListener("input", () => refreshRublesIntegerInputState(amountEl, amountEl.value));
   }
 
+  const periodBtn = document.getElementById("calcPeriodApplyBtn");
+  if (periodBtn && !periodBtn.dataset.periodBound) {
+    periodBtn.dataset.periodBound = "1";
+    periodBtn.addEventListener("click", () => applyCalculationsPeriodFromInputs());
+  }
+
   const searchBtn = document.getElementById("calcSearchBtn");
   const searchInput = document.getElementById("calcSearchInput");
   if (searchBtn && searchInput && !searchBtn.dataset.searchBound) {
@@ -631,6 +744,7 @@ function setupCalculationsForm() {
 }
 
 export async function initCalculationsSection() {
+  initCalculationsDateRangeDefaults();
   setupCalculationsForm();
   await loadCalculations();
 }
@@ -645,6 +759,7 @@ async function init() {
     window.location.href = hrefToHome();
   });
 
+  initCalculationsDateRangeDefaults();
   setupCalculationsForm();
   await loadCalculations();
 }

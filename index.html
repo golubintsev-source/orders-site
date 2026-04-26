@@ -685,12 +685,25 @@
                 <input type="text" id="calcAmount" inputmode="numeric" title="Только целые рубли, без копеек" />
               </div>
             </div>
-            <div class="field">
-              <label for="calcComment">Комментарий</label>
-              <input type="text" id="calcComment" />
+            <div class="calculations-form-row calculations-form-row--comment-submit">
+              <div class="calculations-comment-wrap field">
+                <label for="calcComment">Комментарий</label>
+                <input type="text" id="calcComment" class="calculations-comment-input" placeholder="Комментарий" />
+              </div>
+              <button type="submit" id="calcSubmitBtn" class="calculations-submit-btn">Добавить</button>
+            </div>
+            <div class="calculations-form-row calculations-form-row--dates" role="group" aria-label="Период отображения">
+              <div class="field calculations-date-field">
+                <label for="calcDateFrom">с</label>
+                <input type="date" id="calcDateFrom" autocomplete="off" />
+              </div>
+              <div class="field calculations-date-field">
+                <label for="calcDateTo">по</label>
+                <input type="date" id="calcDateTo" autocomplete="off" />
+              </div>
+              <button type="button" id="calcPeriodApplyBtn" class="calculations-search-btn" aria-label="Применить период и обновить таблицу">Найти</button>
             </div>
             <div class="calculations-form-row calculations-form-row--submit-search">
-              <button type="submit" id="calcSubmitBtn" class="calculations-submit-btn">Добавить</button>
               <div class="calculations-search-wrap">
                 <input type="search" id="calcSearchInput" class="calculations-search-input" placeholder="Поиск…" autocomplete="off" enterkeyhint="search" aria-label="Поиск по таблице" />
                 <button type="button" id="calcSearchBtn" class="calculations-search-btn">Найти</button>

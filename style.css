@@ -1023,9 +1023,68 @@ h2 {
   min-width: 0;
 }
 
-#section-calculations .calculations-form #calcComment,
-.calculations-page .calculations-form #calcComment {
+/* Строка: комментарий (как ширина «Поиск») + «Добавить» */
+.calculations-form-row--comment-submit {
+  --calc-submit-row-height: 40px;
+  --calc-primary-action-width: 9rem;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.calculations-form-row--comment-submit .calculations-comment-wrap {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+#section-calculations .calculations-form .calculations-comment-input,
+.calculations-page .calculations-form .calculations-comment-input {
+  flex: 0 0 var(--calc-primary-action-width);
+  width: var(--calc-primary-action-width);
+  max-width: var(--calc-primary-action-width);
+  min-width: 0;
   font-size: 16px;
+  height: var(--calc-submit-row-height, 40px);
+  min-height: var(--calc-submit-row-height, 40px);
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+
+#section-calculations .calculations-form-row--comment-submit .calculations-submit-btn,
+.calculations-page .calculations-form-row--comment-submit .calculations-submit-btn {
+  flex: 0 0 var(--calc-primary-action-width);
+  width: var(--calc-primary-action-width);
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--calc-submit-row-height);
+  min-height: var(--calc-submit-row-height);
+  padding: 0 12px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+/* Период «с» / «по» */
+.calculations-form-row--dates {
+  --calc-submit-row-height: 40px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.calculations-form-row--dates .calculations-date-field {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 11rem;
 }
 
 #section-calculations .calculations-submit-btn,
@@ -1046,10 +1105,9 @@ h2 {
   opacity: 0.95;
 }
 
-/* Одна высота в строке: Добавить, поле поиска, Найти */
+/* Строка: поле поиска и «Найти» */
 .calculations-form-row--submit-search {
   --calc-submit-row-height: 40px;
-  /* Общая ширина для «Добавить» и поля «Поиск» */
   --calc-primary-action-width: 9rem;
   display: flex;
   flex-direction: row;
@@ -1060,18 +1118,8 @@ h2 {
   min-width: 0;
 }
 
-.calculations-form-row--submit-search .calculations-submit-btn {
-  flex: 0 0 var(--calc-primary-action-width);
-  width: var(--calc-primary-action-width);
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: var(--calc-submit-row-height);
-  min-height: var(--calc-submit-row-height);
-  padding: 0 12px;
-  font-size: 13px;
-  box-sizing: border-box;
+.calculations-form-row--dates .calculations-search-btn {
+  align-self: flex-end;
 }
 
 .calculations-search-wrap {
