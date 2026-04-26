@@ -17,6 +17,7 @@ import {
   switchSection,
   syncOrdersSearchIconAccent,
 } from "./section-nav.js";
+import { initDbPingIndicator } from "./db-ping.js";
 import { canAccessSection } from "./roles.js";
 import { applyClientFilter } from "./orders.js";
 import {
@@ -54,6 +55,7 @@ async function init() {
     if (!user) return;
 
     await loadProfile();
+    initDbPingIndicator();
     refreshSectionNavAfterProfile();
     applyOrderTypeSelectForRole();
     applyRouteOnLoad();

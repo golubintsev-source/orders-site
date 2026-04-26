@@ -166,16 +166,82 @@ h2 {
   transition: background 0.15s, color 0.15s;
 }
 
+.topbar-orders-type-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-left: 2px;
+  margin-bottom: 2px;
+}
+
 .orders-type-toggle-wrap {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding-left: 6px;
-  margin-bottom: 2px;
 }
 
 .orders-type-toggle-wrap[hidden] {
   display: none;
+}
+
+.db-ping-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 6px;
+  border-radius: 10px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  user-select: none;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.db-ping-indicator__icon {
+  flex-shrink: 0;
+}
+
+.db-ping-indicator__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: inherit;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.db-ping-indicator--pending {
+  color: #6b7280;
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
+
+.db-ping-indicator--ok {
+  color: #15803d;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.db-ping-indicator--slow {
+  color: #a16207;
+  border-color: #fde047;
+  background: #fefce8;
+}
+
+.db-ping-indicator--error {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+@media (max-width: 480px) {
+  .db-ping-indicator__label {
+    display: none;
+  }
+
+  .db-ping-indicator {
+    padding: 6px;
+  }
 }
 
 .orders-type-toggle--active {

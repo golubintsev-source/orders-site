@@ -91,29 +91,46 @@
             </div>
           </div>
         </div>
-        <div class="orders-type-toggle-wrap" role="group" aria-label="Быстрый фильтр по типу заказа" hidden>
-          <span
-            id="ordersTypeToggleO"
-            class="orders-type-toggle"
-            tabindex="0"
-            role="switch"
-            aria-checked="false"
-            aria-label="Фильтр по типам: С, П, О, А, Без типа"
-            title="Фильтр: С, П, О, А, Без типа"
+        <div class="topbar-orders-type-tools">
+          <div class="orders-type-toggle-wrap" role="group" aria-label="Быстрый фильтр по типу заказа" hidden>
+            <span
+              id="ordersTypeToggleO"
+              class="orders-type-toggle"
+              tabindex="0"
+              role="switch"
+              aria-checked="false"
+              aria-label="Фильтр по типам: С, П, О, А, Без типа"
+              title="Фильтр: С, П, О, А, Без типа"
+            >
+              О
+            </span>
+            <span
+              id="ordersTypeToggleM"
+              class="orders-type-toggle"
+              tabindex="0"
+              role="switch"
+              aria-checked="false"
+              aria-label="Фильтр по типу: Магазин"
+              title="Фильтр: Магазин"
+            >
+              М
+            </span>
+          </div>
+          <div
+            id="dbPingIndicator"
+            class="db-ping-indicator db-ping-indicator--pending"
+            role="status"
+            aria-live="polite"
+            aria-label="База данных: проверка соединения"
+            title="База данных: проверка…"
           >
-            О
-          </span>
-          <span
-            id="ordersTypeToggleM"
-            class="orders-type-toggle"
-            tabindex="0"
-            role="switch"
-            aria-checked="false"
-            aria-label="Фильтр по типу: Магазин"
-            title="Фильтр: Магазин"
-          >
-            М
-          </span>
+            <svg class="db-ping-indicator__icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/>
+              <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+              <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
+            </svg>
+            <span class="db-ping-indicator__label">База данных</span>
+          </div>
         </div>
       </nav>
       <div class="topbar-toolbar">
@@ -1092,6 +1109,6 @@
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=26"></script>
+  <script type="module" src="./js/main.js?v=27"></script>
 </body>
 </html>
