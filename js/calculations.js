@@ -91,20 +91,29 @@ function readCalcPeriodInputs() {
   };
 }
 
-function applyCalculationsPeriodFromInputs() {
+/** @returns {Promise<boolean>} true если период применён и данные перезагружены */
+async function applyCalculationsPeriodFromInputs() {
   const { fromYmd, toYmd } = readCalcPeriodInputs();
   if (!fromYmd || !toYmd) {
     setMessage("Укажите обе даты периода.", true);
-    return;
+    return false;
   }
   if (localYmdStartMs(fromYmd) > localYmdEndMs(toYmd)) {
     setMessage("Дата «с» не может быть позже даты «по».", true);
-    return;
+    return false;
   }
   appliedCalcDateFromYmd = fromYmd;
   appliedCalcDateToYmd = toYmd;
   setMessage("");
-  void loadCalculations();
+  await loadCalculations();
+  return true;
+}
+
+/** Одна кнопка «Найти»: период «с»/«по» + запрос к БД + фильтр по полю «Поиск». */
+async function applyCalculationsFindCombined() {
+  const ok = await applyCalculationsPeriodFromInputs();
+  if (!ok) return;
+  applyCalculationsSearchFromInput();
 }
 
 /** «16 мар 08:11:05» — локальное время. */
@@ -713,12 +722,6 @@ function setupCalculationsForm() {
     amountEl.addEventListener("input", () => refreshRublesIntegerInputState(amountEl, amountEl.value));
   }
 
-  const periodBtn = document.getElementById("calcPeriodApplyBtn");
-  if (periodBtn && !periodBtn.dataset.periodBound) {
-    periodBtn.dataset.periodBound = "1";
-    periodBtn.addEventListener("click", () => applyCalculationsPeriodFromInputs());
-  }
-
   const searchBtn = document.getElementById("calcSearchBtn");
   const searchInput = document.getElementById("calcSearchInput");
   if (searchBtn && searchInput && !searchBtn.dataset.searchBound) {
@@ -730,13 +733,20 @@ function setupCalculationsForm() {
       if (active) {
         cancelCalculationsSearch();
       } else {
-        applyCalculationsSearchFromInput();
+        void applyCalculationsFindCombined();
       }
     });
     searchInput.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-      applyCalculationsSearchFromInput();
+      const active =
+        appliedCalculationsSearchQuery != null &&
+        String(appliedCalculationsSearchQuery).trim() !== "";
+      if (active) {
+        applyCalculationsSearchFromInput();
+      } else {
+        void applyCalculationsFindCombined();
+      }
     });
   }
 

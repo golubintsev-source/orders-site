@@ -1050,8 +1050,12 @@ h2 {
   font-size: 16px;
   height: var(--calc-submit-row-height, 40px);
   min-height: var(--calc-submit-row-height, 40px);
+  max-height: var(--calc-submit-row-height, 40px);
   padding: 0 8px;
   box-sizing: border-box;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 #section-calculations .calculations-form-row--comment-submit .calculations-submit-btn,
@@ -1116,10 +1120,6 @@ h2 {
   gap: 6px;
   width: 100%;
   min-width: 0;
-}
-
-.calculations-form-row--dates .calculations-search-btn {
-  align-self: flex-end;
 }
 
 .calculations-search-wrap {
