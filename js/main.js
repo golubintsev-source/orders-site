@@ -19,6 +19,11 @@ import {
 } from "./section-nav.js";
 import { canAccessSection } from "./roles.js";
 import { applyClientFilter } from "./orders.js";
+import {
+  getRouteSectionFromUrl,
+  migrateLegacyHashToPathIfNeeded,
+  tryConsumeOrdersExcelExport,
+} from "./app-routes.js";
 
 window.editOrder = editOrder;
 window.viewOrder = viewOrder;
@@ -51,7 +56,8 @@ async function init() {
     initRouteSheetSection();
     initAllChangesSection();
 
-    applyHashSection();
+    applyRouteOnLoad();
+    ensurePopstateRouting();
     applyPendingOrdersSearchFromHistory();
   } catch (err) {
     console.error("Ошибка инициализации:", err);
@@ -59,31 +65,26 @@ async function init() {
   }
 }
 
-const HASH_SECTION_IDS = new Set([
-  "all",
-  "new",
-  "calculations",
-  "tasks-all",
-  "changes-all",
-  "balance",
-  "route-sheet",
-  "settings",
-]);
+function applyRouteOnLoad() {
+  tryConsumeOrdersExcelExport(canAccessSection("orders-excel"));
 
-function applyHashSection() {
-  const h = window.location.hash.replace(/^#/, "");
-  if (!h) return;
-  if (h === "orders-excel") {
-    if (!canAccessSection("orders-excel")) {
-      history.replaceState(null, "", window.location.pathname + window.location.search);
-      return;
-    }
-    history.replaceState(null, "", window.location.pathname + window.location.search);
-    void import("./ordersExcelExport.js").then((m) => m.exportOrdersToExcel());
-    return;
-  }
-  if (!HASH_SECTION_IDS.has(h) || !canAccessSection(h)) return;
-  switchSection(h);
+  let sectionId = getRouteSectionFromUrl();
+  if (!canAccessSection(sectionId)) sectionId = "all";
+  switchSection(sectionId, { skipUrlSync: true });
+  migrateLegacyHashToPathIfNeeded();
+}
+
+let popstateRoutingBound = false;
+
+function ensurePopstateRouting() {
+  if (popstateRoutingBound) return;
+  popstateRoutingBound = true;
+  window.addEventListener("popstate", () => {
+    if (!document.getElementById("ordersTable")) return;
+    let sectionId = getRouteSectionFromUrl();
+    if (!canAccessSection(sectionId)) sectionId = "all";
+    switchSection(sectionId, { skipUrlSync: true });
+  });
 }
 
 function applyPendingOrdersSearchFromHistory() {

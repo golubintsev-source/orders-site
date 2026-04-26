@@ -1,0 +1,132 @@
+/** Разделы приложения, которые отражаются в адресной строке (кроме одноразового export Excel). */
+export const ROUTE_SECTION_IDS = new Set([
+  "all",
+  "new",
+  "calculations",
+  "tasks-all",
+  "changes-all",
+  "balance",
+  "route-sheet",
+  "settings",
+  "order-tasks",
+]);
+
+function normalizePathname(pathname) {
+  let p = pathname.replace(/\/index\.html$/i, "") || "/";
+  if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
+  return p;
+}
+
+const PATH_TO_SECTION = new Map([
+  ["/", "all"],
+  ["/all", "all"],
+  ["/new", "new"],
+  ["/calculations", "calculations"],
+  ["/tasks-all", "tasks-all"],
+  ["/changes-all", "changes-all"],
+  ["/balance", "balance"],
+  ["/route-sheet", "route-sheet"],
+  ["/settings", "settings"],
+  ["/order-tasks", "order-tasks"],
+]);
+
+export function usesHashOnlyRouting() {
+  return window.location.protocol === "file:";
+}
+
+export function pathForRouteSection(sectionId) {
+  if (sectionId === "all") return "/";
+  return `/${sectionId}`;
+}
+
+/** Ссылка на главную (список заказов). */
+export function hrefToHome() {
+  return usesHashOnlyRouting() ? "index.html" : "/";
+}
+
+/** Ссылка на раздел SPA (для полной перезагрузки со страниц вне index). */
+export function hrefToAppSection(sectionId) {
+  if (sectionId === "orders-excel") return hrefToOrdersExcelExport();
+  if (!ROUTE_SECTION_IDS.has(sectionId)) return hrefToHome();
+  if (usesHashOnlyRouting()) {
+    if (sectionId === "all") return "index.html";
+    return `index.html#${sectionId}`;
+  }
+  return pathForRouteSection(sectionId);
+}
+
+export function hrefToOrdersExcelExport() {
+  return usesHashOnlyRouting() ? "index.html#orders-excel" : "/?export=orders-excel";
+}
+
+function stripHashAndExportParam() {
+  const u = new URL(window.location.href);
+  u.hash = "";
+  u.searchParams.delete("export");
+  const path = u.pathname + u.search;
+  return path === "" ? "/" : path;
+}
+
+/**
+ * Одноразовый экспорт Excel: ?export=orders-excel или #orders-excel.
+ * @returns {boolean} true, если сработал экспорт (URL очищен).
+ */
+export function tryConsumeOrdersExcelExport(canAccessOrdersExcel) {
+  const hash = window.location.hash.replace(/^#/, "");
+  const q = new URLSearchParams(window.location.search).get("export");
+  const isExcel = hash === "orders-excel" || q === "orders-excel";
+  if (!isExcel) return false;
+  const clean = stripHashAndExportParam();
+  if (!canAccessOrdersExcel) {
+    history.replaceState(null, "", clean);
+    return false;
+  }
+  history.replaceState(null, "", clean);
+  void import("./ordersExcelExport.js").then((m) => m.exportOrdersToExcel());
+  return true;
+}
+
+export function getRouteSectionFromUrl() {
+  if (usesHashOnlyRouting()) {
+    const h = window.location.hash.replace(/^#/, "");
+    if (h === "orders-excel") return "all";
+    if (ROUTE_SECTION_IDS.has(h)) return h;
+    return "all";
+  }
+  const pathKey = normalizePathname(window.location.pathname);
+  const fromPath = PATH_TO_SECTION.get(pathKey);
+  const h = window.location.hash.replace(/^#/, "");
+  const rootLike = pathKey === "/" || pathKey === "/all";
+
+  if (!rootLike && fromPath) return fromPath;
+  if (h && h !== "orders-excel" && ROUTE_SECTION_IDS.has(h)) return h;
+  if (fromPath) return fromPath;
+  return "all";
+}
+
+/** После загрузки: убрать устаревший #раздел при работе по путям (http/https). */
+export function migrateLegacyHashToPathIfNeeded() {
+  if (usesHashOnlyRouting()) return;
+  const h = window.location.hash.replace(/^#/, "");
+  if (!h || h === "orders-excel" || !ROUTE_SECTION_IDS.has(h)) return;
+  history.replaceState(null, "", pathForRouteSection(h) + window.location.search);
+}
+
+export function syncBrowserUrlToSection(sectionId) {
+  if (!ROUTE_SECTION_IDS.has(sectionId)) return;
+
+  if (usesHashOnlyRouting()) {
+    const base = window.location.pathname + window.location.search;
+    const targetHash = sectionId === "all" ? "" : `#${sectionId}`;
+    if (window.location.hash === targetHash) return;
+    history.pushState(null, "", `${base}${targetHash}`);
+    return;
+  }
+
+  const want = pathForRouteSection(sectionId);
+  const cur = normalizePathname(window.location.pathname);
+  const curSection = PATH_TO_SECTION.get(cur);
+  if (curSection === sectionId && !window.location.hash) return;
+
+  history.pushState(null, "", want + window.location.search);
+}

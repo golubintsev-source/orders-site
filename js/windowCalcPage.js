@@ -1,3 +1,4 @@
+import { hrefToHome } from "./app-routes.js";
 import { calculateWindow } from "./windowCalculator.js";
 import { GRID_PRESETS, resolveRowHeights, resolveColumnWidths } from "./windowGridSchema.js";
 
@@ -820,7 +821,7 @@ function setupBackButton() {
   const btn = document.getElementById("backToOrdersBtn");
   if (!btn) return;
   btn.addEventListener("click", () => {
-    window.location.href = "index.html";
+    window.location.href = hrefToHome();
   });
 }
 

@@ -1,4 +1,5 @@
 import { supabaseClient } from "./config.js";
+import { hrefToHome } from "./app-routes.js";
 
 window.login = async function login() {
   const email = document.getElementById("email").value;
@@ -14,5 +15,5 @@ window.login = async function login() {
     return;
   }
 
-  window.location.href = "index.html";
+  window.location.href = hrefToHome();
 };

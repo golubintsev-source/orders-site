@@ -3,5 +3,16 @@
     "api/supabase-proxy.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/new", "destination": "/index.html" },
+    { "source": "/calculations", "destination": "/index.html" },
+    { "source": "/tasks-all", "destination": "/index.html" },
+    { "source": "/changes-all", "destination": "/index.html" },
+    { "source": "/balance", "destination": "/index.html" },
+    { "source": "/route-sheet", "destination": "/index.html" },
+    { "source": "/settings", "destination": "/index.html" },
+    { "source": "/order-tasks", "destination": "/index.html" },
+    { "source": "/all", "destination": "/index.html" }
+  ]
 }

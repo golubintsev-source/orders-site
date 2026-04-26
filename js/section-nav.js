@@ -5,6 +5,7 @@ import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
 import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite } from "./roles.js";
+import { hrefToOrdersExcelExport, syncBrowserUrlToSection } from "./app-routes.js";
 
 /** Статусы: «Товар передан заказчику» или «Монтаж выполнен» */
 const RICHER_STATUSES = new Set(["Товар передан заказчику", "Монтаж выполнен"]);
@@ -240,8 +241,10 @@ function toggleSectionNavDropdown() {
 
 /**
  * Переключить раздел и обновить заголовок в шапке (без открытого дропдауна).
+ * @param {string} sectionId
+ * @param {{ skipUrlSync?: boolean }} [opts]
  */
-export function switchSection(sectionId) {
+export function switchSection(sectionId, opts = {}) {
   if (!sectionId) return;
   if (!canAccessSection(sectionId)) {
     sectionId = "all";
@@ -250,6 +253,7 @@ export function switchSection(sectionId) {
   if (!contentSections.length) return;
 
   const prevSectionId = currentSectionId;
+  const { skipUrlSync = false } = opts;
 
   currentSectionId = sectionId;
   contentSections.forEach((section) => {
@@ -294,6 +298,10 @@ export function switchSection(sectionId) {
       m.clearOrdersTableMobileFit();
       scheduleOrdersStickyHeaderUpdate();
     });
+  }
+
+  if (!skipUrlSync && prevSectionId !== sectionId) {
+    syncBrowserUrlToSection(sectionId);
   }
 }
 
@@ -352,7 +360,7 @@ export function initSectionNavDropdown(options = {}) {
           if (!canAccessSection("orders-excel")) return;
           const hasOrdersTable = Boolean(document.getElementById("ordersTable"));
           if (!hasOrdersTable) {
-            window.location.href = "index.html#orders-excel";
+            window.location.href = hrefToOrdersExcelExport();
             closeSectionNavDropdown();
             return;
           }

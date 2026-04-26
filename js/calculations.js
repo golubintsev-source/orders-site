@@ -2,6 +2,7 @@ import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile } from "./auth.js";
 import { formatAmount, formatAmountWholeRubles, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY, refreshRublesIntegerInputState } from "./format.js";
 import { isAdmin } from "./roles.js";
+import { hrefToHome } from "./app-routes.js";
 
 let editingId = null;
 let editingCreatedAt = null;
@@ -552,7 +553,7 @@ async function init() {
   currentUserEmail = user.email || "";
 
   document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
-    window.location.href = "index.html";
+    window.location.href = hrefToHome();
   });
 
   setupCalculationsForm();

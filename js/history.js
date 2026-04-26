@@ -9,6 +9,7 @@ import {
   closeSectionNavDropdown,
   refreshSectionNavAfterProfile,
 } from "./section-nav.js";
+import { hrefToAppSection } from "./app-routes.js";
 
 const params = new URLSearchParams(window.location.search);
 const orderId = params.get("order_id");
@@ -38,7 +39,7 @@ function wireHistorySearchAndLogout() {
 
   function goToOrdersWithSearch(query) {
     sessionStorage.setItem("pendingOrdersSearch", query.trim());
-    window.location.href = "index.html#all";
+    window.location.href = hrefToAppSection("all");
   }
 
   function openOrdersSearchDropdown() {
@@ -60,7 +61,7 @@ function wireHistorySearchAndLogout() {
     ordersSearchOpenBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (ordersSearchOpenBtn.dataset.navMode === "orders") {
-        window.location.href = "index.html#all";
+        window.location.href = hrefToAppSection("all");
         return;
       }
       toggleOrdersSearchDropdown();
@@ -97,7 +98,7 @@ function wireHistorySearchAndLogout() {
   });
 
   document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
-    window.location.href = "index.html#all";
+    window.location.href = hrefToAppSection("all");
   });
 }
 
@@ -143,7 +144,7 @@ async function init() {
 
   initSectionNavDropdown({
     onSectionItemSelect: (id) => {
-      window.location.href = `index.html#${id}`;
+      window.location.href = hrefToAppSection(id);
     },
   });
   setStandaloneSectionNavLabel("Изменения");
