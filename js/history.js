@@ -1,6 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile, logout } from "./auth.js";
 import { isOrderHiddenFromUserLite } from "./roles.js";
+import { readSnapshot, mergeOrderHistoryRows } from "./offline-cache.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
 import {
   initSectionNavDropdown,
@@ -107,7 +108,7 @@ async function loadHistory() {
 
   const { data, error } = await supabaseClient
     .from("order_history")
-    .select("created_at, user_email, comment")
+    .select("created_at, user_email, comment, order_id")
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
 
@@ -115,22 +116,34 @@ async function loadHistory() {
   const msgEl = document.getElementById("historyMessage");
   tbody.innerHTML = "";
 
+  const baseRows = error ? readSnapshot()?.order_history || [] : data || [];
+  const merged = mergeOrderHistoryRows(baseRows);
+  const rows = merged.filter((r) => String(r.order_id) === String(orderId)).sort((a, b) => {
+    const ta = new Date(a.created_at || 0).getTime();
+    const tb = new Date(b.created_at || 0).getTime();
+    return ta - tb;
+  });
+
   if (error) {
     console.error("Ошибка загрузки истории:", error);
-    msgEl.textContent = "Ошибка загрузки истории.";
-    return;
+    if (!rows.length) {
+      msgEl.textContent = "Ошибка загрузки истории.";
+      return;
+    }
+    msgEl.textContent = "Показана копия с устройства (сеть недоступна).";
+  } else {
+    msgEl.textContent = "";
   }
 
-  if (!data || data.length === 0) {
+  if (!rows.length) {
     msgEl.textContent = "Записей пока нет.";
     return;
   }
-
-  msgEl.textContent = "";
-  data.forEach((row) => {
+  rows.forEach((row) => {
     const createdAt = row.created_at ? formatTaskDateRu(row.created_at) : "—";
     const author = formatTaskAuthorShort(row.user_email || "");
     const tr = document.createElement("tr");
+    if (row.__offlinePendingSync) tr.classList.add("tr-order-offline-pending");
     tr.innerHTML = `<td>${escapeHtml(createdAt)}</td><td>${escapeHtml(author)}</td><td class="order-tasks-text-cell">${escapeHtml(row.comment || "")}</td>`;
     tbody.appendChild(tr);
   });

@@ -3,6 +3,7 @@ import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
 import { isOrderHiddenFromUserLite } from "./roles.js";
 import { setDbUnavailableBannerVisible } from "./dbHealth.js";
+import { readSnapshot, persistOrderHistorySnapshot, mergeOrderHistoryRows } from "./offline-cache.js";
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -52,18 +53,19 @@ export async function loadAllChanges() {
 
   if (error) {
     console.error("Ошибка загрузки истории изменений:", error);
-    setDbUnavailableBannerVisible(true);
+    setDbUnavailableBannerVisible(true, { cacheMode: true });
     if (msg) {
-      msg.textContent = "Не удалось загрузить изменения.";
-      msg.classList.add("order-tasks-message--error");
+      msg.textContent = "Показаны сохранённые на устройстве изменения; новые записи без сети — внизу с жёлтой заливкой.";
+      msg.classList.remove("order-tasks-message--error");
     }
-    tbody.innerHTML = "";
-    return;
+  } else {
+    setDbUnavailableBannerVisible(false);
   }
 
-  setDbUnavailableBannerVisible(false);
+  const baseRows = error ? readSnapshot()?.order_history || [] : data || [];
+  if (!error && data) persistOrderHistorySnapshot(data);
 
-  const rows = data || [];
+  const rows = mergeOrderHistoryRows(baseRows);
   const lines = [];
   for (const row of rows) {
     const orderType = state.allOrders?.find((o) => Number(o.id) === Number(row.order_id))?.order_type ?? "";
@@ -71,8 +73,9 @@ export async function loadAllChanges() {
 
     const chip = formatOrderIdTypeChip(row.order_id, orderType);
     const oid = row.order_id != null ? String(row.order_id) : "";
+    const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
     lines.push(`
-    <tr class="all-changes-row" data-order-id="${escapeHtml(oid)}">
+    <tr class="all-changes-row${offlineCls}" data-order-id="${escapeHtml(oid)}">
       <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
       <td>${escapeHtml(formatLoginFive(row.user_email))}</td>
       <td>${escapeHtml(chip)}</td>
@@ -82,7 +85,9 @@ export async function loadAllChanges() {
   tbody.innerHTML = lines.join("");
 
   if (lines.length === 0 && msg) {
-    msg.textContent = "Пока нет записей об изменениях.";
+    msg.textContent = error
+      ? "Нет сохранённой копии изменений на этом устройстве."
+      : "Пока нет записей об изменениях.";
   }
 
   applyAllChangesFilter();

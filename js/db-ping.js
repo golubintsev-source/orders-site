@@ -17,6 +17,8 @@ function pingTimeoutRace() {
 
 let intervalId = null;
 let inFlight = false;
+/** Предыдущий пинг завершился ошибкой/таймаутом — при следующем успехе перезагрузить заказы (синхронизация офлайн-очереди). */
+let lastPingWasFailure = false;
 
 function setIndicator(el, kind, title, ariaLabel) {
   if (!el) return;
@@ -38,6 +40,7 @@ async function pingOnce() {
     ]);
     const ms = Math.round(performance.now() - t0);
     if (error) {
+      lastPingWasFailure = true;
       setIndicator(
         el,
         "error",
@@ -45,6 +48,10 @@ async function pingOnce() {
         `База данных: нет связи, ${error.message}`,
       );
       return;
+    }
+    if (lastPingWasFailure) {
+      lastPingWasFailure = false;
+      void import("./orders.js").then((m) => m.loadOrders());
     }
     if (ms < FAST_MS) {
       setIndicator(el, "ok", `База данных: отлично (${ms} мс)`, `База данных: связь хорошая, ${ms} миллисекунд`);
@@ -57,6 +64,7 @@ async function pingOnce() {
       );
     }
   } catch (e) {
+    lastPingWasFailure = true;
     if (e === TIMEOUT_SENTINEL) {
       const sec = PING_TIMEOUT_MS / 1000;
       setIndicator(

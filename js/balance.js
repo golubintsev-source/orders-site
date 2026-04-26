@@ -2,6 +2,7 @@ import { supabaseClient } from "./config.js";
 import { isUserLite } from "./roles.js";
 import { formatAmountWholeRubles } from "./format.js";
 import { state } from "./state.js";
+import { readSnapshot, persistCalculationsSnapshot } from "./offline-cache.js";
 
 const PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
 const MSK_TZ = "Europe/Moscow";
@@ -56,8 +57,7 @@ function getRecentMskDayKeys(daysCount) {
   return keys;
 }
 
-export async function loadBalance() {
-  const messageEl = document.getElementById("balanceMessage");
+function renderBalanceFromCalcRows(calcRows, messageEl) {
   const theadRow = document.querySelector("#balanceTable thead tr");
   const tbody = document.querySelector("#balanceTable tbody");
   if (!theadRow || !tbody) return;
@@ -73,18 +73,6 @@ export async function loadBalance() {
     ])
   );
   const hourAgoMs = Date.now() - 60 * 60 * 1000;
-
-  const calcRes = await supabaseClient
-    .from("calculations")
-    .select("from_place,to_place,amount,created_at")
-    .is("deleted_at", null);
-
-  if (calcRes.error) {
-    console.error("Ошибка загрузки расчётов для баланса:", calcRes.error);
-    if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса";
-    return;
-  }
-  const calcRows = calcRes.data || [];
   for (const row of calcRows) {
     const amount = toNumber(row.amount);
     // Откуда => минус, Куда => плюс
@@ -151,6 +139,37 @@ export async function loadBalance() {
     `
     )
     .join("");
+}
+
+export async function loadBalance() {
+  const messageEl = document.getElementById("balanceMessage");
+  const theadRow = document.querySelector("#balanceTable thead tr");
+  const tbody = document.querySelector("#balanceTable tbody");
+  if (!theadRow || !tbody) return;
+
+  const calcRes = await supabaseClient
+    .from("calculations")
+    .select("from_place,to_place,amount,created_at")
+    .is("deleted_at", null);
+
+  if (calcRes.error) {
+    console.error("Ошибка загрузки расчётов для баланса:", calcRes.error);
+    const snap = readSnapshot();
+    const cached = snap?.calculations;
+    if (cached?.length) {
+      if (messageEl) {
+        messageEl.textContent = "Баланс по последней сохранённой на устройстве копии расчётов (сеть недоступна).";
+      }
+      renderBalanceFromCalcRows(cached, null);
+      return;
+    }
+    if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса";
+    return;
+  }
+
+  const calcRows = calcRes.data || [];
+  persistCalculationsSnapshot(calcRows);
+  renderBalanceFromCalcRows(calcRows, messageEl);
 }
 
 export async function initBalanceSection() {

@@ -32,6 +32,17 @@ body {
 }
 .db-unavailable-banner__text {
   line-height: 1.35;
+  max-width: 52rem;
+}
+
+/* Офлайн-очередь: заказы, задачи, изменения, расчёты (ещё не в Supabase) */
+#ordersTable tbody tr.tr-order-offline-pending td,
+#allTasksTable tbody tr.tr-order-offline-pending td,
+#orderTasksTable tbody tr.tr-order-offline-pending td,
+#allChangesTable tbody tr.tr-order-offline-pending td,
+#calculationsTable tbody tr.tr-order-offline-pending td,
+#historyTable tbody tr.tr-order-offline-pending td {
+  background-color: #fff9c4;
 }
 
 .container {

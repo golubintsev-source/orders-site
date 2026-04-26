@@ -70,6 +70,10 @@ export function formatAmountWholeRubles(val) {
 export function formatOrderIdTypeChip(orderId, orderType) {
   if (orderId == null || orderId === "") return "";
   const letter = (orderType || "").trim().charAt(0);
+  if (typeof orderId === "number" && orderId < 0) {
+    const tail = String(Math.abs(orderId) % 10000).padStart(4, "0");
+    return letter ? `офл.${tail}_${letter}` : `офл.${tail}`;
+  }
   const base = String(orderId).padStart(4, "0");
   return letter ? `${base}_${letter}` : base;
 }

@@ -1,4 +1,6 @@
 export const state = {
+  /** true — список заказов сейчас из localStorage (последний снимок + офлайн-очередь), не с сервера */
+  ordersFromCache: false,
   currentUser: null,
   currentRole: "user",
   editingOrderId: null,

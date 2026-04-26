@@ -3,6 +3,15 @@ import { checkAuth, loadProfile } from "./auth.js";
 import { formatAmount, formatAmountWholeRubles, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY, refreshRublesIntegerInputState } from "./format.js";
 import { isAdmin } from "./roles.js";
 import { hrefToHome } from "./app-routes.js";
+import {
+  readSnapshot,
+  persistCalculationsSnapshot,
+  mergeCalculationRows,
+  addPendingOfflineCalculation,
+  nextOfflineTempCalcId,
+  removePendingCalcByTempId,
+  isOfflineDataMode,
+} from "./offline-cache.js";
 
 let editingId = null;
 let editingCreatedAt = null;
@@ -299,8 +308,14 @@ function renderCalculationsTableFromCache() {
       ? comment.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim()
       : comment;
     const escapedComment = escapeHtml(displayComment);
-    const actionsCell =
-      isAdmin() && !isOrderDeltaRow
+    const isOfflineRow = row.__offlinePendingSync === true;
+    const actionsCell = isOfflineRow
+      ? isAdmin()
+        ? `<td class="td-actions">
+        <button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" data-offline-pending="1" title="Удалить локальную запись (ещё не в базе)">${CALC_ICON_DELETE_SVG}</button>
+      </td>`
+        : `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`
+      : isAdmin() && !isOrderDeltaRow
         ? `<td class="td-actions">
         <button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>
         <button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>
@@ -312,6 +327,7 @@ function renderCalculationsTableFromCache() {
           : `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`;
     const tr = document.createElement("tr");
     if (isOrderDeltaRow) tr.classList.add("calc-row-system");
+    if (isOfflineRow) tr.classList.add("tr-order-offline-pending");
     tr.innerHTML = `
       <td><span class="status-value">${escapeHtml(formatCalcTimeRu(row.created_at))}</span></td>
       <td>${escapeHtml(row.from_place)}</td>
@@ -328,7 +344,16 @@ function renderCalculationsTableFromCache() {
       btn.addEventListener("click", () => startEdit(Number(btn.dataset.id)));
     });
     tbody.querySelectorAll(".btn-delete-calc").forEach((btn) => {
-      btn.addEventListener("click", () => softDeleteCalculationRow(Number(btn.dataset.id)));
+      const id = Number(btn.dataset.id);
+      if (btn.dataset.offlinePending === "1") {
+        btn.addEventListener("click", () => {
+          if (!confirm("Удалить локальную запись расчёта? Она ещё не отправлена в базу.")) return;
+          removePendingCalcByTempId(id);
+          void loadCalculations();
+        });
+      } else {
+        btn.addEventListener("click", () => softDeleteCalculationRow(id));
+      }
     });
   }
 }
@@ -345,14 +370,15 @@ export async function loadCalculations() {
 
   if (error) {
     console.error("Ошибка загрузки расчетов:", error);
-    setMessage("Ошибка загрузки данных.", true);
-    calculationsRowsCache = [];
-    tbody.innerHTML = "";
+    setMessage("Показана копия с устройства; локальные несинхронизированные строки — с жёлтой заливкой.", true);
+    calculationsRowsCache = mergeCalculationRows(readSnapshot()?.calculations || []);
+    renderCalculationsTableFromCache();
     return;
   }
 
   setMessage("");
-  calculationsRowsCache = data || [];
+  calculationsRowsCache = mergeCalculationRows(data || []);
+  persistCalculationsSnapshot(data || []);
   renderCalculationsTableFromCache();
 }
 
@@ -413,6 +439,14 @@ function resetForm() {
 
 function startEdit(id) {
   if (!isAdmin()) return;
+  if (isOfflineDataMode() && typeof id === "number" && id < 0) {
+    setMessage("Локальную запись нельзя редактировать.", true);
+    return;
+  }
+  if (isOfflineDataMode()) {
+    setMessage("Без связи с базой нельзя редактировать сохранённые в базе расчёты.", true);
+    return;
+  }
   editingId = id;
   editingCreatedAt = null;
   document.getElementById("calcSubmitBtn").textContent = "Сохранить";
@@ -451,6 +485,14 @@ async function submitForm(e) {
   }
 
   if (editingId) {
+    if (isOfflineDataMode() && typeof editingId === "number" && editingId < 0) {
+      setMessage("Редактирование локальной записи расчёта недоступно. Удалите и создайте заново.", true);
+      return;
+    }
+    if (isOfflineDataMode()) {
+      setMessage("Без связи с базой нельзя изменять сохранённые в базе расчёты.", true);
+      return;
+    }
     if (!isAdmin()) {
       setMessage("Изменение записей доступно только администратору.", true);
       resetForm();
@@ -470,6 +512,21 @@ async function submitForm(e) {
     resetForm();
   } else {
     const insertPayload = { ...payload, created_at: new Date().toISOString() };
+    if (isOfflineDataMode()) {
+      const localId =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `calc-${Date.now()}`;
+      addPendingOfflineCalculation({
+        localId,
+        tempCalcId: nextOfflineTempCalcId(),
+        insertPayload,
+      });
+      setMessage("Запись сохранена на устройстве; отправка в базу при появлении связи.", false);
+      resetForm();
+      await loadCalculations();
+      return;
+    }
     const { error } = await supabaseClient.from("calculations").insert([insertPayload]);
     if (error) {
       console.error("Ошибка добавления:", error);
@@ -485,6 +542,16 @@ async function submitForm(e) {
 /** Запись не удаляется из БД — только выставляется deleted_at. */
 async function softDeleteCalculationRow(id) {
   if (!isAdmin()) return;
+  if (typeof id === "number" && id < 0) {
+    if (!confirm("Удалить локальную запись расчёта? Она ещё не отправлена в базу.")) return;
+    removePendingCalcByTempId(id);
+    await loadCalculations();
+    return;
+  }
+  if (isOfflineDataMode()) {
+    setMessage("Без связи с базой нельзя скрывать расчёты из базы.", true);
+    return;
+  }
   if (
     !confirm(
       "Скрыть эту запись из списка? В базе останется пометка удаления, строка не удаляется физически."

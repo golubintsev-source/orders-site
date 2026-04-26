@@ -42,30 +42,26 @@ import {
   isOrderHiddenFromUserLite,
   isUserLite,
 } from "./roles.js";
+import {
+  readSnapshot,
+  readPendingQueue,
+  mergeServerOrdersWithPendingDisplayRows,
+  persistServerOrdersForOffline,
+  syncPendingOfflineDataToSupabase,
+  addPendingOfflineOrderHistory,
+  shouldSaveNewOrderToLocalQueue,
+  isOfflineClientOrderId,
+  addPendingOfflineOrder,
+  updatePendingOfflineOrder,
+  removePendingByLocalId,
+  buildDisplayRowForPendingOrder,
+  insertPayloadFromFormData,
+  nextOfflineTempOrderId,
+  cloneOrderWithoutOfflineMeta,
+  sortOrdersWithOfflinePendingFirst,
+} from "./offline-cache.js";
 
-export async function loadOrders() {
-  const { data, error } = await supabaseClient
-    .from("orders")
-    .select("*")
-    .is("deleted_at", null)
-    .order("id", { ascending: false });
-
-  if (error) {
-    console.error("Ошибка загрузки:", error);
-    setDbUnavailableBannerVisible(true);
-    state.allOrders = [];
-    state.filesCountMap = {};
-    applyFiltersAndRender();
-    updateSectionNavRicherStat();
-    setMessage("Ошибка загрузки заявок", "#d32f2f");
-    return;
-  }
-
-  setDbUnavailableBannerVisible(false);
-  state.allOrders = data || [];
-  await loadFilesCountMap();
-  applyFiltersAndRender();
-  updateSectionNavRicherStat();
+function refreshOrdersDependentSections() {
   if (getCurrentSectionId() === "tasks-all") {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadAllTasks());
@@ -77,6 +73,57 @@ export async function loadOrders() {
   } else if (getCurrentSectionId() === "route-sheet") {
     void import("./route-sheet.js").then((m) => m.loadRouteSheet());
   }
+}
+
+export async function loadOrders() {
+  const ordersQuery = () =>
+    supabaseClient.from("orders").select("*").is("deleted_at", null).order("id", { ascending: false });
+
+  const { data, error } = await ordersQuery();
+
+  if (!error && data) {
+    setDbUnavailableBannerVisible(false);
+    await syncPendingOfflineDataToSupabase();
+    const again = await ordersQuery();
+    const finalData = again.error ? data : again.data || data;
+    persistServerOrdersForOffline(finalData);
+    state.ordersFromCache = false;
+    state.allOrders = mergeServerOrdersWithPendingDisplayRows(finalData);
+    await loadFilesCountMap();
+    applyFiltersAndRender();
+    updateSectionNavRicherStat();
+    refreshOrdersDependentSections();
+    return;
+  }
+
+  console.error("Ошибка загрузки:", error);
+  const snap = readSnapshot();
+  const merged = mergeServerOrdersWithPendingDisplayRows(snap?.orders || []);
+  const hasLocalData = merged.length > 0 || readPendingQueue().length > 0;
+
+  if (hasLocalData) {
+    setDbUnavailableBannerVisible(true, { cacheMode: true });
+    state.ordersFromCache = true;
+    state.allOrders = merged;
+    state.filesCountMap = {};
+    applyFiltersAndRender();
+    updateSectionNavRicherStat();
+    setMessage(
+      "Нет связи с базой. Открыта последняя копия с этого устройства; новые заявки сохраняются локально и отправятся при появлении связи.",
+      "#92400e"
+    );
+    refreshOrdersDependentSections();
+    return;
+  }
+
+  setDbUnavailableBannerVisible(true);
+  state.ordersFromCache = false;
+  state.allOrders = [];
+  state.filesCountMap = {};
+  applyFiltersAndRender();
+  updateSectionNavRicherStat();
+  setMessage("Ошибка загрузки заявок", "#d32f2f");
+  refreshOrdersDependentSections();
 }
 
 const STATUS_OPTIONS = [
@@ -963,7 +1010,7 @@ export function getFilteredOrders() {
     list = list.filter((order) => orderMatchesOrderDateRange(order, df, dt));
   }
 
-  return list;
+  return sortOrdersWithOfflinePendingFirst(list);
 }
 
 /** Календарная дата заказа YYYY-MM-DD в локальной зоне (для сравнения с input type=date). */
@@ -995,6 +1042,11 @@ function orderMatchesOrderDateRange(order, fromYmd, toYmd) {
   if (from && ymd < from) return false;
   if (to && ymd > to) return false;
   return true;
+}
+
+function rebaselineAllOrdersFromStateAndPendingQueue() {
+  const serverLike = state.allOrders.filter((o) => !o.__offlinePendingSync).map((o) => cloneOrderWithoutOfflineMeta({ ...o }));
+  state.allOrders = mergeServerOrdersWithPendingDisplayRows(serverLike);
 }
 
 export function applyFiltersAndRender() {
@@ -1087,6 +1139,10 @@ export function canShowEditButtonForOrder(order) {
 
 export async function setLockEditForUserLite(orderId, locked) {
   if (isUserLite()) return false;
+  if (state.ordersFromCache) {
+    setMessage("В режиме локальной копии нельзя менять блокировку заявок", "#d32f2f");
+    return false;
+  }
   const val = locked ? 1 : 0;
   const { error } = await supabaseClient
     .from("orders")
@@ -1279,10 +1335,12 @@ export function renderOrders(orders) {
   table.innerHTML = "";
 
   orders.forEach((order) => {
-    const deleteButton =
-      canDeleteOrders()
-        ? `<button type="button" class="btn-icon btn-delete" onclick="deleteOrder(${order.id})" title="Удалить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>`
-        : "";
+    const allowDeleteThisRow =
+      canDeleteOrders() && (!state.ordersFromCache || order.__offlinePendingSync);
+    const deleteButton = allowDeleteThisRow
+      ? `<button type="button" class="btn-icon btn-delete" onclick="deleteOrder(${order.id})" title="Удалить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>`
+      : "";
+    const trClass = order.__offlinePendingSync ? ' class="tr-order-offline-pending"' : "";
 
     const filesCount = state.filesCountMap[order.id] || 0;
 
@@ -1306,7 +1364,7 @@ export function renderOrders(orders) {
     const statusDisplayText =
       order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом");
     const row = `
-      <tr>
+      <tr${trClass}>
         <td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}" data-lock-edit-user-lite="${isOrderEditLockedForUserLite(order) ? "1" : "0"}">
           <span class="${orderIdChipClasses.join(" ")}">
             ${orderNumberDisplay}
@@ -2045,6 +2103,7 @@ export function updateInstallerPaymentAmountFromArea() {
 /** При открытии заказа проверить, есть ли уже запись об оплате монтажнику; если да — заполнить и отключить блок. */
 export async function checkInstallerPaymentDone(orderId) {
   if (orderId == null) return;
+  if (isOfflineClientOrderId(orderId)) return;
   const { data } = await supabaseClient
     .from("calculations")
     .select("from_place, amount")
@@ -2311,17 +2370,20 @@ export async function viewOrder(orderId) {
   state.editingOrderId = null;
   state.viewingOrderId = orderId;
 
-  const { data, error } = await supabaseClient
-    .from("orders")
-    .select("*")
-    .eq("id", orderId)
-    .single();
-
-  if (error) {
-    console.error("Ошибка загрузки заявки:", error);
-    setMessage("Ошибка загрузки заявки", "#d32f2f");
-    state.viewingOrderId = null;
-    return;
+  const idNum = Number(orderId);
+  const fromList = state.allOrders.find((x) => Number(x.id) === idNum);
+  let data = null;
+  if (fromList && (state.ordersFromCache || isOfflineClientOrderId(idNum))) {
+    data = fromList;
+  } else {
+    const res = await supabaseClient.from("orders").select("*").eq("id", orderId).single();
+    if (res.error) {
+      console.error("Ошибка загрузки заявки:", res.error);
+      setMessage("Ошибка загрузки заявки", "#d32f2f");
+      state.viewingOrderId = null;
+      return;
+    }
+    data = res.data;
   }
 
   if (isOrderHiddenFromUserLite(data)) {
@@ -2361,19 +2423,30 @@ export async function editOrder(orderId) {
     return;
   }
 
+  const idNum = Number(orderId);
+  const fromList = state.allOrders.find((x) => Number(x.id) === idNum);
+  if (state.ordersFromCache && fromList && !fromList.__offlinePendingSync) {
+    setMessage(
+      "Без связи с базой можно только создавать новые заявки и менять те, что созданы на этом устройстве без сети (жёлтые строки в таблице).",
+      "#d32f2f"
+    );
+    return;
+  }
+
   state.viewingOrderId = null;
   applyOrderFormReadOnly(false);
 
-  const { data, error } = await supabaseClient
-    .from("orders")
-    .select("*")
-    .eq("id", orderId)
-    .single();
-
-  if (error) {
-    console.error("Ошибка загрузки заявки:", error);
-    setMessage("Ошибка загрузки заявки", "#d32f2f");
-    return;
+  let data = null;
+  if (fromList && (state.ordersFromCache || isOfflineClientOrderId(idNum))) {
+    data = fromList;
+  } else {
+    const res = await supabaseClient.from("orders").select("*").eq("id", orderId).single();
+    if (res.error) {
+      console.error("Ошибка загрузки заявки:", res.error);
+      setMessage("Ошибка загрузки заявки", "#d32f2f");
+      return;
+    }
+    data = res.data;
   }
 
   if (isOrderHiddenFromUserLite(data)) {
@@ -2414,6 +2487,28 @@ export async function editOrder(orderId) {
 
 export async function deleteOrder(orderId) {
   if (!canDeleteOrders()) return;
+
+  const idNum = Number(orderId);
+
+  if (state.ordersFromCache && !isOfflineClientOrderId(idNum)) {
+    setMessage("В режиме локальной копии нельзя удалять заявки с сервера", "#d32f2f");
+    return;
+  }
+
+  if (isOfflineClientOrderId(idNum)) {
+    const order = state.allOrders.find((x) => Number(x.id) === idNum);
+    const localId = order?.__offlineLocalId;
+    if (!localId) return;
+    const chip = formatOrderIdTypeChip(idNum, order?.order_type);
+    const ok = confirm(`Удалить несинхронизированную заявку ${chip}?`);
+    if (!ok) return;
+    removePendingByLocalId(localId);
+    rebaselineAllOrdersFromStateAndPendingQueue();
+    applyFiltersAndRender();
+    updateSectionNavRicherStat();
+    setMessage("Заявка удалена из локальной очереди", "");
+    return;
+  }
 
   const ok = confirm(`Удалить заявку #${orderId}?`);
   if (!ok) return;
@@ -2461,15 +2556,23 @@ export async function submitOrderForm(event) {
     return;
   }
 
-  if (state.editingOrderId && isUserLite()) {
-    const { data: lockRow, error: lockErr } = await supabaseClient
-      .from("orders")
-      .select("lock_edit_for_user_lite")
-      .eq("id", state.editingOrderId)
-      .single();
-    if (!lockErr && lockRow && isOrderEditLockedForUserLite(lockRow)) {
-      setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
-      return;
+  if (state.editingOrderId && isUserLite() && !isOfflineClientOrderId(state.editingOrderId)) {
+    if (state.ordersFromCache) {
+      const lockRow = state.allOrders.find((x) => Number(x.id) === Number(state.editingOrderId));
+      if (lockRow && isOrderEditLockedForUserLite(lockRow)) {
+        setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
+        return;
+      }
+    } else {
+      const { data: lockRow, error: lockErr } = await supabaseClient
+        .from("orders")
+        .select("lock_edit_for_user_lite")
+        .eq("id", state.editingOrderId)
+        .single();
+      if (!lockErr && lockRow && isOrderEditLockedForUserLite(lockRow)) {
+        setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
+        return;
+      }
     }
   }
 
@@ -2550,9 +2653,87 @@ export async function submitOrderForm(event) {
     return;
   }
 
+  if (
+    state.editingOrderId &&
+    !isOfflineClientOrderId(state.editingOrderId) &&
+    typeof navigator !== "undefined" &&
+    navigator.onLine === false
+  ) {
+    setMessage(
+      "Нет сети: изменить существующую заявку с сервера нельзя. Можно создать новую — она сохранится на устройстве и отправится в базу позже.",
+      "#d32f2f"
+    );
+    return;
+  }
+
   setMessage("Сохраняю...", "");
 
   const orderData = getFormData();
+
+  const saveLocalNew = !state.editingOrderId && shouldSaveNewOrderToLocalQueue();
+  const saveLocalEdit = Boolean(state.editingOrderId && isOfflineClientOrderId(state.editingOrderId));
+
+  if (saveLocalNew || saveLocalEdit) {
+    const insertPayload = insertPayloadFromFormData(orderData);
+    let highlightId;
+
+    if (saveLocalNew) {
+      const localId =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const tempId = nextOfflineTempOrderId();
+      const displayRow = buildDisplayRowForPendingOrder(orderData, tempId, localId);
+      addPendingOfflineOrder({ localId, displayRow, insertPayload });
+      const histLocalId =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `hist-${Date.now()}`;
+      addPendingOfflineOrderHistory({
+        localId: histLocalId,
+        pending_order_local_id: localId,
+        order_temp_id: tempId,
+        user_email: state.currentUser?.email || "",
+        comment: buildOrderHistoryComment(null, orderData, false),
+      });
+      highlightId = tempId;
+    } else {
+      const cur = state.allOrders.find((x) => x.id === state.editingOrderId);
+      const localId = cur?.__offlineLocalId;
+      if (!localId) {
+        setMessage("Не удалось обновить локальную заявку", "#d32f2f");
+        return;
+      }
+      const displayRow = buildDisplayRowForPendingOrder(orderData, state.editingOrderId, localId);
+      updatePendingOfflineOrder(localId, displayRow, insertPayload);
+      const histLocalId =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `hist-${Date.now()}`;
+      addPendingOfflineOrderHistory({
+        localId: histLocalId,
+        pending_order_local_id: localId,
+        order_temp_id: state.editingOrderId,
+        user_email: state.currentUser?.email || "",
+        comment: buildOrderHistoryComment(state.initialOrderSnapshot, orderData, true),
+      });
+      highlightId = state.editingOrderId;
+    }
+
+    rebaselineAllOrdersFromStateAndPendingQueue();
+    resetFormMode();
+    switchSection("all");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => highlightAndFocusSavedOrderRow(highlightId));
+    });
+    setMessage(
+      saveLocalEdit
+        ? "Изменения сохранены на устройстве; отправка в базу при появлении связи."
+        : "Заявка сохранена на устройстве; отправка в базу при появлении связи.",
+      "#92400e"
+    );
+    return;
+  }
 
   let error = null;
   let savedOrderId = state.editingOrderId;

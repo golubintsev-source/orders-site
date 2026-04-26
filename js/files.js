@@ -433,6 +433,11 @@ export async function renderExistingOrderFilesInForm(orderId) {
     return;
   }
 
+  if (typeof orderId === "number" && orderId < 0) {
+    clearExistingOrderFilesInForm();
+    return;
+  }
+
   wrap.hidden = false;
   list.innerHTML = '<p class="existing-order-files-loading">Загрузка списка…</p>';
 

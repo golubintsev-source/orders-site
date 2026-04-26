@@ -2,6 +2,7 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { isAdmin } from "./roles.js";
 import { tryParseRublesInteger } from "./format.js";
+import { readSnapshot, persistSettingsSnapshotFromRows } from "./offline-cache.js";
 
 const KEY_INSTALLER_RATE = "installer_rate_per_m2";
 const DEFAULT_RATE = 1400;
@@ -27,11 +28,20 @@ export function parseAdjustmentInt(raw) {
 export async function loadSettings() {
   const keys = [KEY_INSTALLER_RATE, ...BALANCE_ADJ_FIELDS.map((f) => f.settingKey)];
   const { data: rows, error } = await supabaseClient.from("app_settings").select("key, value").in("key", keys);
-  if (error) console.error("Ошибка загрузки настроек:", error);
+  let effectiveRows = rows || [];
+  if (error) {
+    console.error("Ошибка загрузки настроек:", error);
+    const snap = readSnapshot();
+    if (snap?.settingsRows?.length) {
+      effectiveRows = snap.settingsRows;
+    }
+  } else if (rows?.length) {
+    persistSettingsSnapshotFromRows(rows);
+  }
 
-  const byKey = Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
+  const byKey = Object.fromEntries(effectiveRows.map((r) => [r.key, r.value]));
 
-  const rateVal = error ? null : byKey[KEY_INSTALLER_RATE];
+  const rateVal = byKey[KEY_INSTALLER_RATE];
   const rateNum = rateVal != null && rateVal !== "" ? parseFloat(rateVal) : null;
   state.defaultInstallerRatePerM2 = Number.isFinite(rateNum) ? rateNum : DEFAULT_RATE;
 
