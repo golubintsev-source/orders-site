@@ -5,6 +5,59 @@ import { isOrderHiddenFromUserLite } from "./roles.js";
 import { setDbUnavailableBannerVisible } from "./dbHealth.js";
 import { readSnapshot, persistOrderHistorySnapshot, mergeOrderHistoryRows } from "./offline-cache.js";
 
+/** YYYY-MM-DD в локальной календарной дате. */
+function ymdLocal(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function defaultAllChangesDateFromYmd() {
+  const t = new Date();
+  t.setDate(t.getDate() - 2);
+  return ymdLocal(t);
+}
+
+function defaultAllChangesDateToYmd() {
+  return ymdLocal(new Date());
+}
+
+/** ISO границы суток (локально), конец дня включительно. */
+function localDayRangeIsoInclusive(fromYmd, toYmd) {
+  const [fy, fm, fd] = fromYmd.split("-").map(Number);
+  const [ty, tm, td] = toYmd.split("-").map(Number);
+  const start = new Date(fy, fm - 1, fd, 0, 0, 0, 0);
+  const end = new Date(ty, tm - 1, td, 23, 59, 59, 999);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+function readAllChangesDateRangeFromInputs() {
+  const fromEl = document.getElementById("allChangesDateFrom");
+  const toEl = document.getElementById("allChangesDateTo");
+  let fromYmd = (fromEl?.value || "").trim();
+  let toYmd = (toEl?.value || "").trim();
+  if (!fromYmd) fromYmd = defaultAllChangesDateFromYmd();
+  if (!toYmd) toYmd = defaultAllChangesDateToYmd();
+  if (fromYmd > toYmd) {
+    const s = fromYmd;
+    fromYmd = toYmd;
+    toYmd = s;
+    if (fromEl) fromEl.value = fromYmd;
+    if (toEl) toEl.value = toYmd;
+  }
+  const { startIso, endIso } = localDayRangeIsoInclusive(fromYmd, toYmd);
+  return { fromYmd, toYmd, startIso, endIso };
+}
+
+function rowInCreatedAtRange(row, startIso, endIso) {
+  const t = new Date(row?.created_at || 0).getTime();
+  if (Number.isNaN(t)) return false;
+  const a = new Date(startIso).getTime();
+  const b = new Date(endIso).getTime();
+  return t >= a && t <= b;
+}
+
 function escapeHtml(s) {
   if (s == null) return "";
   const div = document.createElement("div");
@@ -46,9 +99,13 @@ export async function loadAllChanges() {
     msg.classList.remove("order-tasks-message--error");
   }
 
+  const { startIso, endIso } = readAllChangesDateRangeFromInputs();
+
   const { data, error } = await supabaseClient
     .from("order_history")
     .select("created_at, user_email, comment, order_id")
+    .gte("created_at", startIso)
+    .lte("created_at", endIso)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -62,10 +119,13 @@ export async function loadAllChanges() {
     setDbUnavailableBannerVisible(false);
   }
 
-  const baseRows = error ? readSnapshot()?.order_history || [] : data || [];
+  const snapRows = readSnapshot()?.order_history || [];
+  const baseRows = error
+    ? snapRows.filter((r) => rowInCreatedAtRange(r, startIso, endIso))
+    : data || [];
   if (!error && data) persistOrderHistorySnapshot(data);
 
-  const rows = mergeOrderHistoryRows(baseRows);
+  const rows = mergeOrderHistoryRows(baseRows).filter((r) => rowInCreatedAtRange(r, startIso, endIso));
   const lines = [];
   for (const row of rows) {
     const orderType = state.allOrders?.find((o) => Number(o.id) === Number(row.order_id))?.order_type ?? "";
@@ -86,18 +146,25 @@ export async function loadAllChanges() {
 
   if (lines.length === 0 && msg) {
     msg.textContent = error
-      ? "Нет сохранённой копии изменений на этом устройстве."
-      : "Пока нет записей об изменениях.";
+      ? "Нет сохранённой копии изменений за выбранный период на этом устройстве."
+      : "За выбранный период записей нет.";
   }
 
   applyAllChangesFilter();
 }
 
 export function initAllChangesSection() {
+  const fromEl = document.getElementById("allChangesDateFrom");
+  const toEl = document.getElementById("allChangesDateTo");
+  if (fromEl && !fromEl.value) fromEl.value = defaultAllChangesDateFromYmd();
+  if (toEl && !toEl.value) toEl.value = defaultAllChangesDateToYmd();
+
   const btn = document.getElementById("allChangesSearchBtn");
   const input = document.getElementById("allChangesSearchInput");
   if (!btn || !input) return;
-  btn.addEventListener("click", () => applyAllChangesFilter());
+  btn.addEventListener("click", () => {
+    void loadAllChanges();
+  });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();

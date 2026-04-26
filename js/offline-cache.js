@@ -85,7 +85,7 @@ export function isNetworkFetchError(err) {
 }
 
 /** iOS Safari часто долго не отклоняет fetch при «офлайне» или ложном navigator.onLine. */
-export const OFFLINE_SUPABASE_WAIT_MS = 6000;
+export const OFFLINE_SUPABASE_WAIT_MS = 5000;
 
 export function raceWithTimeout(promise, ms = OFFLINE_SUPABASE_WAIT_MS) {
   return new Promise((resolve, reject) => {
