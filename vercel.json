@@ -1,4 +1,10 @@
 {
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+    }
+  ],
   "functions": {
     "api/supabase-proxy.js": {
       "maxDuration": 60
