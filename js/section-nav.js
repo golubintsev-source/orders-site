@@ -6,6 +6,7 @@ import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
 import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite } from "./roles.js";
 import { getRouteSectionFromUrl, hrefToOrdersExcelExport, syncBrowserUrlToSection } from "./app-routes.js";
+import { loadAllChanges } from "./all-changes.js";
 
 /** Статусы: «Товар передан заказчику» или «Монтаж выполнен» */
 const RICHER_STATUSES = new Set(["Товар передан заказчику", "Монтаж выполнен"]);
@@ -284,7 +285,7 @@ export function switchSection(sectionId, opts = {}) {
     void import("./tasks.js").then((m) => m.loadAllTasks());
   }
   if (sectionId === "changes-all") {
-    void import("./all-changes.js").then((m) => m.loadAllChanges());
+    void loadAllChanges();
   }
   if (sectionId === "order-tasks") {
     void import("./tasks.js").then((m) => m.loadOrderTasks());

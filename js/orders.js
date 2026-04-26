@@ -17,6 +17,7 @@ import {
   updateSectionNavRicherStat,
   getCurrentSectionId,
 } from "./section-nav.js";
+import { loadAllChanges } from "./all-changes.js";
 import {
   loadFilesCountMap,
   getFilesWord,
@@ -101,7 +102,7 @@ function refreshOrdersDependentSections() {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadAllTasks());
   } else if (getCurrentSectionId() === "changes-all") {
-    void import("./all-changes.js").then((m) => m.loadAllChanges());
+    void loadAllChanges();
   } else if (getCurrentSectionId() === "order-tasks") {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadOrderTasks());

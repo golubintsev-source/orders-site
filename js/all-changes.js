@@ -8,6 +8,8 @@ import {
   persistOrderHistorySnapshot,
   mergeOrderHistoryRows,
   raceWithTimeout,
+  isOfflineDataMode,
+  OFFLINE_SUPABASE_WAIT_MS,
 } from "./offline-cache.js";
 
 /** YYYY-MM-DD в локальной календарной дате. */
@@ -95,6 +97,57 @@ function formatLoginFive(raw) {
   return s.slice(0, 5);
 }
 
+function buildOrderTypeByIdMap() {
+  const m = new Map();
+  for (const o of state.allOrders || []) {
+    m.set(Number(o.id), o.order_type ?? "");
+  }
+  return m;
+}
+
+/**
+ * @param {string} startIso
+ * @param {string} endIso
+ * @param {unknown[]} baseRowsForMerge — строки из снимка или с сервера (ещё до merge с очередью офлайна)
+ * @param {{ error: unknown | null }} opts
+ * @returns {number} число отрисованных строк
+ */
+function paintAllChangesFromBaseRows(startIso, endIso, baseRowsForMerge, opts) {
+  const tbody = document.querySelector("#allChangesTable tbody");
+  const msg = document.getElementById("allChangesMessage");
+  if (!tbody) return 0;
+  const { error } = opts;
+
+  const rows = mergeOrderHistoryRows(baseRowsForMerge).filter((r) => rowInCreatedAtRange(r, startIso, endIso));
+  const orderTypeById = buildOrderTypeByIdMap();
+  const lines = [];
+  for (const row of rows) {
+    const orderType = orderTypeById.get(Number(row.order_id)) ?? "";
+    if (isOrderHiddenFromUserLite({ order_type: orderType })) continue;
+
+    const chip = formatOrderIdTypeChip(row.order_id, orderType);
+    const oid = row.order_id != null ? String(row.order_id) : "";
+    const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
+    lines.push(`
+    <tr class="all-changes-row${offlineCls}" data-order-id="${escapeHtml(oid)}">
+      <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
+      <td>${escapeHtml(formatLoginFive(row.user_email))}</td>
+      <td>${escapeHtml(chip)}</td>
+      <td class="all-changes-text-cell">${escapeHtml(row.comment || "")}</td>
+    </tr>`);
+  }
+  tbody.innerHTML = lines.join("");
+
+  if (lines.length === 0 && msg) {
+    msg.textContent = error
+      ? "Нет сохранённой копии изменений за выбранный период на этом устройстве."
+      : "За выбранный период записей нет.";
+  }
+
+  applyAllChangesFilter();
+  return lines.length;
+}
+
 export async function loadAllChanges() {
   const tbody = document.querySelector("#allChangesTable tbody");
   const msg = document.getElementById("allChangesMessage");
@@ -106,6 +159,9 @@ export async function loadAllChanges() {
 
   const { startIso, endIso } = readAllChangesDateRangeFromInputs();
 
+  const snapRows = readSnapshot()?.order_history || [];
+  const snapFiltered = snapRows.filter((r) => rowInCreatedAtRange(r, startIso, endIso));
+
   const historyQuery = () =>
     supabaseClient
       .from("order_history")
@@ -114,13 +170,23 @@ export async function loadAllChanges() {
       .lte("created_at", endIso)
       .order("created_at", { ascending: false });
 
+  /** Без ожидания fetch: «офлайн» по флагу браузера, уже работаем с кэшем заказов, или ложный onLine без сети — сначала снимок. */
+  const skipNetwork =
+    (typeof navigator !== "undefined" && navigator.onLine === false) || isOfflineDataMode();
+
   let data = null;
   let error = null;
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+
+  if (skipNetwork) {
     error = { message: "offline" };
   } else {
+    if (snapFiltered.length > 0) {
+      paintAllChangesFromBaseRows(startIso, endIso, snapFiltered, { error: null });
+    }
     try {
-      const res = await raceWithTimeout(historyQuery());
+      /** Снимок уже на экране — не ждём полные 5 с при «ложном» onLine. */
+      const waitMs = snapFiltered.length > 0 ? 1800 : OFFLINE_SUPABASE_WAIT_MS;
+      const res = await raceWithTimeout(historyQuery(), waitMs);
       data = res.data;
       error = res.error;
     } catch (e) {
@@ -145,38 +211,10 @@ export async function loadAllChanges() {
     setDbUnavailableBannerVisible(false);
   }
 
-  const snapRows = readSnapshot()?.order_history || [];
-  const baseRows = error
-    ? snapRows.filter((r) => rowInCreatedAtRange(r, startIso, endIso))
-    : data || [];
+  const baseRows = error ? snapFiltered : data || [];
   if (!error && data) persistOrderHistorySnapshot(data);
 
-  const rows = mergeOrderHistoryRows(baseRows).filter((r) => rowInCreatedAtRange(r, startIso, endIso));
-  const lines = [];
-  for (const row of rows) {
-    const orderType = state.allOrders?.find((o) => Number(o.id) === Number(row.order_id))?.order_type ?? "";
-    if (isOrderHiddenFromUserLite({ order_type: orderType })) continue;
-
-    const chip = formatOrderIdTypeChip(row.order_id, orderType);
-    const oid = row.order_id != null ? String(row.order_id) : "";
-    const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
-    lines.push(`
-    <tr class="all-changes-row${offlineCls}" data-order-id="${escapeHtml(oid)}">
-      <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
-      <td>${escapeHtml(formatLoginFive(row.user_email))}</td>
-      <td>${escapeHtml(chip)}</td>
-      <td class="all-changes-text-cell">${escapeHtml(row.comment || "")}</td>
-    </tr>`);
-  }
-  tbody.innerHTML = lines.join("");
-
-  if (lines.length === 0 && msg) {
-    msg.textContent = error
-      ? "Нет сохранённой копии изменений за выбранный период на этом устройстве."
-      : "За выбранный период записей нет.";
-  }
-
-  applyAllChangesFilter();
+  paintAllChangesFromBaseRows(startIso, endIso, baseRows, { error });
 }
 
 export function initAllChangesSection() {
