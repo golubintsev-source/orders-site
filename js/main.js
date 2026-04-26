@@ -45,6 +45,9 @@ async function init() {
     await loadProfile();
     refreshSectionNavAfterProfile();
     applyOrderTypeSelectForRole();
+    applyRouteOnLoad();
+    ensurePopstateRouting();
+
     await loadSettings();
     await loadOrders();
     initOrderTasksSection();
@@ -56,8 +59,6 @@ async function init() {
     initRouteSheetSection();
     initAllChangesSection();
 
-    applyRouteOnLoad();
-    ensurePopstateRouting();
     applyPendingOrdersSearchFromHistory();
   } catch (err) {
     console.error("Ошибка инициализации:", err);
