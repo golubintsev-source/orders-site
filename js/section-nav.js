@@ -5,7 +5,7 @@ import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
 import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite } from "./roles.js";
-import { hrefToOrdersExcelExport, syncBrowserUrlToSection } from "./app-routes.js";
+import { getRouteSectionFromUrl, hrefToOrdersExcelExport, syncBrowserUrlToSection } from "./app-routes.js";
 
 /** Статусы: «Товар передан заказчику» или «Монтаж выполнен» */
 const RICHER_STATUSES = new Set(["Товар передан заказчику", "Монтаж выполнен"]);
@@ -66,7 +66,8 @@ const SECTION_LABELS = {
   settings: "Настройки",
 };
 
-let currentSectionId = "all";
+/** Совпадает с URL после boot-route.js (иначе шапка/лупа до main рассинхронизированы). */
+let currentSectionId = getRouteSectionFromUrl();
 
 /** Псевдо-раздел для отдельных страниц (history.html и т.д.): не совпадает с пунктами меню. */
 export const STANDALONE_SECTION_NAV_ID = "__standalone__";

@@ -40,6 +40,14 @@ body {
   padding: 6px 16px 16px 16px;
 }
 
+/*
+ * index.html: до js/boot-route.js контент разделов скрыт, чтобы не мигал «Заказы»
+ * (дефолтный .active в разметке). Атрибут data-route-boot выставляет boot-route.
+ */
+html:not([data-route-boot]) .container > section.content-section {
+  display: none !important;
+}
+
 /* ПК: раздел «Заказы» — контейнер до 1550px (остальные разделы — 1200px) */
 @media (hover: hover) and (pointer: fine) {
   .container:has(#section-all.content-section.active) {

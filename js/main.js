@@ -32,7 +32,18 @@ window.openFilesModal = openFilesModal;
 window.removeFile = removeFile;
 window.toggleOrderRowHighlightById = toggleOrderRowHighlightById;
 
+/** Если boot-route.js не выполнился (сеть), снять «вечную» скрытость разделов из style.css. */
+function ensureBootOrFallback() {
+  if (document.documentElement.hasAttribute("data-route-boot")) return;
+  document.querySelectorAll(".container > section.content-section").forEach((el) => {
+    el.classList.remove("active");
+  });
+  document.getElementById("section-all")?.classList.add("active");
+  document.documentElement.setAttribute("data-route-boot", "1");
+}
+
 async function init() {
+  ensureBootOrFallback();
   bindUIEvents();
   initOrdersTableStickyHeader();
   initOrdersTableMobileFit();
