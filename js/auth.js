@@ -1,17 +1,34 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { normalizeRole } from "./roles.js";
+import { isNetworkFetchError } from "./offline-cache.js";
 
+/**
+ * Вход в приложение без сети: getUser() ходит на Auth API и падает офлайн,
+ * из‑за чего раньше срабатывал редирект на login и не вызывался loadOrders() с кэшем localStorage.
+ * getSession() берёт JWT из локального хранилища Supabase и достаточен для старта UI.
+ */
 export async function checkAuth() {
-  const { data, error } = await supabaseClient.auth.getUser();
-
-  if (error || !data.user) {
+  const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+  const sessionUser = sessionData?.session?.user;
+  if (sessionError || !sessionUser) {
     window.location.href = "login.html";
     return null;
   }
 
-  state.currentUser = data.user;
-  return data.user;
+  state.currentUser = sessionUser;
+
+  if (typeof navigator !== "undefined" && navigator.onLine) {
+    const { data, error } = await supabaseClient.auth.getUser();
+    if (!error && data?.user) {
+      state.currentUser = data.user;
+    } else if (error && !isNetworkFetchError(error)) {
+      window.location.href = "login.html";
+      return null;
+    }
+  }
+
+  return state.currentUser;
 }
 
 export async function loadProfile() {
