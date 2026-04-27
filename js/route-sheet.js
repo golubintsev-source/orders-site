@@ -107,10 +107,8 @@ const HEADERS_DELIVERY = [
   "Дата",
   "Клиент",
   "Адрес",
-  "км",
   "Описание",
   "Остаток",
-  "Телефон",
 ];
 
 /**
@@ -118,7 +116,7 @@ const HEADERS_DELIVERY = [
  * плюс перенос текста. Без «вписать в ширину 1 стр.» — иначе узкие колонки не растягиваются на лист.
  * Индекс совпадает с HEADERS_DELIVERY.
  */
-const ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS = [11, 10, 14, 19, 8, 19, 10, 12];
+const ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS = [11, 10, 22, 27, 19, 10];
 
 const ROUTE_SHEET_DELIVERY_EXCEL_BORDER_THIN = {
   top: { style: "thin" },
@@ -2118,19 +2116,31 @@ function rowMainValues(order) {
 function rowDeliveryMainValues(order) {
   const kmEntry = deliveryKmByOrderId.get(order.id);
   const kmCell = formatKmCellDisplay(kmEntry);
+  const clientBase = String(order.client ?? "").trim();
+  const phoneBase = String(order.phone ?? "").trim();
+  const clientWithPhone = phoneBase ? `${clientBase} ${phoneBase}`.trim() : clientBase;
+  const addressBase = String(order.address ?? "").trim();
+  let addressWithKm = addressBase;
+  if (kmCell && kmCell !== "—") {
+    const kmMatch = kmCell.match(/^([0-9]+(?:,[0-9]+)?)(?:\s+\((Юг|Север)\))?$/);
+    if (kmMatch) {
+      const kmNum = kmMatch[1];
+      const hem = kmMatch[2] ? String(kmMatch[2]).toLowerCase() : "";
+      const kmText = hem ? `${kmNum} км - ${hem}` : `${kmNum} км`;
+      addressWithKm = `${addressBase} (${kmText})`.trim();
+    }
+  }
   return [
     routeSheetOrderChipPlain(order) || "",
     formatDateShortRU(order.delivery_date),
-    order.client ?? "",
-    order.address ?? "",
-    kmCell,
+    clientWithPhone,
+    addressWithKm,
     routeSheetDeliveryDescriptionFullPlain(order),
     boolDaNet(order.installation) === "да"
       ? "-"
       : !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
         ? formatAmount(order.remaining_amount)
         : "-",
-    order.phone ?? "",
   ];
 }
 
