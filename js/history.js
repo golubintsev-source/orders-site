@@ -1,6 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile, logout } from "./auth.js";
-import { isOrderHiddenFromUserLite } from "./roles.js";
+import { isOrderHiddenForCurrentRole } from "./roles.js";
 import { readSnapshot, mergeOrderHistoryRows } from "./offline-cache.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
 import {
@@ -180,9 +180,9 @@ async function init() {
     return;
   }
 
-  if (isOrderHiddenFromUserLite(orderRow)) {
+  if (isOrderHiddenForCurrentRole(orderRow)) {
     setHistorySectionLabel(orderRow?.order_type);
-    document.getElementById("historyMessage").textContent = "Нет доступа к заказам типа «Магазин».";
+    document.getElementById("historyMessage").textContent = "Нет доступа к этому типу заказа.";
     return;
   }
 

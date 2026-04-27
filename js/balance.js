@@ -1,5 +1,5 @@
 import { supabaseClient } from "./config.js";
-import { isUserLite } from "./roles.js";
+import { isUserLite, isUserShop } from "./roles.js";
 import { formatAmountWholeRubles } from "./format.js";
 import { state } from "./state.js";
 import { persistBalanceOfflineView, readBalanceOfflineView } from "./offline-cache.js";
@@ -207,6 +207,6 @@ export async function loadBalance() {
 }
 
 export async function initBalanceSection() {
-  if (isUserLite()) return;
+  if (isUserLite() || isUserShop()) return;
   await loadBalance();
 }

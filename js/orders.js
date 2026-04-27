@@ -40,8 +40,10 @@ import {
   canDeleteOrders,
   isAdmin,
   isOrderEditLockedForUserLite,
-  isOrderHiddenFromUserLite,
+  isOrderHiddenForCurrentRole,
+  isShopOrder,
   isUserLite,
+  isUserShop,
 } from "./roles.js";
 import {
   readSnapshot,
@@ -211,6 +213,9 @@ function normalizeStatus(val) {
 const ORDER_TYPE_FILTER_KEYS = ["__empty__", "Окна", "Подоконники", "Аллюминий", "Магазин", "Сетки/мелочь"];
 
 function orderTypeFilterKeysForUi() {
+  if (isUserShop()) {
+    return ["Магазин"];
+  }
   if (isUserLite()) {
     return ORDER_TYPE_FILTER_KEYS.filter((k) => k !== "Магазин");
   }
@@ -1072,9 +1077,7 @@ function syncOrdersScrollPositions() {
 export function getFilteredOrders() {
   let list = state.allOrders;
 
-  if (isUserLite()) {
-    list = list.filter((order) => !isOrderHiddenFromUserLite(order));
-  }
+  list = list.filter((order) => !isOrderHiddenForCurrentRole(order));
 
   if (state.statusFilterSelected && state.statusFilterSelected.length > 0) {
     list = list.filter((order) => {
@@ -1241,6 +1244,7 @@ function isRemainingAmountZero(order) {
 /** Кнопка «Редактировать» в таблице и в меню по номеру. */
 export function canShowEditButtonForOrder(order) {
   if (!canMutateOrders()) return false;
+  if (isOrderHiddenForCurrentRole(order)) return false;
   if (isUserLite() && isOrderEditLockedForUserLite(order)) return false;
   return true;
 }
@@ -2494,8 +2498,8 @@ export async function viewOrder(orderId) {
     data = res.data;
   }
 
-  if (isOrderHiddenFromUserLite(data)) {
-    setMessage("Нет доступа к заказам типа «Магазин»", "#d32f2f");
+  if (isOrderHiddenForCurrentRole(data)) {
+    setMessage("Нет доступа к этому типу заказа", "#d32f2f");
     state.viewingOrderId = null;
     return;
   }
@@ -2557,8 +2561,8 @@ export async function editOrder(orderId) {
     data = res.data;
   }
 
-  if (isOrderHiddenFromUserLite(data)) {
-    setMessage("Нет доступа к заказам типа «Магазин»", "#d32f2f");
+  if (isOrderHiddenForCurrentRole(data)) {
+    setMessage("Нет доступа к этому типу заказа", "#d32f2f");
     return;
   }
 
@@ -2731,6 +2735,10 @@ export async function submitOrderForm(event) {
   const orderTypeForSave = (document.getElementById("order_type")?.value || "").trim();
   if (isUserLite() && orderTypeForSave === "Магазин") {
     setMessage("Тип заказа «Магазин» недоступен для вашей роли", "#d32f2f");
+    return;
+  }
+  if (isUserShop() && orderTypeForSave !== "Магазин") {
+    setMessage("Для вашей роли доступен только тип заказа «Магазин»", "#d32f2f");
     return;
   }
 
@@ -3005,12 +3013,22 @@ export function applyOrderTypeSelectForRole() {
   const sel = document.getElementById("order_type");
   if (!sel) return;
   for (const opt of sel.querySelectorAll("option")) {
-    if (opt.value === "Магазин") {
-      opt.hidden = isUserLite();
+    if (isUserShop()) {
+      opt.hidden = opt.value !== "Магазин";
+      continue;
     }
+    if (opt.value === "Магазин") opt.hidden = isUserLite();
   }
   if (isUserLite() && state.orderTypeFilterSelected?.length) {
     state.orderTypeFilterSelected = state.orderTypeFilterSelected.filter((k) => k !== "Магазин");
+  }
+  if (isUserShop()) {
+    state.orderTypeFilterSelected = [];
+    if (!state.editingOrderId && state.viewingOrderId == null) {
+      sel.value = "Магазин";
+    } else if (!isShopOrder({ order_type: sel.value })) {
+      sel.value = "Магазин";
+    }
   }
   renderOrderTypeFilterDropdown();
   applyFiltersAndRender();

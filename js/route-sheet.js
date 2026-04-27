@@ -1,8 +1,8 @@
 import { state } from "./state.js";
 import {
   isOrderEditLockedForUserLite,
-  isOrderHiddenFromUserLite,
-  isUserLite,
+  isOrderHiddenForCurrentRole,
+  isUserShop,
   canMutateOrders,
 } from "./roles.js";
 import { formatOrderIdTypeChip, formatDateShortRU, formatAmount, tryParseRublesInteger } from "./format.js";
@@ -1682,7 +1682,8 @@ async function runDeliveryPipeline(deliveryRows, gen) {
  */
 function ordersVisibleOnRouteSheet({ includeShopForUserLite = false } = {}) {
   return (state.allOrders || []).filter((o) => {
-    if (!isOrderHiddenFromUserLite(o)) return true;
+    if (isUserShop()) return true;
+    if (!isOrderHiddenForCurrentRole(o)) return true;
     return includeShopForUserLite && isShopType(o);
   });
 }
@@ -2646,15 +2647,13 @@ export function initRouteSheetSection() {
       const idTd = e.target.closest("td.td-order-id");
       if (!idTd || !routeSheetSection.contains(idTd)) return;
       if (idTd.classList.contains("td-order-id--route-sheet-manual")) return;
-      if (isUserLite()) {
-        const raw = idTd.getAttribute("data-order-id") || "";
-        const idNum = Number(raw);
-        const order =
-          Number.isFinite(idNum)
-            ? (state.allOrders || []).find((o) => Number(o.id) === idNum) || null
-            : null;
-        if (order && isOrderHiddenFromUserLite(order)) return;
-      }
+      const raw = idTd.getAttribute("data-order-id") || "";
+      const idNum = Number(raw);
+      const order =
+        Number.isFinite(idNum)
+          ? (state.allOrders || []).find((o) => Number(o.id) === idNum) || null
+          : null;
+      if (order && isOrderHiddenForCurrentRole(order)) return;
       e.stopPropagation();
       e.preventDefault();
       openOrderIdActionsMenu(idTd);

@@ -1,7 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
-import { isOrderHiddenFromUserLite } from "./roles.js";
+import { isOrderHiddenForCurrentRole } from "./roles.js";
 import { setDbUnavailableBannerVisible } from "./dbHealth.js";
 import {
   readSnapshot,
@@ -123,7 +123,7 @@ function paintAllChangesFromBaseRows(startIso, endIso, baseRowsForMerge, opts) {
   const lines = [];
   for (const row of rows) {
     const orderType = orderTypeById.get(Number(row.order_id)) ?? "";
-    if (isOrderHiddenFromUserLite({ order_type: orderType })) continue;
+    if (isOrderHiddenForCurrentRole({ order_type: orderType })) continue;
 
     const chip = formatOrderIdTypeChip(row.order_id, orderType);
     const oid = row.order_id != null ? String(row.order_id) : "";

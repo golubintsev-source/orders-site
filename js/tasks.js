@@ -3,6 +3,7 @@ import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
 import { applyFiltersAndRender } from "./orders.js";
 import { switchSection } from "./section-nav.js";
+import { isOrderHiddenForCurrentRole, isUserLite, isUserShop } from "./roles.js";
 import {
   readSnapshot,
   persistOrderTasksSnapshot,
@@ -36,6 +37,12 @@ function orderTasksHighlightFromOrder(order) {
   if (!order) return false;
   const v = order.tasks_highlight;
   return v === true || v === 1 || v === "1";
+}
+
+function canAccessOrderTasksByOrderId(orderId) {
+  const order = state.allOrders?.find((o) => Number(o.id) === Number(orderId));
+  if (!order) return !(isUserLite() || isUserShop());
+  return !isOrderHiddenForCurrentRole(order);
 }
 
 /** Красная подсветка чекбокса и строк таблицы на странице «Задачи по заказу». */
@@ -149,6 +156,7 @@ export async function loadAllTasks() {
   tbody.innerHTML = rows
     .map((row) => {
       const order = state.allOrders?.find((o) => Number(o.id) === Number(row.order_id));
+      if (!canAccessOrderTasksByOrderId(row.order_id)) return "";
       const chip = formatOrderIdTypeChip(row.order_id, order?.order_type);
       const highlight = orderTasksHighlightFromOrder(order);
       const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
@@ -190,6 +198,18 @@ export async function loadOrderTasks() {
       msg.textContent =
         "Выберите заказ: в таблице нажмите на номер заказа → Задачи.";
       msg.classList.remove("order-tasks-message--error");
+    }
+    return;
+  }
+
+  if (!canAccessOrderTasksByOrderId(state.tasksOrderId)) {
+    tbody.innerHTML = "";
+    if (createBtn) createBtn.disabled = true;
+    if (textInput) textInput.disabled = true;
+    setHighlightCheckboxNoOrder();
+    if (msg) {
+      msg.textContent = "Нет доступа к задачам этого заказа.";
+      msg.classList.add("order-tasks-message--error");
     }
     return;
   }
@@ -254,6 +274,14 @@ export async function createOrderTask() {
   }
 
   const author = getAuthorLogin();
+
+  if (!canAccessOrderTasksByOrderId(state.tasksOrderId)) {
+    if (msg) {
+      msg.textContent = "Нет доступа к задачам этого заказа.";
+      msg.classList.add("order-tasks-message--error");
+    }
+    return;
+  }
 
   if (isOfflineDataMode() && !isOfflineClientOrderId(state.tasksOrderId)) {
     if (msg) {
@@ -353,6 +381,7 @@ export function initOrderTasksSection() {
       const raw = tr.getAttribute("data-order-id");
       const id = raw ? Number(raw) : NaN;
       if (Number.isNaN(id)) return;
+      if (!canAccessOrderTasksByOrderId(id)) return;
       state.tasksOrderId = id;
       switchSection("order-tasks");
     });

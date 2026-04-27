@@ -57,7 +57,7 @@ import {
   BALANCE_ADJ_FIELDS,
 } from "./settings.js";
 import { loadBalance } from "./balance.js";
-import { canMutateOrders, isOrderEditLockedForUserLite, isUserLite } from "./roles.js";
+import { canMutateOrders, isOrderEditLockedForUserLite, isUserLite, isUserShop } from "./roles.js";
 import { refreshRublesIntegerInputState } from "./format.js";
 
 export function toggleOrderRowHighlightById(orderId) {
@@ -155,7 +155,7 @@ export function openOrderIdActionsMenu(idTd) {
 
   const lockChecked = orderRow && isOrderEditLockedForUserLite(orderRow);
   const lockBlock =
-    orderRow && !isUserLite() && canMutateOrders()
+    orderRow && !isUserLite() && !isUserShop() && canMutateOrders()
       ? `<label class="order-id-actions-menu-lock" title="Закрыть редактирование заказа для роли user_lite">
     <input type="checkbox" data-action="toggle-lock-edit-user-lite" ${lockChecked ? "checked" : ""} />
     <span>Закрыть редактирование</span>
@@ -499,10 +499,15 @@ export function bindUIEvents() {
     const ORDERS_TYPE_TOGGLE_STORAGE_KEY = "ordersTypeToggles";
     const ORDER_TYPE_KEYS_O = ["__empty__", "Окна", "Подоконники", "Аллюминий", "Сетки/мелочь"];
     const ORDER_TYPE_KEYS_M = ["Магазин"];
-    const ALL_KEYS = isUserLite() ? ORDER_TYPE_KEYS_O : [...ORDER_TYPE_KEYS_O, ...ORDER_TYPE_KEYS_M];
+    const ALL_KEYS = isUserShop()
+      ? ORDER_TYPE_KEYS_M
+      : isUserLite()
+        ? ORDER_TYPE_KEYS_O
+        : [...ORDER_TYPE_KEYS_O, ...ORDER_TYPE_KEYS_M];
 
-    // Для user_lite фильтр "Магазин" скрыт в старом выпадающем меню, поэтому и этот переключатель скрываем.
+    // Для user_lite фильтр "Магазин" скрыт в старом выпадающем меню.
     if (isUserLite()) ordersTypeToggleM.hidden = true;
+    if (isUserShop()) ordersTypeToggleO.hidden = true;
 
     function readSavedToggles() {
       try {
@@ -528,6 +533,10 @@ export function bindUIEvents() {
 
     let { oOn, mOn } = readSavedToggles();
     if (isUserLite()) mOn = false;
+    if (isUserShop()) {
+      oOn = false;
+      mOn = true;
+    }
 
     function setTogglesFromState() {
       if (!state.orderTypeFilterSelected || state.orderTypeFilterSelected.length === 0) {
@@ -536,6 +545,7 @@ export function bindUIEvents() {
       oOn = state.orderTypeFilterSelected.some((k) => ORDER_TYPE_KEYS_O.includes(k));
       mOn = state.orderTypeFilterSelected.includes("Магазин");
       if (isUserLite()) mOn = false;
+      if (isUserShop()) oOn = false;
     }
 
     function syncUI() {
@@ -576,9 +586,11 @@ export function bindUIEvents() {
       if (!sectionAll || !sectionAll.classList.contains("active")) return;
 
       if (kind === "O") {
+        if (isUserShop()) return;
         oOn = !oOn;
       } else if (kind === "M") {
         if (isUserLite()) return;
+        if (isUserShop()) return;
         mOn = !mOn;
       }
       applyFromToggles();
