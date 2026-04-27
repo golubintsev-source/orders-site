@@ -361,6 +361,13 @@ h2 {
   display: none !important;
 }
 
+/* user_shop: пункты Баланс, Настройки, Расчеты не показываются (дублирует логику hidden в JS) */
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="balance"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="settings"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="calculations"] {
+  display: none !important;
+}
+
 /* Итог и мотивационная фраза внизу меню разделов */
 .section-nav-dropdown-footer {
   margin-top: 4px;

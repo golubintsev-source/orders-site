@@ -4,7 +4,7 @@ import { bumpRouteDeliveryMapGeneration, loadRouteSheet } from "./route-sheet.js
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
-import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite } from "./roles.js";
+import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite, isUserShop } from "./roles.js";
 import { getRouteSectionFromUrl, hrefToOrdersExcelExport, syncBrowserUrlToSection } from "./app-routes.js";
 import { loadAllChanges } from "./all-changes.js";
 
@@ -130,14 +130,15 @@ function getContentSections() {
   return document.querySelectorAll(".content-section");
 }
 
-function syncSectionNavDropdownUserLiteClass() {
+function syncSectionNavDropdownRoleClasses() {
   const panel = document.getElementById("sectionNavDropdownPanel");
   if (!panel) return;
   panel.classList.toggle("section-nav-dropdown-panel--user-lite", isUserLite());
+  panel.classList.toggle("section-nav-dropdown-panel--user-shop", isUserShop());
 }
 
 function updateDropdownItemsVisibility(activeId) {
-  syncSectionNavDropdownUserLiteClass();
+  syncSectionNavDropdownRoleClasses();
   document.querySelectorAll(".section-nav-dropdown-item").forEach((btn) => {
     const id = btn.dataset.section;
     btn.hidden = id === activeId || isSectionHiddenFromNav(id);

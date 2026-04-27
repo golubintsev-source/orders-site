@@ -38,8 +38,23 @@ DROP POLICY IF EXISTS "restrict_user_shop_orders_write_only_shop_type" ON public
 CREATE POLICY "restrict_user_shop_orders_write_only_shop_type"
 ON public.orders
 AS RESTRICTIVE
-FOR INSERT, UPDATE
+FOR INSERT
 TO authenticated
+WITH CHECK (
+  public.current_app_role() <> 'user_shop'
+  OR order_type = 'Магазин'
+);
+
+DROP POLICY IF EXISTS "restrict_user_shop_orders_update_only_shop_type" ON public.orders;
+CREATE POLICY "restrict_user_shop_orders_update_only_shop_type"
+ON public.orders
+AS RESTRICTIVE
+FOR UPDATE
+TO authenticated
+USING (
+  public.current_app_role() <> 'user_shop'
+  OR order_type = 'Магазин'
+)
 WITH CHECK (
   public.current_app_role() <> 'user_shop'
   OR order_type = 'Магазин'
