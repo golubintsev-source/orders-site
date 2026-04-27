@@ -17,3 +17,13 @@ window.login = async function login() {
 
   window.location.href = hrefToHome();
 };
+
+const passwordInput = document.getElementById("password");
+if (passwordInput) {
+  passwordInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      window.login();
+    }
+  });
+}
