@@ -379,12 +379,13 @@ function isShopType(order) {
 }
 
 function filterRouteSheetDeliveryOrdersByShipment(orders, fromKey, toKey, shipment) {
+  const allowAllTypesForRouteSheetDelivery = isUserShop();
   return orders
     .filter(
       (o) =>
         (o.delivery || "").trim() === shipment &&
         isInDateRange(o, fromKey, toKey) &&
-        (isMainRouteType(o) || isShopType(o)),
+        (allowAllTypesForRouteSheetDelivery || isMainRouteType(o) || isShopType(o)),
     )
     .sort(sortByDeliveryThenId);
 }
