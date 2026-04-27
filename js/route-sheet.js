@@ -1,5 +1,10 @@
 import { state } from "./state.js";
-import { isOrderEditLockedForUserLite, isOrderHiddenFromUserLite, isUserLite, canMutateOrders } from "./roles.js";
+import {
+  isOrderEditLockedForUserLite,
+  isOrderHiddenFromUserLite,
+  isUserLite,
+  canMutateOrders,
+} from "./roles.js";
 import { formatOrderIdTypeChip, formatDateShortRU, formatAmount, tryParseRublesInteger } from "./format.js";
 import { isOrderPaid, loadOrders } from "./orders.js";
 import { closeOrderIdActionsMenu, openOrderIdActionsMenu } from "./ui.js";
@@ -128,8 +133,6 @@ const ROUTE_SHEET_DELIVERY_EXCEL_HEADER_FILL = {
   pattern: "solid",
   fgColor: { argb: "FFE8E8E8" },
 };
-
-const HEADERS_SHOP = ["Номер", "Клиент", "Адрес", "Описание", "Телефон"];
 
 /** Центр Волгограда (OSM). */
 const VOLGOGRAD_CENTER = [48.708, 44.513];
@@ -371,6 +374,21 @@ function filterMainOrdersByShipment(orders, fromKey, toKey, shipment) {
   return filterMainOrders(orders, fromKey, toKey).filter((o) => (o.delivery || "").trim() === shipment);
 }
 
+function isShopType(order) {
+  return (order?.order_type || "").trim() === SHOP_TYPE;
+}
+
+function filterRouteSheetDeliveryOrdersByShipment(orders, fromKey, toKey, shipment) {
+  return orders
+    .filter(
+      (o) =>
+        (o.delivery || "").trim() === shipment &&
+        isInDateRange(o, fromKey, toKey) &&
+        (isMainRouteType(o) || isShopType(o)),
+    )
+    .sort(sortByDeliveryThenId);
+}
+
 /**
  * Порядок заказов для выгрузки: как строки в таблице «Доставка» на экране
  * (после «Составить маршрут» — порядок объезда), затем остальные из list по sortByDeliveryThenId.
@@ -394,12 +412,6 @@ function ordersDeliveryListInExportOrder(list) {
   }
   const tail = list.filter((o) => !used.has(String(o.id ?? ""))).sort(sortByDeliveryThenId);
   return out.concat(tail);
-}
-
-function filterShopOrders(orders, fromKey, toKey) {
-  return orders
-    .filter((o) => (o.order_type || "").trim() === SHOP_TYPE && isInDateRange(o, fromKey, toKey))
-    .sort(sortByDeliveryThenId);
 }
 
 function isRouteSheetSectionActive() {
@@ -1664,9 +1676,15 @@ async function runDeliveryPipeline(deliveryRows, gen) {
   }
 }
 
-/** Как в таблице заказов: user_lite не видит тип «Магазин». */
-function ordersVisibleOnRouteSheet() {
-  return (state.allOrders || []).filter((o) => !isOrderHiddenFromUserLite(o));
+/**
+ * На маршрутном листе в «Доставка» user_lite видит строки типа «Магазин»,
+ * но открытие/редактирование карточки заказа для них остаётся закрытым.
+ */
+function ordersVisibleOnRouteSheet({ includeShopForUserLite = false } = {}) {
+  return (state.allOrders || []).filter((o) => {
+    if (!isOrderHiddenFromUserLite(o)) return true;
+    return includeShopForUserLite && isShopType(o);
+  });
 }
 
 /** Подсказка при наведении на обрезанный адрес — как в `renderOrders` для `td.td-order-address`. */
@@ -1747,22 +1765,11 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
   </tr>`;
 }
 
-function rowShopHtml(order) {
-  return `<tr>
-    ${orderIdCellHtml(order)}
-    <td>${escapeHtml(order.client ?? "")}</td>
-    <td>${escapeHtml(order.address ?? "")}</td>
-    <td>${escapeHtml(order.description ?? "")}</td>
-    <td class="route-sheet-col-phone">${escapeHtml(order.phone ?? "")}</td>
-  </tr>`;
-}
-
 export function loadRouteSheet() {
   const msgEl = document.getElementById("routeSheetMessage");
   const tbodyDelivery = document.querySelector("#routeSheetTableDelivery tbody");
   const tbodyPickup = document.querySelector("#routeSheetTablePickup tbody");
-  const tbodyShop = document.querySelector("#routeSheetTableShop tbody");
-  if (!tbodyDelivery || !tbodyPickup || !tbodyShop) return;
+  if (!tbodyDelivery || !tbodyPickup) return;
 
   closeOrderIdActionsMenu();
 
@@ -1771,7 +1778,6 @@ export function loadRouteSheet() {
     if (msgEl) msgEl.textContent = "Укажите даты «с» и «по» в формате ГГГГ-ММ-ДД.";
     tbodyDelivery.innerHTML = "";
     tbodyPickup.innerHTML = "";
-    tbodyShop.innerHTML = "";
     routeDeliveryPipelineGeneration += 1;
     routeDeliveryComposeGeneration += 1;
     deliveryKmByOrderId.clear();
@@ -1783,7 +1789,6 @@ export function loadRouteSheet() {
     if (msgEl) msgEl.textContent = "Дата «с» не может быть позже даты «по».";
     tbodyDelivery.innerHTML = "";
     tbodyPickup.innerHTML = "";
-    tbodyShop.innerHTML = "";
     routeDeliveryPipelineGeneration += 1;
     routeDeliveryComposeGeneration += 1;
     deliveryKmByOrderId.clear();
@@ -1794,15 +1799,18 @@ export function loadRouteSheet() {
 
   if (msgEl) msgEl.textContent = "";
 
-  const orders = ordersVisibleOnRouteSheet();
-  const deliveryFromDb = filterMainOrdersByShipment(orders, fromKey, toKey, DELIVERY_SHIP);
+  const orders = ordersVisibleOnRouteSheet({ includeShopForUserLite: true });
+  const deliveryFromDb = filterRouteSheetDeliveryOrdersByShipment(
+    orders,
+    fromKey,
+    toKey,
+    DELIVERY_SHIP,
+  );
   const deliveryManual = manualDeliveryOrdersInRange(fromKey, toKey);
   const deliveryRows = deliveryFromDb.concat(deliveryManual);
   const pickupRows = filterMainOrdersByShipment(orders, fromKey, toKey, DELIVERY_PICKUP);
-  const shop = filterShopOrders(orders, fromKey, toKey);
 
   tbodyPickup.innerHTML = pickupRows.map((o) => rowMainHtml(o)).join("");
-  tbodyShop.innerHTML = shop.map(rowShopHtml).join("");
 
   if (isRouteSheetSectionActive()) {
     const gen = ++routeDeliveryPipelineGeneration;
@@ -2124,16 +2132,6 @@ function rowDeliveryMainValues(order) {
   ];
 }
 
-function rowShopValues(order) {
-  return [
-    order.id != null ? formatOrderIdTypeChip(order.id, order.order_type) : "",
-    order.client ?? "",
-    order.address ?? "",
-    order.description ?? "",
-    order.phone ?? "",
-  ];
-}
-
 /** При уходе с раздела — отменить фоновое геокодирование и очистить маркеры. */
 export function bumpRouteDeliveryMapGeneration() {
   routeDeliveryPipelineGeneration += 1;
@@ -2146,7 +2144,12 @@ export function bumpRouteDeliveryMapGeneration() {
 export async function exportRouteSheetDeliveryExcel() {
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid || fromKey > toKey) return;
-  const base = filterMainOrdersByShipment(ordersVisibleOnRouteSheet(), fromKey, toKey, DELIVERY_SHIP);
+  const base = filterRouteSheetDeliveryOrdersByShipment(
+    ordersVisibleOnRouteSheet({ includeShopForUserLite: true }),
+    fromKey,
+    toKey,
+    DELIVERY_SHIP,
+  );
   const manual = manualDeliveryOrdersInRange(fromKey, toKey);
   const list = base.concat(manual);
   const orderedList = ordersDeliveryListInExportOrder(list);
@@ -2202,17 +2205,14 @@ export async function exportRouteSheetDeliveryExcel() {
 export function exportRouteSheetPickupExcel() {
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid || fromKey > toKey) return;
-  const list = filterMainOrdersByShipment(ordersVisibleOnRouteSheet(), fromKey, toKey, DELIVERY_PICKUP);
+  const list = filterMainOrdersByShipment(
+    ordersVisibleOnRouteSheet({ includeShopForUserLite: true }),
+    fromKey,
+    toKey,
+    DELIVERY_PICKUP,
+  );
   const rows = list.map(rowMainValues);
   exportSheet(HEADERS_MAIN, rows, "Самовывоз", "marshrutnyy_list_samovyvoz");
-}
-
-export function exportRouteSheetShopExcel() {
-  const { fromKey, toKey, valid } = getRangeFromDom();
-  if (!valid || fromKey > toKey) return;
-  const shop = filterShopOrders(ordersVisibleOnRouteSheet(), fromKey, toKey);
-  const rows = shop.map(rowShopValues);
-  exportSheet(HEADERS_SHOP, rows, "Магазин", "marshrutnyy_list_magazin");
 }
 
 function clearRouteSheetAddressGeoPopoverFields() {
@@ -2614,9 +2614,6 @@ export function initRouteSheetSection() {
   loadRouteSheetManualFromSession();
   initRouteSheetAddPointDialog();
 
-  const shopSection = document.getElementById("routeSheetShopSection");
-  if (shopSection) shopSection.hidden = isUserLite();
-
   const fromEl = document.getElementById("routeSheetDateFrom");
   const toEl = document.getElementById("routeSheetDateTo");
   if (!fromEl || !toEl) return;
@@ -2649,6 +2646,15 @@ export function initRouteSheetSection() {
       const idTd = e.target.closest("td.td-order-id");
       if (!idTd || !routeSheetSection.contains(idTd)) return;
       if (idTd.classList.contains("td-order-id--route-sheet-manual")) return;
+      if (isUserLite()) {
+        const raw = idTd.getAttribute("data-order-id") || "";
+        const idNum = Number(raw);
+        const order =
+          Number.isFinite(idNum)
+            ? (state.allOrders || []).find((o) => Number(o.id) === idNum) || null
+            : null;
+        if (order && isOrderHiddenFromUserLite(order)) return;
+      }
       e.stopPropagation();
       e.preventDefault();
       openOrderIdActionsMenu(idTd);
@@ -2657,7 +2663,6 @@ export function initRouteSheetSection() {
 
   const deliveryBtn = document.getElementById("routeSheetExportDeliveryBtn");
   const pickupBtn = document.getElementById("routeSheetExportPickupBtn");
-  const shopBtn = document.getElementById("routeSheetExportShopBtn");
   if (deliveryBtn && !deliveryBtn.dataset.routeSheetBound) {
     deliveryBtn.dataset.routeSheetBound = "1";
     deliveryBtn.addEventListener("click", () => void exportRouteSheetDeliveryExcel());
@@ -2665,10 +2670,6 @@ export function initRouteSheetSection() {
   if (pickupBtn && !pickupBtn.dataset.routeSheetBound) {
     pickupBtn.dataset.routeSheetBound = "1";
     pickupBtn.addEventListener("click", () => exportRouteSheetPickupExcel());
-  }
-  if (shopBtn && !shopBtn.dataset.routeSheetBound) {
-    shopBtn.dataset.routeSheetBound = "1";
-    shopBtn.addEventListener("click", () => exportRouteSheetShopExcel());
   }
 
   const composeRouteBtn = document.getElementById("routeSheetComposeRouteBtn");
