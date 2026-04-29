@@ -2160,7 +2160,7 @@ function getInstallerPaymentElements() {
 
 function applyOrderFormFieldsVisibilityForRole() {
   const hideForShop = isUserShop();
-  const rowIds = ["orderFormAreaRow"];
+  const rowIds = ["orderFormAreaRow", "orderFormInstallationRow", "installer_payment_block", "orderFormRevealsRow"];
   rowIds.forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
