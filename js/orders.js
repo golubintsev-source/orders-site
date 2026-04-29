@@ -2158,6 +2158,16 @@ function getInstallerPaymentElements() {
   };
 }
 
+function applyOrderFormFieldsVisibilityForRole() {
+  const hideForShop = isUserShop();
+  const rowIds = ["orderFormAreaRow", "orderFormInstallationRow", "installer_payment_block", "orderFormRevealsRow"];
+  rowIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = hideForShop ? "none" : "";
+  });
+}
+
 export function setInstallerPaymentBlockDisabled(disabled) {
   const { amountEl, byEl } = getInstallerPaymentElements();
   if (amountEl) amountEl.disabled = disabled;
@@ -2356,6 +2366,7 @@ export async function fillForm(order) {
     clearExistingOrderFilesInForm();
   });
   await checkInstallerPaymentDone(order.id);
+  applyOrderFormFieldsVisibilityForRole();
   state.initialOrderSnapshot = JSON.parse(JSON.stringify(getFormData()));
 }
 
@@ -2477,6 +2488,7 @@ export function resetFormMode() {
   if (submitBtnTop) submitBtnTop.style.display = "";
 
   applyOrderTypeSelectForRole();
+  applyOrderFormFieldsVisibilityForRole();
 }
 
 /** Просмотр заказа: та же форма, что при редактировании, без изменения данных. */
