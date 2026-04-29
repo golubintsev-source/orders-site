@@ -2813,6 +2813,11 @@ export async function submitOrderForm(event) {
   }
   document.getElementById("payment_status")?.classList.remove("payment-status-invalid");
 
+  if (statusVal === "Заказ закрыт" && !isAdmin() && state.currentRole !== "user") {
+    setMessage("Статус «Заказ закрыт» доступен только ролям admin и user", "#d32f2f");
+    return;
+  }
+
   // Правило: нельзя ставить "Заказ закрыт", если "Оплачено" = "нет"
   // "Оплачено" вычисляется от поля "Кому остаток" через updatePaidField().
   updatePaidField();
