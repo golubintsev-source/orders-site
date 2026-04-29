@@ -2786,13 +2786,46 @@ table {
   margin-bottom: 2px;
 }
 
-.route-sheet-add-point-open-btn {
+.route-sheet-dates-toolbar {
   margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.route-sheet-toolbar-outline-btn {
+  min-height: 30px;
+  padding: 4px 12px;
+  font-size: 13px;
+  line-height: 1.2;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+}
+
+.route-sheet-toolbar-outline-btn:hover {
+  background: #f9fafb;
+}
+
+.route-sheet-toolbar-outline-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.route-sheet-add-point-open-btn {
   flex-shrink: 0;
   min-height: 30px;
   padding: 4px 12px;
   font-size: 13px;
   line-height: 1.2;
+}
+
+.route-sheet-point-by-no-dialog.route-sheet-add-point-dialog {
+  max-width: min(100vw - 24px, 380px);
 }
 
 .route-sheet-add-point-dialog {

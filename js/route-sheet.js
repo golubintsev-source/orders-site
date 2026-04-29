@@ -1687,6 +1687,29 @@ function ordersVisibleOnRouteSheet({ includeShopForUserLite = false } = {}) {
   });
 }
 
+/**
+ * Найти заказ по вводу «Точка по номеру»: только цифры (id) или полный номер, как в таблице заказов.
+ */
+function findOrderByRouteSheetNumberInput(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const orders = ordersVisibleOnRouteSheet({ includeShopForUserLite: true });
+
+  if (/^\d+$/.test(s)) {
+    const n = parseInt(s, 10);
+    if (!Number.isFinite(n)) return null;
+    return orders.find((o) => Number(o.id) === n) ?? null;
+  }
+
+  const norm = s.replace(/\s+/g, "");
+  for (const o of orders) {
+    const chip = formatOrderIdTypeChip(o.id, o.order_type);
+    if (!chip) continue;
+    if (chip.replace(/\s+/g, "").toLowerCase() === norm.toLowerCase()) return o;
+  }
+  return null;
+}
+
 /** Подсказка при наведении на обрезанный адрес — как в `renderOrders` для `td.td-order-address`. */
 function syncRouteSheetDeliveryAddressTitles() {
   const tbody = document.querySelector("#routeSheetTableDelivery tbody");
@@ -2510,6 +2533,130 @@ function closeRouteSheetAddPointDialog() {
   clearRouteSheetAddPointFormError();
 }
 
+function clearRouteSheetPointByNoError() {
+  const err = document.getElementById("routeSheetPointByNoError");
+  if (err) {
+    err.hidden = true;
+    err.textContent = "";
+  }
+}
+
+function setRouteSheetPointByNoError(text) {
+  const err = document.getElementById("routeSheetPointByNoError");
+  if (err) {
+    err.textContent = text;
+    err.hidden = false;
+  }
+}
+
+function resetRouteSheetPointByNoForm() {
+  const inp = document.getElementById("routeSheetPointByNoInput");
+  if (inp) inp.value = "";
+  clearRouteSheetPointByNoError();
+}
+
+function openRouteSheetPointByNoDialog() {
+  const dlg = document.getElementById("routeSheetPointByNoDialog");
+  if (!dlg || typeof dlg.showModal !== "function") return;
+  resetRouteSheetPointByNoForm();
+  dlg.showModal();
+  const inp = document.getElementById("routeSheetPointByNoInput");
+  if (inp) {
+    try {
+      inp.focus({ preventScroll: true });
+    } catch {
+      inp.focus();
+    }
+  }
+}
+
+function closeRouteSheetPointByNoDialog() {
+  const dlg = document.getElementById("routeSheetPointByNoDialog");
+  if (dlg && typeof dlg.close === "function") dlg.close();
+  clearRouteSheetPointByNoError();
+}
+
+async function confirmRouteSheetPointByNo() {
+  clearRouteSheetPointByNoError();
+
+  const inp = document.getElementById("routeSheetPointByNoInput");
+  const raw = (inp?.value ?? "").trim();
+
+  if (!raw) {
+    setRouteSheetPointByNoError("Укажите номер заказа.");
+    return;
+  }
+
+  const digitsOnly = /^\d+$/.test(raw);
+  const order = findOrderByRouteSheetNumberInput(raw);
+  if (!order) {
+    setRouteSheetPointByNoError(
+      digitsOnly
+        ? "Заказ с таким номером не найден."
+        : "Заказ не найден. Введите полный номер (как в списке заказов) или только цифры id.",
+    );
+    return;
+  }
+
+  if (!canMutateOrders()) {
+    setMessage("Недостаточно прав для изменения заказа.", "#d32f2f");
+    return;
+  }
+
+  const tomorrow = getTomorrowIsoDate();
+  const confirmBtn = document.getElementById("routeSheetPointByNoConfirmBtn");
+  if (confirmBtn) confirmBtn.disabled = true;
+  try {
+    const { error } = await supabaseClient.from("orders").update({ delivery_date: tomorrow }).eq("id", order.id);
+    if (error) {
+      console.error("route-sheet point by no:", error);
+      setRouteSheetPointByNoError(error.message || "Не удалось сохранить дату.");
+      return;
+    }
+    if (state.currentUser?.email) {
+      const { error: histError } = await supabaseClient.from("order_history").insert([
+        {
+          order_id: order.id,
+          user_email: state.currentUser.email,
+          comment: `Маршрутный лист: дата доставки → ${tomorrow}`,
+        },
+      ]);
+      if (histError) console.warn("order_history:", histError.message);
+    }
+    closeRouteSheetPointByNoDialog();
+    setMessage(`Дата доставки обновлена: ${formatOrderIdTypeChip(order.id, order.order_type)}`, "#2e7d32");
+    await loadOrders();
+    loadRouteSheet();
+  } finally {
+    if (confirmBtn) confirmBtn.disabled = false;
+  }
+}
+
+function initRouteSheetPointByNoDialog() {
+  const dlg = document.getElementById("routeSheetPointByNoDialog");
+  const openBtn = document.getElementById("routeSheetPointByNoOpenBtn");
+  const cancelBtn = document.getElementById("routeSheetPointByNoCancelBtn");
+  const confirmBtn = document.getElementById("routeSheetPointByNoConfirmBtn");
+
+  if (!dlg || !openBtn || dlg.dataset.routeSheetPointByNoBound) return;
+  dlg.dataset.routeSheetPointByNoBound = "1";
+
+  openBtn.addEventListener("click", () => openRouteSheetPointByNoDialog());
+  if (cancelBtn) cancelBtn.addEventListener("click", () => closeRouteSheetPointByNoDialog());
+  if (confirmBtn) confirmBtn.addEventListener("click", () => void confirmRouteSheetPointByNo());
+  dlg.addEventListener("close", () => clearRouteSheetPointByNoError());
+
+  const inp = document.getElementById("routeSheetPointByNoInput");
+  if (inp) {
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        void confirmRouteSheetPointByNo();
+      }
+    });
+  }
+}
+
 function confirmRouteSheetAddPoint() {
   clearRouteSheetAddPointFormError();
 
@@ -2624,6 +2771,7 @@ function initRouteSheetAddPointDialog() {
 
 export function initRouteSheetSection() {
   loadRouteSheetManualFromSession();
+  initRouteSheetPointByNoDialog();
   initRouteSheetAddPointDialog();
 
   const fromEl = document.getElementById("routeSheetDateFrom");

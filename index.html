@@ -848,9 +848,14 @@
             <span class="route-sheet-date-prefix">по</span>
             <input type="date" id="routeSheetDateTo" class="route-sheet-date-input" min="2000-01-01" max="2099-12-31" />
           </label>
-          <button type="button" id="routeSheetAddPointOpenBtn" class="btn-primary route-sheet-add-point-open-btn">
-            Добавить точку
-          </button>
+          <div class="route-sheet-dates-toolbar">
+            <button type="button" id="routeSheetPointByNoOpenBtn" class="route-sheet-toolbar-outline-btn">
+              Точка по номеру
+            </button>
+            <button type="button" id="routeSheetAddPointOpenBtn" class="btn-primary route-sheet-add-point-open-btn">
+              Добавить точку
+            </button>
+          </div>
         </div>
         <dialog id="routeSheetAddPointDialog" class="route-sheet-add-point-dialog" aria-labelledby="routeSheetAddPointDialogTitle">
           <div class="route-sheet-add-point-dialog-panel">
@@ -919,6 +924,32 @@
             <div class="route-sheet-add-point-actions">
               <button type="button" id="routeSheetAddPointConfirmBtn" class="btn-primary route-sheet-add-point-action-btn">Добавить точку</button>
               <button type="button" id="routeSheetAddPointCancelBtn" class="route-sheet-add-point-cancel-btn">Отменить</button>
+            </div>
+          </div>
+        </dialog>
+        <dialog
+          id="routeSheetPointByNoDialog"
+          class="route-sheet-add-point-dialog route-sheet-point-by-no-dialog"
+          aria-labelledby="routeSheetPointByNoDialogTitle"
+        >
+          <div class="route-sheet-add-point-dialog-panel">
+            <h3 id="routeSheetPointByNoDialogTitle" class="route-sheet-add-point-dialog-title">Точка по номеру заказа</h3>
+            <label class="route-sheet-add-point-field route-sheet-add-point-field--wide">
+              <span class="route-sheet-add-point-label">Номер заказа</span>
+              <input
+                type="text"
+                id="routeSheetPointByNoInput"
+                class="route-sheet-add-point-input"
+                placeholder="0112_О или 112"
+                autocomplete="off"
+              />
+            </label>
+            <p id="routeSheetPointByNoError" class="route-sheet-add-point-error" hidden></p>
+            <div class="route-sheet-add-point-actions">
+              <button type="button" id="routeSheetPointByNoConfirmBtn" class="btn-primary route-sheet-add-point-action-btn">
+                Добавить
+              </button>
+              <button type="button" id="routeSheetPointByNoCancelBtn" class="route-sheet-add-point-cancel-btn">Отмена</button>
             </div>
           </div>
         </dialog>
