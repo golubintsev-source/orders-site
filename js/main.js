@@ -8,7 +8,6 @@ import {
   editOrder,
   viewOrder,
   deleteOrder,
-  applyOrderTypeSelectForRole,
 } from "./orders.js";
 import { initCalculationsSection } from "./calculations.js";
 import { initBalanceSection } from "./balance.js";
@@ -75,7 +74,6 @@ async function init() {
     await Promise.all([loadProfile(), loadSettings()]);
     initDbPingIndicator();
     refreshSectionNavAfterProfile();
-    applyOrderTypeSelectForRole();
     applyRouteOnLoad();
     ensurePopstateRouting();
 

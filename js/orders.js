@@ -2475,6 +2475,8 @@ export function resetFormMode() {
   if (cancelEditBtnTop) cancelEditBtnTop.style.display = "inline-block";
   if (submitBtn) submitBtn.style.display = "";
   if (submitBtnTop) submitBtnTop.style.display = "";
+
+  applyOrderTypeSelectForRole();
 }
 
 /** Просмотр заказа: та же форма, что при редактировании, без изменения данных. */
@@ -3008,17 +3010,28 @@ function highlightAndFocusSavedOrderRow(orderId) {
   }
 }
 
-/** Скрыть в форме тип «Магазин» для роли user_lite и обновить фильтр по типам. */
+/** Полный HTML опций «Тип заказа» до ограничений по роли (восстановление после user_shop). */
+let orderTypeSelectHtmlBackup = null;
+
+/** Скрыть в форме тип «Магазин» для роли user_lite и обновить фильтр по типам. Для user_shop в списке только «Магазин» (hidden у option в select не работает в типичных браузерах). */
 export function applyOrderTypeSelectForRole() {
   const sel = document.getElementById("order_type");
   if (!sel) return;
-  for (const opt of sel.querySelectorAll("option")) {
-    if (isUserShop()) {
-      opt.hidden = opt.value !== "Магазин";
-      continue;
-    }
-    if (opt.value === "Магазин") opt.hidden = isUserLite();
+
+  if (orderTypeSelectHtmlBackup == null) {
+    orderTypeSelectHtmlBackup = sel.innerHTML;
   }
+
+  if (isUserShop()) {
+    sel.innerHTML = '<option value="Магазин">Магазин</option>';
+  } else {
+    sel.innerHTML = orderTypeSelectHtmlBackup;
+    for (const opt of sel.querySelectorAll("option")) {
+      if (opt.value === "Магазин") opt.hidden = isUserLite();
+      else opt.hidden = false;
+    }
+  }
+
   if (isUserLite() && state.orderTypeFilterSelected?.length) {
     state.orderTypeFilterSelected = state.orderTypeFilterSelected.filter((k) => k !== "Магазин");
   }
