@@ -2160,10 +2160,20 @@ function getInstallerPaymentElements() {
 
 function applyOrderFormFieldsVisibilityForRole() {
   const hideForShop = isUserShop();
-  const rowIds = ["orderFormAreaRow", "orderFormInstallationRow", "installer_payment_block", "orderFormRevealsRow"];
-  rowIds.forEach((id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
+  const rows = new Set();
+  [
+    document.getElementById("orderFormAreaRow"),
+    document.getElementById("orderFormInstallationRow"),
+    document.getElementById("installer_payment_block"),
+    document.getElementById("orderFormRevealsRow"),
+    document.getElementById("area_m2")?.closest(".compact-fields-row"),
+    document.getElementById("installation")?.closest(".installation-row"),
+    document.getElementById("installer_rate_per_m2")?.closest(".compact-fields-row"),
+    document.getElementById("reveals")?.closest(".installation-row"),
+  ].forEach((el) => {
+    if (el) rows.add(el);
+  });
+  rows.forEach((el) => {
     el.style.display = hideForShop ? "none" : "";
   });
 }
