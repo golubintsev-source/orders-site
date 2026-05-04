@@ -647,6 +647,18 @@ async function blobBodyForStorageUpload(blob) {
   return new Blob([buf], { type: blob.type || "application/octet-stream" });
 }
 
+async function writeFileChangeToHistory(orderId, comment) {
+  if (!orderId || !comment) return;
+  const userEmail = state.currentUser?.email;
+  if (!userEmail) return;
+  const { error } = await supabaseClient.from("order_history").insert([
+    { order_id: orderId, user_email: userEmail, comment },
+  ]);
+  if (error) {
+    console.error("Ошибка записи изменения файлов в историю:", error);
+  }
+}
+
 export async function uploadFiles(orderId) {
   applyPendingToAttachmentsInput();
   if (pendingAttachments.length === 0) {
@@ -655,6 +667,7 @@ export async function uploadFiles(orderId) {
   }
 
   const files = [...pendingAttachments];
+  let uploadedFilesCount = 0;
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -726,7 +739,13 @@ export async function uploadFiles(orderId) {
         await supabaseClient.storage.from("order-files").remove([thumbnailStoragePath]).catch(() => {});
       }
       await supabaseClient.storage.from("order-files").remove([filePath]).catch(() => {});
+    } else {
+      uploadedFilesCount += 1;
     }
+  }
+
+  if (uploadedFilesCount > 0) {
+    await writeFileChangeToHistory(orderId, `добавлен файл (${uploadedFilesCount} шт.)`);
   }
 
   resetFileUpload();
@@ -1051,6 +1070,7 @@ export async function removeFile(fileId, orderId) {
   }
 
   setMessage("Файл удалён");
+  await writeFileChangeToHistory(orderId, "удален файл (1 шт.)");
   await loadFilesCountMap();
 
   const { applyClientFilter } = await import("./orders.js");
@@ -1071,6 +1091,7 @@ export async function removeOrderFileFromEditForm(fileId, orderId) {
   }
 
   setMessage("Файл удалён");
+  await writeFileChangeToHistory(orderId, "удален файл (1 шт.)");
   await loadFilesCountMap();
 
   const { applyClientFilter } = await import("./orders.js");
