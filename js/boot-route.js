@@ -5,7 +5,7 @@
 import { getRouteSectionFromUrl } from "./app-routes.js";
 
 const BOOT_LABELS = {
-  all: "Заказы4",
+  all: "Заказы",
   new: "Новый",
   calculations: "Расчеты",
   "tasks-all": "Все задачи",

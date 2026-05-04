@@ -58,7 +58,7 @@ export function updateSectionNavRicherStat() {
 }
 
 const SECTION_LABELS = {
-  all: "Заказы4",
+  all: "Заказы",
   calculations: "Расчеты",
   "tasks-all": "Все задачи",
   "changes-all": "Все изменения",
@@ -190,8 +190,8 @@ function updateOrdersSearchBtnVisibility(sectionId) {
       `;
       searchBtn.classList.remove("section-nav-search-btn--active-orders");
     } else {
-      searchBtn.setAttribute("title", "Заказы4");
-      searchBtn.setAttribute("aria-label", "Заказы4");
+      searchBtn.setAttribute("title", "Заказы");
+      searchBtn.setAttribute("aria-label", "Заказы");
       // Простой "документ/список" как иконка «Заказы».
       searchBtn.innerHTML = `
         <svg class="section-nav-orders-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
