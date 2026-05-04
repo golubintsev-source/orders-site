@@ -1,6 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
-import { isAdmin, isOrderHiddenForCurrentRole } from "./roles.js";
+import { isAdmin, isOrderHiddenForCurrentRole, isUserLite } from "./roles.js";
 import { formatOrderIdTypeChip } from "./format.js";
 import {
   attachmentsInput,
@@ -858,8 +858,16 @@ function appendRemoveIconToButton(delBtn) {
   delBtn.appendChild(svg);
 }
 
+function canDeleteOrderFile(file) {
+  if (isAdmin()) return true;
+  if (!isUserLite()) return false;
+  const currentUserId = state.currentUser?.id;
+  if (!currentUserId) return false;
+  return String(file?.uploaded_by || "") === String(currentUserId);
+}
+
 /**
- * Строка файла: как в модалке (превью, имя, мета, Открыть / Скачать / Удалить для админа).
+ * Строка файла: как в модалке (превью, имя, мета, Открыть / Скачать / Удалить по правам роли).
  * @param {(fileId: number, orderId: number) => void | Promise<void>} onAdminDelete
  */
 async function createOrderFileRowElement(file, orderId, onAdminDelete) {
@@ -928,7 +936,7 @@ async function createOrderFileRowElement(file, orderId, onAdminDelete) {
     actions.appendChild(dlA);
   }
 
-  if (isAdmin() && onAdminDelete) {
+  if (canDeleteOrderFile(file) && onAdminDelete) {
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "file-remove-btn";
@@ -997,7 +1005,7 @@ export async function openFilesModal(orderId) {
 async function deleteOrderFileFromStorageAndDb(fileId) {
   const { data: row, error: fetchError } = await supabaseClient
     .from("order_files")
-    .select("storage_path, thumbnail_storage_path")
+    .select("storage_path, thumbnail_storage_path, uploaded_by")
     .eq("id", fileId)
     .maybeSingle();
 
@@ -1007,6 +1015,9 @@ async function deleteOrderFileFromStorageAndDb(fileId) {
   }
   if (!row?.storage_path) {
     return { ok: false, message: "Запись файла не найдена" };
+  }
+  if (!canDeleteOrderFile(row)) {
+    return { ok: false, message: "Нет прав на удаление этого файла" };
   }
 
   const paths = [row.storage_path];
