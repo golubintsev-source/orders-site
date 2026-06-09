@@ -2269,6 +2269,7 @@ export function updateInstallerPaymentAmountFromArea() {
 export async function checkInstallerPaymentDone(orderId) {
   if (orderId == null) return;
   if (isOfflineClientOrderId(orderId)) return;
+  if (isOfflineDataMode()) return;
   const { data } = await supabaseClient
     .from("calculations")
     .select("from_place, amount")
@@ -2534,25 +2535,44 @@ export function resetFormMode() {
   applyOrderFormFieldsVisibilityForRole();
 }
 
+async function loadOrderRowForForm(orderId) {
+  const idNum = Number(orderId);
+  const fromList = state.allOrders.find((x) => Number(x.id) === idNum);
+  if (fromList && (isOfflineDataMode() || isOfflineClientOrderId(idNum))) {
+    return fromList;
+  }
+  try {
+    const res = await raceWithTimeout(
+      supabaseClient.from("orders").select("*").eq("id", orderId).single(),
+    );
+    if (!res.error && res.data) return res.data;
+    if (fromList) return fromList;
+    return { error: res.error || new Error("not found") };
+  } catch (e) {
+    if (fromList) return fromList;
+    throw e;
+  }
+}
+
 /** Просмотр заказа: та же форма, что при редактировании, без изменения данных. */
 export async function viewOrder(orderId) {
   state.editingOrderId = null;
   state.viewingOrderId = orderId;
 
-  const idNum = Number(orderId);
-  const fromList = state.allOrders.find((x) => Number(x.id) === idNum);
   let data = null;
-  if (fromList && (state.ordersFromCache || isOfflineClientOrderId(idNum))) {
-    data = fromList;
-  } else {
-    const res = await supabaseClient.from("orders").select("*").eq("id", orderId).single();
-    if (res.error) {
-      console.error("Ошибка загрузки заявки:", res.error);
-      setMessage("Ошибка загрузки заявки", "#d32f2f");
-      state.viewingOrderId = null;
-      return;
-    }
-    data = res.data;
+  try {
+    data = await loadOrderRowForForm(orderId);
+  } catch (e) {
+    console.error("Ошибка загрузки заявки:", e);
+    setMessage("Ошибка загрузки заявки", "#d32f2f");
+    state.viewingOrderId = null;
+    return;
+  }
+  if (data?.error) {
+    console.error("Ошибка загрузки заявки:", data.error);
+    setMessage("Ошибка загрузки заявки", "#d32f2f");
+    state.viewingOrderId = null;
+    return;
   }
 
   if (isOrderHiddenForCurrentRole(data)) {
@@ -2606,16 +2626,17 @@ export async function editOrder(orderId) {
   applyOrderFormReadOnly(false);
 
   let data = null;
-  if (fromList && (state.ordersFromCache || isOfflineClientOrderId(idNum))) {
-    data = fromList;
-  } else {
-    const res = await supabaseClient.from("orders").select("*").eq("id", orderId).single();
-    if (res.error) {
-      console.error("Ошибка загрузки заявки:", res.error);
-      setMessage("Ошибка загрузки заявки", "#d32f2f");
-      return;
-    }
-    data = res.data;
+  try {
+    data = await loadOrderRowForForm(orderId);
+  } catch (e) {
+    console.error("Ошибка загрузки заявки:", e);
+    setMessage("Ошибка загрузки заявки", "#d32f2f");
+    return;
+  }
+  if (data?.error) {
+    console.error("Ошибка загрузки заявки:", data.error);
+    setMessage("Ошибка загрузки заявки", "#d32f2f");
+    return;
   }
 
   if (isOrderHiddenForCurrentRole(data)) {
