@@ -2476,29 +2476,26 @@ function resolveOrderFormReturnSectionId(stored) {
 
 async function applyPostOrderFormNavigation(returnSectionId, { savedOrderId = null, reloadOrders = true } = {}) {
   const target = resolveOrderFormReturnSectionId(returnSectionId);
-  if (target === "all") {
-    switchSection("all");
-    if (reloadOrders) await loadOrders();
-    if (savedOrderId != null) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => highlightAndFocusSavedOrderRow(savedOrderId));
-      });
-    }
-    return;
-  }
-  if (reloadOrders) await loadOrders();
+  // Сначала уйти с формы заказа: иначе resetFormMode() показывает «Новая заявка»,
+  // а loadOrders() на мобильном может занять несколько секунд до switchSection.
   switchSection(target);
+  resetFormMode();
+  if (!reloadOrders) return;
+  await loadOrders();
+  if (target === "all" && savedOrderId != null) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => highlightAndFocusSavedOrderRow(savedOrderId));
+    });
+  }
 }
 
 export async function leaveOrderFormAfterSave(savedOrderId) {
   const returnSectionId = state.orderFormReturnSectionId;
-  resetFormMode();
   await applyPostOrderFormNavigation(returnSectionId, { savedOrderId });
 }
 
 export function leaveOrderFormOnCancel() {
   const returnSectionId = state.orderFormReturnSectionId;
-  resetFormMode();
   void applyPostOrderFormNavigation(returnSectionId, { reloadOrders: false });
 }
 
