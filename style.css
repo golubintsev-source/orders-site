@@ -1308,7 +1308,7 @@ h2 {
   }
 
   /* дата в «пилюле» — меньше отступы, чтобы не выталкивала соседнюю ячейку */
-  #calculationsTable td:nth-child(2) .status-value {
+  #calculationsTable td:nth-child(1) .status-value {
     padding: 3px 6px;
     font-size: 12px;
     max-width: 100%;
@@ -1333,7 +1333,7 @@ h2 {
   white-space: nowrap;
 }
 
-/* Автор, Время, Откуда, Куда, Сумма, Комментарий — 3px между соседними столбцами */
+/* Время, Автор, Откуда, Куда, Сумма, Комментарий — 3px между соседними столбцами */
 #calculationsTable th:nth-child(1),
 #calculationsTable td:nth-child(1),
 #calculationsTable th:nth-child(2),

@@ -574,8 +574,8 @@ function renderCalculationsTableFromCache() {
     if (isOrderDeltaRow) tr.classList.add("calc-row-system");
     if (isOfflineRow) tr.classList.add("tr-order-offline-pending");
     tr.innerHTML = `
-      <td class="td-calc-author">${displayAuthor ? `<span class="status-value">${escapeHtml(displayAuthor)}</span>` : ""}</td>
       <td><span class="status-value">${escapeHtml(formatCalcTimeRu(row.created_at))}</span></td>
+      <td class="td-calc-author">${displayAuthor ? `<span class="status-value">${escapeHtml(displayAuthor)}</span>` : ""}</td>
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
       <td class="td-money"><span class="status-value">${escapeHtml(formatAmount(row.amount))}</span></td>
