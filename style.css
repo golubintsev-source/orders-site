@@ -2826,19 +2826,20 @@ table {
   padding: 4px 12px;
   font-size: 13px;
   line-height: 1.2;
-  border: 1px solid #d1d5db;
+  font-weight: 600;
+  border: 1px solid #c4b5fd;
   border-radius: 8px;
-  background: #fff;
-  color: #374151;
+  background: #ede9fe;
+  color: #6d28d9;
   cursor: pointer;
 }
 
 .route-sheet-toolbar-outline-btn:hover {
-  background: #f9fafb;
+  background: #ddd6fe;
 }
 
 .route-sheet-toolbar-outline-btn:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid #8b5cf6;
   outline-offset: 1px;
 }
 
