@@ -288,10 +288,23 @@ function appendActorToComment(comment) {
   return base ? `${base}; ${actor}` : actor;
 }
 
+/** У автозаписей заказа в конце комментария «; ЧЧ:ММ; автор» — время не показываем, автора оставляем. */
+function stripOrderDeltaTrailingTime(body) {
+  const parts = String(body || "")
+    .split("; ")
+    .map((p) => p.trim());
+  if (parts.length >= 5 && /^\d{2}:\d{2}$/.test(parts[parts.length - 2])) {
+    return [...parts.slice(0, -2), parts[parts.length - 1]].join("; ");
+  }
+  return body;
+}
+
 export function getCalcDisplayComment(comment) {
   const c = comment ?? "";
   const isOrderDeltaRow = typeof c === "string" && c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
-  return isOrderDeltaRow ? c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim() : c;
+  if (!isOrderDeltaRow) return c;
+  const body = c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim();
+  return stripOrderDeltaTrailingTime(body);
 }
 
 /** Строки, видимые в таблице (период уже в кэше; учитывается активный поиск). */
@@ -406,9 +419,7 @@ function renderCalculationsTableFromCache() {
   rows.forEach((row) => {
     const comment = row.comment ?? "";
     const isOrderDeltaRow = typeof comment === "string" && comment.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
-    const displayComment = isOrderDeltaRow
-      ? comment.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim()
-      : comment;
+    const displayComment = getCalcDisplayComment(comment);
     const escapedComment = escapeHtml(displayComment);
     const isOfflineRow = row.__offlinePendingSync === true;
     const actionsCell = isOfflineRow
