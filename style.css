@@ -1794,42 +1794,93 @@ h2 {
 
 /* Баланс: максимально узкие столбцы участников под мобильный экран */
 #balanceTable th,
-#balanceTable td,
-#calculationsSaldoTable th,
-#calculationsSaldoTable td {
+#balanceTable td {
   padding: 3px 1px;
   font-size: 12px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-#balanceTable thead th:first-child,
-#calculationsSaldoTable thead th:first-child {
+#balanceTable thead th:first-child {
   padding-left: 0;
   padding-right: 4px;
 }
-#balanceTable tbody th,
-#calculationsSaldoTable tbody th {
+#balanceTable tbody th {
   font-weight: 600;
   text-align: left;
   padding-left: 0;
   padding-right: 4px;
 }
-#balanceTable thead th:not(:first-child),
-#calculationsSaldoTable thead th:not(:first-child) {
+#balanceTable thead th:not(:first-child) {
   padding-left: 1px;
   padding-right: 1px;
   text-align: right;
 }
 
 /* Суммы — серая подложка как «Статус» в «Заказы» */
-#balanceTable td.td-money .status-value,
-#calculationsSaldoTable td.td-money .status-value {
+#balanceTable td.td-money .status-value {
   padding: 3px 6px;
   font-size: 12px;
 }
 
+/* Сальдо на странице расчётов: без глобального min-width:900px, компактно под iPhone */
+#calculationsSaldoTable {
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  table-layout: auto;
+  border-collapse: collapse;
+}
+
+#calculationsSaldoTable th,
+#calculationsSaldoTable td {
+  padding: 2px 1px;
+  font-size: 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+#calculationsSaldoTable thead th:first-child,
+#calculationsSaldoTable tbody th {
+  width: 1%;
+  font-weight: 600;
+  text-align: left;
+  padding-left: 0;
+  padding-right: 2px;
+}
+
+#calculationsSaldoTable thead th:not(:first-child) {
+  padding-left: 0;
+  padding-right: 0;
+  text-align: right;
+}
+
+#calculationsSaldoTable td.td-money {
+  text-align: right;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+#calculationsSaldoTable td.td-money .status-value {
+  padding: 1px 3px;
+  font-size: 11px;
+}
+
 .calculations-saldo-wrap {
   margin-top: 10px;
+}
+
+@media (max-width: 768px) {
+  #calculationsSaldoTable th,
+  #calculationsSaldoTable td {
+    padding: 1px 0;
+    font-size: 10px;
+    letter-spacing: -0.02em;
+  }
+
+  #calculationsSaldoTable td.td-money .status-value {
+    padding: 1px 2px;
+    font-size: 10px;
+  }
 }
 
 #section-settings .settings-rate-row {
