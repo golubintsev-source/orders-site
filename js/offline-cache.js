@@ -69,8 +69,15 @@ export function isOfflineClientOrderId(orderId) {
 
 export function isOfflineDataMode() {
   if (state.ordersFromCache) return true;
+  if (state.dbUnavailable) return true;
   if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
   return false;
+}
+
+/** Ошибка при сохранении заказа: уйти в локальную очередь вместо показа ошибки. */
+export function shouldFallbackSaveOrderToLocal(err) {
+  if (err?.code === "TIMEOUT") return true;
+  return isNetworkFetchError(err);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { supabaseClient } from "./config.js";
+import { state } from "./state.js";
 
 const INTERVAL_MS = 5000;
 const FAST_MS = 1000;
@@ -28,6 +29,23 @@ function setIndicator(el, kind, title, ariaLabel) {
   el.setAttribute("aria-label", ariaLabel);
 }
 
+function onDbPingFailure() {
+  lastPingWasFailure = true;
+  void import("./orders.js").then((m) => {
+    if (typeof m.applyOfflineModeFromDbUnavailable === "function") {
+      m.applyOfflineModeFromDbUnavailable();
+    }
+  });
+}
+
+function onDbPingSuccess() {
+  state.dbUnavailable = false;
+  if (lastPingWasFailure) {
+    lastPingWasFailure = false;
+    void import("./orders.js").then((m) => m.loadOrders());
+  }
+}
+
 async function pingOnce() {
   const el = document.getElementById("dbPingIndicator");
   if (!el || inFlight) return;
@@ -40,19 +58,16 @@ async function pingOnce() {
     ]);
     const ms = Math.round(performance.now() - t0);
     if (error) {
-      lastPingWasFailure = true;
       setIndicator(
         el,
         "error",
         `База данных: нет связи (${error.message})`,
         `База данных: нет связи, ${error.message}`,
       );
+      onDbPingFailure();
       return;
     }
-    if (lastPingWasFailure) {
-      lastPingWasFailure = false;
-      void import("./orders.js").then((m) => m.loadOrders());
-    }
+    onDbPingSuccess();
     if (ms < FAST_MS) {
       setIndicator(el, "ok", `База данных: отлично (${ms} мс)`, `База данных: связь хорошая, ${ms} миллисекунд`);
     } else {
@@ -64,7 +79,6 @@ async function pingOnce() {
       );
     }
   } catch (e) {
-    lastPingWasFailure = true;
     if (e === TIMEOUT_SENTINEL) {
       const sec = PING_TIMEOUT_MS / 1000;
       setIndicator(
@@ -76,9 +90,15 @@ async function pingOnce() {
     } else {
       setIndicator(el, "error", "База данных: нет связи", "База данных: нет связи");
     }
+    onDbPingFailure();
   } finally {
     inFlight = false;
   }
+}
+
+/** Внеочередная проверка (например после window «online»). */
+export function triggerDbPingNow() {
+  return pingOnce();
 }
 
 /** Периодический SELECT к Supabase (каждые 5 с): зелёный менее 1 с, жёлтый от 1 с, красный при ошибке или отсутствии ответа 5 с. */

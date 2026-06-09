@@ -47,6 +47,22 @@ window.addEventListener("pageshow", (e) => {
   void import("./orders.js").then((m) => m.paintOrdersFromLocalStorageIfAny());
 });
 
+window.addEventListener("offline", () => {
+  void import("./orders.js").then((m) => {
+    m.paintOrdersFromLocalStorageIfAny();
+    if (typeof m.applyOfflineModeFromDbUnavailable === "function") {
+      m.applyOfflineModeFromDbUnavailable();
+    }
+  });
+});
+
+window.addEventListener("online", () => {
+  void import("./orders.js").then((m) => m.loadOrders());
+  void import("./db-ping.js").then((m) => {
+    if (typeof m.triggerDbPingNow === "function") m.triggerDbPingNow();
+  });
+});
+
 /** Если boot-route.js не выполнился (сеть), снять «вечную» скрытость разделов из style.css. */
 function ensureBootOrFallback() {
   if (document.documentElement.hasAttribute("data-route-boot")) return;

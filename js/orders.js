@@ -65,6 +65,8 @@ import {
   cloneOrderWithoutOfflineMeta,
   sortOrdersWithOfflinePendingFirst,
   isNetworkFetchError,
+  isOfflineDataMode,
+  shouldFallbackSaveOrderToLocal,
   persistEmergencyOrdersView,
   readEmergencyOrdersBaseForMerge,
   raceWithTimeout,
@@ -97,6 +99,32 @@ export function paintOrdersFromLocalStorageIfAny() {
   setDbUnavailableBannerVisible(true, { cacheMode: true });
   applyFiltersAndRender();
   updateSectionNavRicherStat();
+}
+
+/** Вызывается при ошибке пинга БД: переключить UI на локальную копию, если она есть. */
+export function applyOfflineModeFromDbUnavailable() {
+  state.dbUnavailable = true;
+  if (state.ordersFromCache) {
+    setDbUnavailableBannerVisible(true, { cacheMode: state.allOrders.length > 0 });
+    return;
+  }
+  const { rows: merged } = mergedLocalOrdersForOfflineDisplayMeta();
+  if (merged.length > 0) {
+    state.ordersFromCache = true;
+    state.allOrders = merged;
+    persistEmergencyOrdersView(state.allOrders);
+    state.filesCountMap = {};
+    setDbUnavailableBannerVisible(true, { cacheMode: true });
+    applyFiltersAndRender();
+    updateSectionNavRicherStat();
+    return;
+  }
+  if (state.allOrders.length > 0) {
+    state.ordersFromCache = true;
+    setDbUnavailableBannerVisible(true, { cacheMode: true });
+    return;
+  }
+  setDbUnavailableBannerVisible(true);
 }
 
 function refreshOrdersDependentSections() {
@@ -139,6 +167,7 @@ export async function loadOrders() {
   }
 
   if (!error && data) {
+    state.dbUnavailable = false;
     setDbUnavailableBannerVisible(false);
     await syncPendingOfflineDataToSupabase();
     const again = await ordersQuery();
@@ -155,6 +184,7 @@ export async function loadOrders() {
   }
 
   console.error("Ошибка загрузки:", error);
+  state.dbUnavailable = true;
   const { rows: merged, fromSnap } = mergedLocalOrdersForOfflineDisplayMeta();
 
   if (merged.length > 0) {
@@ -2564,7 +2594,7 @@ export async function editOrder(orderId) {
 
   const idNum = Number(orderId);
   const fromList = state.allOrders.find((x) => Number(x.id) === idNum);
-  if (state.ordersFromCache && fromList && !fromList.__offlinePendingSync) {
+  if (isOfflineDataMode() && fromList && !fromList.__offlinePendingSync) {
     setMessage(
       "Без связи с базой можно только создавать новые заявки и менять те, что созданы на этом устройстве без сети (жёлтые строки в таблице).",
       "#d32f2f"
@@ -2731,8 +2761,10 @@ function commitOrderFormToOfflineStorage(orderData, editingOffline) {
     orderData,
   });
 
+  state.dbUnavailable = true;
   state.ordersFromCache = true;
   rebaselineAllOrdersFromStateAndPendingQueue();
+  setDbUnavailableBannerVisible(true, { cacheMode: true });
   resetFormMode();
   switchSection("all");
   requestAnimationFrame(() => {
@@ -2880,14 +2912,9 @@ export async function submitOrderForm(event) {
     return;
   }
 
-  if (
-    state.editingOrderId &&
-    !isOfflineClientOrderId(state.editingOrderId) &&
-    typeof navigator !== "undefined" &&
-    navigator.onLine === false
-  ) {
+  if (state.editingOrderId && !isOfflineClientOrderId(state.editingOrderId) && isOfflineDataMode()) {
     setMessage(
-      "Нет сети: изменить существующую заявку с сервера нельзя. Можно создать новую — она сохранится на устройстве и отправится в базу позже.",
+      "Нет связи с базой: изменить существующую заявку с сервера нельзя. Можно создать новую — она сохранится на устройстве и отправится в базу позже.",
       "#d32f2f"
     );
     return;
@@ -2911,12 +2938,9 @@ export async function submitOrderForm(event) {
 
   try {
     if (state.editingOrderId) {
-      const result = await supabaseClient
-        .from("orders")
-        .update(orderData)
-        .eq("id", state.editingOrderId)
-        .select()
-        .single();
+      const result = await raceWithTimeout(
+        supabaseClient.from("orders").update(orderData).eq("id", state.editingOrderId).select().single(),
+      );
 
       error = result.error;
 
@@ -2924,11 +2948,9 @@ export async function submitOrderForm(event) {
         savedOrderId = result.data.id;
       }
     } else {
-      const result = await supabaseClient
-        .from("orders")
-        .insert([orderData])
-        .select()
-        .single();
+      const result = await raceWithTimeout(
+        supabaseClient.from("orders").insert([orderData]).select().single(),
+      );
 
       error = result.error;
 
@@ -2940,8 +2962,8 @@ export async function submitOrderForm(event) {
     error = e;
   }
 
-  if (error && !wasEditing && isNetworkFetchError(error)) {
-    setDbUnavailableBannerVisible(true, { cacheMode: true });
+  if (error && !wasEditing && shouldFallbackSaveOrderToLocal(error)) {
+    applyOfflineModeFromDbUnavailable();
     commitOrderFormToOfflineStorage(orderData, false);
     return;
   }
