@@ -17,6 +17,8 @@ import {
 let editingId = null;
 let editingCreatedAt = null;
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
+/** Пустое значение в комментарии расчёта (вместо «—»). */
+const CALC_COMMENT_EMPTY = "[__]";
 let currentUserEmail = "";
 
 /** Полные строки с сервера; фильтр поиска применяется при отрисовке. */
@@ -371,26 +373,44 @@ export function getCalcDisplayAuthor(comment) {
   return extractAuthorFromManualComment(c);
 }
 
+function isCalcCommentEmptyPart(s) {
+  const t = String(s ?? "").trim();
+  return t === "" || t === "—" || t === CALC_COMMENT_EMPTY;
+}
+
+function formatCalcCommentEmptyPlaceholders(text) {
+  if (!text) return text;
+  return text
+    .split("; ")
+    .map((part) => (part.trim() === "—" ? CALC_COMMENT_EMPTY : part))
+    .join("; ");
+}
+
 function insertAddressAfterClientInDeltaComment(body, address) {
   const addr = String(address ?? "").trim();
-  if (!addr || addr === "—") return body;
+  if (!addr || isCalcCommentEmptyPart(addr)) return body;
   const parts = body.split("; ").map((p) => p.trim());
   if (parts.length < 3) return body;
   if (parts[3] === addr) return body;
+  if (isCalcCommentEmptyPart(parts[3])) {
+    return [...parts.slice(0, 3), addr, ...parts.slice(4)].join("; ");
+  }
   return [...parts.slice(0, 3), addr, ...parts.slice(3)].join("; ");
 }
 
 export function getCalcDisplayComment(comment) {
   const c = comment ?? "";
   const isOrderDeltaRow = typeof c === "string" && c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
-  if (!isOrderDeltaRow) return stripAuthorFromManualComment(c);
+  if (!isOrderDeltaRow) {
+    return formatCalcCommentEmptyPlaceholders(stripAuthorFromManualComment(c));
+  }
   const body = c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim();
   let display = stripOrderDeltaTrailingTime(body);
   const orderId = parseOrderDeltaCommentOrderId(c);
   if (orderId != null && calcOrderAddressById.has(orderId)) {
     display = insertAddressAfterClientInDeltaComment(display, calcOrderAddressById.get(orderId));
   }
-  return stripAuthorFromOrderDeltaBody(display);
+  return formatCalcCommentEmptyPlaceholders(stripAuthorFromOrderDeltaBody(display));
 }
 
 async function refreshCalcOrderAddressesForRows(rows) {

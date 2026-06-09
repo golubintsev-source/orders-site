@@ -253,6 +253,8 @@ export const RUBLE_INTEGER_ORDER_FIELD_IDS = [
 ];
 
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
+/** Пустое значение в теле автокомментария расчёта (клиент, адрес и т.п.). */
+const CALC_COMMENT_EMPTY = "[__]";
 
 /** Время чч:мм (локальное) для автокомментария в «Расчеты». */
 function formatTimeHHmmFromIso(iso) {
@@ -297,8 +299,8 @@ function buildOrderDeltaCalculationInsertRows({
   const timeHHmm = formatTimeHHmmFromIso(nowIso);
   const actorShort = shortLoginByEmail(state.currentUser?.email);
   const orderNumberStr = formatOrderIdTypeChip(orderId, orderData?.order_type) || `#${orderId}`;
-  const clientStr = (orderData?.client && String(orderData.client).trim()) || "—";
-  const addressStr = (orderData?.address && String(orderData.address).trim()) || "—";
+  const clientStr = (orderData?.client && String(orderData.client).trim()) || CALC_COMMENT_EMPTY;
+  const addressStr = (orderData?.address && String(orderData.address).trim()) || CALC_COMMENT_EMPTY;
   const old = {
     prepayment: wasEditing ? toComparableNumber(initialSums?.prepayment) : 0,
     remaining_amount: wasEditing ? toComparableNumber(initialSums?.remaining_amount) : 0,

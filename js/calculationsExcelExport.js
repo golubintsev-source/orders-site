@@ -142,7 +142,9 @@ export function getCalculationRowValuesForExcel(row, orderById) {
   const client =
     order?.client != null && String(order.client).trim() !== ""
       ? String(order.client).trim()
-      : meta?.clientFromComment && meta.clientFromComment !== "—"
+      : meta?.clientFromComment &&
+          meta.clientFromComment !== "—" &&
+          meta.clientFromComment !== "[__]"
         ? meta.clientFromComment
         : "";
 
