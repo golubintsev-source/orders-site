@@ -16,6 +16,7 @@ import {
   refreshSectionNavLabel,
   updateSectionNavRicherStat,
   getCurrentSectionId,
+  STANDALONE_SECTION_NAV_ID,
 } from "./section-nav.js";
 import { loadAllChanges } from "./all-changes.js";
 import {
@@ -2458,10 +2459,54 @@ export function applyOrderFormReadOnly(readOnly) {
   updatePaidField();
 }
 
+function captureOrderFormReturnSection() {
+  const cur = getCurrentSectionId();
+  if (cur && cur !== "new") {
+    state.orderFormReturnSectionId = cur;
+  }
+}
+
+function resolveOrderFormReturnSectionId(stored) {
+  const id = stored ?? null;
+  if (id && id !== "new" && id !== STANDALONE_SECTION_NAV_ID) {
+    return id;
+  }
+  return "all";
+}
+
+async function applyPostOrderFormNavigation(returnSectionId, { savedOrderId = null, reloadOrders = true } = {}) {
+  const target = resolveOrderFormReturnSectionId(returnSectionId);
+  if (target === "all") {
+    switchSection("all");
+    if (reloadOrders) await loadOrders();
+    if (savedOrderId != null) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => highlightAndFocusSavedOrderRow(savedOrderId));
+      });
+    }
+    return;
+  }
+  if (reloadOrders) await loadOrders();
+  switchSection(target);
+}
+
+export async function leaveOrderFormAfterSave(savedOrderId) {
+  const returnSectionId = state.orderFormReturnSectionId;
+  resetFormMode();
+  await applyPostOrderFormNavigation(returnSectionId, { savedOrderId });
+}
+
+export function leaveOrderFormOnCancel() {
+  const returnSectionId = state.orderFormReturnSectionId;
+  resetFormMode();
+  void applyPostOrderFormNavigation(returnSectionId, { reloadOrders: false });
+}
+
 export function resetFormMode() {
   state.viewingOrderId = null;
   applyOrderFormReadOnly(false);
   state.editingOrderId = null;
+  state.orderFormReturnSectionId = null;
   state.editingOrderDescription = null;
   state.initialPaymentStatus = null;
   state.initialOrderSums = null;
@@ -2598,6 +2643,7 @@ export async function viewOrder(orderId) {
     formTitle.textContent = `Просмотр ${formatOrderIdTypeChip(orderId, data.order_type)}`;
   }
 
+  captureOrderFormReturnSection();
   switchSection("new");
   refreshSectionNavLabel();
 
@@ -2668,6 +2714,7 @@ export async function editOrder(orderId) {
   if (cancelEditBtn) cancelEditBtn.style.display = "inline-block";
   if (cancelEditBtnTop) cancelEditBtnTop.style.display = "inline-block";
 
+  captureOrderFormReturnSection();
   switchSection("new");
 
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2784,11 +2831,7 @@ function commitOrderFormToOfflineStorage(orderData, editingOffline) {
   state.ordersFromCache = true;
   rebaselineAllOrdersFromStateAndPendingQueue();
   syncDbUnavailableBanner();
-  resetFormMode();
-  switchSection("all");
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => highlightAndFocusSavedOrderRow(highlightId));
-  });
+  void leaveOrderFormAfterSave(highlightId);
   setMessage(
     editingOffline
       ? "Изменения сохранены на устройстве; отправка в базу при появлении связи."
@@ -3015,16 +3058,7 @@ export async function submitOrderForm(event) {
     ]);
   }
 
-  resetFormMode();
-  // Сначала показать «Заказы»: при скрытом #section-all scrollWidth таблицы = 0,
-  // и верхняя горизонтальная полоса прокрутки теряет ширину.
-  switchSection("all");
-  await loadOrders();
-  // После перерисовки таблицы подсветить сохранённый заказ
-  // и сфокусировать экран на левую часть строки.
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => highlightAndFocusSavedOrderRow(savedOrderId));
-  });
+  await leaveOrderFormAfterSave(savedOrderId);
 
   setMessage(
     wasEditing

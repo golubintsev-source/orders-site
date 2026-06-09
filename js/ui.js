@@ -33,6 +33,7 @@ import {
   initPaidFilter,
   initOrderDateFilter,
   resetFormMode,
+  leaveOrderFormOnCancel,
   submitOrderForm,
   updatePaidField,
   updateRemainingFromCostAndPrepayment,
@@ -672,8 +673,7 @@ export function bindUIEvents() {
   }
 
   const onCancelEdit = () => {
-    resetFormMode();
-    switchSection("all");
+    leaveOrderFormOnCancel();
   };
   if (cancelEditBtn) cancelEditBtn.addEventListener("click", onCancelEdit);
   if (cancelEditBtnTop) cancelEditBtnTop.addEventListener("click", onCancelEdit);
