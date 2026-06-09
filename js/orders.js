@@ -298,6 +298,7 @@ function buildOrderDeltaCalculationInsertRows({
   const actorShort = shortLoginByEmail(state.currentUser?.email);
   const orderNumberStr = formatOrderIdTypeChip(orderId, orderData?.order_type) || `#${orderId}`;
   const clientStr = (orderData?.client && String(orderData.client).trim()) || "—";
+  const addressStr = (orderData?.address && String(orderData.address).trim()) || "—";
   const old = {
     prepayment: wasEditing ? toComparableNumber(initialSums?.prepayment) : 0,
     remaining_amount: wasEditing ? toComparableNumber(initialSums?.remaining_amount) : 0,
@@ -323,7 +324,7 @@ function buildOrderDeltaCalculationInsertRows({
       from_place: from_place || "—",
       to_place: to_place || "—",
       amount,
-      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${kindLabel}; ${orderNumberStr}; ${clientStr}; ${detail}; ${timeHHmm}; ${actorShort}`,
+      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${kindLabel}; ${orderNumberStr}; ${clientStr}; ${addressStr}; ${detail}; ${timeHHmm}; ${actorShort}`,
       order_id: orderId,
       delta_key,
     });

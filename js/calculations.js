@@ -21,6 +21,8 @@ let currentUserEmail = "";
 
 /** Полные строки с сервера; фильтр поиска применяется при отрисовке. */
 let calculationsRowsCache = [];
+/** Адреса заказов для автозаписей (id → address), подставляются в комментарий при отображении. */
+let calcOrderAddressById = new Map();
 /** Непустая строка — поиск активен (кнопка «Отменить»). */
 let appliedCalculationsSearchQuery = null;
 
@@ -288,6 +290,24 @@ function appendActorToComment(comment) {
   return base ? `${base}; ${actor}` : actor;
 }
 
+function parseOrderIdFromChip(chip) {
+  if (!chip) return null;
+  const s = String(chip).trim();
+  if (s.startsWith("офл.")) return null;
+  const base = s.split("_")[0];
+  const n = parseInt(base, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseOrderDeltaCommentOrderId(comment) {
+  const c = comment ?? "";
+  if (!c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX)) return null;
+  const body = c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim();
+  const parts = body.split("; ").map((p) => p.trim());
+  if (parts.length < 2) return null;
+  return parseOrderIdFromChip(parts[1]);
+}
+
 /** У автозаписей заказа в конце комментария «; ЧЧ:ММ; автор» — время не показываем, автора оставляем. */
 function stripOrderDeltaTrailingTime(body) {
   const parts = String(body || "")
@@ -299,12 +319,69 @@ function stripOrderDeltaTrailingTime(body) {
   return body;
 }
 
+function insertAddressAfterClientInDeltaComment(body, address) {
+  const addr = String(address ?? "").trim();
+  if (!addr || addr === "—") return body;
+  const parts = body.split("; ").map((p) => p.trim());
+  if (parts.length < 3) return body;
+  if (parts[3] === addr) return body;
+  return [...parts.slice(0, 3), addr, ...parts.slice(3)].join("; ");
+}
+
 export function getCalcDisplayComment(comment) {
   const c = comment ?? "";
   const isOrderDeltaRow = typeof c === "string" && c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
   if (!isOrderDeltaRow) return c;
   const body = c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim();
-  return stripOrderDeltaTrailingTime(body);
+  let display = stripOrderDeltaTrailingTime(body);
+  const orderId = parseOrderDeltaCommentOrderId(c);
+  if (orderId != null && calcOrderAddressById.has(orderId)) {
+    display = insertAddressAfterClientInDeltaComment(display, calcOrderAddressById.get(orderId));
+  }
+  return display;
+}
+
+async function refreshCalcOrderAddressesForRows(rows) {
+  const orderIds = [];
+  for (const row of rows || []) {
+    const id = parseOrderDeltaCommentOrderId(row.comment);
+    if (id != null) orderIds.push(id);
+  }
+  const uniqueIds = [...new Set(orderIds)];
+  calcOrderAddressById = new Map();
+  if (!uniqueIds.length) return;
+
+  const fromSnapshot = () => {
+    const snapOrders = readSnapshot()?.orders;
+    if (!Array.isArray(snapOrders)) return;
+    for (const o of snapOrders) {
+      if (o?.id != null && uniqueIds.includes(o.id) && o.address != null) {
+        calcOrderAddressById.set(o.id, String(o.address).trim());
+      }
+    }
+  };
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    fromSnapshot();
+    return;
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("orders")
+      .select("id, address")
+      .in("id", uniqueIds)
+      .is("deleted_at", null);
+    if (error) throw error;
+    for (const o of data || []) {
+      if (o?.id != null && o.address != null && String(o.address).trim()) {
+        calcOrderAddressById.set(o.id, String(o.address).trim());
+      }
+    }
+  } catch (e) {
+    console.warn("Адреса заказов для комментариев расчётов: используем кэш.", e);
+    fromSnapshot();
+  }
 }
 
 /** Строки, видимые в таблице (период уже в кэше; учитывается активный поиск). */
@@ -525,6 +602,7 @@ export async function loadCalculations() {
       appliedCalcDateFromYmd,
       appliedCalcDateToYmd
     );
+    await refreshCalcOrderAddressesForRows(calculationsRowsCache);
     renderCalculationsTableFromCache();
     return;
   }
@@ -537,6 +615,7 @@ export async function loadCalculations() {
     appliedCalcDateToYmd
   );
   persistCalculationsSnapshot(calculationsRowsCache);
+  await refreshCalcOrderAddressesForRows(calculationsRowsCache);
   renderCalculationsTableFromCache();
 }
 
