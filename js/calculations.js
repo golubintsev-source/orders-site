@@ -288,10 +288,19 @@ function appendActorToComment(comment) {
   return base ? `${base}; ${actor}` : actor;
 }
 
-function getCalcDisplayComment(comment) {
+export function getCalcDisplayComment(comment) {
   const c = comment ?? "";
   const isOrderDeltaRow = typeof c === "string" && c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
   return isOrderDeltaRow ? c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim() : c;
+}
+
+/** Строки, видимые в таблице (период уже в кэше; учитывается активный поиск). */
+export function getFilteredCalculationRows() {
+  const q =
+    appliedCalculationsSearchQuery != null ? String(appliedCalculationsSearchQuery).trim() : "";
+  const needle = q ? q.toLowerCase() : "";
+  if (!needle) return [...calculationsRowsCache];
+  return calculationsRowsCache.filter((row) => rowMatchesCalculationsSearch(row, needle));
 }
 
 function rowMatchesCalculationsSearch(row, needleLower) {
@@ -747,6 +756,14 @@ function setupCalculationsForm() {
       } else {
         void applyCalculationsFindCombined();
       }
+    });
+  }
+
+  const exportBtn = document.getElementById("calcExportExcelBtn");
+  if (exportBtn && !exportBtn.dataset.exportBound) {
+    exportBtn.dataset.exportBound = "1";
+    exportBtn.addEventListener("click", () => {
+      void import("./calculationsExcelExport.js").then((m) => m.exportCalculationsToExcel());
     });
   }
 

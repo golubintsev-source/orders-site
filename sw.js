@@ -25,6 +25,7 @@ const JS_FILES = [
   "balance.js",
   "boot-route.js",
   "calculations.js",
+  "calculationsExcelExport.js",
   "clientAutocomplete.js",
   "config.js",
   "db-ping.js",
