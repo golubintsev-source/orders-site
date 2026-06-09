@@ -33,6 +33,8 @@ let appliedCalculationsSearchQuery = null;
 let appliedCalcDateFromYmd = "";
 let appliedCalcDateToYmd = "";
 
+const CALC_SALDO_PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
+
 function localDateToYmd(d) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -542,6 +544,37 @@ function setMessage(text, isError) {
   }
 }
 
+function computeSaldoFromCalcRows(rows) {
+  const balances = Object.fromEntries(CALC_SALDO_PARTICIPANTS.map((p) => [p, 0]));
+  for (const row of rows || []) {
+    const amount = Number(row.amount);
+    if (!Number.isFinite(amount)) continue;
+    if (Object.prototype.hasOwnProperty.call(balances, row.from_place)) {
+      balances[row.from_place] -= amount;
+    }
+    if (Object.prototype.hasOwnProperty.call(balances, row.to_place)) {
+      balances[row.to_place] += amount;
+    }
+  }
+  return balances;
+}
+
+function renderCalculationsSaldoTable(rows) {
+  const tbody = document.querySelector("#calculationsSaldoTable tbody");
+  if (!tbody) return;
+
+  const balances = computeSaldoFromCalcRows(rows);
+  tbody.innerHTML = `
+    <tr>
+      <th scope="row">Сальдо</th>
+      ${CALC_SALDO_PARTICIPANTS.map(
+        (p) =>
+          `<td class="td-money"><span class="status-value">${escapeHtml(formatAmountWholeRubles(balances[p]))}</span></td>`
+      ).join("")}
+    </tr>
+  `;
+}
+
 function renderCalculationsTableFromCache() {
   const tbody = document.querySelector("#calculationsTable tbody");
   if (!tbody) return;
@@ -560,6 +593,7 @@ function renderCalculationsTableFromCache() {
     const tr = document.createElement("tr");
     tr.innerHTML = "<td colspan=\"7\">Записей пока нет.</td>";
     tbody.appendChild(tr);
+    renderCalculationsSaldoTable([]);
     return;
   }
 
@@ -567,6 +601,7 @@ function renderCalculationsTableFromCache() {
     const tr = document.createElement("tr");
     tr.innerHTML = "<td colspan=\"7\">Ничего не найдено.</td>";
     tbody.appendChild(tr);
+    renderCalculationsSaldoTable([]);
     return;
   }
 
@@ -625,6 +660,8 @@ function renderCalculationsTableFromCache() {
       }
     });
   }
+
+  renderCalculationsSaldoTable(rows);
 }
 
 export async function loadCalculations() {

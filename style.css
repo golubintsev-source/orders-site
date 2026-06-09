@@ -1794,32 +1794,42 @@ h2 {
 
 /* Баланс: максимально узкие столбцы участников под мобильный экран */
 #balanceTable th,
-#balanceTable td {
+#balanceTable td,
+#calculationsSaldoTable th,
+#calculationsSaldoTable td {
   padding: 3px 1px;
   font-size: 12px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-#balanceTable thead th:first-child {
+#balanceTable thead th:first-child,
+#calculationsSaldoTable thead th:first-child {
   padding-left: 0;
   padding-right: 4px;
 }
-#balanceTable tbody th {
+#balanceTable tbody th,
+#calculationsSaldoTable tbody th {
   font-weight: 600;
   text-align: left;
   padding-left: 0;
   padding-right: 4px;
 }
-#balanceTable thead th:not(:first-child) {
+#balanceTable thead th:not(:first-child),
+#calculationsSaldoTable thead th:not(:first-child) {
   padding-left: 1px;
   padding-right: 1px;
   text-align: right;
 }
 
 /* Суммы — серая подложка как «Статус» в «Заказы» */
-#balanceTable td.td-money .status-value {
+#balanceTable td.td-money .status-value,
+#calculationsSaldoTable td.td-money .status-value {
   padding: 3px 6px;
   font-size: 12px;
+}
+
+.calculations-saldo-wrap {
+  margin-top: 10px;
 }
 
 #section-settings .settings-rate-row {
