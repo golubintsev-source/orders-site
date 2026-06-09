@@ -1,10 +1,13 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
+import { syncDbUnavailableBanner } from "./dbHealth.js";
 
 const INTERVAL_MS = 5000;
 const FAST_MS = 1000;
 /** Нет ответа от БД дольше этого — красный индикатор. */
 const PING_TIMEOUT_MS = 5000;
+/** Сколько подряд неудачных пингов нужно, чтобы включить офлайн-режим (не реагировать на один медленный ответ). */
+const FAILURES_BEFORE_OFFLINE = 2;
 
 const TIMEOUT_SENTINEL = Symbol("dbPingTimeout");
 
@@ -20,6 +23,7 @@ let intervalId = null;
 let inFlight = false;
 /** Предыдущий пинг завершился ошибкой/таймаутом — при следующем успехе перезагрузить заказы (синхронизация офлайн-очереди). */
 let lastPingWasFailure = false;
+let consecutivePingFailures = 0;
 
 function setIndicator(el, kind, title, ariaLabel) {
   if (!el) return;
@@ -31,6 +35,8 @@ function setIndicator(el, kind, title, ariaLabel) {
 
 function onDbPingFailure() {
   lastPingWasFailure = true;
+  consecutivePingFailures += 1;
+  if (consecutivePingFailures < FAILURES_BEFORE_OFFLINE) return;
   void import("./orders.js").then((m) => {
     if (typeof m.applyOfflineModeFromDbUnavailable === "function") {
       m.applyOfflineModeFromDbUnavailable();
@@ -39,7 +45,9 @@ function onDbPingFailure() {
 }
 
 function onDbPingSuccess() {
+  consecutivePingFailures = 0;
   state.dbUnavailable = false;
+  syncDbUnavailableBanner();
   if (lastPingWasFailure) {
     lastPingWasFailure = false;
     void import("./orders.js").then((m) => m.loadOrders());

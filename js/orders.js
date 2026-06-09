@@ -1,5 +1,5 @@
 import { supabaseClient } from "./config.js";
-import { setDbUnavailableBannerVisible } from "./dbHealth.js";
+import { syncDbUnavailableBanner } from "./dbHealth.js";
 import { state } from "./state.js";
 import {
   clientSearch,
@@ -88,24 +88,22 @@ function mergedLocalOrdersForOfflineDisplay() {
 
 /**
  * Сразу после входа: таблица из localStorage без ожидания сети (Safari/iOS).
- * Полная синхронизация остаётся в loadOrders().
+ * Баннер и офлайн-флаги не выставляются — только оптимистичная отрисовка до loadOrders().
  */
 export function paintOrdersFromLocalStorageIfAny() {
   const rows = mergedLocalOrdersForOfflineDisplay();
   if (rows.length === 0) return;
-  state.ordersFromCache = true;
   state.allOrders = rows;
   state.filesCountMap = state.filesCountMap || {};
-  setDbUnavailableBannerVisible(true, { cacheMode: true });
   applyFiltersAndRender();
   updateSectionNavRicherStat();
 }
 
-/** Вызывается при ошибке пинга БД: переключить UI на локальную копию, если она есть. */
+/** Вызывается при подтверждённой недоступности БД (пинг): переключить UI на локальную копию. */
 export function applyOfflineModeFromDbUnavailable() {
   state.dbUnavailable = true;
   if (state.ordersFromCache) {
-    setDbUnavailableBannerVisible(true, { cacheMode: state.allOrders.length > 0 });
+    syncDbUnavailableBanner();
     return;
   }
   const { rows: merged } = mergedLocalOrdersForOfflineDisplayMeta();
@@ -114,17 +112,17 @@ export function applyOfflineModeFromDbUnavailable() {
     state.allOrders = merged;
     persistEmergencyOrdersView(state.allOrders);
     state.filesCountMap = {};
-    setDbUnavailableBannerVisible(true, { cacheMode: true });
+    syncDbUnavailableBanner();
     applyFiltersAndRender();
     updateSectionNavRicherStat();
     return;
   }
   if (state.allOrders.length > 0) {
     state.ordersFromCache = true;
-    setDbUnavailableBannerVisible(true, { cacheMode: true });
+    syncDbUnavailableBanner();
     return;
   }
-  setDbUnavailableBannerVisible(true);
+  syncDbUnavailableBanner();
 }
 
 function refreshOrdersDependentSections() {
@@ -168,7 +166,6 @@ export async function loadOrders() {
 
   if (!error && data) {
     state.dbUnavailable = false;
-    setDbUnavailableBannerVisible(false);
     await syncPendingOfflineDataToSupabase();
     const again = await ordersQuery();
     const finalData = again.error ? data : again.data || data;
@@ -177,6 +174,7 @@ export async function loadOrders() {
     state.allOrders = mergeServerOrdersWithPendingDisplayRows(finalData);
     persistEmergencyOrdersView(state.allOrders);
     await loadFilesCountMap();
+    syncDbUnavailableBanner();
     applyFiltersAndRender();
     updateSectionNavRicherStat();
     refreshOrdersDependentSections();
@@ -188,11 +186,11 @@ export async function loadOrders() {
   const { rows: merged, fromSnap } = mergedLocalOrdersForOfflineDisplayMeta();
 
   if (merged.length > 0) {
-    setDbUnavailableBannerVisible(true, { cacheMode: true });
     state.ordersFromCache = true;
     state.allOrders = merged;
     persistEmergencyOrdersView(state.allOrders);
     state.filesCountMap = {};
+    syncDbUnavailableBanner();
     applyFiltersAndRender();
     updateSectionNavRicherStat();
     setMessage(
@@ -205,7 +203,7 @@ export async function loadOrders() {
     return;
   }
 
-  setDbUnavailableBannerVisible(true);
+  syncDbUnavailableBanner();
   state.ordersFromCache = false;
   state.allOrders = [];
   state.filesCountMap = {};
@@ -2785,7 +2783,7 @@ function commitOrderFormToOfflineStorage(orderData, editingOffline) {
   state.dbUnavailable = true;
   state.ordersFromCache = true;
   rebaselineAllOrdersFromStateAndPendingQueue();
-  setDbUnavailableBannerVisible(true, { cacheMode: true });
+  syncDbUnavailableBanner();
   resetFormMode();
   switchSection("all");
   requestAnimationFrame(() => {

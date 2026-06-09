@@ -1,3 +1,5 @@
+import { state } from "./state.js";
+
 /**
  * Баннер «База данных недоступна».
  * @param {boolean} visible
@@ -13,4 +15,17 @@ export function setDbUnavailableBannerVisible(visible, opts = {}) {
       ? "Нет связи с базой данных. Показана последняя сохранённая на этом устройстве копия заказов; новые заявки сохраняются здесь и отправятся в базу при появлении связи."
       : "База данных недоступна";
   }
+}
+
+/** Показать/скрыть баннер по фактическому офлайн-состоянию приложения. */
+export function syncDbUnavailableBanner() {
+  const offline =
+    state.ordersFromCache ||
+    state.dbUnavailable ||
+    (typeof navigator !== "undefined" && navigator.onLine === false);
+  if (!offline) {
+    setDbUnavailableBannerVisible(false);
+    return;
+  }
+  setDbUnavailableBannerVisible(true, { cacheMode: state.allOrders.length > 0 });
 }

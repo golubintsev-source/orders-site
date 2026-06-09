@@ -2,7 +2,6 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
 import { isOrderHiddenForCurrentRole } from "./roles.js";
-import { setDbUnavailableBannerVisible } from "./dbHealth.js";
 import {
   readSnapshot,
   persistOrderHistorySnapshot,
@@ -202,13 +201,10 @@ export async function loadAllChanges() {
 
   if (error) {
     console.error("Ошибка загрузки истории изменений:", error);
-    setDbUnavailableBannerVisible(true, { cacheMode: true });
     if (msg) {
       msg.textContent = "Показаны сохранённые на устройстве изменения; новые записи без сети — внизу с жёлтой заливкой.";
       msg.classList.remove("order-tasks-message--error");
     }
-  } else {
-    setDbUnavailableBannerVisible(false);
   }
 
   const baseRows = error ? snapFiltered : data || [];
