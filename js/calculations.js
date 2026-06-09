@@ -11,6 +11,7 @@ import {
   nextOfflineTempCalcId,
   removePendingCalcByTempId,
   isOfflineDataMode,
+  isBrowserOffline,
   raceWithTimeout,
 } from "./offline-cache.js";
 
@@ -433,17 +434,19 @@ async function refreshCalcOrderAddressesForRows(rows) {
     }
   };
 
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+  if (isOfflineDataMode()) {
     fromSnapshot();
     return;
   }
 
   try {
-    const { data, error } = await supabaseClient
-      .from("orders")
-      .select("id, address")
-      .in("id", uniqueIds)
-      .is("deleted_at", null);
+    const { data, error } = await raceWithTimeout(
+      supabaseClient
+        .from("orders")
+        .select("id, address")
+        .in("id", uniqueIds)
+        .is("deleted_at", null),
+    );
     if (error) throw error;
     for (const o of data || []) {
       if (o?.id != null && o.address != null && String(o.address).trim()) {
@@ -651,7 +654,7 @@ export async function loadCalculations() {
 
   let data = null;
   let error = null;
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+  if (isBrowserOffline()) {
     error = { message: "offline" };
   } else {
     try {

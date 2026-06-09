@@ -24,8 +24,43 @@ export function parseAdjustmentInt(raw) {
   return r.value ?? 0;
 }
 
+/** Применить строки app_settings к state и полям формы. */
+function applySettingsRowsToStateAndDom(effectiveRows) {
+  const byKey = Object.fromEntries((effectiveRows || []).map((r) => [r.key, r.value]));
+
+  const rateVal = byKey[KEY_INSTALLER_RATE];
+  const rateNum = rateVal != null && rateVal !== "" ? parseFloat(rateVal) : null;
+  state.defaultInstallerRatePerM2 = Number.isFinite(rateNum) ? rateNum : DEFAULT_RATE;
+
+  for (const { participant, settingKey } of BALANCE_ADJ_FIELDS) {
+    const raw = byKey[settingKey];
+    const n = raw != null && raw !== "" ? parseInt(String(raw).trim(), 10) : 0;
+    state.balanceAdjustments[participant] = Number.isFinite(n) ? n : 0;
+  }
+
+  const rateInput = document.getElementById("installer_rate_per_m2");
+  if (rateInput) rateInput.value = String(state.defaultInstallerRatePerM2);
+
+  const settingsRateInput = document.getElementById("settings_installer_rate_per_m2");
+  if (settingsRateInput) settingsRateInput.value = String(state.defaultInstallerRatePerM2);
+
+  for (const { participant, inputId } of BALANCE_ADJ_FIELDS) {
+    const el = document.getElementById(inputId);
+    if (el) el.value = String(state.balanceAdjustments[participant] ?? 0);
+  }
+
+  updateSettingsSaveButtonState();
+  updateAdjustmentsSaveButtonState();
+}
+
 /** Загрузить настройки из БД и обновить state и поля на странице. */
 export async function loadSettings() {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    const snap = readSnapshot();
+    applySettingsRowsToStateAndDom(snap?.settingsRows || []);
+    return state.defaultInstallerRatePerM2;
+  }
+
   const keys = [KEY_INSTALLER_RATE, ...BALANCE_ADJ_FIELDS.map((f) => f.settingKey)];
   let rows = null;
   let error = null;
@@ -53,31 +88,7 @@ export async function loadSettings() {
     persistSettingsSnapshotFromRows(rows);
   }
 
-  const byKey = Object.fromEntries(effectiveRows.map((r) => [r.key, r.value]));
-
-  const rateVal = byKey[KEY_INSTALLER_RATE];
-  const rateNum = rateVal != null && rateVal !== "" ? parseFloat(rateVal) : null;
-  state.defaultInstallerRatePerM2 = Number.isFinite(rateNum) ? rateNum : DEFAULT_RATE;
-
-  for (const { participant, settingKey } of BALANCE_ADJ_FIELDS) {
-    const raw = byKey[settingKey];
-    const n = raw != null && raw !== "" ? parseInt(String(raw).trim(), 10) : 0;
-    state.balanceAdjustments[participant] = Number.isFinite(n) ? n : 0;
-  }
-
-  const rateInput = document.getElementById("installer_rate_per_m2");
-  if (rateInput) rateInput.value = String(state.defaultInstallerRatePerM2);
-
-  const settingsRateInput = document.getElementById("settings_installer_rate_per_m2");
-  if (settingsRateInput) settingsRateInput.value = String(state.defaultInstallerRatePerM2);
-
-  for (const { participant, inputId } of BALANCE_ADJ_FIELDS) {
-    const el = document.getElementById(inputId);
-    if (el) el.value = String(state.balanceAdjustments[participant] ?? 0);
-  }
-
-  updateSettingsSaveButtonState();
-  updateAdjustmentsSaveButtonState();
+  applySettingsRowsToStateAndDom(effectiveRows);
   return state.defaultInstallerRatePerM2;
 }
 

@@ -50,12 +50,18 @@ export async function checkAuth() {
   state.currentUser = sessionUser;
 
   if (typeof navigator !== "undefined" && navigator.onLine) {
-    const { data, error } = await supabaseClient.auth.getUser();
-    if (!error && data?.user) {
-      state.currentUser = data.user;
-    } else if (error && !isNetworkFetchError(error)) {
-      window.location.href = "login.html";
-      return null;
+    try {
+      const { data, error } = await raceWithTimeout(supabaseClient.auth.getUser());
+      if (!error && data?.user) {
+        state.currentUser = data.user;
+      } else if (error && !isNetworkFetchError(error)) {
+        window.location.href = "login.html";
+        return null;
+      }
+    } catch (e) {
+      if (e?.code !== "TIMEOUT" && !isNetworkFetchError(e)) {
+        console.error("Ошибка проверки сессии:", e);
+      }
     }
   }
 
@@ -63,6 +69,11 @@ export async function checkAuth() {
 }
 
 export async function loadProfile() {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    state.currentRole = normalizeRole(readCachedRoleRaw());
+    return;
+  }
+
   let res;
   try {
     res = await raceWithTimeout(

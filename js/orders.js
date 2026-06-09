@@ -67,6 +67,7 @@ import {
   sortOrdersWithOfflinePendingFirst,
   isNetworkFetchError,
   isOfflineDataMode,
+  isBrowserOffline,
   shouldFallbackSaveOrderToLocal,
   persistEmergencyOrdersView,
   readEmergencyOrdersBaseForMerge,
@@ -89,15 +90,21 @@ function mergedLocalOrdersForOfflineDisplay() {
 
 /**
  * Сразу после входа: таблица из localStorage без ожидания сети (Safari/iOS).
- * Баннер и офлайн-флаги не выставляются — только оптимистичная отрисовка до loadOrders().
+ * При navigator.onLine === false сразу включает офлайн-режим (F5 без сети).
  */
 export function paintOrdersFromLocalStorageIfAny() {
   const rows = mergedLocalOrdersForOfflineDisplay();
-  if (rows.length === 0) return;
-  state.allOrders = rows;
-  state.filesCountMap = state.filesCountMap || {};
-  applyFiltersAndRender();
-  updateSectionNavRicherStat();
+  if (rows.length > 0) {
+    state.allOrders = rows;
+    state.filesCountMap = state.filesCountMap || {};
+    applyFiltersAndRender();
+    updateSectionNavRicherStat();
+  }
+  if (isBrowserOffline()) {
+    state.ordersFromCache = true;
+    state.dbUnavailable = true;
+    syncDbUnavailableBanner();
+  }
 }
 
 /** Вызывается при подтверждённой недоступности БД (пинг): переключить UI на локальную копию. */
@@ -147,7 +154,7 @@ export async function loadOrders() {
   let data = null;
   let error = null;
 
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+  if (isBrowserOffline()) {
     error = { message: "offline" };
   } else {
     try {
@@ -168,7 +175,7 @@ export async function loadOrders() {
   if (!error && data) {
     state.dbUnavailable = false;
     await syncPendingOfflineDataToSupabase();
-    const again = await ordersQuery();
+    const again = await raceWithTimeout(ordersQuery());
     const finalData = again.error ? data : again.data || data;
     persistServerOrdersForOffline(finalData);
     state.ordersFromCache = false;
