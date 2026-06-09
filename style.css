@@ -1125,22 +1125,28 @@ h2 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: var(--calc-submit-row-height, 40px);
   height: var(--calc-submit-row-height, 40px);
+  min-width: var(--calc-submit-row-height, 40px);
   min-height: var(--calc-submit-row-height, 40px);
-  padding: 0 12px;
-  font-size: 13px;
-  font-weight: 600;
-  background: #1f6feb;
+  padding: 0;
+  background: #217346;
   color: #fff;
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  white-space: nowrap;
+}
+
+#section-calculations .calculations-export-excel-btn svg,
+.calculations-page .calculations-export-excel-btn svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 #section-calculations .calculations-export-excel-btn:hover,
 .calculations-page .calculations-export-excel-btn:hover {
-  opacity: 0.95;
+  background: #1a5c38;
 }
 
 #section-calculations .calculations-submit-btn,
