@@ -308,15 +308,67 @@ function parseOrderDeltaCommentOrderId(comment) {
   return parseOrderIdFromChip(parts[1]);
 }
 
-/** У автозаписей заказа в конце комментария «; ЧЧ:ММ; автор» — время не показываем, автора оставляем. */
+/** У автозаписей заказа в конце комментария «; ЧЧ:ММ; автор» — время не показываем в комментарии. */
 function stripOrderDeltaTrailingTime(body) {
   const parts = String(body || "")
     .split("; ")
     .map((p) => p.trim());
   if (parts.length >= 5 && /^\d{2}:\d{2}$/.test(parts[parts.length - 2])) {
-    return [...parts.slice(0, -2), parts[parts.length - 1]].join("; ");
+    return parts.slice(0, -2).join("; ");
   }
   return body;
+}
+
+function isCalcAuthorToken(s) {
+  const t = String(s ?? "").trim();
+  return t === "неизв.." || /\.\.$/.test(t);
+}
+
+function extractAuthorFromOrderDeltaBody(body) {
+  const parts = String(body || "")
+    .split("; ")
+    .map((p) => p.trim());
+  if (parts.length < 2) return "";
+  if (parts.length >= 5 && /^\d{2}:\d{2}$/.test(parts[parts.length - 2])) {
+    return parts[parts.length - 1] || "";
+  }
+  const last = parts[parts.length - 1];
+  return isCalcAuthorToken(last) ? last : "";
+}
+
+function stripAuthorFromOrderDeltaBody(body) {
+  const parts = String(body || "")
+    .split("; ")
+    .map((p) => p.trim());
+  if (parts.length < 2) return body;
+  const last = parts[parts.length - 1];
+  if (isCalcAuthorToken(last)) {
+    return parts.slice(0, -1).join("; ");
+  }
+  return body;
+}
+
+function extractAuthorFromManualComment(comment) {
+  const m = String(comment ?? "").match(/;\s*([^;]+)$/);
+  if (!m) return "";
+  const token = m[1].trim();
+  return isCalcAuthorToken(token) ? token : "";
+}
+
+function stripAuthorFromManualComment(comment) {
+  const c = String(comment ?? "");
+  const m = c.match(/;\s*([^;]+)$/);
+  if (!m || !isCalcAuthorToken(m[1].trim())) return c;
+  return c.slice(0, m.index).trim();
+}
+
+export function getCalcDisplayAuthor(comment) {
+  const c = comment ?? "";
+  if (c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX)) {
+    const body = c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim();
+    return extractAuthorFromOrderDeltaBody(body);
+  }
+  return extractAuthorFromManualComment(c);
 }
 
 function insertAddressAfterClientInDeltaComment(body, address) {
@@ -331,14 +383,14 @@ function insertAddressAfterClientInDeltaComment(body, address) {
 export function getCalcDisplayComment(comment) {
   const c = comment ?? "";
   const isOrderDeltaRow = typeof c === "string" && c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
-  if (!isOrderDeltaRow) return c;
+  if (!isOrderDeltaRow) return stripAuthorFromManualComment(c);
   const body = c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim();
   let display = stripOrderDeltaTrailingTime(body);
   const orderId = parseOrderDeltaCommentOrderId(c);
   if (orderId != null && calcOrderAddressById.has(orderId)) {
     display = insertAddressAfterClientInDeltaComment(display, calcOrderAddressById.get(orderId));
   }
-  return display;
+  return stripAuthorFromOrderDeltaBody(display);
 }
 
 async function refreshCalcOrderAddressesForRows(rows) {
@@ -396,8 +448,10 @@ export function getFilteredCalculationRows() {
 function rowMatchesCalculationsSearch(row, needleLower) {
   if (!needleLower) return true;
   const displayComment = getCalcDisplayComment(row.comment);
+  const displayAuthor = getCalcDisplayAuthor(row.comment);
   const rawComment = row.comment ?? "";
   const parts = [
+    displayAuthor,
     formatCalcTimeRu(row.created_at),
     row.created_at || "",
     String(row.from_place ?? ""),
@@ -481,14 +535,14 @@ function renderCalculationsTableFromCache() {
 
   if (calculationsRowsCache.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td colspan=\"6\">Записей пока нет.</td>";
+    tr.innerHTML = "<td colspan=\"7\">Записей пока нет.</td>";
     tbody.appendChild(tr);
     return;
   }
 
   if (rows.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td colspan=\"6\">Ничего не найдено.</td>";
+    tr.innerHTML = "<td colspan=\"7\">Ничего не найдено.</td>";
     tbody.appendChild(tr);
     return;
   }
@@ -497,6 +551,7 @@ function renderCalculationsTableFromCache() {
     const comment = row.comment ?? "";
     const isOrderDeltaRow = typeof comment === "string" && comment.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
     const displayComment = getCalcDisplayComment(comment);
+    const displayAuthor = getCalcDisplayAuthor(comment);
     const escapedComment = escapeHtml(displayComment);
     const isOfflineRow = row.__offlinePendingSync === true;
     const actionsCell = isOfflineRow
@@ -519,6 +574,7 @@ function renderCalculationsTableFromCache() {
     if (isOrderDeltaRow) tr.classList.add("calc-row-system");
     if (isOfflineRow) tr.classList.add("tr-order-offline-pending");
     tr.innerHTML = `
+      <td class="td-calc-author">${displayAuthor ? `<span class="status-value">${escapeHtml(displayAuthor)}</span>` : ""}</td>
       <td><span class="status-value">${escapeHtml(formatCalcTimeRu(row.created_at))}</span></td>
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>

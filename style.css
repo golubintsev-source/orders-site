@@ -1261,8 +1261,10 @@ h2 {
 #calculationsTable td:nth-child(3),
 #calculationsTable th:nth-child(4),
 #calculationsTable td:nth-child(4),
-#calculationsTable th:nth-child(6),
-#calculationsTable td:nth-child(6) {
+#calculationsTable th:nth-child(5),
+#calculationsTable td:nth-child(5),
+#calculationsTable th:nth-child(7),
+#calculationsTable td:nth-child(7) {
   width: 1%;
 }
 
@@ -1291,27 +1293,29 @@ h2 {
   #calculationsTable td:nth-child(3),
   #calculationsTable th:nth-child(4),
   #calculationsTable td:nth-child(4),
-  #calculationsTable th:nth-child(6),
-  #calculationsTable td:nth-child(6) {
+  #calculationsTable th:nth-child(5),
+  #calculationsTable td:nth-child(5),
+  #calculationsTable th:nth-child(7),
+  #calculationsTable td:nth-child(7) {
     width: max-content;
     min-width: 0;
   }
 
-  #calculationsTable th:nth-child(5),
-  #calculationsTable td:nth-child(5) {
+  #calculationsTable th:nth-child(6),
+  #calculationsTable td:nth-child(6) {
     width: auto;
     min-width: 0;
   }
 
   /* дата в «пилюле» — меньше отступы, чтобы не выталкивала соседнюю ячейку */
-  #calculationsTable td:nth-child(1) .status-value {
+  #calculationsTable td:nth-child(2) .status-value {
     padding: 3px 6px;
     font-size: 12px;
     max-width: 100%;
     box-sizing: border-box;
   }
 
-  #calculationsTable td:nth-child(4) .status-value {
+  #calculationsTable td:nth-child(5) .status-value {
     padding: 3px 6px;
     font-size: 12px;
   }
@@ -1329,26 +1333,22 @@ h2 {
   white-space: nowrap;
 }
 
-/* Дата, Откуда, Куда, Сумма, Комментарий — 3px между соседними столбцами */
+/* Автор, Время, Откуда, Куда, Сумма, Комментарий — 3px между соседними столбцами */
 #calculationsTable th:nth-child(1),
-#calculationsTable td:nth-child(1) {
-  padding-left: 0;
-  padding-right: 3px;
-}
+#calculationsTable td:nth-child(1),
 #calculationsTable th:nth-child(2),
 #calculationsTable td:nth-child(2),
 #calculationsTable th:nth-child(3),
-#calculationsTable td:nth-child(3) {
-  padding-left: 0;
-  padding-right: 3px;
-}
+#calculationsTable td:nth-child(3),
 #calculationsTable th:nth-child(4),
-#calculationsTable td:nth-child(4) {
-  padding-left: 0;
-  padding-right: 3px;
-}
+#calculationsTable td:nth-child(4),
 #calculationsTable th:nth-child(5),
 #calculationsTable td:nth-child(5) {
+  padding-left: 0;
+  padding-right: 3px;
+}
+#calculationsTable th:nth-child(6),
+#calculationsTable td:nth-child(6) {
   padding-left: 0;
 }
 #calculationsTable td.td-calc-comment {
@@ -1399,24 +1399,20 @@ h2 {
 
   /* ~4px между колонками без border-spacing (он даёт разрывы заливки) */
   #calculationsTable th:nth-child(1),
-  #calculationsTable td:nth-child(1) {
-    padding-left: 0;
-    padding-right: 4px;
-  }
+  #calculationsTable td:nth-child(1),
   #calculationsTable th:nth-child(2),
   #calculationsTable td:nth-child(2),
   #calculationsTable th:nth-child(3),
-  #calculationsTable td:nth-child(3) {
-    padding-left: 0;
-    padding-right: 4px;
-  }
+  #calculationsTable td:nth-child(3),
   #calculationsTable th:nth-child(4),
-  #calculationsTable td:nth-child(4) {
-    padding-left: 0;
-    padding-right: 4px;
-  }
+  #calculationsTable td:nth-child(4),
   #calculationsTable th:nth-child(5),
   #calculationsTable td:nth-child(5) {
+    padding-left: 0;
+    padding-right: 4px;
+  }
+  #calculationsTable th:nth-child(6),
+  #calculationsTable td:nth-child(6) {
     padding-left: 0;
   }
 
