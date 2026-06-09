@@ -1822,7 +1822,7 @@ h2 {
   font-size: 12px;
 }
 
-/* Сальдо на странице расчётов: без глобального min-width:900px, компактно под iPhone */
+/* Сальдо на странице расчётов: без глобального min-width:900px; шрифт как у #calculationsTable */
 #calculationsSaldoTable {
   width: max-content;
   max-width: 100%;
@@ -1833,8 +1833,8 @@ h2 {
 
 #calculationsSaldoTable th,
 #calculationsSaldoTable td {
-  padding: 2px 1px;
-  font-size: 11px;
+  padding: 8px 2px;
+  font-size: 13px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -1844,25 +1844,29 @@ h2 {
   width: 1%;
   font-weight: 600;
   text-align: left;
-  padding-left: 0;
-  padding-right: 2px;
 }
 
-#calculationsSaldoTable thead th:not(:first-child) {
-  padding-left: 0;
-  padding-right: 0;
-  text-align: right;
-}
-
+#calculationsSaldoTable thead th:not(:first-child),
 #calculationsSaldoTable td.td-money {
   text-align: right;
-  padding-left: 0;
-  padding-right: 0;
 }
 
-#calculationsSaldoTable td.td-money .status-value {
-  padding: 1px 3px;
-  font-size: 11px;
+/* 6px между соседними столбцами */
+#calculationsSaldoTable th:nth-child(1),
+#calculationsSaldoTable td:nth-child(1),
+#calculationsSaldoTable th:nth-child(2),
+#calculationsSaldoTable td:nth-child(2),
+#calculationsSaldoTable th:nth-child(3),
+#calculationsSaldoTable td:nth-child(3),
+#calculationsSaldoTable th:nth-child(4),
+#calculationsSaldoTable td:nth-child(4) {
+  padding-left: 0;
+  padding-right: 6px;
+}
+
+#calculationsSaldoTable th:nth-child(5),
+#calculationsSaldoTable td:nth-child(5) {
+  padding-left: 0;
 }
 
 .calculations-saldo-wrap {
@@ -1870,16 +1874,9 @@ h2 {
 }
 
 @media (max-width: 768px) {
-  #calculationsSaldoTable th,
-  #calculationsSaldoTable td {
-    padding: 1px 0;
-    font-size: 10px;
-    letter-spacing: -0.02em;
-  }
-
   #calculationsSaldoTable td.td-money .status-value {
-    padding: 1px 2px;
-    font-size: 10px;
+    padding: 3px 6px;
+    font-size: 12px;
   }
 }
 
