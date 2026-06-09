@@ -1116,7 +1116,7 @@ h2 {
 .calculations-page .calculations-form-row--dates .calculations-date-field input[type="date"] {
   width: auto;
   flex: 0 1 auto;
-  min-width: 8.5rem;
+  min-width: 6.8rem;
 }
 
 #section-calculations .calculations-export-excel-btn,
