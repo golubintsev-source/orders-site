@@ -116,7 +116,7 @@ async function applyCalculationsPeriodFromInputs() {
   return true;
 }
 
-/** Одна кнопка «Найти»: период «с»/«по» + запрос к БД + фильтр по полю «Поиск». */
+/** Одна кнопка «Показать»: период «с»/«по» + запрос к БД + фильтр по полю «Поиск». */
 async function applyCalculationsFindCombined() {
   const ok = await applyCalculationsPeriodFromInputs();
   if (!ok) return;
@@ -495,7 +495,7 @@ function updateCalculationsSearchButton() {
   if (!btn) return;
   const active =
     appliedCalculationsSearchQuery != null && String(appliedCalculationsSearchQuery).trim() !== "";
-  btn.textContent = active ? "Отменить" : "Найти";
+  btn.textContent = active ? "Отменить" : "Показать";
   btn.setAttribute("aria-pressed", active ? "true" : "false");
 }
 
