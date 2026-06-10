@@ -1088,6 +1088,16 @@ h2 {
   box-sizing: border-box;
 }
 
+/* Блок фильтров (даты, поиск) — отделён от добавления записи */
+.calculations-form-block--filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+}
+
 /* Период «с» / «по» — одна строка: подпись и дата рядом, оба периода в ряд */
 .calculations-form-row--dates {
   --calc-submit-row-height: 40px;
