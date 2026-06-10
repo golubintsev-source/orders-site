@@ -4,7 +4,11 @@
  * (HTML, JS, CSS, изображения, CDN-скрипты из index/login/calculations/history).
  * Увеличьте CACHE_STATIC при изменении списка или критичных ассетов.
  */
-const CACHE_STATIC = "orders-site-static-v2";
+const CACHE_STATIC = "orders-site-static-v3";
+
+/** iOS Safari при офлайне часто не отклоняет fetch — без таймаута F5 «висит» бесконечно. */
+const NETWORK_TIMEOUT_MS = 4000;
+const NAVIGATE_NETWORK_TIMEOUT_MS = 2000;
 
 const CDN_URLS = [
   "https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css",
@@ -82,10 +86,20 @@ function originUrls() {
   return { all: [...paths.map((p) => o + p), main], mainPrecache: main };
 }
 
+async function fetchWithTimeout(request, ms = NETWORK_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(request, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function putOrIgnore(cache, url) {
   try {
     const req = new Request(url, { cache: "reload" });
-    const res = await fetch(req);
+    const res = await fetchWithTimeout(req, NETWORK_TIMEOUT_MS);
     if (res.ok) await cache.put(url, res);
   } catch (e) {
     console.warn("[sw] precache skip:", url, e);
@@ -158,6 +172,79 @@ async function cacheMatchLoose(cache, request) {
   return r || null;
 }
 
+async function navigateFallbackResponse(cache) {
+  const fallbacks = [
+    self.location.origin + "/index.html",
+    self.location.origin + "/",
+    self.location.origin + "/login.html",
+    self.location.origin + "/calculations.html",
+    self.location.origin + "/history.html",
+    self.location.origin + "/window-calculations.html",
+  ];
+  for (const fb of fallbacks) {
+    const cached = await cache.match(fb);
+    if (cached) return cached;
+  }
+  return null;
+}
+
+async function respondFromCacheOrOfflineText(cache, req) {
+  let cached = await cacheMatchLoose(cache, req);
+  if (cached) return cached;
+
+  if (req.mode === "navigate") {
+    cached = await navigateFallbackResponse(cache);
+    if (cached) return cached;
+  }
+
+  return new Response("Нет сети и нет копии в кэше сервис-воркера. Откройте сайт онлайн один раз.", {
+    status: 503,
+    statusText: "Offline",
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}
+
+async function handleCachedGet(event, req, url) {
+  const cache = await caches.open(CACHE_STATIC);
+
+  if (req.mode === "navigate") {
+    const cached = await cacheMatchLoose(cache, req);
+    if (cached) {
+      if (self.navigator && self.navigator.onLine === false) {
+        return cached;
+      }
+      try {
+        const networkRes = await fetchWithTimeout(req, NAVIGATE_NETWORK_TIMEOUT_MS);
+        if (networkRes.ok) {
+          event.waitUntil(
+            cache.put(req, networkRes.clone()).catch(() => {
+              /* ignore quota */
+            })
+          );
+          return networkRes;
+        }
+      } catch {
+        /* timeout / offline — отдаём кэш */
+      }
+      return cached;
+    }
+  }
+
+  try {
+    const networkRes = await fetchWithTimeout(req, NETWORK_TIMEOUT_MS);
+    if (networkRes.ok && shouldRuntimeCacheGet(url)) {
+      try {
+        await cache.put(req, networkRes.clone());
+      } catch (_) {
+        /* ignore quota / opaque */
+      }
+    }
+    return networkRes;
+  } catch {
+    return respondFromCacheOrOfflineText(cache, req);
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -166,7 +253,7 @@ self.addEventListener("fetch", (event) => {
 
   if (isSameOrigin(url) && url.pathname.startsWith("/api/")) {
     event.respondWith(
-      fetch(req).catch(
+      fetchWithTimeout(req, NETWORK_TIMEOUT_MS).catch(
         () =>
           new Response(JSON.stringify({ error: "offline", message: "Нет сети" }), {
             status: 503,
@@ -181,43 +268,5 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(
-    (async () => {
-      const cache = await caches.open(CACHE_STATIC);
-      try {
-        const networkRes = await fetch(req);
-        if (networkRes.ok && shouldRuntimeCacheGet(url)) {
-          try {
-            await cache.put(req, networkRes.clone());
-          } catch (_) {
-            /* ignore quota / opaque */
-          }
-        }
-        return networkRes;
-      } catch {
-        let cached = await cacheMatchLoose(cache, req);
-        if (cached) return cached;
-
-        if (req.mode === "navigate") {
-          const fallbacks = [
-            self.location.origin + "/index.html",
-            self.location.origin + "/",
-            self.location.origin + "/login.html",
-            self.location.origin + "/calculations.html",
-            self.location.origin + "/history.html",
-            self.location.origin + "/window-calculations.html",
-          ];
-          for (const fb of fallbacks) {
-            cached = await cache.match(fb);
-            if (cached) return cached;
-          }
-        }
-        return new Response("Нет сети и нет копии в кэше сервис-воркера. Откройте сайт онлайн один раз.", {
-          status: 503,
-          statusText: "Offline",
-          headers: { "Content-Type": "text/plain; charset=utf-8" },
-        });
-      }
-    })()
-  );
+  event.respondWith(handleCachedGet(event, req, url));
 });
