@@ -1008,9 +1008,9 @@ h2 {
 
 @media (min-width: 769px) {
   .calculations-form-row--first .field {
-    flex: 0 0 160px;
-    width: 160px;
-    max-width: 160px;
+    flex: 0 0 150px;
+    width: 150px;
+    max-width: 150px;
   }
 }
 
