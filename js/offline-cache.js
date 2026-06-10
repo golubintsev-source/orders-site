@@ -6,6 +6,8 @@ const PENDING_ORDERS_KEY = "orders_site_offline_pending_v1";
 const PENDING_TASKS_KEY = "orders_site_offline_pending_tasks_v1";
 const PENDING_HISTORY_KEY = "orders_site_offline_pending_history_v1";
 const PENDING_CALCS_KEY = "orders_site_offline_pending_calcs_v1";
+/** Правки существующих заказов с сервера (положительный id), ещё не отправленные в БД. */
+const PENDING_ORDER_EDITS_KEY = "orders_site_offline_pending_edits_v1";
 /** Последний отображаемый список заказов (для F5 без сети, даже если основной snap пуст). */
 const EMERGENCY_ORDERS_KEY = "orders_site_emergency_orders_v1";
 /** Готовые числа страницы «Баланс» (без пересчёта из расчётов офлайн). */
@@ -37,8 +39,116 @@ export function cloneOrderWithoutOfflineMeta(row) {
   if (!row || typeof row !== "object") return row;
   const o = { ...row };
   delete o.__offlineLocalId;
+  delete o.__offlineEditLocalId;
   delete o.__offlinePendingSync;
   return o;
+}
+
+/** Подписи полей в order_history.comment (синхронно с ORDER_HISTORY_FIELDS в orders.js). */
+const HISTORY_LABEL_TO_KEY = {
+  "Тип заказа": "order_type",
+  "Номер заказа": "order_number",
+  "Дата и время заказа": "order_date",
+  Телефон: "phone",
+  Клиент: "client",
+  Адрес: "address",
+  Статус: "payment_status",
+  Комментарий: "description",
+  Стоимость: "amount",
+  Предоплата: "prepayment",
+  "Кому предоплата": "prepayment_to",
+  Остаток: "remaining_amount",
+  "Кому остаток": "remaining_to",
+  "Площадь м²": "area_m2",
+  "Москитные сетки": "mosquito_nets",
+  Конструкций: "construction_count",
+  Доставка: "delivery",
+  "Дата доставки": "delivery_date",
+  Монтаж: "installation",
+  "Дата монтажа": "installation_date",
+  Откосы: "reveals",
+  "Дата откосов": "reveals_date",
+  "з/п монтаж": "installer_payment_amount",
+  "Кто оплатил монтаж": "installer_payment_by",
+};
+
+function normHistoryNumber(v) {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function numbersEqualHistory(a, b) {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  return Math.abs(a - b) < 1e-9;
+}
+
+function valuesEqualForOrderHistory(key, a, b) {
+  if (key === "installation" || key === "reveals") return !!a === !!b;
+  if (
+    key === "amount" ||
+    key === "prepayment" ||
+    key === "remaining_amount" ||
+    key === "installer_payment_amount" ||
+    key === "area_m2" ||
+    key === "mosquito_nets" ||
+    key === "construction_count"
+  ) {
+    return numbersEqualHistory(normHistoryNumber(a), normHistoryNumber(b));
+  }
+  if (key === "order_date" || key === "delivery_date" || key === "installation_date" || key === "reveals_date") {
+    const sa = a == null || a === "" ? null : String(a).trim();
+    const sb = b == null || b === "" ? null : String(b).trim();
+    if (sa == null && sb == null) return true;
+    if (sa == null || sb == null) return false;
+    return sa === sb;
+  }
+  const sa = a == null || a === "" ? null : String(a).trim();
+  const sb = b == null || b === "" ? null : String(b).trim();
+  if (sa == null && sb == null) return true;
+  if (sa == null || sb == null) return false;
+  return sa === sb;
+}
+
+export function getChangedOrderFieldKeys(prev, next) {
+  const keys = [];
+  for (const key of Object.values(HISTORY_LABEL_TO_KEY)) {
+    const ov = prev ? prev[key] : undefined;
+    const nv = next ? next[key] : undefined;
+    if (!valuesEqualForOrderHistory(key, ov, nv)) keys.push(key);
+  }
+  return keys;
+}
+
+function parseFieldKeysFromHistoryComment(comment) {
+  if (!comment || typeof comment !== "string") return [];
+  const keys = new Set();
+  for (const part of comment.split(";")) {
+    const p = part.trim();
+    if (!p || p === "Заказ создан" || p === "Сохранено без изменений" || p === "Заявка удалена") continue;
+    const idx = p.indexOf(":");
+    if (idx < 0) continue;
+    const label = p.slice(0, idx).trim();
+    const key = HISTORY_LABEL_TO_KEY[label];
+    if (key) keys.add(key);
+  }
+  return [...keys];
+}
+
+/** Поле → время последнего изменения в order_history строго после afterIso. */
+function buildRemoteFieldChangeTimesAfter(historyRows, afterIso) {
+  const t0 = new Date(afterIso || 0).getTime();
+  const fieldTimes = {};
+  for (const row of historyRows || []) {
+    const t = new Date(row.created_at || 0).getTime();
+    if (Number.isNaN(t) || t <= t0) continue;
+    for (const key of parseFieldKeysFromHistoryComment(row.comment)) {
+      const prev = fieldTimes[key] ? new Date(fieldTimes[key]).getTime() : 0;
+      if (t > prev) fieldTimes[key] = row.created_at;
+    }
+  }
+  return fieldTimes;
 }
 
 function stripOfflineMeta(row) {
@@ -305,12 +415,114 @@ export function sortOrdersWithOfflinePendingFirst(list) {
   });
 }
 
+function readPendingOrderEditsDoc() {
+  const o = readJson(PENDING_ORDER_EDITS_KEY, { version: PENDING_VERSION, items: [] });
+  if (!o || o.version !== PENDING_VERSION) return { items: [] };
+  return { items: Array.isArray(o.items) ? o.items : [] };
+}
+
+export function readPendingOrderEditsQueue() {
+  return readPendingOrderEditsDoc().items;
+}
+
+function writePendingOrderEditsItems(items) {
+  writeJson(PENDING_ORDER_EDITS_KEY, { version: PENDING_VERSION, items });
+}
+
+function buildDisplayRowForPendingServerEdit(orderId, orderData, editLocalId) {
+  return {
+    id: orderId,
+    deleted_at: null,
+    lock_edit_for_user_lite: 0,
+    tasks_highlight: 0,
+    ...orderData,
+    __offlinePendingSync: true,
+    __offlineEditLocalId: editLocalId,
+  };
+}
+
+/**
+ * Добавить или дополнить очередь офлайн-правок существующего заказа (id > 0).
+ */
+export function addOrAppendPendingServerOrderEdit({
+  orderId,
+  orderData,
+  prevSnapshot,
+  historyComment,
+  user_email,
+  changedAt,
+  initialSums,
+  initialParticipants,
+}) {
+  const oid = Number(orderId);
+  if (!Number.isFinite(oid) || oid <= 0) return false;
+  const items = readPendingOrderEditsQueue();
+  let item = items.find((x) => Number(x.orderId) === oid);
+  const editLocalId =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `edit-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const editEntry = {
+    editLocalId,
+    changedAt: changedAt || new Date().toISOString(),
+    user_email: user_email || "",
+    orderData: { ...orderData },
+    prevSnapshot: prevSnapshot ? { ...prevSnapshot } : null,
+    historyComment,
+    initialSums: initialSums ?? null,
+    initialParticipants: initialParticipants ?? null,
+  };
+  if (!item) {
+    const localId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `srv-edit-${Date.now()}`;
+    item = {
+      localId,
+      orderId: oid,
+      displayRow: buildDisplayRowForPendingServerEdit(oid, orderData, localId),
+      edits: [editEntry],
+    };
+    items.push(item);
+  } else {
+    item.edits.push(editEntry);
+    item.displayRow = buildDisplayRowForPendingServerEdit(oid, orderData, item.localId);
+  }
+  writePendingOrderEditsItems(items);
+  return true;
+}
+
+export function pendingServerEditHistoryDisplayRows() {
+  return readPendingOrderEditsQueue().flatMap((item) =>
+    (item.edits || []).map((e) => ({
+      created_at: e.changedAt,
+      user_email: e.user_email,
+      comment: e.historyComment,
+      order_id: item.orderId,
+      __offlinePendingSync: true,
+      __offlineLocalId: e.editLocalId,
+    })),
+  );
+}
+
 export function mergeServerOrdersWithPendingDisplayRows(serverOrders) {
   const server = (serverOrders || []).map((row) => stripOfflineMeta({ ...row }));
+  const editById = new Map(readPendingOrderEditsQueue().map((e) => [String(e.orderId), e]));
+  const withEdits = server.map((row) => {
+    const pending = editById.get(String(row.id));
+    if (!pending?.displayRow) return row;
+    return {
+      ...row,
+      ...stripOfflineMeta(pending.displayRow),
+      id: row.id,
+      __offlinePendingSync: true,
+      __offlineEditLocalId: pending.localId,
+    };
+  });
   const pending = pendingDisplayRows();
-  const serverIds = new Set(server.map((s) => String(s.id)));
+  const serverIds = new Set(withEdits.map((s) => String(s.id)));
   const extras = pending.filter((p) => p.id != null && !serverIds.has(String(p.id)));
-  return sortOrdersWithOfflinePendingFirst([...extras, ...server]);
+  return sortOrdersWithOfflinePendingFirst([...extras, ...withEdits]);
 }
 
 export function shouldSaveNewOrderToLocalQueue() {
@@ -434,7 +646,7 @@ export function pendingHistoryDisplayRows() {
 
 export function mergeOrderHistoryRows(serverRows) {
   const server = (serverRows || []).map((r) => ({ ...r }));
-  const pending = pendingHistoryDisplayRows();
+  const pending = [...pendingHistoryDisplayRows(), ...pendingServerEditHistoryDisplayRows()];
   const key = (r) => `${r.created_at}|${r.order_id}|${r.user_email}|${(r.comment || "").slice(0, 80)}`;
   const seen = new Set(server.map((r) => key(r)));
   const extras = pending.filter((p) => !seen.has(key(p)));
@@ -575,10 +787,82 @@ async function syncPendingCalcsToSupabase(negOrderIdToServerId) {
   writePendingCalcsItems(remaining);
 }
 
+async function flushOnePendingServerOrderEdit(item) {
+  const orderId = Number(item.orderId);
+  const edits = Array.isArray(item.edits) ? item.edits : [];
+  if (!Number.isFinite(orderId) || orderId <= 0 || edits.length === 0) return true;
+
+  const { data: histRows, error: histErr } = await supabaseClient
+    .from("order_history")
+    .select("created_at, comment")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: true });
+  if (histErr) throw histErr;
+
+  const remoteHistory = [...(histRows || [])];
+  const sortedEdits = [...edits].sort((a, b) => String(a.changedAt).localeCompare(String(b.changedAt)));
+  const patch = {};
+
+  for (const edit of sortedEdits) {
+    const remoteAfterEdit = buildRemoteFieldChangeTimesAfter(remoteHistory, edit.changedAt);
+    const changedKeys = getChangedOrderFieldKeys(edit.prevSnapshot, edit.orderData);
+    for (const key of changedKeys) {
+      if (remoteAfterEdit[key]) continue;
+      patch[key] = edit.orderData[key];
+    }
+    if (!edit.historyComment || edit.historyComment === "Сохранено без изменений") continue;
+    const { error: insErr } = await supabaseClient.from("order_history").insert([
+      {
+        order_id: orderId,
+        user_email: edit.user_email,
+        comment: edit.historyComment,
+        created_at: edit.changedAt,
+      },
+    ]);
+    if (insErr) throw insErr;
+    remoteHistory.push({ created_at: edit.changedAt, comment: edit.historyComment });
+  }
+
+  const updatePayload = insertPayloadFromFormData(patch);
+  if (Object.keys(updatePayload).length > 0) {
+    const { error: updErr } = await supabaseClient.from("orders").update(updatePayload).eq("id", orderId);
+    if (updErr) throw updErr;
+  }
+  return true;
+}
+
+/** Отправить в Supabase очередь правок существующих заказов (с разрешением конфликтов по полям). */
+export async function syncPendingServerOrderEditsToSupabase() {
+  const items = readPendingOrderEditsQueue();
+  if (items.length === 0) return { synced: 0, failed: 0 };
+
+  const remaining = [];
+  let synced = 0;
+  let failed = 0;
+  for (const item of items) {
+    try {
+      const ok = await flushOnePendingServerOrderEdit(item);
+      if (ok) synced += 1;
+      else {
+        failed += 1;
+        remaining.push(item);
+      }
+    } catch (e) {
+      console.error("offline sync server order edit:", e);
+      failed += 1;
+      remaining.push(item);
+    }
+  }
+  writePendingOrderEditsItems(remaining);
+  return { synced, failed };
+}
+
 /**
  * Вставить офлайн-заказы, привязанную историю, затем задачи и расчёты с подменой временных id заказов.
  */
 export async function syncPendingOfflineDataToSupabase() {
+  await syncPendingServerOrderEditsToSupabase();
+
   const orderItems = readPendingQueue();
   if (orderItems.length === 0) {
     const negMap = {};

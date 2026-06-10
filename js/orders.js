@@ -71,13 +71,15 @@ import {
   shouldFallbackSaveOrderToLocal,
   persistEmergencyOrdersView,
   readEmergencyOrdersBaseForMerge,
+  readPendingOrderEditsQueue,
+  addOrAppendPendingServerOrderEdit,
   raceWithTimeout,
 } from "./offline-cache.js";
 
 function mergedLocalOrdersForOfflineDisplayMeta() {
   const snap = readSnapshot();
   const merged = mergeServerOrdersWithPendingDisplayRows(snap?.orders || []);
-  if (merged.length > 0 || readPendingQueue().length > 0) {
+  if (merged.length > 0 || readPendingQueue().length > 0 || readPendingOrderEditsQueue().length > 0) {
     return { rows: merged, fromSnap: true };
   }
   const rows = mergeServerOrdersWithPendingDisplayRows(readEmergencyOrdersBaseForMerge());
@@ -1192,7 +1194,11 @@ function orderMatchesOrderDateRange(order, fromYmd, toYmd) {
 }
 
 function rebaselineAllOrdersFromStateAndPendingQueue() {
-  const serverLike = state.allOrders.filter((o) => !o.__offlinePendingSync).map((o) => cloneOrderWithoutOfflineMeta({ ...o }));
+  const snap = readSnapshot();
+  let serverLike = (snap?.orders || []).map((o) => cloneOrderWithoutOfflineMeta({ ...o }));
+  if (serverLike.length === 0) {
+    serverLike = readEmergencyOrdersBaseForMerge();
+  }
   state.allOrders = mergeServerOrdersWithPendingDisplayRows(serverLike);
   persistEmergencyOrdersView(state.allOrders);
   applyFiltersAndRender();
@@ -1487,7 +1493,7 @@ export function renderOrders(orders) {
 
   orders.forEach((order) => {
     const allowDeleteThisRow =
-      canDeleteOrders() && (!state.ordersFromCache || order.__offlinePendingSync);
+      canDeleteOrders() && (!state.ordersFromCache || isOfflineClientOrderId(Number(order.id)));
     const deleteButton = allowDeleteThisRow
       ? `<button type="button" class="btn-icon btn-delete" onclick="deleteOrder(${order.id})" title="Удалить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>`
       : "";
@@ -2660,16 +2666,6 @@ export async function editOrder(orderId) {
     return;
   }
 
-  const idNum = Number(orderId);
-  const fromList = state.allOrders.find((x) => Number(x.id) === idNum);
-  if (isOfflineDataMode() && fromList && !fromList.__offlinePendingSync) {
-    setMessage(
-      "Без связи с базой можно только создавать новые заявки и менять те, что созданы на этом устройстве без сети (жёлтые строки в таблице).",
-      "#d32f2f"
-    );
-    return;
-  }
-
   state.viewingOrderId = null;
   applyOrderFormReadOnly(false);
 
@@ -2772,6 +2768,40 @@ export async function deleteOrder(orderId) {
 
   setMessage(`Заявка #${orderId} удалена`, "");
   await loadOrders();
+}
+
+/** Сохранить правку существующего заказа с сервера в локальную очередь (офлайн). */
+function commitServerOrderEditToOfflineStorage(orderData) {
+  const orderId = Number(state.editingOrderId);
+  const historyComment = buildOrderHistoryComment(state.initialOrderSnapshot, orderData, true);
+  if (historyComment === "Сохранено без изменений") {
+    setMessage("Нет изменений для сохранения", "");
+    return;
+  }
+  const changedAt = new Date().toISOString();
+  addOrAppendPendingServerOrderEdit({
+    orderId,
+    orderData,
+    prevSnapshot: state.initialOrderSnapshot,
+    historyComment,
+    user_email: state.currentUser?.email || "",
+    changedAt,
+    initialSums: state.initialOrderSums,
+    initialParticipants: state.initialOrderParticipants,
+  });
+  queueOrderDeltaCalculationsForOffline({
+    orderTempId: orderId,
+    wasEditing: true,
+    initialSums: state.initialOrderSums,
+    initialParticipants: state.initialOrderParticipants,
+    orderData,
+  });
+  state.dbUnavailable = true;
+  state.ordersFromCache = true;
+  rebaselineAllOrdersFromStateAndPendingQueue();
+  syncDbUnavailableBanner();
+  void leaveOrderFormAfterSave(orderId);
+  setMessage("Изменения сохранены на устройстве; отправка в базу при появлении связи.", "#92400e");
 }
 
 /** Сохранить заказ только в localStorage (очередь офлайн). editingOffline — правка существующей офлайн-заявки. */
@@ -2978,23 +3008,22 @@ export async function submitOrderForm(event) {
     return;
   }
 
-  if (state.editingOrderId && !isOfflineClientOrderId(state.editingOrderId) && isOfflineDataMode()) {
-    setMessage(
-      "Нет связи с базой: изменить существующую заявку с сервера нельзя. Можно создать новую — она сохранится на устройстве и отправится в базу позже.",
-      "#d32f2f"
-    );
-    return;
-  }
-
   setMessage("Сохраняю...", "");
 
   const orderData = getFormData();
 
   const saveLocalNew = !state.editingOrderId && shouldSaveNewOrderToLocalQueue();
   const saveLocalEdit = Boolean(state.editingOrderId && isOfflineClientOrderId(state.editingOrderId));
+  const saveLocalServerEdit = Boolean(
+    state.editingOrderId && !isOfflineClientOrderId(state.editingOrderId) && isOfflineDataMode(),
+  );
 
   if (saveLocalNew || saveLocalEdit) {
     commitOrderFormToOfflineStorage(orderData, saveLocalEdit);
+    return;
+  }
+  if (saveLocalServerEdit) {
+    commitServerOrderEditToOfflineStorage(orderData);
     return;
   }
 
@@ -3031,6 +3060,18 @@ export async function submitOrderForm(event) {
   if (error && !wasEditing && shouldFallbackSaveOrderToLocal(error)) {
     applyOfflineModeFromDbUnavailable();
     commitOrderFormToOfflineStorage(orderData, false);
+    return;
+  }
+
+  if (
+    error &&
+    wasEditing &&
+    state.editingOrderId &&
+    !isOfflineClientOrderId(state.editingOrderId) &&
+    shouldFallbackSaveOrderToLocal(error)
+  ) {
+    applyOfflineModeFromDbUnavailable();
+    commitServerOrderEditToOfflineStorage(orderData);
     return;
   }
 
