@@ -390,7 +390,7 @@ function buildOrderDeltaCalculationInsertRows({
         to_place: prepToAfter,
         amount: prepNew,
         delta_key: "prepayment",
-        detail: `кому − → ${prepToAfter}; сумма ${formatAmount(prepNew)}`,
+        detail: `кому ${CALC_COMMENT_EMPTY} → ${prepToAfter}; сумма ${formatAmount(prepNew)}`,
       });
     } else if (!prepToBeforeEmpty && prepToAfterEmpty) {
       pushAmountRecipientCalcRow("Предоплата", {
@@ -446,7 +446,7 @@ function buildOrderDeltaCalculationInsertRows({
         to_place: remToAfter,
         amount: remNew,
         delta_key: "remaining_amount",
-        detail: `кому − → ${remToAfter}; сумма ${formatAmount(remNew)}`,
+        detail: `кому ${CALC_COMMENT_EMPTY} → ${remToAfter}; сумма ${formatAmount(remNew)}`,
       });
     } else if (!remToBeforeEmpty && remToAfterEmpty) {
       pushAmountRecipientCalcRow("Остаток", {
@@ -502,7 +502,7 @@ function buildOrderDeltaCalculationInsertRows({
         to_place: "Монтаж",
         amount: instNew,
         delta_key: "installer_payment_amount",
-        detail: `оплатил − → ${instByAfter}; сумма ${formatAmount(instNew)}`,
+        detail: `оплатил ${CALC_COMMENT_EMPTY} → ${instByAfter}; сумма ${formatAmount(instNew)}`,
       });
     } else if (!instByBeforeEmpty && instByAfterEmpty) {
       pushAmountRecipientCalcRow("Монтаж", {

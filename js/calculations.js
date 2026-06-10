@@ -383,10 +383,14 @@ function isCalcCommentEmptyPart(s) {
 
 function formatCalcCommentEmptyPlaceholders(text) {
   if (!text) return text;
-  return text
+  const withPartPlaceholders = text
     .split("; ")
     .map((part) => (part.trim() === "—" ? CALC_COMMENT_EMPTY : part))
     .join("; ");
+  return withPartPlaceholders.replace(
+    /(кому|оплатил)\s+[−\-—]/g,
+    `$1 ${CALC_COMMENT_EMPTY}`
+  );
 }
 
 function insertAddressAfterClientInDeltaComment(body, address) {
