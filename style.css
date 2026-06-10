@@ -1205,7 +1205,8 @@ h2 {
 
 #section-calculations .calculations-form .calculations-search-btn,
 .calculations-page .calculations-form .calculations-search-btn {
-  flex: 0 0 auto;
+  flex: 0 0 var(--calc-primary-action-width);
+  width: var(--calc-primary-action-width);
   display: inline-flex;
   align-items: center;
   justify-content: center;
