@@ -1006,6 +1006,14 @@ h2 {
   min-width: 0;
 }
 
+@media (min-width: 769px) {
+  .calculations-form-row--first .field {
+    flex: 0 0 180px;
+    width: 180px;
+    max-width: 180px;
+  }
+}
+
 #section-calculations .calculations-form .field,
 .calculations-page .calculations-form .field {
   margin: 0;
