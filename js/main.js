@@ -25,7 +25,6 @@ import {
   refreshSectionNavAfterProfile,
   switchSection,
   syncOrdersSearchIconAccent,
-  getCurrentSectionId,
 } from "./section-nav.js";
 import { initDbPingIndicator } from "./db-ping.js";
 import { canAccessSection } from "./roles.js";
@@ -38,8 +37,6 @@ import {
 import {
   flushPendingAccessLogs,
   initAccessLogging,
-  logSiteAccess,
-  measureNavigationResponseMs,
 } from "./access-log.js";
 
 window.editOrder = editOrder;
@@ -116,13 +113,6 @@ async function init() {
     initStatisticsSection();
 
     applyPendingOrdersSearchFromHistory();
-
-    const sectionId = getCurrentSectionId();
-    void logSiteAccess({
-      pagePath: `${window.location.pathname}${window.location.search}#${sectionId}`,
-      responseTimeMs: measureNavigationResponseMs(),
-      force: true,
-    });
   } catch (err) {
     console.error("Ошибка инициализации:", err);
     setMessage("Ошибка подключения к базе. Проверьте интернет и настройки Supabase.", "#d32f2f");
@@ -141,7 +131,7 @@ function applyRouteOnLoad() {
 
   let sectionId = getRouteSectionFromUrl();
   if (!canAccessSection(sectionId)) sectionId = "all";
-  switchSection(sectionId, { skipUrlSync: true });
+  switchSection(sectionId, { skipUrlSync: true, logInitialAccess: true });
   migrateLegacyHashToPathIfNeeded();
 }
 

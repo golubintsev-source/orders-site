@@ -13,6 +13,7 @@ import {
   logSpaSectionAccess,
   markSectionSwitchStart,
   measureAfterPaint,
+  measureNavigationResponseMs,
 } from "./access-log.js";
 
 /** Статусы: «Товар передан заказчику» или «Монтаж выполнен» */
@@ -326,6 +327,10 @@ export function switchSection(sectionId, opts = {}) {
   if (prevSectionId !== sectionId) {
     measureAfterPaint(() => {
       logSpaSectionAccess(sectionId, consumeSectionSwitchMs());
+    });
+  } else if (opts.logInitialAccess) {
+    measureAfterPaint(() => {
+      logSpaSectionAccess(sectionId, measureNavigationResponseMs());
     });
   }
 }

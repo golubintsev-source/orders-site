@@ -1,6 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { isOfflineDataMode } from "./offline-cache.js";
+import { buildPagePathForSection, normalizeAccessLogPath } from "./app-routes.js";
 
 const GEO_CACHE_KEY = "orders_site_access_geo_v1";
 const PENDING_LOGS_KEY = "orders_site_pending_access_logs_v1";
@@ -216,7 +217,7 @@ function getWorkMode() {
 }
 
 function shouldSkipDuplicate(pagePath) {
-  const key = pagePath;
+  const key = normalizeAccessLogPath(pagePath);
   const now = Date.now();
   if (key === lastLogKey && now - lastLogAt < DEDUPE_MS) return true;
   lastLogKey = key;
@@ -245,7 +246,7 @@ export async function flushPendingAccessLogs(user = state.currentUser) {
   const remaining = [];
   for (const item of list) {
     try {
-      await insertAccessLog({
+      const payload = {
         user_id: user.id,
         user_email: user.email || item.user_email || null,
         page_path: item.page_path,
@@ -259,7 +260,10 @@ export async function flushPendingAccessLogs(user = state.currentUser) {
         vpn_detected: item.vpn_detected ?? null,
         response_time_ms: item.response_time_ms ?? null,
         work_mode: item.work_mode === "offline" ? "offline" : "online",
-      });
+      };
+      const visitedAt = item.visited_at || item.queuedAt;
+      if (visitedAt) payload.created_at = visitedAt;
+      await insertAccessLog(payload);
     } catch (e) {
       console.warn("Не удалось отправить отложенный лог обращения:", e);
       remaining.push(item);
@@ -273,8 +277,12 @@ export async function flushPendingAccessLogs(user = state.currentUser) {
  * @param {{ pagePath?: string, pageTitle?: string, responseTimeMs?: number|null, user?: object|null, force?: boolean }} opts
  */
 export async function logSiteAccess(opts = {}) {
-  const pagePath = opts.pagePath || getCurrentPagePath();
+  const pagePath = normalizeAccessLogPath(opts.pagePath || getCurrentPagePath());
   if (!opts.force && shouldSkipDuplicate(pagePath)) return;
+
+  // Режим фиксируем сразу: после await collectAccessContext() офлайн уже мог смениться на online.
+  const workMode = opts.workMode ?? getWorkMode();
+  const visitedAt = new Date().toISOString();
 
   const user = opts.user ?? state.currentUser ?? null;
   const { device, geo } = await collectAccessContext();
@@ -292,7 +300,8 @@ export async function logSiteAccess(opts = {}) {
     country: geo.country,
     vpn_detected: geo.vpnDetected,
     response_time_ms: opts.responseTimeMs ?? null,
-    work_mode: getWorkMode(),
+    work_mode: workMode,
+    visited_at: visitedAt,
   };
 
   if (!user?.id) {
@@ -306,7 +315,7 @@ export async function logSiteAccess(opts = {}) {
   }
 
   try {
-    await insertAccessLog({ ...row, user_id: user.id });
+    await insertAccessLog({ ...row, user_id: user.id, created_at: visitedAt });
   } catch (e) {
     console.error("Не удалось записать лог обращения:", e?.message || e, e);
     queuePendingLog(row);
@@ -315,9 +324,8 @@ export async function logSiteAccess(opts = {}) {
 
 /** Лог SPA-раздела после переключения (время — до отрисовки кадра). */
 export function logSpaSectionAccess(sectionId, responseTimeMs = null) {
-  const pagePath = `${window.location.pathname}${window.location.search}#${sectionId}`;
   void logSiteAccess({
-    pagePath,
+    pagePath: buildPagePathForSection(sectionId),
     pageTitle: `${document.title} — ${sectionId}`,
     responseTimeMs,
   });

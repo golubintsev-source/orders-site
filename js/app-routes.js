@@ -41,6 +41,44 @@ export function pathForRouteSection(sectionId) {
   return `/${sectionId}`;
 }
 
+/** Канонический путь для журнала обращений (без лишнего #раздел при path-routing). */
+export function buildPagePathForSection(sectionId) {
+  const { pathname, search, hash } = window.location;
+  const base = `${pathname || "/"}${search || ""}`;
+
+  if (usesHashOnlyRouting()) {
+    if (sectionId === "all") return `${base}${hash || ""}`;
+    return `${base}#${sectionId}`;
+  }
+
+  const normalized = normalizePathname(pathname);
+  const pathSection = PATH_TO_SECTION.get(normalized);
+  if (pathSection === sectionId) return base;
+  if (sectionId === "all" && (normalized === "/" || normalized === "/all")) return base;
+  return `${base}#${sectionId}`;
+}
+
+/** Для дедупликации: /statistics#statistics → /statistics */
+export function normalizeAccessLogPath(pagePath) {
+  const s = String(pagePath || "");
+  const hashIdx = s.indexOf("#");
+  if (hashIdx < 0) return s;
+  const base = s.slice(0, hashIdx);
+  const sectionId = s.slice(hashIdx + 1);
+  if (!ROUTE_SECTION_IDS.has(sectionId)) return s;
+  if (usesHashOnlyRouting()) return s;
+
+  let pathOnly = base;
+  try {
+    pathOnly = new URL(base, window.location.origin).pathname;
+  } catch {
+    /* keep base */
+  }
+  const pathSection = PATH_TO_SECTION.get(normalizePathname(pathOnly));
+  if (pathSection === sectionId) return base;
+  return s;
+}
+
 /** Ссылка на главную (список заказов). */
 export function hrefToHome() {
   return usesHashOnlyRouting() ? "index.html" : "/";
