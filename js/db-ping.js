@@ -25,6 +25,11 @@ let inFlight = false;
 let lastPingWasFailure = false;
 let consecutivePingFailures = 0;
 
+/** Красный индикатор пинга (с первой неудачи). Для журнала обращений — раньше, чем state.dbUnavailable. */
+export function isDbPingIndicatingOffline() {
+  return consecutivePingFailures >= 1;
+}
+
 function setIndicator(el, kind, title, ariaLabel) {
   if (!el) return;
   el.classList.remove(...CLASSES);
@@ -48,6 +53,9 @@ function onDbPingSuccess() {
   consecutivePingFailures = 0;
   state.dbUnavailable = false;
   syncDbUnavailableBanner();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("db-ping-ok"));
+  }
   if (lastPingWasFailure) {
     lastPingWasFailure = false;
     void import("./orders.js").then((m) => m.loadOrders());

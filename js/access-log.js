@@ -2,6 +2,7 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { isOfflineDataMode } from "./offline-cache.js";
 import { buildPagePathForSection, normalizeAccessLogPath } from "./app-routes.js";
+import { isDbPingIndicatingOffline } from "./db-ping.js";
 
 const GEO_CACHE_KEY = "orders_site_access_geo_v1";
 const PENDING_LOGS_KEY = "orders_site_pending_access_logs_v1";
@@ -235,8 +236,19 @@ export function measureAfterPaint(callback) {
   });
 }
 
+function isUiShowingDbOffline() {
+  const banner = document.getElementById("dbUnavailableBanner");
+  if (banner && !banner.hidden) return true;
+  const ping = document.getElementById("dbPingIndicator");
+  if (ping?.classList.contains("db-ping-indicator--error")) return true;
+  return false;
+}
+
 function getWorkMode() {
-  return isOfflineDataMode() ? "offline" : "online";
+  if (isOfflineDataMode()) return "offline";
+  if (isDbPingIndicatingOffline()) return "offline";
+  if (isUiShowingDbOffline()) return "offline";
+  return "online";
 }
 
 function wasRecentlyLogged(pagePath) {
@@ -350,13 +362,16 @@ export async function logSiteAccess(opts = {}) {
 
   inFlightLogPaths.add(pagePath);
 
-  // Режим фиксируем сразу: после await collectAccessContext() офлайн уже мог смениться на online.
-  const workMode = opts.workMode ?? getWorkMode();
+  // Режим фиксируем сразу; после await перепроверяем (пинг БД мог стать красным).
+  const workModeAtStart = opts.workMode ?? getWorkMode();
   const visitedAt = new Date().toISOString();
 
   try {
     const user = opts.user ?? state.currentUser ?? null;
     const { device, geo } = await collectAccessContext();
+
+    const workMode =
+      workModeAtStart === "offline" || getWorkMode() === "offline" ? "offline" : "online";
 
     const row = {
       user_id: user?.id ?? null,
@@ -381,7 +396,11 @@ export async function logSiteAccess(opts = {}) {
       return;
     }
 
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    // В офлайне не пишем в БД сразу: иначе insert может пройти при navigator.onLine === true.
+    if (
+      workMode === "offline" ||
+      (typeof navigator !== "undefined" && navigator.onLine === false)
+    ) {
       queuePendingLog(row);
       markRecentlyLogged(pagePath);
       return;
@@ -393,6 +412,7 @@ export async function logSiteAccess(opts = {}) {
       markRecentlyLogged(pagePath);
     } catch (e) {
       console.error("Не удалось записать лог обращения:", e?.message || e, e);
+      row.work_mode = getWorkMode() === "offline" ? "offline" : row.work_mode;
       queuePendingLog(row);
     }
   } finally {
@@ -411,6 +431,9 @@ export function logSpaSectionAccess(sectionId, responseTimeMs = null) {
 
 export function initAccessLogging() {
   window.addEventListener("online", () => {
+    void flushPendingAccessLogs();
+  });
+  window.addEventListener("db-ping-ok", () => {
     void flushPendingAccessLogs();
   });
 }
