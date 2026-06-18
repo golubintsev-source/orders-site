@@ -11,6 +11,7 @@ import {
   refreshSectionNavAfterProfile,
 } from "./section-nav.js";
 import { hrefToAppSection } from "./app-routes.js";
+import { flushPendingAccessLogs, logSiteAccess, measureNavigationResponseMs } from "./access-log.js";
 
 const params = new URLSearchParams(window.location.search);
 const orderId = params.get("order_id");
@@ -152,8 +153,14 @@ async function loadHistory() {
 async function init() {
   const user = await checkAuth();
   if (!user) return;
+  await flushPendingAccessLogs(user);
   await loadProfile();
   refreshSectionNavAfterProfile();
+
+  void logSiteAccess({
+    responseTimeMs: measureNavigationResponseMs(),
+    force: true,
+  });
 
   initSectionNavDropdown({
     onSectionItemSelect: (id) => {

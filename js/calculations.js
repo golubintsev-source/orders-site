@@ -4,6 +4,11 @@ import { formatAmount, formatAmountWholeRubles, tryParseRublesInteger, MSG_SUM_I
 import { isAdmin } from "./roles.js";
 import { hrefToHome } from "./app-routes.js";
 import {
+  flushPendingAccessLogs,
+  logSiteAccess,
+  measureNavigationResponseMs,
+} from "./access-log.js";
+import {
   readSnapshot,
   persistCalculationsSnapshot,
   mergeCalculationRows,
@@ -989,8 +994,14 @@ export async function initCalculationsSection() {
 async function init() {
   const user = await checkAuth();
   if (!user) return;
+  await flushPendingAccessLogs(user);
   await loadProfile();
   currentUserEmail = user.email || "";
+
+  void logSiteAccess({
+    responseTimeMs: measureNavigationResponseMs(),
+    force: true,
+  });
 
   document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
     window.location.href = hrefToHome();

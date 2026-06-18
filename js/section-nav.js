@@ -7,6 +7,12 @@ import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from 
 import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite, isUserShop } from "./roles.js";
 import { getRouteSectionFromUrl, hrefToOrdersExcelExport, syncBrowserUrlToSection } from "./app-routes.js";
 import { loadAllChanges } from "./all-changes.js";
+import {
+  consumeSectionSwitchMs,
+  logSpaSectionAccess,
+  markSectionSwitchStart,
+  measureAfterPaint,
+} from "./access-log.js";
 
 /** Статусы: «Товар передан заказчику» или «Монтаж выполнен» */
 const RICHER_STATUSES = new Set(["Товар передан заказчику", "Монтаж выполнен"]);
@@ -258,6 +264,10 @@ export function switchSection(sectionId, opts = {}) {
   const prevSectionId = currentSectionId;
   const { skipUrlSync = false } = opts;
 
+  if (prevSectionId !== sectionId) {
+    markSectionSwitchStart();
+  }
+
   currentSectionId = sectionId;
   contentSections.forEach((section) => {
     section.classList.toggle("active", section.id === `section-${sectionId}`);
@@ -305,6 +315,12 @@ export function switchSection(sectionId, opts = {}) {
 
   if (!skipUrlSync && prevSectionId !== sectionId) {
     syncBrowserUrlToSection(sectionId);
+  }
+
+  if (prevSectionId !== sectionId) {
+    measureAfterPaint(() => {
+      logSpaSectionAccess(sectionId, consumeSectionSwitchMs());
+    });
   }
 }
 

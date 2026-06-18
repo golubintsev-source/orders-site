@@ -1,6 +1,8 @@
 import { hrefToHome } from "./app-routes.js";
 import { calculateWindow } from "./windowCalculator.js";
 import { GRID_PRESETS, resolveRowHeights, resolveColumnWidths } from "./windowGridSchema.js";
+import { supabaseClient } from "./config.js";
+import { flushPendingAccessLogs, logSiteAccess, measureNavigationResponseMs } from "./access-log.js";
 
 function setMessage(text, isError) {
   const el = document.getElementById("windowCalcMessage");
@@ -828,6 +830,18 @@ function setupBackButton() {
 function init() {
   setupBackButton();
   setupForm();
+  void initAccessLogForWindowCalc();
+}
+
+async function initAccessLogForWindowCalc() {
+  const { data } = await supabaseClient.auth.getSession();
+  const user = data?.session?.user;
+  if (!user) return;
+  await flushPendingAccessLogs(user);
+  void logSiteAccess({
+    responseTimeMs: measureNavigationResponseMs(),
+    force: true,
+  });
 }
 
 if (document.readyState === "loading") {
