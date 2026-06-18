@@ -1,6 +1,8 @@
 import { supabaseClient } from "./config.js";
 import { formatTaskDateRu } from "./format.js";
 import { isAdmin } from "./roles.js";
+import { flushPendingAccessLogs } from "./access-log.js";
+import { state } from "./state.js";
 
 function pad2(n) {
   return String(n).padStart(2, "0");
@@ -18,6 +20,14 @@ function defaultStatisticsDatetimeFrom() {
 
 function defaultStatisticsDatetimeTo() {
   return toDatetimeLocalValue(new Date());
+}
+
+/** Обновить период «последние сутки» перед загрузкой (поле «по» = сейчас). */
+export function refreshStatisticsDefaultRange() {
+  const fromEl = document.getElementById("statisticsDatetimeFrom");
+  const toEl = document.getElementById("statisticsDatetimeTo");
+  if (fromEl) fromEl.value = defaultStatisticsDatetimeFrom();
+  if (toEl) toEl.value = defaultStatisticsDatetimeTo();
 }
 
 function datetimeLocalToIso(value) {
@@ -66,6 +76,12 @@ function formatVpn(v) {
   return "—";
 }
 
+function formatWorkMode(mode) {
+  if (mode === "offline") return "offline";
+  if (mode === "online") return "online";
+  return "—";
+}
+
 function formatDevice(row) {
   const parts = [];
   if (row.device_type) parts.push(row.device_type);
@@ -103,7 +119,7 @@ function paintStatisticsTable(rows) {
 
   tbody.innerHTML = "";
   if (!rows.length) {
-    if (msg) msg.textContent = "За выбранный период записей нет.";
+    if (msg) msg.textContent = "";
     return;
   }
 
@@ -120,6 +136,7 @@ function paintStatisticsTable(rows) {
       <td>${escapeHtml(row.city || "—")}</td>
       <td>${escapeHtml(row.country || "—")}</td>
       <td>${escapeHtml(formatVpn(row.vpn_detected))}</td>
+      <td>${escapeHtml(formatWorkMode(row.work_mode))}</td>
       <td>${row.response_time_ms != null ? escapeHtml(String(row.response_time_ms)) : "—"}</td>
     `;
     tbody.appendChild(tr);
@@ -129,12 +146,18 @@ function paintStatisticsTable(rows) {
   applyStatisticsFilter();
 }
 
-export async function loadStatistics() {
+export async function loadStatistics(opts = {}) {
   if (!isAdmin()) return;
 
   const tbody = document.querySelector("#statisticsTable tbody");
   const msg = document.getElementById("statisticsMessage");
   if (!tbody) return;
+
+  if (opts.refreshDefaultRange) {
+    refreshStatisticsDefaultRange();
+  }
+
+  await flushPendingAccessLogs(state.currentUser);
 
   const { fromIso, toIso } = readStatisticsRangeFromInputs();
   if (!fromIso || !toIso) {
@@ -142,13 +165,13 @@ export async function loadStatistics() {
     return;
   }
 
-  tbody.innerHTML = `<tr><td colspan="9" class="statistics-loading-cell">Загрузка…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="10" class="statistics-loading-cell">Загрузка…</td></tr>`;
   if (msg) msg.textContent = "";
 
   const { data, error } = await supabaseClient
     .from("site_access_logs")
     .select(
-      "id, created_at, user_email, page_path, page_title, device_type, device_name, os_name, os_version, city, country, vpn_detected, response_time_ms",
+      "id, created_at, user_email, page_path, page_title, device_type, device_name, os_name, os_version, city, country, vpn_detected, work_mode, response_time_ms",
     )
     .gte("created_at", fromIso)
     .lte("created_at", toIso)
@@ -158,11 +181,18 @@ export async function loadStatistics() {
   if (error) {
     console.error("Ошибка загрузки статистики:", error);
     tbody.innerHTML = "";
-    if (msg) msg.textContent = "Не удалось загрузить данные. Проверьте права доступа и подключение.";
+    const hint = error?.message ? ` ${error.message}` : "";
+    if (msg) {
+      msg.textContent = `Не удалось загрузить данные.${hint} Проверьте, что выполнен SQL из supabase_site_access_logs.sql (таблица, GRANT, RLS).`;
+    }
     return;
   }
 
   paintStatisticsTable(data || []);
+  if (!data?.length && msg) {
+    msg.textContent =
+      "За выбранный период записей нет. Откройте другие разделы сайта и обновите статистику — каждое посещение пишется в журнал.";
+  }
 }
 
 export function initStatisticsSection() {

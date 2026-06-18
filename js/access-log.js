@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
+import { isOfflineDataMode } from "./offline-cache.js";
 
 const GEO_CACHE_KEY = "orders_site_access_geo_v1";
 const PENDING_LOGS_KEY = "orders_site_pending_access_logs_v1";
@@ -85,11 +86,17 @@ async function collectDeviceInfo() {
 
   if (navigator.userAgentData?.getHighEntropyValues) {
     try {
-      const hints = await navigator.userAgentData.getHighEntropyValues([
+      const hintsPromise = navigator.userAgentData.getHighEntropyValues([
         "platform",
         "platformVersion",
         "model",
         "mobile",
+      ]);
+      const hints = await Promise.race([
+        hintsPromise,
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("ua timeout")), 1500);
+        }),
       ]);
       mobileHint = hints.mobile;
       platform = hints.platform || "";
@@ -128,7 +135,7 @@ async function fetchGeoInfo() {
   if (!geoCachePromise) {
     geoCachePromise = (async () => {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
+      const timer = setTimeout(() => controller.abort(), 2500);
       try {
         const res = await fetch("https://ipwho.is/", { signal: controller.signal });
         if (!res.ok) throw new Error(`geo http ${res.status}`);
@@ -153,6 +160,21 @@ async function fetchGeoInfo() {
   }
 
   return geoCachePromise;
+}
+
+const EMPTY_GEO = { city: null, country: null, vpnDetected: null };
+
+async function collectAccessContext() {
+  const [device, geo] = await Promise.all([
+    collectDeviceInfo(),
+    Promise.race([
+      fetchGeoInfo(),
+      new Promise((resolve) => {
+        setTimeout(() => resolve(EMPTY_GEO), 3000);
+      }),
+    ]),
+  ]);
+  return { device, geo };
 }
 
 export function getCurrentPagePath() {
@@ -187,6 +209,10 @@ export function measureAfterPaint(callback) {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => callback());
   });
+}
+
+function getWorkMode() {
+  return isOfflineDataMode() ? "offline" : "online";
 }
 
 function shouldSkipDuplicate(pagePath) {
@@ -232,6 +258,7 @@ export async function flushPendingAccessLogs(user = state.currentUser) {
         country: item.country ?? null,
         vpn_detected: item.vpn_detected ?? null,
         response_time_ms: item.response_time_ms ?? null,
+        work_mode: item.work_mode === "offline" ? "offline" : "online",
       });
     } catch (e) {
       console.warn("Не удалось отправить отложенный лог обращения:", e);
@@ -250,7 +277,7 @@ export async function logSiteAccess(opts = {}) {
   if (!opts.force && shouldSkipDuplicate(pagePath)) return;
 
   const user = opts.user ?? state.currentUser ?? null;
-  const [device, geo] = await Promise.all([collectDeviceInfo(), fetchGeoInfo()]);
+  const { device, geo } = await collectAccessContext();
 
   const row = {
     user_id: user?.id ?? null,
@@ -265,6 +292,7 @@ export async function logSiteAccess(opts = {}) {
     country: geo.country,
     vpn_detected: geo.vpnDetected,
     response_time_ms: opts.responseTimeMs ?? null,
+    work_mode: getWorkMode(),
   };
 
   if (!user?.id) {
@@ -280,7 +308,7 @@ export async function logSiteAccess(opts = {}) {
   try {
     await insertAccessLog({ ...row, user_id: user.id });
   } catch (e) {
-    console.warn("Не удалось записать лог обращения:", e);
+    console.error("Не удалось записать лог обращения:", e?.message || e, e);
     queuePendingLog(row);
   }
 }

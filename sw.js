@@ -23,6 +23,7 @@ const CDN_URLS = [
 ];
 
 const JS_FILES = [
+  "access-log.js",
   "all-changes.js",
   "app-routes.js",
   "auth.js",

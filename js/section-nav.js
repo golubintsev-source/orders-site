@@ -302,7 +302,7 @@ export function switchSection(sectionId, opts = {}) {
     void loadAllChanges();
   }
   if (sectionId === "statistics") {
-    void loadStatistics();
+    void loadStatistics({ refreshDefaultRange: true });
   }
   if (sectionId === "order-tasks") {
     void import("./tasks.js").then((m) => m.loadOrderTasks());
