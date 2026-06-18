@@ -8,6 +8,7 @@ export const ROUTE_SECTION_IDS = new Set([
   "balance",
   "route-sheet",
   "settings",
+  "statistics",
   "order-tasks",
 ]);
 
@@ -27,6 +28,7 @@ const PATH_TO_SECTION = new Map([
   ["/balance", "balance"],
   ["/route-sheet", "route-sheet"],
   ["/settings", "settings"],
+  ["/statistics", "statistics"],
   ["/order-tasks", "order-tasks"],
 ]);
 

@@ -18,6 +18,7 @@
     { "source": "/balance", "destination": "/index.html" },
     { "source": "/route-sheet", "destination": "/index.html" },
     { "source": "/settings", "destination": "/index.html" },
+    { "source": "/statistics", "destination": "/index.html" },
     { "source": "/order-tasks", "destination": "/index.html" },
     { "source": "/all", "destination": "/index.html" }
   ]

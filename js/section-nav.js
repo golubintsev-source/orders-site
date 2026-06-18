@@ -7,6 +7,7 @@ import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from 
 import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite, isUserShop } from "./roles.js";
 import { getRouteSectionFromUrl, hrefToOrdersExcelExport, syncBrowserUrlToSection } from "./app-routes.js";
 import { loadAllChanges } from "./all-changes.js";
+import { loadStatistics } from "./statistics.js";
 import {
   consumeSectionSwitchMs,
   logSpaSectionAccess,
@@ -71,6 +72,7 @@ const SECTION_LABELS = {
   balance: "Баланс",
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
+  statistics: "Статистика",
 };
 
 /** Совпадает с URL после boot-route.js (иначе шапка/лупа до main рассинхронизированы). */
@@ -88,6 +90,7 @@ const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "balance",
   "route-sheet",
   "settings",
+  "statistics",
 ]);
 
 function updateBackToOrdersBtnVisibility(sectionId) {
@@ -297,6 +300,9 @@ export function switchSection(sectionId, opts = {}) {
   }
   if (sectionId === "changes-all") {
     void loadAllChanges();
+  }
+  if (sectionId === "statistics") {
+    void loadStatistics();
   }
   if (sectionId === "order-tasks") {
     void import("./tasks.js").then((m) => m.loadOrderTasks());

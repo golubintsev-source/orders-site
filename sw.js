@@ -51,6 +51,7 @@ const JS_FILES = [
   "route-sheet.js",
   "section-nav.js",
   "settings.js",
+  "statistics.js",
   "state.js",
   "tasks.js",
   "ui.js",
@@ -145,7 +146,7 @@ function shouldRuntimeCacheGet(url) {
       p.endsWith(".ico") ||
       p.endsWith(".woff2") ||
       p === "/" ||
-      /^\/(new|calculations|tasks-all|changes-all|balance|route-sheet|settings|order-tasks|all)(\/)?$/.test(
+      /^\/(new|calculations|tasks-all|changes-all|balance|route-sheet|settings|statistics|order-tasks|all)(\/)?$/.test(
         url.pathname
       )
     );
