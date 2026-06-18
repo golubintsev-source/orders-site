@@ -1,8 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { formatTaskDateRu } from "./format.js";
 import { isAdmin } from "./roles.js";
-import { flushPendingAccessLogs } from "./access-log.js";
-import { state } from "./state.js";
 
 function pad2(n) {
   return String(n).padStart(2, "0");
@@ -156,8 +154,6 @@ export async function loadStatistics(opts = {}) {
   if (opts.refreshDefaultRange) {
     refreshStatisticsDefaultRange();
   }
-
-  await flushPendingAccessLogs(state.currentUser);
 
   const { fromIso, toIso } = readStatisticsRangeFromInputs();
   if (!fromIso || !toIso) {

@@ -75,7 +75,8 @@ export function normalizeAccessLogPath(pagePath) {
     /* keep base */
   }
   const pathSection = PATH_TO_SECTION.get(normalizePathname(pathOnly));
-  if (pathSection === sectionId) return base;
+  if (pathSection === sectionId) return base || "/";
+  if (sectionId === "all" && (!base || base === "/")) return "/";
   return s;
 }
 

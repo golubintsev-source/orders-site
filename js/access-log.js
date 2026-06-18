@@ -5,12 +5,35 @@ import { buildPagePathForSection, normalizeAccessLogPath } from "./app-routes.js
 
 const GEO_CACHE_KEY = "orders_site_access_geo_v1";
 const PENDING_LOGS_KEY = "orders_site_pending_access_logs_v1";
-const DEDUPE_MS = 2000;
+const RECENT_LOG_KEY = "orders_site_access_recent_log_v1";
+/** Не писать повторно тот же раздел чаще чем раз в 10 с (вкладка). */
+const DEDUPE_MS = 10000;
 
 let lastLogKey = "";
 let lastLogAt = 0;
 let geoCachePromise = null;
 let sectionSwitchStartedAt = null;
+/** Нормализованные пути, по которым запись ещё выполняется (async). */
+const inFlightLogPaths = new Set();
+let flushPendingPromise = null;
+
+function readSessionJson(key, fallback) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function writeSessionJson(key, value) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* ignore */
+  }
+}
 
 function readJsonStorage(key, fallback) {
   try {
@@ -216,13 +239,41 @@ function getWorkMode() {
   return isOfflineDataMode() ? "offline" : "online";
 }
 
+function wasRecentlyLogged(pagePath) {
+  const key = normalizeAccessLogPath(pagePath);
+  const recent = readSessionJson(RECENT_LOG_KEY, {});
+  const at = recent[key];
+  return typeof at === "number" && Date.now() - at < DEDUPE_MS;
+}
+
+function markRecentlyLogged(pagePath) {
+  const key = normalizeAccessLogPath(pagePath);
+  const recent = readSessionJson(RECENT_LOG_KEY, {});
+  recent[key] = Date.now();
+  const cutoff = Date.now() - DEDUPE_MS * 2;
+  for (const [k, t] of Object.entries(recent)) {
+    if (typeof t !== "number" || t < cutoff) delete recent[k];
+  }
+  writeSessionJson(RECENT_LOG_KEY, recent);
+}
+
 function shouldSkipDuplicate(pagePath) {
   const key = normalizeAccessLogPath(pagePath);
+  if (inFlightLogPaths.has(key)) return true;
+  if (wasRecentlyLogged(key)) return true;
   const now = Date.now();
   if (key === lastLogKey && now - lastLogAt < DEDUPE_MS) return true;
   lastLogKey = key;
   lastLogAt = now;
   return false;
+}
+
+function removePendingLogsForPath(pagePath) {
+  const key = normalizeAccessLogPath(pagePath);
+  const list = readJsonStorage(PENDING_LOGS_KEY, []);
+  if (!list.length) return;
+  const next = list.filter((item) => normalizeAccessLogPath(item.page_path) !== key);
+  if (next.length !== list.length) writeJsonStorage(PENDING_LOGS_KEY, next);
 }
 
 function queuePendingLog(row) {
@@ -239,37 +290,54 @@ async function insertAccessLog(row) {
 export async function flushPendingAccessLogs(user = state.currentUser) {
   if (!user?.id) return;
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  if (flushPendingPromise) return flushPendingPromise;
 
-  const list = readJsonStorage(PENDING_LOGS_KEY, []);
-  if (!list.length) return;
+  flushPendingPromise = (async () => {
+    const list = readJsonStorage(PENDING_LOGS_KEY, []);
+    if (!list.length) return;
 
-  const remaining = [];
-  for (const item of list) {
-    try {
-      const payload = {
-        user_id: user.id,
-        user_email: user.email || item.user_email || null,
-        page_path: item.page_path,
-        page_title: item.page_title ?? null,
-        device_type: item.device_type ?? null,
-        device_name: item.device_name ?? null,
-        os_name: item.os_name ?? null,
-        os_version: item.os_version ?? null,
-        city: item.city ?? null,
-        country: item.country ?? null,
-        vpn_detected: item.vpn_detected ?? null,
-        response_time_ms: item.response_time_ms ?? null,
-        work_mode: item.work_mode === "offline" ? "offline" : "online",
-      };
-      const visitedAt = item.visited_at || item.queuedAt;
-      if (visitedAt) payload.created_at = visitedAt;
-      await insertAccessLog(payload);
-    } catch (e) {
-      console.warn("Не удалось отправить отложенный лог обращения:", e);
-      remaining.push(item);
+    // Сразу забираем очередь из storage — параллельные flush не продублируют записи.
+    writeJsonStorage(PENDING_LOGS_KEY, []);
+
+    const remaining = [];
+    for (const item of list) {
+      const pagePath = normalizeAccessLogPath(item.page_path);
+
+      try {
+        const payload = {
+          user_id: user.id,
+          user_email: user.email || item.user_email || null,
+          page_path: pagePath,
+          page_title: item.page_title ?? null,
+          device_type: item.device_type ?? null,
+          device_name: item.device_name ?? null,
+          os_name: item.os_name ?? null,
+          os_version: item.os_version ?? null,
+          city: item.city ?? null,
+          country: item.country ?? null,
+          vpn_detected: item.vpn_detected ?? null,
+          response_time_ms: item.response_time_ms ?? null,
+          work_mode: item.work_mode === "offline" ? "offline" : "online",
+        };
+        const visitedAt = item.visited_at || item.queuedAt;
+        if (visitedAt) payload.created_at = visitedAt;
+        await insertAccessLog(payload);
+        markRecentlyLogged(pagePath);
+      } catch (e) {
+        console.warn("Не удалось отправить отложенный лог обращения:", e);
+        remaining.push(item);
+      }
     }
-  }
-  writeJsonStorage(PENDING_LOGS_KEY, remaining);
+
+    if (remaining.length) {
+      const existing = readJsonStorage(PENDING_LOGS_KEY, []);
+      writeJsonStorage(PENDING_LOGS_KEY, [...remaining, ...existing].slice(-50));
+    }
+  })().finally(() => {
+    flushPendingPromise = null;
+  });
+
+  return flushPendingPromise;
 }
 
 /**
@@ -280,45 +348,55 @@ export async function logSiteAccess(opts = {}) {
   const pagePath = normalizeAccessLogPath(opts.pagePath || getCurrentPagePath());
   if (!opts.force && shouldSkipDuplicate(pagePath)) return;
 
+  inFlightLogPaths.add(pagePath);
+
   // Режим фиксируем сразу: после await collectAccessContext() офлайн уже мог смениться на online.
   const workMode = opts.workMode ?? getWorkMode();
   const visitedAt = new Date().toISOString();
 
-  const user = opts.user ?? state.currentUser ?? null;
-  const { device, geo } = await collectAccessContext();
-
-  const row = {
-    user_id: user?.id ?? null,
-    user_email: user?.email ?? null,
-    page_path: pagePath,
-    page_title: opts.pageTitle ?? document.title ?? null,
-    device_type: device.deviceType,
-    device_name: device.deviceName || null,
-    os_name: device.osName || null,
-    os_version: device.osVersion || null,
-    city: geo.city,
-    country: geo.country,
-    vpn_detected: geo.vpnDetected,
-    response_time_ms: opts.responseTimeMs ?? null,
-    work_mode: workMode,
-    visited_at: visitedAt,
-  };
-
-  if (!user?.id) {
-    queuePendingLog(row);
-    return;
-  }
-
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
-    queuePendingLog(row);
-    return;
-  }
-
   try {
-    await insertAccessLog({ ...row, user_id: user.id, created_at: visitedAt });
-  } catch (e) {
-    console.error("Не удалось записать лог обращения:", e?.message || e, e);
-    queuePendingLog(row);
+    const user = opts.user ?? state.currentUser ?? null;
+    const { device, geo } = await collectAccessContext();
+
+    const row = {
+      user_id: user?.id ?? null,
+      user_email: user?.email ?? null,
+      page_path: pagePath,
+      page_title: opts.pageTitle ?? document.title ?? null,
+      device_type: device.deviceType,
+      device_name: device.deviceName || null,
+      os_name: device.osName || null,
+      os_version: device.osVersion || null,
+      city: geo.city,
+      country: geo.country,
+      vpn_detected: geo.vpnDetected,
+      response_time_ms: opts.responseTimeMs ?? null,
+      work_mode: workMode,
+      visited_at: visitedAt,
+    };
+
+    if (!user?.id) {
+      queuePendingLog(row);
+      markRecentlyLogged(pagePath);
+      return;
+    }
+
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      queuePendingLog(row);
+      markRecentlyLogged(pagePath);
+      return;
+    }
+
+    try {
+      await insertAccessLog({ ...row, user_id: user.id, created_at: visitedAt });
+      removePendingLogsForPath(pagePath);
+      markRecentlyLogged(pagePath);
+    } catch (e) {
+      console.error("Не удалось записать лог обращения:", e?.message || e, e);
+      queuePendingLog(row);
+    }
+  } finally {
+    inFlightLogPaths.delete(pagePath);
   }
 }
 
