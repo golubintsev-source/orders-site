@@ -8,6 +8,9 @@
   "functions": {
     "api/supabase-proxy.js": {
       "maxDuration": 60
+    },
+    "api/secret-login.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [

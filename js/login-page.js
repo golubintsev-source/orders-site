@@ -1,6 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { hrefToHome } from "./app-routes.js";
 import { flushPendingAccessLogs, logSiteAccess } from "./access-log.js";
+import { trySecretLoginFromUrl } from "./secret-login.js";
 
 window.login = async function login() {
   const email = document.getElementById("email").value;
@@ -25,7 +26,10 @@ window.login = async function login() {
   window.location.href = hrefToHome();
 };
 
-void logSiteAccess({ force: true });
+void (async () => {
+  await logSiteAccess({ force: true });
+  await trySecretLoginFromUrl();
+})();
 
 const passwordInput = document.getElementById("password");
 if (passwordInput) {
