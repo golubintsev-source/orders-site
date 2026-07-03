@@ -1,4 +1,5 @@
 import { state } from "./state.js";
+import { isOfflineWorkModeEnabled } from "./config.js";
 
 /** Баннер «Нет связи с базой данных». */
 export function setDbUnavailableBannerVisible(visible) {
@@ -13,6 +14,10 @@ export function setDbUnavailableBannerVisible(visible) {
 
 /** Показать/скрыть баннер по фактическому офлайн-состоянию приложения. */
 export function syncDbUnavailableBanner() {
+  if (!isOfflineWorkModeEnabled()) {
+    setDbUnavailableBannerVisible(false);
+    return;
+  }
   const offline =
     state.ordersFromCache ||
     state.dbUnavailable ||

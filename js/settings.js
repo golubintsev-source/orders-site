@@ -1,4 +1,4 @@
-import { supabaseClient } from "./config.js";
+import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
 import { isAdmin } from "./roles.js";
 import { tryParseRublesInteger } from "./format.js";
@@ -55,7 +55,7 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
 
 /** Загрузить настройки из БД и обновить state и поля на странице. */
 export async function loadSettings() {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+  if (isOfflineWorkModeEnabled() && typeof navigator !== "undefined" && navigator.onLine === false) {
     const snap = readSnapshot();
     applySettingsRowsToStateAndDom(snap?.settingsRows || []);
     return state.defaultInstallerRatePerM2;

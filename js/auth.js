@@ -1,4 +1,4 @@
-import { supabaseClient } from "./config.js";
+import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
 import { normalizeRole } from "./roles.js";
 import { isNetworkFetchError, raceWithTimeout } from "./offline-cache.js";
@@ -49,7 +49,9 @@ export async function checkAuth() {
 
   state.currentUser = sessionUser;
 
-  if (typeof navigator !== "undefined" && navigator.onLine) {
+  const shouldValidateWithServer =
+    !isOfflineWorkModeEnabled() || (typeof navigator !== "undefined" && navigator.onLine);
+  if (shouldValidateWithServer) {
     try {
       const { data, error } = await raceWithTimeout(supabaseClient.auth.getUser());
       if (!error && data?.user) {
@@ -69,7 +71,7 @@ export async function checkAuth() {
 }
 
 export async function loadProfile() {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+  if (isOfflineWorkModeEnabled() && typeof navigator !== "undefined" && navigator.onLine === false) {
     state.currentRole = normalizeRole(readCachedRoleRaw());
     return;
   }

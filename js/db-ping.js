@@ -1,4 +1,4 @@
-import { supabaseClient } from "./config.js";
+import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
 import { syncDbUnavailableBanner } from "./dbHealth.js";
 
@@ -39,6 +39,7 @@ function setIndicator(el, kind, title, ariaLabel) {
 }
 
 function onDbPingFailure() {
+  if (!isOfflineWorkModeEnabled()) return;
   lastPingWasFailure = true;
   consecutivePingFailures += 1;
   if (consecutivePingFailures < FAILURES_BEFORE_OFFLINE) return;
@@ -121,6 +122,10 @@ export function triggerDbPingNow() {
 export function initDbPingIndicator() {
   const el = document.getElementById("dbPingIndicator");
   if (!el) return;
+  if (!isOfflineWorkModeEnabled()) {
+    el.hidden = true;
+    return;
+  }
   if (intervalId != null) {
     window.clearInterval(intervalId);
     intervalId = null;

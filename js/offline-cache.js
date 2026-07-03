@@ -1,4 +1,4 @@
-import { supabaseClient } from "./config.js";
+import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
 
 const SNAP_KEY = "orders_site_offline_snap_v1";
@@ -18,6 +18,7 @@ const BALANCE_OFFLINE_VIEW_VERSION = 1;
 const PENDING_VERSION = 1;
 
 function readJson(key, fallback) {
+  if (!isOfflineWorkModeEnabled()) return fallback;
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
@@ -28,6 +29,7 @@ function readJson(key, fallback) {
 }
 
 function writeJson(key, val) {
+  if (!isOfflineWorkModeEnabled()) return;
   try {
     localStorage.setItem(key, JSON.stringify(val));
   } catch (e) {
@@ -178,6 +180,7 @@ export function isOfflineClientOrderId(orderId) {
 }
 
 export function isOfflineDataMode() {
+  if (!isOfflineWorkModeEnabled()) return false;
   if (state.ordersFromCache) return true;
   if (state.dbUnavailable) return true;
   if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
@@ -186,6 +189,7 @@ export function isOfflineDataMode() {
 
 /** Ошибка при сохранении заказа: уйти в локальную очередь вместо показа ошибки. */
 export function shouldFallbackSaveOrderToLocal(err) {
+  if (!isOfflineWorkModeEnabled()) return false;
   if (err?.code === "TIMEOUT") return true;
   return isNetworkFetchError(err);
 }
@@ -208,6 +212,7 @@ export function isNetworkFetchError(err) {
 export const OFFLINE_SUPABASE_WAIT_MS = 5000;
 
 export function isBrowserOffline() {
+  if (!isOfflineWorkModeEnabled()) return false;
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
@@ -861,6 +866,9 @@ export async function syncPendingServerOrderEditsToSupabase() {
  * Вставить офлайн-заказы, привязанную историю, затем задачи и расчёты с подменой временных id заказов.
  */
 export async function syncPendingOfflineDataToSupabase() {
+  if (!isOfflineWorkModeEnabled()) {
+    return { ordersSynced: 0, ordersFailed: 0 };
+  }
   await syncPendingServerOrderEditsToSupabase();
 
   const orderItems = readPendingQueue();

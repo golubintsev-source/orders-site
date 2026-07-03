@@ -1,4 +1,4 @@
-import { supabaseClient } from "./config.js";
+import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
 import { isOrderHiddenForCurrentRole } from "./roles.js";
@@ -171,7 +171,8 @@ export async function loadAllChanges() {
 
   /** Без ожидания fetch: «офлайн» по флагу браузера, уже работаем с кэшем заказов, или ложный onLine без сети — сначала снимок. */
   const skipNetwork =
-    (typeof navigator !== "undefined" && navigator.onLine === false) || isOfflineDataMode();
+    isOfflineWorkModeEnabled() &&
+    ((typeof navigator !== "undefined" && navigator.onLine === false) || isOfflineDataMode());
 
   let data = null;
   let error = null;

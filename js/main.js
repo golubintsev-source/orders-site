@@ -27,6 +27,7 @@ import {
   syncOrdersSearchIconAccent,
 } from "./section-nav.js";
 import { initDbPingIndicator } from "./db-ping.js";
+import { isOfflineWorkModeEnabled } from "./config.js";
 import { canAccessSection } from "./roles.js";
 import { applyClientFilter } from "./orders.js";
 import {
@@ -48,11 +49,12 @@ window.toggleOrderRowHighlightById = toggleOrderRowHighlightById;
 
 /** Safari: при возврате из bfcache скрипт init не выполняется повторно — подтянуть таблицу из localStorage. */
 window.addEventListener("pageshow", (e) => {
-  if (!e.persisted) return;
+  if (!isOfflineWorkModeEnabled() || !e.persisted) return;
   void import("./orders.js").then((m) => m.paintOrdersFromLocalStorageIfAny());
 });
 
 window.addEventListener("offline", () => {
+  if (!isOfflineWorkModeEnabled()) return;
   void import("./orders.js").then((m) => {
     m.paintOrdersFromLocalStorageIfAny();
     if (typeof m.applyOfflineModeFromDbUnavailable === "function") {
@@ -62,6 +64,7 @@ window.addEventListener("offline", () => {
 });
 
 window.addEventListener("online", () => {
+  if (!isOfflineWorkModeEnabled()) return;
   void import("./orders.js").then((m) => m.loadOrders());
   void import("./db-ping.js").then((m) => {
     if (typeof m.triggerDbPingNow === "function") m.triggerDbPingNow();
@@ -93,7 +96,9 @@ async function init() {
     await flushPendingAccessLogs(user);
 
     hydrateCachedRoleFromStorage();
-    paintOrdersFromLocalStorageIfAny();
+    if (isOfflineWorkModeEnabled()) {
+      paintOrdersFromLocalStorageIfAny();
+    }
 
     await Promise.all([loadProfile(), loadSettings()]);
     initDbPingIndicator();

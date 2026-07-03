@@ -1,4 +1,4 @@
-import { supabaseClient } from "./config.js";
+import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { syncDbUnavailableBanner } from "./dbHealth.js";
 import { state } from "./state.js";
 import {
@@ -95,6 +95,7 @@ function mergedLocalOrdersForOfflineDisplay() {
  * При navigator.onLine === false сразу включает офлайн-режим (F5 без сети).
  */
 export function paintOrdersFromLocalStorageIfAny() {
+  if (!isOfflineWorkModeEnabled()) return;
   const rows = mergedLocalOrdersForOfflineDisplay();
   if (rows.length > 0) {
     state.allOrders = rows;
@@ -111,6 +112,7 @@ export function paintOrdersFromLocalStorageIfAny() {
 
 /** Вызывается при подтверждённой недоступности БД (пинг): переключить UI на локальную копию. */
 export function applyOfflineModeFromDbUnavailable() {
+  if (!isOfflineWorkModeEnabled()) return;
   state.dbUnavailable = true;
   if (state.ordersFromCache) {
     syncDbUnavailableBanner();
@@ -176,13 +178,20 @@ export async function loadOrders() {
 
   if (!error && data) {
     state.dbUnavailable = false;
-    await syncPendingOfflineDataToSupabase();
-    const again = await raceWithTimeout(ordersQuery());
-    const finalData = again.error ? data : again.data || data;
-    persistServerOrdersForOffline(finalData);
+    let finalData = data;
+    if (isOfflineWorkModeEnabled()) {
+      await syncPendingOfflineDataToSupabase();
+      const again = await raceWithTimeout(ordersQuery());
+      finalData = again.error ? data : again.data || data;
+      persistServerOrdersForOffline(finalData);
+    }
     state.ordersFromCache = false;
-    state.allOrders = mergeServerOrdersWithPendingDisplayRows(finalData);
-    persistEmergencyOrdersView(state.allOrders);
+    state.allOrders = isOfflineWorkModeEnabled()
+      ? mergeServerOrdersWithPendingDisplayRows(finalData)
+      : finalData;
+    if (isOfflineWorkModeEnabled()) {
+      persistEmergencyOrdersView(state.allOrders);
+    }
     await loadFilesCountMap();
     syncDbUnavailableBanner();
     applyFiltersAndRender();
@@ -192,6 +201,20 @@ export async function loadOrders() {
   }
 
   console.error("Ошибка загрузки:", error);
+
+  if (!isOfflineWorkModeEnabled()) {
+    state.dbUnavailable = false;
+    state.ordersFromCache = false;
+    state.allOrders = [];
+    state.filesCountMap = {};
+    syncDbUnavailableBanner();
+    applyFiltersAndRender();
+    updateSectionNavRicherStat();
+    setMessage("Ошибка загрузки заявок", "#d32f2f");
+    refreshOrdersDependentSections();
+    return;
+  }
+
   state.dbUnavailable = true;
   const { rows: merged, fromSnap } = mergedLocalOrdersForOfflineDisplayMeta();
 
