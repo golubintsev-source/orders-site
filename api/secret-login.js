@@ -3,21 +3,32 @@
  *
  * Переменные окружения в Vercel:
  *   SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY — service role (только на сервере, не в клиенте)
  *   SECRET_LOGIN_TOKEN_GOLUBINTSEV — секрет из URL для golubintsev26@gmail.com
+ *
+ * Один из вариантов авторизации (достаточно любого):
+ *   SUPABASE_SERVICE_ROLE_KEY — service role (предпочтительно, пароль не хранится)
+ *   или SUPABASE_ANON_KEY + SECRET_LOGIN_PASSWORD_GOLUBINTSEV — пароль аккаунта на сервере
  */
 
 const crypto = require("crypto");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 const SECRET_LOGINS = [
   {
     email: "golubintsev26@gmail.com",
     token: process.env.SECRET_LOGIN_TOKEN_GOLUBINTSEV,
+    password: process.env.SECRET_LOGIN_PASSWORD_GOLUBINTSEV,
   },
 ];
+
+function isSecretLoginConfigured() {
+  if (!SUPABASE_URL) return false;
+  if (SERVICE_ROLE_KEY) return true;
+  return Boolean(ANON_KEY && SECRET_LOGINS.some((e) => e.token && e.password));
+}
 
 function timingSafeEqual(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
@@ -76,6 +87,43 @@ async function createSessionForEmail(email) {
   return verifyRes.json();
 }
 
+async function createSessionWithPassword(email, password) {
+  const base = SUPABASE_URL.replace(/\/$/, "");
+  const res = await fetch(`${base}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: {
+      apikey: ANON_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`password grant ${res.status}: ${text}`);
+  }
+
+  return res.json();
+}
+
+async function createSessionForLogin(login) {
+  if (SERVICE_ROLE_KEY) {
+    try {
+      return await createSessionForEmail(login.email);
+    } catch (e) {
+      if (login.password && ANON_KEY) {
+        console.warn("secret-login: admin link failed, trying password grant:", e.message);
+        return createSessionWithPassword(login.email, login.password);
+      }
+      throw e;
+    }
+  }
+  if (login.password && ANON_KEY) {
+    return createSessionWithPassword(login.email, login.password);
+  }
+  throw new Error("No auth method configured for secret login");
+}
+
 function readJsonBody(req) {
   if (req.body != null && typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
     return req.body;
@@ -104,8 +152,11 @@ module.exports = async (req, res) => {
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    return res.status(503).json({ message: "Secret login not configured" });
+  if (!isSecretLoginConfigured()) {
+    return res.status(503).json({
+      message: "Secret login not configured",
+      code: "not_configured",
+    });
   }
 
   let body;
@@ -121,7 +172,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const session = await createSessionForEmail(login.email);
+    const session = await createSessionForLogin(login);
     if (!session?.access_token || !session?.refresh_token) {
       throw new Error("verify: missing session tokens");
     }

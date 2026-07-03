@@ -30,7 +30,18 @@ export async function trySecretLoginFromUrl() {
     stripKeyFromUrl();
 
     if (!res.ok) {
-      if (msg) msg.innerText = "Ссылка недействительна";
+      let text = "Ссылка недействительна";
+      try {
+        const err = await res.json();
+        if (err?.code === "not_configured" || res.status === 503) {
+          text = "Секретный вход не настроен на сервере";
+        } else if (res.status === 500) {
+          text = "Ошибка авторизации";
+        }
+      } catch {
+        /* keep default */
+      }
+      if (msg) msg.innerText = text;
       return true;
     }
 
