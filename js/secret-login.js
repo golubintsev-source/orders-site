@@ -14,7 +14,7 @@ function stripKeyFromUrl() {
  * @returns {Promise<boolean>} true, если параметр key был в URL (успех или ошибка)
  */
 export async function trySecretLoginFromUrl() {
-  const key = new URLSearchParams(window.location.search).get("key");
+  const key = new URLSearchParams(window.location.search).get("key")?.trim();
   if (!key) return false;
 
   const msg = document.getElementById("message");
@@ -35,8 +35,10 @@ export async function trySecretLoginFromUrl() {
         const err = await res.json();
         if (err?.code === "not_configured" || res.status === 503) {
           text = "Секретный вход не настроен на сервере";
+        } else if (res.status === 401) {
+          text = "Ключ в ссылке не совпадает с SECRET_LOGIN_TOKEN_GOLUBINTSEV на Vercel";
         } else if (res.status === 500) {
-          text = "Ошибка авторизации";
+          text = "Ошибка авторизации (проверьте пароль в Vercel)";
         }
       } catch {
         /* keep default */

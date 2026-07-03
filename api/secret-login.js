@@ -38,10 +38,16 @@ function timingSafeEqual(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
+function normalizeToken(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function findLoginByToken(token) {
-  if (!token || typeof token !== "string") return null;
+  const normalized = normalizeToken(token);
+  if (!normalized) return null;
   for (const entry of SECRET_LOGINS) {
-    if (entry.token && timingSafeEqual(token, entry.token)) {
+    const expected = normalizeToken(entry.token);
+    if (expected && timingSafeEqual(normalized, expected)) {
       return entry;
     }
   }
