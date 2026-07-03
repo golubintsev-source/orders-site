@@ -18,6 +18,7 @@ import {
   getCurrentSectionId,
   STANDALONE_SECTION_NAV_ID,
 } from "./section-nav.js";
+import { scheduleSaveUserPlace } from "./user-place.js";
 import { loadAllChanges } from "./all-changes.js";
 import {
   loadFilesCountMap,
@@ -2681,6 +2682,7 @@ export async function viewOrder(orderId) {
   refreshSectionNavLabel();
 
   window.scrollTo({ top: 0, behavior: "smooth" });
+  scheduleSaveUserPlace();
 }
 
 export async function editOrder(orderId) {
@@ -2741,6 +2743,7 @@ export async function editOrder(orderId) {
   switchSection("new");
 
   window.scrollTo({ top: 0, behavior: "smooth" });
+  scheduleSaveUserPlace();
 }
 
 export async function deleteOrder(orderId) {

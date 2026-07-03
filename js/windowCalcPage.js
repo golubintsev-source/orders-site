@@ -1,4 +1,9 @@
 import { hrefToHome } from "./app-routes.js";
+import {
+  applySavedScroll,
+  initUserPlaceTracking,
+  readSavedPlaceForCurrentPage,
+} from "./user-place.js";
 import { calculateWindow } from "./windowCalculator.js";
 import { GRID_PRESETS, resolveRowHeights, resolveColumnWidths } from "./windowGridSchema.js";
 import { supabaseClient } from "./config.js";
@@ -837,11 +842,13 @@ async function initAccessLogForWindowCalc() {
   const { data } = await supabaseClient.auth.getSession();
   const user = data?.session?.user;
   if (!user) return;
+  initUserPlaceTracking(user.id);
   await flushPendingAccessLogs(user);
   void logSiteAccess({
     responseTimeMs: measureNavigationResponseMs(),
     force: true,
   });
+  await applySavedScroll(readSavedPlaceForCurrentPage(user.id));
 }
 
 if (document.readyState === "loading") {

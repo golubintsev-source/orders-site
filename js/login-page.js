@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { hrefToHome } from "./app-routes.js";
+import { getResumeHref } from "./user-place.js";
 import { flushPendingAccessLogs, logSiteAccess } from "./access-log.js";
 import { trySecretLoginFromUrl } from "./secret-login.js";
 
@@ -23,7 +24,7 @@ window.login = async function login() {
     await flushPendingAccessLogs(user);
   }
 
-  window.location.href = hrefToHome();
+  window.location.href = getResumeHref(user.id, hrefToHome());
 };
 
 void (async () => {

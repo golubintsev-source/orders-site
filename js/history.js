@@ -12,6 +12,11 @@ import {
 } from "./section-nav.js";
 import { hrefToAppSection } from "./app-routes.js";
 import { flushPendingAccessLogs, logSiteAccess, measureNavigationResponseMs } from "./access-log.js";
+import {
+  applySavedScroll,
+  initUserPlaceTracking,
+  readSavedPlaceForCurrentPage,
+} from "./user-place.js";
 
 const params = new URLSearchParams(window.location.search);
 const orderId = params.get("order_id");
@@ -154,6 +159,7 @@ async function init() {
   const user = await checkAuth();
   if (!user) return;
   await flushPendingAccessLogs(user);
+  initUserPlaceTracking(user.id);
   await loadProfile();
   refreshSectionNavAfterProfile();
 
@@ -196,6 +202,7 @@ async function init() {
   setHistorySectionLabel(orderRow?.order_type);
 
   await loadHistory();
+  await applySavedScroll(readSavedPlaceForCurrentPage(user.id));
 }
 
 init();

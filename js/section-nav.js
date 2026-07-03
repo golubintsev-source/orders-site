@@ -8,6 +8,7 @@ import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite, isUserSh
 import { getRouteSectionFromUrl, hrefToOrdersExcelExport, syncBrowserUrlToSection } from "./app-routes.js";
 import { loadAllChanges } from "./all-changes.js";
 import { loadStatistics } from "./statistics.js";
+import { scheduleSaveUserPlace } from "./user-place.js";
 import {
   consumeSectionSwitchMs,
   logSpaSectionAccess,
@@ -333,6 +334,8 @@ export function switchSection(sectionId, opts = {}) {
       logSpaSectionAccess(sectionId, measureNavigationResponseMs());
     });
   }
+
+  scheduleSaveUserPlace();
 }
 
 /** Обновить только текст текущего раздела (например «Новый» ↔ «Редактирование»). */

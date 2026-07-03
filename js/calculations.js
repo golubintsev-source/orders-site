@@ -4,6 +4,11 @@ import { formatAmount, formatAmountWholeRubles, tryParseRublesInteger, MSG_SUM_I
 import { isAdmin } from "./roles.js";
 import { hrefToHome } from "./app-routes.js";
 import {
+  applySavedScroll,
+  initUserPlaceTracking,
+  readSavedPlaceForCurrentPage,
+} from "./user-place.js";
+import {
   flushPendingAccessLogs,
   logSiteAccess,
   measureNavigationResponseMs,
@@ -995,6 +1000,7 @@ async function init() {
   const user = await checkAuth();
   if (!user) return;
   await flushPendingAccessLogs(user);
+  initUserPlaceTracking(user.id);
   await loadProfile();
   currentUserEmail = user.email || "";
 
@@ -1010,6 +1016,7 @@ async function init() {
   initCalculationsDateRangeDefaults();
   setupCalculationsForm();
   await loadCalculations();
+  await applySavedScroll(readSavedPlaceForCurrentPage(user.id));
 }
 
 init();

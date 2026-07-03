@@ -25,6 +25,7 @@ import {
   refreshSectionNavAfterProfile,
   switchSection,
   syncOrdersSearchIconAccent,
+  getCurrentSectionId,
 } from "./section-nav.js";
 import { initDbPingIndicator } from "./db-ping.js";
 import { isOfflineWorkModeEnabled } from "./config.js";
@@ -39,6 +40,16 @@ import {
   flushPendingAccessLogs,
   initAccessLogging,
 } from "./access-log.js";
+import {
+  applySavedScroll,
+  captureHref,
+  getResumeHref,
+  initUserPlaceTracking,
+  readSavedPlaceForCurrentPage,
+  readUserPlace,
+  scheduleSaveUserPlace,
+  shouldRedirectToSavedPlace,
+} from "./user-place.js";
 
 window.editOrder = editOrder;
 window.viewOrder = viewOrder;
@@ -95,6 +106,22 @@ async function init() {
 
     await flushPendingAccessLogs(user);
 
+    initUserPlaceTracking(user.id, {
+      getAppContext: () => ({
+        sectionId: getCurrentSectionId(),
+        viewingOrderId: state.viewingOrderId,
+        editingOrderId: state.editingOrderId,
+        tasksOrderId: state.tasksOrderId,
+        clientSearch: (document.getElementById("clientSearch")?.value || "").trim() || undefined,
+      }),
+    });
+
+    const savedPlace = readSavedPlaceForCurrentPage(user.id);
+    if (!savedPlace && shouldRedirectToSavedPlace(captureHref(), readUserPlace(user.id)?.href)) {
+      window.location.replace(getResumeHref(user.id, captureHref()));
+      return;
+    }
+
     hydrateCachedRoleFromStorage();
     if (isOfflineWorkModeEnabled()) {
       paintOrdersFromLocalStorageIfAny();
@@ -118,6 +145,8 @@ async function init() {
     initStatisticsSection();
 
     applyPendingOrdersSearchFromHistory();
+    await restoreSavedAppContext(user.id);
+    await applySavedScroll(readSavedPlaceForCurrentPage(user.id));
   } catch (err) {
     console.error("Ошибка инициализации:", err);
     setMessage("Ошибка подключения к базе. Проверьте интернет и настройки Supabase.", "#d32f2f");
@@ -162,6 +191,49 @@ function applyPendingOrdersSearchFromHistory() {
     el.value = pending;
     applyClientFilter();
     syncOrdersSearchIconAccent();
+  }
+}
+
+async function restoreSavedAppContext(userId) {
+  const saved = readSavedPlaceForCurrentPage(userId);
+  const app = saved?.app;
+  if (!app) return;
+
+  if (app.clientSearch && app.sectionId === "all" && !sessionStorage.getItem("pendingOrdersSearch")) {
+    const el = document.getElementById("clientSearch");
+    if (el && !el.value.trim()) {
+      el.value = app.clientSearch;
+      applyClientFilter();
+      syncOrdersSearchIconAccent();
+    }
+  }
+
+  if (app.viewingOrderId != null) {
+    await viewOrder(app.viewingOrderId);
+    scheduleSaveUserPlace();
+    return;
+  }
+  if (app.editingOrderId != null) {
+    await editOrder(app.editingOrderId);
+    scheduleSaveUserPlace();
+    return;
+  }
+
+  if (app.sectionId === "order-tasks" && app.tasksOrderId != null) {
+    state.tasksOrderId = app.tasksOrderId;
+    switchSection("order-tasks", { skipUrlSync: true });
+    await import("./tasks.js").then((m) => m.loadOrderTasks());
+    scheduleSaveUserPlace();
+    return;
+  }
+
+  if (
+    app.sectionId &&
+    app.sectionId !== getCurrentSectionId() &&
+    canAccessSection(app.sectionId)
+  ) {
+    switchSection(app.sectionId, { skipUrlSync: true });
+    scheduleSaveUserPlace();
   }
 }
 

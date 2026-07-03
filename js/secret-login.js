@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { hrefToHome } from "./app-routes.js";
+import { getResumeHref } from "./user-place.js";
 import { flushPendingAccessLogs } from "./access-log.js";
 
 function stripKeyFromUrl() {
@@ -64,7 +65,7 @@ export async function trySecretLoginFromUrl() {
       await flushPendingAccessLogs(user);
     }
 
-    window.location.href = hrefToHome();
+    window.location.href = getResumeHref(user.id, hrefToHome());
     return true;
   } catch (e) {
     console.error("secret-login:", e);
