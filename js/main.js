@@ -50,6 +50,7 @@ import {
   scheduleSaveUserPlace,
   shouldRedirectToSavedPlace,
 } from "./user-place.js";
+import { initPushNotifications } from "./push-notifications.js";
 
 window.editOrder = editOrder;
 window.viewOrder = viewOrder;
@@ -130,6 +131,7 @@ async function init() {
     await Promise.all([loadProfile(), loadSettings()]);
     initDbPingIndicator();
     refreshSectionNavAfterProfile();
+    void initPushNotifications();
     applyRouteOnLoad();
     ensurePopstateRouting();
 

@@ -4,7 +4,7 @@
  * (HTML, JS, CSS, изображения, CDN-скрипты из index/login/calculations/history).
  * Увеличьте CACHE_STATIC при изменении списка или критичных ассетов.
  */
-const CACHE_STATIC = "orders-site-static-v3";
+const CACHE_STATIC = "orders-site-static-v4";
 
 /** iOS Safari при офлайне часто не отклоняет fetch — без таймаута F5 «висит» бесконечно. */
 const NETWORK_TIMEOUT_MS = 4000;
@@ -48,6 +48,7 @@ const JS_FILES = [
   "ordersTableMobileFit.js",
   "ordersTablePinchZoom.js",
   "ordersTableStickyHeader.js",
+  "push-notifications.js",
   "roles.js",
   "route-sheet.js",
   "section-nav.js",
@@ -73,6 +74,10 @@ function originUrls() {
     "/history.html",
     "/window-calculations.html",
     "/style.css",
+    "/manifest.webmanifest",
+    "/img/icon-192.png",
+    "/img/icon-512.png",
+    "/img/apple-touch-icon.png",
     "/img/logo.png",
     "/img/calculator.svg",
     "/img/window-calculations-link.svg",
@@ -271,4 +276,57 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(handleCachedGet(event, req, url));
+});
+
+self.addEventListener("push", (event) => {
+  let data = {
+    title: "Заявки",
+    body: "Новая задача",
+    url: "/tasks-all",
+    tag: "new-task",
+  };
+  try {
+    if (event.data) {
+      const parsed = event.data.json();
+      data = { ...data, ...parsed };
+    }
+  } catch (_) {
+    /* ignore malformed payload */
+  }
+
+  const options = {
+    body: data.body || "Новая задача",
+    icon: "/img/icon-192.png",
+    badge: "/img/icon-192.png",
+    tag: data.tag || "new-task",
+    data: { url: data.url || "/tasks-all" },
+    renotify: true,
+  };
+
+  event.waitUntil(self.registration.showNotification(data.title || "Заявки", options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const relUrl = event.notification.data?.url || "/tasks-all";
+  const targetUrl = new URL(relUrl, self.location.origin).href;
+
+  event.waitUntil(
+    (async () => {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of clients) {
+        if (!client.url.startsWith(self.location.origin)) continue;
+        if ("focus" in client) {
+          if (typeof client.navigate === "function") {
+            await client.navigate(targetUrl);
+          }
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+      return undefined;
+    })()
+  );
 });

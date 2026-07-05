@@ -306,6 +306,9 @@ export function switchSection(sectionId, opts = {}) {
   if (sectionId === "statistics") {
     void loadStatistics({ refreshDefaultRange: true });
   }
+  if (sectionId === "settings") {
+    void import("./push-notifications.js").then((m) => m.refreshPushNotificationsUi());
+  }
   if (sectionId === "order-tasks") {
     void import("./tasks.js").then((m) => m.loadOrderTasks());
   }

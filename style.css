@@ -2100,6 +2100,36 @@ h2 {
   opacity: 0.9;
 }
 
+#section-settings .push-notifications-card {
+  margin-top: 16px;
+  max-width: 520px;
+}
+#section-settings .push-notifications-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+#section-settings .push-notifications-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #4b5563;
+}
+#section-settings .push-notifications-toggle-btn {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+#section-settings .push-notifications-message {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #374151;
+}
+#section-settings .push-notifications-message--error {
+  color: #b91c1c;
+}
+
 .inprogress-picture img {
   width: 100%;
   max-width: 500px;

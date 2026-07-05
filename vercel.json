@@ -3,6 +3,10 @@
     {
       "source": "/sw.js",
       "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }]
     }
   ],
   "functions": {
@@ -11,6 +15,12 @@
     },
     "api/secret-login.js": {
       "maxDuration": 30
+    },
+    "api/send-task-push.js": {
+      "maxDuration": 30
+    },
+    "api/push-config.js": {
+      "maxDuration": 10
     }
   },
   "rewrites": [
