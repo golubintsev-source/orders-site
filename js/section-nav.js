@@ -74,7 +74,7 @@ const SECTION_LABELS = {
   balance: "Баланс",
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
-  statistics: "Статистика",
+  statistics: "Статистика2",
 };
 
 /** Совпадает с URL после boot-route.js (иначе шапка/лупа до main рассинхронизированы). */
