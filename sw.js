@@ -4,7 +4,9 @@
  * (HTML, JS, CSS, изображения, CDN-скрипты из index/login/calculations/history).
  * Увеличьте CACHE_STATIC при изменении списка или критичных ассетов.
  */
-const CACHE_STATIC = "orders-site-static-v4";
+const CACHE_STATIC = "orders-site-static-v5";
+const BADGE_CACHE = "orders-site-badge-v1";
+const BADGE_COUNT_KEY = "/badge-count";
 
 /** iOS Safari при офлайне часто не отклоняет fetch — без таймаута F5 «висит» бесконечно. */
 const NETWORK_TIMEOUT_MS = 4000;
@@ -278,6 +280,50 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(handleCachedGet(event, req, url));
 });
 
+async function getBadgeCount() {
+  try {
+    const cache = await caches.open(BADGE_CACHE);
+    const res = await cache.match(BADGE_COUNT_KEY);
+    if (!res) return 0;
+    const n = parseInt(await res.text(), 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function setBadgeCount(count) {
+  const n = Math.max(0, Math.min(count, 99));
+  try {
+    const cache = await caches.open(BADGE_CACHE);
+    if (n > 0) {
+      await cache.put(BADGE_COUNT_KEY, new Response(String(n)));
+    } else {
+      await cache.delete(BADGE_COUNT_KEY);
+    }
+    if (self.registration.setAppBadge && self.registration.clearAppBadge) {
+      if (n > 0) await self.registration.setAppBadge(n);
+      else await self.registration.clearAppBadge();
+    }
+  } catch (e) {
+    console.warn("[sw] badge:", e);
+  }
+}
+
+async function incrementBadge() {
+  await setBadgeCount((await getBadgeCount()) + 1);
+}
+
+async function clearBadge() {
+  await setBadgeCount(0);
+}
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "clear-badge") {
+    event.waitUntil(clearBadge());
+  }
+});
+
 self.addEventListener("push", (event) => {
   let data = {
     title: "Заявки",
@@ -303,7 +349,12 @@ self.addEventListener("push", (event) => {
     renotify: true,
   };
 
-  event.waitUntil(self.registration.showNotification(data.title || "Заявки", options));
+  event.waitUntil(
+    (async () => {
+      await incrementBadge();
+      await self.registration.showNotification(data.title || "Заявки", options);
+    })()
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
@@ -313,6 +364,7 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     (async () => {
+      await clearBadge();
       const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       for (const client of clients) {
         if (!client.url.startsWith(self.location.origin)) continue;

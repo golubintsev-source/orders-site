@@ -251,6 +251,19 @@ export async function refreshPushNotificationsUi() {
   await refreshPushSettingsUi();
 }
 
+/** Сбросить красный кружок на иконке PWA (iOS / Android). */
+export async function clearPushBadge() {
+  try {
+    if (typeof navigator.clearAppBadge === "function") {
+      await navigator.clearAppBadge();
+    }
+    const reg = await navigator.serviceWorker?.ready;
+    reg?.active?.postMessage({ type: "clear-badge" });
+  } catch (e) {
+    console.warn("[push] clear badge:", e);
+  }
+}
+
 export function initPushNotificationsSection() {
   const btn = document.getElementById("pushNotificationsToggleBtn");
   if (!btn || btn.dataset.pushBound === "1") return;

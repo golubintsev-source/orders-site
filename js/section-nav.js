@@ -299,6 +299,7 @@ export function switchSection(sectionId, opts = {}) {
 
   if (sectionId === "tasks-all") {
     void import("./tasks.js").then((m) => m.loadAllTasks());
+    void import("./push-notifications.js").then((m) => m.clearPushBadge());
   }
   if (sectionId === "changes-all") {
     void loadAllChanges();
@@ -311,6 +312,7 @@ export function switchSection(sectionId, opts = {}) {
   }
   if (sectionId === "order-tasks") {
     void import("./tasks.js").then((m) => m.loadOrderTasks());
+    void import("./push-notifications.js").then((m) => m.clearPushBadge());
   }
 
   updateBackToOrdersBtnVisibility(sectionId);
