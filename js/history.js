@@ -1,7 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile, logout } from "./auth.js";
 import { isOrderHiddenForCurrentRole } from "./roles.js";
-import { readSnapshot, mergeOrderHistoryRows } from "./offline-cache.js";
+import { mergeOrderHistoryRows } from "./offline-cache.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
 import {
   initSectionNavDropdown,
@@ -122,7 +122,7 @@ async function loadHistory() {
   const msgEl = document.getElementById("historyMessage");
   tbody.innerHTML = "";
 
-  const baseRows = error ? readSnapshot()?.order_history || [] : data || [];
+  const baseRows = error ? [] : data || [];
   const merged = mergeOrderHistoryRows(baseRows);
   const rows = merged.filter((r) => String(r.order_id) === String(orderId)).sort((a, b) => {
     const ta = new Date(a.created_at || 0).getTime();
@@ -132,14 +132,11 @@ async function loadHistory() {
 
   if (error) {
     console.error("Ошибка загрузки истории:", error);
-    if (!rows.length) {
-      msgEl.textContent = "Ошибка загрузки истории.";
-      return;
-    }
-    msgEl.textContent = "Показана копия с устройства (сеть недоступна).";
-  } else {
-    msgEl.textContent = "";
+    msgEl.textContent = "Ошибка загрузки истории.";
+    return;
   }
+
+  msgEl.textContent = "";
 
   if (!rows.length) {
     msgEl.textContent = "Записей пока нет.";

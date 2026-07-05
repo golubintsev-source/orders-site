@@ -5,7 +5,6 @@ import { applyFiltersAndRender } from "./orders.js";
 import { switchSection } from "./section-nav.js";
 import { isOrderHiddenForCurrentRole, isUserLite, isUserShop } from "./roles.js";
 import {
-  readSnapshot,
   persistOrderTasksSnapshot,
   mergeOrderTasksRowsForAllTasks,
   mergeOrderTasksRowsForOrder,
@@ -144,12 +143,14 @@ export async function loadAllTasks() {
   if (error) {
     console.error("Ошибка загрузки задач:", error);
     if (msg) {
-      msg.textContent = "Показаны сохранённые на устройстве задачи (сеть недоступна).";
-      msg.classList.remove("order-tasks-message--error");
+      msg.textContent = "Ошибка загрузки задач.";
+      msg.classList.add("order-tasks-message--error");
     }
+    tbody.innerHTML = "";
+    return;
   }
 
-  const baseRows = error ? readSnapshot()?.order_tasks || [] : data || [];
+  const baseRows = data || [];
   if (!error && data) persistOrderTasksSnapshot(data);
 
   const rows = mergeOrderTasksRowsForAllTasks(baseRows);
@@ -174,7 +175,7 @@ export async function loadAllTasks() {
     .join("");
 
   if (rows.length === 0 && msg) {
-    msg.textContent = error ? "Нет сохранённой копии задач на этом устройстве." : "Пока нет задач.";
+    msg.textContent = "Пока нет задач.";
   }
 }
 
@@ -228,16 +229,16 @@ export async function loadOrderTasks() {
   if (error) {
     console.error("Ошибка загрузки задач:", error);
     if (msg) {
-      msg.textContent = "Показаны сохранённые на устройстве задачи (сеть недоступна).";
-      msg.classList.remove("order-tasks-message--error");
+      msg.textContent = "Ошибка загрузки задач.";
+      msg.classList.add("order-tasks-message--error");
     }
+    tbody.innerHTML = "";
+    return;
   }
 
-  if (msg && !error) msg.classList.remove("order-tasks-message--error");
+  if (msg) msg.classList.remove("order-tasks-message--error");
 
-  const baseRows = error
-    ? (readSnapshot()?.order_tasks || []).filter((r) => Number(r.order_id) === Number(state.tasksOrderId))
-    : data || [];
+  const baseRows = data || [];
 
   const rows = mergeOrderTasksRowsForOrder(baseRows, state.tasksOrderId);
   tbody.innerHTML = rows

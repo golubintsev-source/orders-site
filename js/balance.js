@@ -2,7 +2,8 @@ import { supabaseClient } from "./config.js";
 import { isUserLite, isUserShop } from "./roles.js";
 import { formatAmountWholeRubles } from "./format.js";
 import { state } from "./state.js";
-import { persistBalanceOfflineView, readBalanceOfflineView, isOfflineDataMode, raceWithTimeout } from "./offline-cache.js";
+import { persistBalanceOfflineView, readBalanceOfflineView, isOfflineDataMode } from "./offline-cache.js";
+import { isOfflineWorkModeEnabled } from "./config.js";
 
 const PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
 const MSK_TZ = "Europe/Moscow";
@@ -180,7 +181,7 @@ export async function loadBalance() {
 
   const offlineMsg = "Показаны сохранённые значения баланса (без сети).";
 
-  if (isOfflineDataMode()) {
+  if (isOfflineWorkModeEnabled() && isOfflineDataMode()) {
     if (tryPaintBalanceFromOfflineCache(messageEl, offlineMsg)) return;
     if (messageEl) {
       messageEl.textContent = "Нет сети и нет сохранённого баланса. Откройте раздел при подключении к интернету.";
@@ -190,22 +191,18 @@ export async function loadBalance() {
 
   let calcRes;
   try {
-    calcRes = await raceWithTimeout(
-      supabaseClient
-        .from("calculations")
-        .select("from_place,to_place,amount,created_at")
-        .is("deleted_at", null),
-    );
+    calcRes = await supabaseClient
+      .from("calculations")
+      .select("from_place,to_place,amount,created_at")
+      .is("deleted_at", null);
   } catch (e) {
     console.error("Ошибка загрузки расчётов для баланса:", e);
-    if (tryPaintBalanceFromOfflineCache(messageEl, offlineMsg)) return;
     if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса.";
     return;
   }
 
   if (calcRes.error) {
     console.error("Ошибка загрузки расчётов для баланса:", calcRes.error);
-    if (tryPaintBalanceFromOfflineCache(messageEl, offlineMsg)) return;
     if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса.";
     return;
   }

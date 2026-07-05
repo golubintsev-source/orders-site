@@ -2,7 +2,7 @@ import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
 import { isAdmin } from "./roles.js";
 import { tryParseRublesInteger } from "./format.js";
-import { readSnapshot, persistSettingsSnapshotFromRows, raceWithTimeout } from "./offline-cache.js";
+import { readSnapshot, persistSettingsSnapshotFromRows } from "./offline-cache.js";
 
 const KEY_INSTALLER_RATE = "installer_rate_per_m2";
 const DEFAULT_RATE = 1400;
@@ -62,28 +62,10 @@ export async function loadSettings() {
   }
 
   const keys = [KEY_INSTALLER_RATE, ...BALANCE_ADJ_FIELDS.map((f) => f.settingKey)];
-  let rows = null;
-  let error = null;
-  try {
-    const res = await raceWithTimeout(
-      supabaseClient.from("app_settings").select("key, value").in("key", keys),
-    );
-    rows = res.data;
-    error = res.error;
-  } catch (e) {
-    if (e?.code === "TIMEOUT") {
-      error = { message: "timeout" };
-    } else {
-      error = e;
-    }
-  }
+  const { data: rows, error } = await supabaseClient.from("app_settings").select("key, value").in("key", keys);
   let effectiveRows = rows || [];
   if (error) {
     console.error("Ошибка загрузки настроек:", error);
-    const snap = readSnapshot();
-    if (snap?.settingsRows?.length) {
-      effectiveRows = snap.settingsRows;
-    }
   } else if (rows?.length) {
     persistSettingsSnapshotFromRows(rows);
   }

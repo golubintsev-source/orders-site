@@ -153,36 +153,22 @@ function refreshOrdersDependentSections() {
 }
 
 export async function loadOrders() {
-  const ordersQuery = () =>
-    supabaseClient.from("orders").select("*").is("deleted_at", null).order("id", { ascending: false });
-
-  let data = null;
-  let error = null;
-
-  if (isBrowserOffline()) {
-    error = { message: "offline" };
-  } else {
-    try {
-      const res = await raceWithTimeout(ordersQuery());
-      data = res.data;
-      error = res.error;
-    } catch (e) {
-      if (e?.code === "TIMEOUT") {
-        data = null;
-        error = { message: "timeout" };
-      } else {
-        data = null;
-        error = e;
-      }
-    }
-  }
+  const { data, error } = await supabaseClient
+    .from("orders")
+    .select("*")
+    .is("deleted_at", null)
+    .order("id", { ascending: false });
 
   if (!error && data) {
     state.dbUnavailable = false;
     let finalData = data;
     if (isOfflineWorkModeEnabled()) {
       await syncPendingOfflineDataToSupabase();
-      const again = await raceWithTimeout(ordersQuery());
+      const again = await supabaseClient
+        .from("orders")
+        .select("*")
+        .is("deleted_at", null)
+        .order("id", { ascending: false });
       finalData = again.error ? data : again.data || data;
       persistServerOrdersForOffline(finalData);
     }

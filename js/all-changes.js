@@ -158,6 +158,28 @@ export async function loadAllChanges() {
 
   const { startIso, endIso } = readAllChangesDateRangeFromInputs();
 
+  if (!isOfflineWorkModeEnabled()) {
+    const { data, error } = await supabaseClient
+      .from("order_history")
+      .select("created_at, user_email, comment, order_id")
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Ошибка загрузки истории изменений:", error);
+      if (msg) {
+        msg.textContent = "Ошибка загрузки истории изменений.";
+        msg.classList.add("order-tasks-message--error");
+      }
+      paintAllChangesFromBaseRows(startIso, endIso, [], { error });
+      return;
+    }
+
+    paintAllChangesFromBaseRows(startIso, endIso, data || [], { error: null });
+    return;
+  }
+
   const snapRows = readSnapshot()?.order_history || [];
   const snapFiltered = snapRows.filter((r) => rowInCreatedAtRange(r, startIso, endIso));
 
@@ -169,10 +191,8 @@ export async function loadAllChanges() {
       .lte("created_at", endIso)
       .order("created_at", { ascending: false });
 
-  /** Без ожидания fetch: «офлайн» по флагу браузера, уже работаем с кэшем заказов, или ложный onLine без сети — сначала снимок. */
   const skipNetwork =
-    isOfflineWorkModeEnabled() &&
-    ((typeof navigator !== "undefined" && navigator.onLine === false) || isOfflineDataMode());
+    (typeof navigator !== "undefined" && navigator.onLine === false) || isOfflineDataMode();
 
   let data = null;
   let error = null;
@@ -184,7 +204,6 @@ export async function loadAllChanges() {
       paintAllChangesFromBaseRows(startIso, endIso, snapFiltered, { error: null });
     }
     try {
-      /** Снимок уже на экране — не ждём полные 5 с при «ложном» onLine. */
       const waitMs = snapFiltered.length > 0 ? 1800 : OFFLINE_SUPABASE_WAIT_MS;
       const res = await raceWithTimeout(historyQuery(), waitMs);
       data = res.data;

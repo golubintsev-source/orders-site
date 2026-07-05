@@ -1,9 +1,8 @@
 const { createClient } = window.supabase;
 
 /**
- * Режим офлайн-работы: кэш в localStorage, пинг БД, локальная очередь без сети.
- * По умолчанию выключен — только онлайн (быстрее старт, без лишних проверок).
- * Переопределение в консоли или в HTML до загрузки модулей: window.__OFFLINE_WORK_MODE_ENABLED__ = true
+ * Режим офлайн-работы отключён по умолчанию (только сервер).
+ * Включение: window.__OFFLINE_WORK_MODE_ENABLED__ = true до загрузки модулей.
  */
 export function isOfflineWorkModeEnabled() {
   if (typeof window !== "undefined" && typeof window.__OFFLINE_WORK_MODE_ENABLED__ === "boolean") {

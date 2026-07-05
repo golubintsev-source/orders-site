@@ -49,11 +49,10 @@ export async function checkAuth() {
 
   state.currentUser = sessionUser;
 
-  const shouldValidateWithServer =
-    !isOfflineWorkModeEnabled() || (typeof navigator !== "undefined" && navigator.onLine);
+  const shouldValidateWithServer = !isOfflineWorkModeEnabled() || navigator.onLine !== false;
   if (shouldValidateWithServer) {
     try {
-      const { data, error } = await raceWithTimeout(supabaseClient.auth.getUser());
+      const { data, error } = await supabaseClient.auth.getUser();
       if (!error && data?.user) {
         state.currentUser = data.user;
       } else if (error && !isNetworkFetchError(error)) {
@@ -61,7 +60,7 @@ export async function checkAuth() {
         return null;
       }
     } catch (e) {
-      if (e?.code !== "TIMEOUT" && !isNetworkFetchError(e)) {
+      if (!isNetworkFetchError(e)) {
         console.error("Ошибка проверки сессии:", e);
       }
     }
@@ -78,9 +77,11 @@ export async function loadProfile() {
 
   let res;
   try {
-    res = await raceWithTimeout(
-      supabaseClient.from("profiles").select("role").eq("id", state.currentUser.id).single(),
-    );
+    res = isOfflineWorkModeEnabled()
+      ? await raceWithTimeout(
+          supabaseClient.from("profiles").select("role").eq("id", state.currentUser.id).single(),
+        )
+      : await supabaseClient.from("profiles").select("role").eq("id", state.currentUser.id).single();
   } catch (e) {
     if (e?.code === "TIMEOUT") {
       state.currentRole = normalizeRole(readCachedRoleRaw());

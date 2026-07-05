@@ -3,14 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <script>
-    /* F5 офлайн: не держать экран пустым до boot-route.js / main.js */
-    (function () {
-      if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        document.documentElement.setAttribute("data-route-boot", "1");
-      }
-    })();
-  </script>
   <script defer src="./js/register-sw.js"></script>
   <title>Заявки</title>
   <link rel="manifest" href="/manifest.webmanifest">
@@ -137,6 +129,7 @@
           <div
             id="dbPingIndicator"
             class="db-ping-indicator db-ping-indicator--pending"
+            hidden
             role="status"
             aria-live="polite"
             aria-label="База данных: проверка соединения"

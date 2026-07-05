@@ -3,7 +3,6 @@ import { state } from "./state.js";
 import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
 import {
   loadOrders,
-  paintOrdersFromLocalStorageIfAny,
   resetFormMode,
   editOrder,
   viewOrder,
@@ -27,8 +26,6 @@ import {
   syncOrdersSearchIconAccent,
   getCurrentSectionId,
 } from "./section-nav.js";
-import { initDbPingIndicator } from "./db-ping.js";
-import { isOfflineWorkModeEnabled } from "./config.js";
 import { canAccessSection } from "./roles.js";
 import { applyClientFilter } from "./orders.js";
 import {
@@ -59,31 +56,7 @@ window.openFilesModal = openFilesModal;
 window.removeFile = removeFile;
 window.toggleOrderRowHighlightById = toggleOrderRowHighlightById;
 
-/** Safari: при возврате из bfcache скрипт init не выполняется повторно — подтянуть таблицу из localStorage. */
-window.addEventListener("pageshow", (e) => {
-  if (!isOfflineWorkModeEnabled() || !e.persisted) return;
-  void import("./orders.js").then((m) => m.paintOrdersFromLocalStorageIfAny());
-});
-
-window.addEventListener("offline", () => {
-  if (!isOfflineWorkModeEnabled()) return;
-  void import("./orders.js").then((m) => {
-    m.paintOrdersFromLocalStorageIfAny();
-    if (typeof m.applyOfflineModeFromDbUnavailable === "function") {
-      m.applyOfflineModeFromDbUnavailable();
-    }
-  });
-});
-
-window.addEventListener("online", () => {
-  if (!isOfflineWorkModeEnabled()) return;
-  void import("./orders.js").then((m) => m.loadOrders());
-  void import("./db-ping.js").then((m) => {
-    if (typeof m.triggerDbPingNow === "function") m.triggerDbPingNow();
-  });
-});
-
-/** Если boot-route.js не выполнился (сеть), снять «вечную» скрытость разделов из style.css. */
+/** Если boot-route.js не выполнился, снять «вечную» скрытость разделов из style.css. */
 function ensureBootOrFallback() {
   if (document.documentElement.hasAttribute("data-route-boot")) return;
   document.querySelectorAll(".container > section.content-section").forEach((el) => {
@@ -124,12 +97,8 @@ async function init() {
     }
 
     hydrateCachedRoleFromStorage();
-    if (isOfflineWorkModeEnabled()) {
-      paintOrdersFromLocalStorageIfAny();
-    }
 
     await Promise.all([loadProfile(), loadSettings()]);
-    initDbPingIndicator();
     refreshSectionNavAfterProfile();
     void initPushNotifications();
     applyRouteOnLoad();
@@ -156,7 +125,7 @@ async function init() {
       try {
         await loadOrders();
       } catch (e2) {
-        console.error("Повторная загрузка заказов из кэша:", e2);
+        console.error("Повторная загрузка заказов:", e2);
       }
     }
   }
