@@ -21,6 +21,9 @@
     },
     "api/push-config.js": {
       "maxDuration": 10
+    },
+    "api/push-status.js": {
+      "maxDuration": 10
     }
   },
   "rewrites": [

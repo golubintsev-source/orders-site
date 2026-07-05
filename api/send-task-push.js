@@ -96,7 +96,18 @@ module.exports = async (req, res) => {
   }
 
   if (!isConfigured()) {
-    return res.status(503).json({ message: "Push not configured", code: "not_configured" });
+    const missing = [];
+    if (!SUPABASE_URL) missing.push("SUPABASE_URL");
+    if (!SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+    if (!VAPID_PUBLIC_KEY) missing.push("VAPID_PUBLIC_KEY");
+    if (!VAPID_PRIVATE_KEY) missing.push("VAPID_PRIVATE_KEY");
+    if (!PUSH_WEBHOOK_SECRET) missing.push("PUSH_WEBHOOK_SECRET");
+    return res.status(503).json({
+      message: "Push not configured",
+      code: "not_configured",
+      missing,
+      hint: "Добавьте недостающие переменные в Vercel → Environment Variables → Production → Redeploy",
+    });
   }
 
   const secret =

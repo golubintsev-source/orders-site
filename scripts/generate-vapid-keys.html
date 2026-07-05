@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Генератор VAPID-ключей</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; line-height: 1.5; color: #111; }
+    h1 { font-size: 22px; }
+    p.note { color: #4b5563; font-size: 14px; }
+    button { padding: 10px 18px; font-size: 15px; font-weight: 600; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+    button:hover { opacity: 0.95; }
+    .field { margin: 16px 0; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; }
+    input, textarea { width: 100%; box-sizing: border-box; font-family: Consolas, monospace; font-size: 13px; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; }
+    textarea { min-height: 72px; resize: vertical; }
+    .copy { margin-top: 6px; font-size: 13px; color: #2563eb; cursor: pointer; background: none; border: none; padding: 0; font-weight: 600; }
+    .ok { color: #15803d; font-size: 13px; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <h1>Генератор VAPID-ключей для Web Push</h1>
+  <p class="note">
+    Ключи создаются <strong>только в вашем браузере</strong> и никуда не отправляются.
+    Откройте этот файл на любом устройстве (Windows, Mac, iPhone, Android) и скопируйте значения в Vercel.
+  </p>
+
+  <p><button type="button" id="generateBtn">Сгенерировать ключи</button></p>
+
+  <div class="field">
+    <label for="publicKey">VAPID_PUBLIC_KEY</label>
+    <textarea id="publicKey" readonly placeholder="Нажмите «Сгенерировать ключи»"></textarea>
+    <button type="button" class="copy" data-target="publicKey">Скопировать</button>
+  </div>
+
+  <div class="field">
+    <label for="privateKey">VAPID_PRIVATE_KEY</label>
+    <textarea id="privateKey" readonly></textarea>
+    <button type="button" class="copy" data-target="privateKey">Скопировать</button>
+  </div>
+
+  <div class="field">
+    <label for="subject">VAPID_SUBJECT</label>
+    <input id="subject" type="text" value="mailto:golubintsev26@gmail.com" />
+    <p class="note">Формат: <code>mailto:ваш@email.com</code></p>
+  </div>
+
+  <div class="field">
+    <label for="webhookSecret">PUSH_WEBHOOK_SECRET</label>
+    <textarea id="webhookSecret" readonly></textarea>
+    <button type="button" class="copy" data-target="webhookSecret">Скопировать</button>
+    <p class="note">Случайная строка для защиты webhook. Тот же текст понадобится в Supabase.</p>
+  </div>
+
+  <p id="status" class="ok"></p>
+
+  <script>
+    function base64UrlEncode(buffer) {
+      const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+      let binary = "";
+      bytes.forEach((b) => { binary += String.fromCharCode(b); });
+      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    }
+
+    function randomSecret(length = 32) {
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+      const arr = new Uint8Array(length);
+      crypto.getRandomValues(arr);
+      return Array.from(arr, (n) => chars[n % chars.length]).join("");
+    }
+
+    async function generateVapidKeys() {
+      const keyPair = await crypto.subtle.generateKey(
+        { name: "ECDSA", namedCurve: "P-256" },
+        true,
+        ["sign", "verify"]
+      );
+
+      const publicRaw = await crypto.subtle.exportKey("raw", keyPair.publicKey);
+      const privateJwk = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
+
+      const d = privateJwk.d.replace(/-/g, "+").replace(/_/g, "/");
+      const pad = d.length % 4 === 0 ? "" : "=".repeat(4 - (d.length % 4));
+      const privBytes = Uint8Array.from(atob(d + pad), (c) => c.charCodeAt(0));
+
+      return {
+        publicKey: base64UrlEncode(publicRaw),
+        privateKey: base64UrlEncode(privBytes),
+      };
+    }
+
+    document.getElementById("generateBtn").addEventListener("click", async () => {
+      const status = document.getElementById("status");
+      status.textContent = "Генерация…";
+      try {
+        const keys = await generateVapidKeys();
+        document.getElementById("publicKey").value = keys.publicKey;
+        document.getElementById("privateKey").value = keys.privateKey;
+        document.getElementById("webhookSecret").value = randomSecret(40);
+        status.textContent = "Готово. Скопируйте значения в Vercel (шаги ниже в инструкции).";
+      } catch (e) {
+        status.textContent = "Ошибка: " + (e.message || e);
+        status.style.color = "#b91c1c";
+      }
+    });
+
+    document.querySelectorAll(".copy").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-target");
+        const el = document.getElementById(id);
+        if (!el?.value) return;
+        try {
+          await navigator.clipboard.writeText(el.value);
+          document.getElementById("status").textContent = "Скопировано: " + id;
+        } catch {
+          el.select();
+          document.execCommand("copy");
+          document.getElementById("status").textContent = "Скопировано: " + id;
+        }
+      });
+    });
+  </script>
+</body>
+</html>

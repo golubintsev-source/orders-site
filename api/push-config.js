@@ -7,7 +7,17 @@ module.exports = (req, res) => {
 
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   if (!publicKey) {
-    return res.status(503).json({ message: "Push not configured", code: "not_configured" });
+    const missing = [];
+    if (!process.env.VAPID_PUBLIC_KEY) missing.push("VAPID_PUBLIC_KEY");
+    if (!process.env.VAPID_PRIVATE_KEY) missing.push("VAPID_PRIVATE_KEY");
+    if (!process.env.VAPID_SUBJECT) missing.push("VAPID_SUBJECT");
+    if (!process.env.PUSH_WEBHOOK_SECRET) missing.push("PUSH_WEBHOOK_SECRET");
+    return res.status(503).json({
+      message: "Push not configured",
+      code: "not_configured",
+      missing,
+      hint: "Добавьте переменные в Vercel → Settings → Environment Variables → отметьте Production → Redeploy",
+    });
   }
 
   res.setHeader("Cache-Control", "public, max-age=3600");
