@@ -3,6 +3,12 @@ import { state } from "./state.js";
 import { isAdmin, isOrderHiddenForCurrentRole, isUserLite } from "./roles.js";
 import { formatOrderIdTypeChip } from "./format.js";
 import {
+  downloadAttachmentOnIos,
+  isIosDevice,
+  needsIosBlobDelivery,
+  openAttachmentOnIos,
+} from "./attachmentActions.js";
+import {
   attachmentsInput,
   fileUploadText,
   clipboardPasteHint,
@@ -885,6 +891,29 @@ function canDeleteOrderFile(file) {
   return String(file?.uploaded_by || "") === String(currentUserId);
 }
 
+function runAttachmentAction(el, action) {
+  el.addEventListener("click", () => {
+    if (el.dataset.loading === "1") return;
+    el.dataset.loading = "1";
+    const prevLabel = el.textContent;
+    if (prevLabel) el.textContent = "Загрузка…";
+    el.setAttribute("aria-busy", "true");
+    if ("disabled" in el) el.disabled = true;
+
+    void action()
+      .catch((e) => {
+        console.error("Вложение:", e);
+        setMessage(e?.message || "Не удалось открыть файл", "#d32f2f");
+      })
+      .finally(() => {
+        delete el.dataset.loading;
+        if (prevLabel) el.textContent = prevLabel;
+        el.removeAttribute("aria-busy");
+        if ("disabled" in el) el.disabled = false;
+      });
+  });
+}
+
 /**
  * Строка файла: как в модалке (превью, имя, мета, Открыть / Скачать / Удалить по правам роли).
  * @param {(fileId: number, orderId: number) => void | Promise<void>} onAdminDelete
@@ -937,22 +966,37 @@ async function createOrderFileRowElement(file, orderId, onAdminDelete) {
   actions.className = "file-actions";
 
   if (fullUrl) {
-    const openA = document.createElement("a");
-    openA.href = fullUrl;
-    openA.target = "_blank";
-    openA.rel = "noopener noreferrer";
-    openA.className = "file-action-btn";
-    openA.textContent = "Открыть";
-    actions.appendChild(openA);
+    const useIosBlob =
+      isIosDevice() && needsIosBlobDelivery(fullName, file.mime_type);
 
-    const dlA = document.createElement("a");
-    dlA.href = fullUrl;
-    dlA.download = file.file_name || "file";
-    dlA.className = "file-download-btn";
-    dlA.title = "Скачать";
-    dlA.setAttribute("aria-label", "Скачать файл");
-    appendDownloadIconToButton(dlA);
-    actions.appendChild(dlA);
+    const openEl = document.createElement(useIosBlob ? "button" : "a");
+    openEl.className = "file-action-btn";
+    openEl.textContent = "Открыть";
+    if (useIosBlob) {
+      openEl.type = "button";
+      runAttachmentAction(openEl, () =>
+        openAttachmentOnIos(fullUrl, fullName, file.mime_type),
+      );
+    } else {
+      openEl.href = fullUrl;
+      openEl.target = "_blank";
+      openEl.rel = "noopener noreferrer";
+    }
+    actions.appendChild(openEl);
+
+    const dlEl = document.createElement(useIosBlob ? "button" : "a");
+    dlEl.className = "file-download-btn";
+    dlEl.title = "Скачать";
+    dlEl.setAttribute("aria-label", "Скачать файл");
+    if (useIosBlob) {
+      dlEl.type = "button";
+      runAttachmentAction(dlEl, () => downloadAttachmentOnIos(fullUrl, fullName));
+    } else {
+      dlEl.href = fullUrl;
+      dlEl.download = fullName;
+    }
+    appendDownloadIconToButton(dlEl);
+    actions.appendChild(dlEl);
   }
 
   if (canDeleteOrderFile(file) && onAdminDelete) {

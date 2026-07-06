@@ -4746,6 +4746,12 @@ th {
   color: #111;
 }
 
+.file-action-btn:disabled,
+.file-download-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 /* Квадратная кнопка скачивания в модалке файлов */
 .file-download-btn {
   display: inline-flex;
