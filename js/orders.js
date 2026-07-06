@@ -91,6 +91,43 @@ function mergedLocalOrdersForOfflineDisplay() {
   return mergedLocalOrdersForOfflineDisplayMeta().rows;
 }
 
+const SESSION_ORDERS_CACHE_KEY = "orders_site_session_orders_v1";
+const SESSION_FILES_COUNT_CACHE_KEY = "orders_site_session_files_count_v1";
+
+function persistOrdersSessionCache(orders, filesCountMap) {
+  try {
+    sessionStorage.setItem(SESSION_ORDERS_CACHE_KEY, JSON.stringify(orders));
+    sessionStorage.setItem(SESSION_FILES_COUNT_CACHE_KEY, JSON.stringify(filesCountMap || {}));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+/** Мгновенная отрисовка таблицы из sessionStorage (stale-while-revalidate). */
+export function paintOrdersFromSessionCacheIfAny() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_ORDERS_CACHE_KEY);
+    if (!raw) return;
+    const orders = JSON.parse(raw);
+    if (!Array.isArray(orders) || orders.length === 0) return;
+    state.allOrders = orders;
+    const fcRaw = sessionStorage.getItem(SESSION_FILES_COUNT_CACHE_KEY);
+    state.filesCountMap = fcRaw ? JSON.parse(fcRaw) : {};
+    applyFiltersAndRender();
+    updateSectionNavRicherStat();
+  } catch {
+    /* ignore */
+  }
+}
+
+function refreshFilesCountMapInBackground() {
+  void loadFilesCountMap().then(() => {
+    if (!state.allOrders.length) return;
+    applyFiltersAndRender();
+    persistOrdersSessionCache(state.allOrders, state.filesCountMap);
+  });
+}
+
 /**
  * Сразу после входа: таблица из localStorage без ожидания сети (Safari/iOS).
  * При navigator.onLine === false сразу включает офлайн-режим (F5 без сети).
@@ -179,11 +216,12 @@ export async function loadOrders() {
     if (isOfflineWorkModeEnabled()) {
       persistEmergencyOrdersView(state.allOrders);
     }
-    await loadFilesCountMap();
     syncDbUnavailableBanner();
     applyFiltersAndRender();
     updateSectionNavRicherStat();
     refreshOrdersDependentSections();
+    persistOrdersSessionCache(state.allOrders, state.filesCountMap);
+    refreshFilesCountMapInBackground();
     return;
   }
 

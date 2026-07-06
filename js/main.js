@@ -3,13 +3,13 @@ import { state } from "./state.js";
 import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
 import {
   loadOrders,
+  paintOrdersFromSessionCacheIfAny,
   resetFormMode,
   editOrder,
   viewOrder,
   deleteOrder,
 } from "./orders.js";
-import { initCalculationsSection } from "./calculations.js";
-import { initBalanceSection } from "./balance.js";
+import { bindCalculationsSection, loadCalculations } from "./calculations.js";
 import { initRouteSheetSection } from "./route-sheet.js";
 import { loadSettings } from "./settings.js";
 import { initOrderTasksSection } from "./tasks.js";
@@ -78,7 +78,7 @@ async function init() {
     const user = await checkAuth();
     if (!user) return;
 
-    await flushPendingAccessLogs(user);
+    void flushPendingAccessLogs(user);
 
     initUserPlaceTracking(user.id, {
       getAppContext: () => ({
@@ -97,6 +97,9 @@ async function init() {
     }
 
     hydrateCachedRoleFromStorage();
+    paintOrdersFromSessionCacheIfAny();
+
+    const ordersPromise = loadOrders();
 
     await Promise.all([loadProfile(), loadSettings()]);
     refreshSectionNavAfterProfile();
@@ -104,13 +107,23 @@ async function init() {
     applyRouteOnLoad();
     ensurePopstateRouting();
 
-    await loadOrders();
+    await ordersPromise;
+
     initOrderTasksSection();
-    resetFormMode();
-    if (canAccessSection("calculations")) {
-      await initCalculationsSection();
+
+    const savedApp = readSavedPlaceForCurrentPage(user.id)?.app;
+    const restoringOrderForm =
+      savedApp?.viewingOrderId != null || savedApp?.editingOrderId != null;
+    if (!restoringOrderForm) {
+      resetFormMode();
     }
-    await initBalanceSection();
+
+    if (canAccessSection("calculations")) {
+      bindCalculationsSection();
+      if (getCurrentSectionId() === "calculations") {
+        void loadCalculations();
+      }
+    }
     initRouteSheetSection();
     initAllChangesSection();
     initStatisticsSection();

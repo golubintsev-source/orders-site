@@ -51,19 +51,22 @@ export async function checkAuth() {
 
   const shouldValidateWithServer = !isOfflineWorkModeEnabled() || navigator.onLine !== false;
   if (shouldValidateWithServer) {
-    try {
-      const { data, error } = await supabaseClient.auth.getUser();
-      if (!error && data?.user) {
-        state.currentUser = data.user;
-      } else if (error && !isNetworkFetchError(error)) {
-        window.location.href = "login.html";
-        return null;
-      }
-    } catch (e) {
-      if (!isNetworkFetchError(e)) {
-        console.error("Ошибка проверки сессии:", e);
-      }
-    }
+    void supabaseClient.auth
+      .getUser()
+      .then(({ data, error }) => {
+        if (!error && data?.user) {
+          state.currentUser = data.user;
+          return;
+        }
+        if (error && !isNetworkFetchError(error)) {
+          window.location.href = "login.html";
+        }
+      })
+      .catch((e) => {
+        if (!isNetworkFetchError(e)) {
+          console.error("Ошибка проверки сессии:", e);
+        }
+      });
   }
 
   return state.currentUser;

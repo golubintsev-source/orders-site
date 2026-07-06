@@ -990,9 +990,14 @@ function setupCalculationsForm() {
   setupCalcCommentPopover();
 }
 
-export async function initCalculationsSection() {
+/** Привязка формы и фильтров без загрузки данных (данные — при открытии раздела). */
+export function bindCalculationsSection() {
   initCalculationsDateRangeDefaults();
   setupCalculationsForm();
+}
+
+export async function initCalculationsSection() {
+  bindCalculationsSection();
   await loadCalculations();
 }
 
