@@ -5087,18 +5087,18 @@ th {
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: #4b5563;
+  color: #059669;
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .messages-nav-btn:hover {
-  background: #f3f4f6;
-  color: #111827;
+  background: #ecfdf5;
+  color: #047857;
 }
 
 .messages-nav-btn--has-unread {
-  color: #1f6feb;
+  color: #047857;
 }
 
 .messages-nav-icon {
@@ -5361,7 +5361,20 @@ th {
   height: 30px;
   min-height: 30px;
   padding: 0;
+  border: none;
   border-radius: 8px;
+  background: #059669;
+  color: #fff;
+  cursor: pointer;
+}
+
+.messages-send-btn:hover:not(:disabled) {
+  background: #047857;
+}
+
+.messages-send-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .messages-send-icon {
