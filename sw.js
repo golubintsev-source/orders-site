@@ -38,6 +38,23 @@ async function getBadgeCount() {
   }
 }
 
+async function applyAppBadge(n) {
+  // iOS/WebKit: Badging API в SW только на navigator (не на registration).
+  if (n > 0) {
+    if ("setAppBadge" in self.navigator) {
+      await self.navigator.setAppBadge(n);
+    } else if (self.registration?.setAppBadge) {
+      await self.registration.setAppBadge(n);
+    }
+    return;
+  }
+  if ("clearAppBadge" in self.navigator) {
+    await self.navigator.clearAppBadge();
+  } else if (self.registration?.clearAppBadge) {
+    await self.registration.clearAppBadge();
+  }
+}
+
 async function setBadgeCount(count) {
   const n = Math.max(0, Math.min(count, 99));
   try {
@@ -47,10 +64,7 @@ async function setBadgeCount(count) {
     } else {
       await cache.delete(BADGE_COUNT_KEY);
     }
-    if (self.registration.setAppBadge && self.registration.clearAppBadge) {
-      if (n > 0) await self.registration.setAppBadge(n);
-      else await self.registration.clearAppBadge();
-    }
+    await applyAppBadge(n);
   } catch (e) {
     console.warn("[sw] badge:", e);
   }
@@ -97,8 +111,11 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     (async () => {
-      await incrementBadge();
-      await self.registration.showNotification(data.title || "Заявки", options);
+      const count = (await getBadgeCount()) + 1;
+      await Promise.all([
+        setBadgeCount(count),
+        self.registration.showNotification(data.title || "Заявки", options),
+      ]);
     })(),
   );
 });
