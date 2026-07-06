@@ -9,12 +9,37 @@ function isIos() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent || "");
 }
 
-function isWindowsDesktop() {
-  return /Windows/i.test(navigator.userAgent || "") && !/Phone/i.test(navigator.userAgent || "");
-}
-
 function isDesktopBrowser() {
   return !isIos() && !/Android/i.test(navigator.userAgent || "");
+}
+
+function isEdgeBrowser() {
+  return /Edg\//i.test(navigator.userAgent || "");
+}
+
+function isChromeBrowser() {
+  return /Chrome\//i.test(navigator.userAgent || "") && !isEdgeBrowser();
+}
+
+function getDesktopInstallHint() {
+  if (isEdgeBrowser()) {
+    return (
+      "Windows + Edge: 1) Посмотрите на адресную строку — если есть значок «+» или «Приложение доступно», нажмите его → Установить. " +
+      "2) Или меню ⋯ справа вверху → Приложения → Установить этот сайт как приложение. " +
+      "3) Откройте «Заявки» с иконки в меню Пуск и включите уведомления."
+    );
+  }
+  if (isChromeBrowser()) {
+    return (
+      "Windows + Chrome: 1) Посмотрите на адресную строку — если есть значок «Установить» (⊕), нажмите его. " +
+      "2) Или меню ⋯ → Передать, сохранить и поделиться → Установить страницу как приложение. " +
+      "3) Откройте «Заявки» с иконки в меню Пуск и включите уведомления."
+    );
+  }
+  return (
+    "Установите сайт как приложение через меню браузера (обычно ⋯ → Установить / Приложения), " +
+    "затем откройте с иконки в меню Пуск и включите уведомления."
+  );
 }
 
 async function applyPageBadge(count) {
@@ -254,9 +279,7 @@ async function refreshPushSettingsUi() {
     hint.textContent =
       "iPhone: добавьте сайт на экран «Домой», откройте с иконки — тогда можно включить уведомления о новых задачах.";
   } else if (!status.standalone && isDesktopBrowser() && hint) {
-    hint.textContent = isWindowsDesktop()
-      ? "Windows: установите приложение (кнопка ниже или меню браузера → Приложения → Установить «Заявки»), затем включите уведомления — счётчик появится на иконке в панели задач."
-      : "Установите сайт как приложение (меню браузера → Установить), затем включите уведомления — счётчик появится на иконке.";
+    hint.textContent = getDesktopInstallHint();
   } else if (hint) {
     hint.textContent =
       "При создании задачи любым пользователем админам придёт уведомление (как в мессенджере).";
@@ -264,7 +287,7 @@ async function refreshPushSettingsUi() {
 
   const installBtn = document.getElementById("pushNotificationsInstallBtn");
   if (installBtn) {
-    installBtn.hidden = status.standalone || !deferredInstallPrompt;
+    installBtn.hidden = status.standalone || !isDesktopBrowser();
   }
 
   if (status.subscribed && status.permission === "granted") {
@@ -340,10 +363,7 @@ function initPwaInstallPrompt() {
 
   installBtn.addEventListener("click", async () => {
     if (!deferredInstallPrompt) {
-      setPushUiMessage(
-        "Установка через браузер: меню ⋯ → Приложения → Установить «Заявки».",
-        true,
-      );
+      setPushUiMessage(getDesktopInstallHint(), true);
       return;
     }
     installBtn.disabled = true;
