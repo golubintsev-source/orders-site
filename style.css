@@ -5312,7 +5312,19 @@ th {
 
 .messages-send-btn {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   min-height: 44px;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.messages-send-icon {
+  display: block;
+  margin-left: 2px;
 }
 
 .messages-suggestions {
