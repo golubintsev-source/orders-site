@@ -5274,6 +5274,7 @@ th {
 }
 
 .messages-composer {
+  position: relative;
   flex-shrink: 0;
   display: flex;
   align-items: flex-end;
@@ -5432,6 +5433,9 @@ th {
 
 .messages-suggestions--orders {
   max-height: 280px;
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .messages-suggestions--orders li {
@@ -5443,30 +5447,27 @@ th {
   display: flex;
   align-items: center;
   gap: 4px;
-  min-width: 0;
+  width: max-content;
+  min-width: 100%;
 }
 
 .messages-suggestions--orders .messages-suggestion-order-cell {
   box-sizing: border-box;
+  flex: 0 0 auto;
   vertical-align: middle;
 }
 
 .messages-suggestions--orders .td-order-date {
-  flex: 0 0 auto;
   white-space: nowrap;
   padding: 3px 2px;
   font-size: 13px;
 }
 
-.messages-suggestions--orders .td-order-id {
-  flex: 0 0 auto;
-}
-
 .messages-suggestions--orders .td-order-client,
 .messages-suggestions--orders .td-order-address,
 .messages-suggestions--orders .td-order-description {
-  flex: 1 1 100px;
-  min-width: 0;
+  width: 100px;
+  min-width: 100px;
   max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5514,5 +5515,20 @@ th {
 
   .message-item {
     max-width: 92%;
+  }
+
+  .messages-suggestions--orders {
+    left: -16px;
+    right: -16px;
+    width: auto;
+    max-height: 240px;
+  }
+
+  .messages-suggestions--orders .td-order-client,
+  .messages-suggestions--orders .td-order-address,
+  .messages-suggestions--orders .td-order-description {
+    width: 120px;
+    min-width: 120px;
+    max-width: 120px;
   }
 }
