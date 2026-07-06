@@ -5286,19 +5286,22 @@ th {
 .messages-composer-tools {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  width: 20px;
   flex-shrink: 0;
 }
 
 .messages-composer-tool-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 1px solid #d1d5db;
-  border-radius: 8px;
+  border-radius: 5px;
   background: #fff;
   color: #4b5563;
   cursor: pointer;
@@ -5318,6 +5321,8 @@ th {
 
 .messages-composer-tool-icon {
   display: block;
+  width: 12px;
+  height: 12px;
 }
 
 .messages-composer-input-wrap {
