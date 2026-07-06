@@ -2121,6 +2121,21 @@ h2 {
   padding: 0 16px;
   font-size: 13px;
 }
+#section-settings .push-notifications-install-btn {
+  display: block;
+  margin: 0 0 10px;
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+}
+#section-settings .push-notifications-install-btn:hover {
+  background: #f9fafb;
+}
 #section-settings .push-notifications-message {
   margin: 10px 0 0;
   font-size: 13px;

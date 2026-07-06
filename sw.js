@@ -22,6 +22,8 @@ self.addEventListener("activate", (event) => {
           .map((k) => caches.delete(k)),
       );
       await self.clients.claim();
+      const count = await getBadgeCount();
+      if (count > 0) await applyAppBadge(count);
     })(),
   );
 });
@@ -81,6 +83,16 @@ async function clearBadge() {
 self.addEventListener("message", (event) => {
   if (event.data?.type === "clear-badge") {
     event.waitUntil(clearBadge());
+    return;
+  }
+  if (event.data?.type === "get-badge-count") {
+    event.waitUntil(
+      (async () => {
+        const count = await getBadgeCount();
+        event.ports[0]?.postMessage({ count });
+        if (count > 0) await applyAppBadge(count);
+      })(),
+    );
   }
 });
 

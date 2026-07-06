@@ -3,9 +3,37 @@ import { state } from "./state.js";
 import { isAdmin } from "./roles.js";
 
 let cachedVapidPublicKey = null;
+let deferredInstallPrompt = null;
 
 function isIos() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent || "");
+}
+
+function isWindowsDesktop() {
+  return /Windows/i.test(navigator.userAgent || "") && !/Phone/i.test(navigator.userAgent || "");
+}
+
+function isDesktopBrowser() {
+  return !isIos() && !/Android/i.test(navigator.userAgent || "");
+}
+
+async function applyPageBadge(count) {
+  const n = Math.max(0, Math.min(count, 99));
+  if (n > 0) {
+    if ("setAppBadge" in navigator) {
+      await navigator.setAppBadge(n);
+    } else {
+      const reg = await navigator.serviceWorker?.ready;
+      if (reg?.setAppBadge) await reg.setAppBadge(n);
+    }
+    return;
+  }
+  if ("clearAppBadge" in navigator) {
+    await navigator.clearAppBadge();
+  } else {
+    const reg = await navigator.serviceWorker?.ready;
+    if (reg?.clearAppBadge) await reg.clearAppBadge();
+  }
 }
 
 /** iOS: push только в установленном PWA (иконка на экране). */
@@ -225,9 +253,18 @@ async function refreshPushSettingsUi() {
   if (status.ios && !status.standalone && hint) {
     hint.textContent =
       "iPhone: добавьте сайт на экран «Домой», откройте с иконки — тогда можно включить уведомления о новых задачах.";
+  } else if (!status.standalone && isDesktopBrowser() && hint) {
+    hint.textContent = isWindowsDesktop()
+      ? "Windows: установите приложение (кнопка ниже или меню браузера → Приложения → Установить «Заявки»), затем включите уведомления — счётчик появится на иконке в панели задач."
+      : "Установите сайт как приложение (меню браузера → Установить), затем включите уведомления — счётчик появится на иконке.";
   } else if (hint) {
     hint.textContent =
       "При создании задачи любым пользователем админам придёт уведомление (как в мессенджере).";
+  }
+
+  const installBtn = document.getElementById("pushNotificationsInstallBtn");
+  if (installBtn) {
+    installBtn.hidden = status.standalone || !deferredInstallPrompt;
   }
 
   if (status.subscribed && status.permission === "granted") {
@@ -251,17 +288,80 @@ export async function refreshPushNotificationsUi() {
   await refreshPushSettingsUi();
 }
 
-/** Сбросить красный кружок на иконке PWA (iOS / Android). */
+/** Сбросить красный кружок на иконке PWA (iOS / Windows / Android). */
 export async function clearPushBadge() {
   try {
-    if (typeof navigator.clearAppBadge === "function") {
-      await navigator.clearAppBadge();
-    }
+    await applyPageBadge(0);
     const reg = await navigator.serviceWorker?.ready;
     reg?.active?.postMessage({ type: "clear-badge" });
   } catch (e) {
     console.warn("[push] clear badge:", e);
   }
+}
+
+/** Восстановить счётчик на иконке из service worker (актуально для Windows PWA). */
+export async function syncPushBadgeFromServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (!reg.active) return;
+
+    const count = await new Promise((resolve) => {
+      const channel = new MessageChannel();
+      const timer = setTimeout(() => resolve(0), 1500);
+      channel.port1.onmessage = (event) => {
+        clearTimeout(timer);
+        resolve(Number(event.data?.count) || 0);
+      };
+      reg.active.postMessage({ type: "get-badge-count" }, [channel.port2]);
+    });
+
+    if (count > 0) await applyPageBadge(count);
+  } catch (e) {
+    console.warn("[push] sync badge:", e);
+  }
+}
+
+function initPwaInstallPrompt() {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    void refreshPushSettingsUi();
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    void refreshPushSettingsUi();
+  });
+
+  const installBtn = document.getElementById("pushNotificationsInstallBtn");
+  if (!installBtn || installBtn.dataset.pushInstallBound === "1") return;
+  installBtn.dataset.pushInstallBound = "1";
+
+  installBtn.addEventListener("click", async () => {
+    if (!deferredInstallPrompt) {
+      setPushUiMessage(
+        "Установка через браузер: меню ⋯ → Приложения → Установить «Заявки».",
+        true,
+      );
+      return;
+    }
+    installBtn.disabled = true;
+    try {
+      await deferredInstallPrompt.prompt();
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      if (outcome === "accepted") {
+        setPushUiMessage("Приложение установлено. Откройте его с иконки и включите уведомления.");
+      }
+    } catch (e) {
+      console.warn("[push] install prompt:", e);
+      setPushUiMessage("Не удалось открыть установку. Используйте меню браузера.", true);
+    } finally {
+      installBtn.disabled = false;
+      await refreshPushSettingsUi();
+    }
+  });
 }
 
 export function initPushNotificationsSection() {
@@ -293,7 +393,15 @@ export function initPushNotificationsSection() {
 
 export async function initPushNotifications() {
   if (!isAdmin()) return;
+  initPwaInstallPrompt();
   initPushNotificationsSection();
   await syncPushSubscriptionIfGranted();
+  await syncPushBadgeFromServiceWorker();
   await refreshPushSettingsUi();
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      void syncPushBadgeFromServiceWorker();
+    }
+  });
 }
