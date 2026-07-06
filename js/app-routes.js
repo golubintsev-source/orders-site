@@ -10,6 +10,7 @@ export const ROUTE_SECTION_IDS = new Set([
   "settings",
   "statistics",
   "order-tasks",
+  "messages",
 ]);
 
 function normalizePathname(pathname) {
@@ -30,6 +31,7 @@ const PATH_TO_SECTION = new Map([
   ["/settings", "settings"],
   ["/statistics", "statistics"],
   ["/order-tasks", "order-tasks"],
+  ["/messages", "messages"],
 ]);
 
 export function usesHashOnlyRouting() {

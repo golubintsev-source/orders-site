@@ -75,6 +75,7 @@ const SECTION_LABELS = {
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
   statistics: "Статистика2",
+  messages: "Сообщения",
 };
 
 /** Совпадает с URL после boot-route.js (иначе шапка/лупа до main рассинхронизированы). */
@@ -89,6 +90,7 @@ const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "tasks-all",
   "changes-all",
   "order-tasks",
+  "messages",
   "balance",
   "route-sheet",
   "settings",
@@ -313,6 +315,9 @@ export function switchSection(sectionId, opts = {}) {
   if (sectionId === "order-tasks") {
     void import("./tasks.js").then((m) => m.loadOrderTasks());
     void import("./push-notifications.js").then((m) => m.clearPushBadge());
+  }
+  if (sectionId === "messages") {
+    void import("./messages.js").then((m) => m.loadMessages());
   }
 
   updateBackToOrdersBtnVisibility(sectionId);

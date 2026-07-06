@@ -48,6 +48,7 @@ import {
   shouldRedirectToSavedPlace,
 } from "./user-place.js";
 import { initPushNotifications } from "./push-notifications.js";
+import { initMessagesSection } from "./messages.js";
 
 window.editOrder = editOrder;
 window.viewOrder = viewOrder;
@@ -110,6 +111,7 @@ async function init() {
     await ordersPromise;
 
     initOrderTasksSection();
+    initMessagesSection();
 
     const savedApp = readSavedPlaceForCurrentPage(user.id)?.app;
     const restoringOrderForm =

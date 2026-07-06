@@ -126,6 +126,18 @@
               М
             </span>
           </div>
+          <button
+            id="messagesNavBtn"
+            class="messages-nav-btn"
+            type="button"
+            title="Сообщения"
+            aria-label="Сообщения"
+          >
+            <svg class="messages-nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+            <span id="messagesUnreadBadge" class="messages-unread-badge" hidden>0</span>
+          </button>
         </div>
       </nav>
       <div class="topbar-toolbar">
@@ -848,6 +860,26 @@
           </table>
         </div>
         <p id="orderTasksMessage" class="order-tasks-hint"></p>
+      </div>
+    </section>
+
+    <section id="section-messages" class="content-section">
+      <div class="messages-page">
+        <div id="messagesFeed" class="messages-feed" role="log" aria-live="polite" aria-label="Сообщения"></div>
+        <p id="messagesPageMessage" class="messages-page-message"></p>
+        <div class="messages-composer">
+          <div class="messages-composer-input-wrap">
+            <textarea
+              id="messagesComposerInput"
+              class="messages-composer-input"
+              rows="2"
+              placeholder="Новое сообщение… @ — получатель, & — заказ"
+              autocomplete="off"
+            ></textarea>
+            <ul id="messagesComposerSuggestions" class="messages-suggestions" hidden role="listbox" aria-label="Подсказки"></ul>
+          </div>
+          <button type="button" id="messagesSendBtn" class="btn-primary messages-send-btn">Отправить</button>
+        </div>
       </div>
     </section>
 

@@ -83,6 +83,7 @@ export function canAccessSection(sectionId) {
 
 export function isSectionHiddenFromNav(sectionId) {
   if (sectionId === "order-tasks") return true;
+  if (sectionId === "messages") return true;
   if (isUserShop()) {
     return (
       sectionId === "balance" ||
