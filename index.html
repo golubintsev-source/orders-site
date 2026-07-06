@@ -873,12 +873,44 @@
         <div id="messagesFeed" class="messages-feed" role="log" aria-live="polite" aria-label="Сообщения"></div>
         <p id="messagesPageMessage" class="messages-page-message"></p>
         <div class="messages-composer">
+          <div class="messages-composer-tools" aria-label="Вставка в сообщение">
+            <button
+              type="button"
+              id="messagesPickUserBtn"
+              class="messages-composer-tool-btn"
+              title="Выбрать получателя"
+              aria-label="Выбрать получателя"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            >
+              <svg class="messages-composer-tool-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
+                <path d="M5 20c0-4 3.5-6 7-6s7 2 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+              </svg>
+            </button>
+            <button
+              type="button"
+              id="messagesPickOrderBtn"
+              class="messages-composer-tool-btn"
+              title="Вставить заказ"
+              aria-label="Вставить заказ"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            >
+              <svg class="messages-composer-tool-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path d="M6 2h9l3 3v17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
+                <path d="M15 2v5h5" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
+                <path d="M7 13h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M7 17h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
           <div class="messages-composer-input-wrap">
             <textarea
               id="messagesComposerInput"
               class="messages-composer-input"
               rows="2"
-              placeholder="Новое сообщение… @ — получатель, & — заказ"
+              placeholder="Новое сообщение…"
               autocomplete="off"
             ></textarea>
             <ul id="messagesComposerSuggestions" class="messages-suggestions" hidden role="listbox" aria-label="Подсказки"></ul>

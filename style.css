@@ -5277,10 +5277,47 @@ th {
   flex-shrink: 0;
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
+}
+
+.messages-composer-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.messages-composer-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #4b5563;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.messages-composer-tool-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.messages-composer-tool-btn--active {
+  border-color: #1f6feb;
+  color: #1f6feb;
+  background: #eff6ff;
+}
+
+.messages-composer-tool-icon {
+  display: block;
 }
 
 .messages-composer-input-wrap {

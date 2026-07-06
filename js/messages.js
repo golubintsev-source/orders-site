@@ -11,6 +11,7 @@ let usersCache = null;
 let usersCachePromise = null;
 let unreadPollTimer = null;
 let composerRecipient = null;
+let activePicker = null;
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -144,7 +145,7 @@ export async function loadMessages() {
   const rows = data || [];
   feed.innerHTML = rows.length
     ? rows.map(renderMessageItem).join("")
-    : '<p class="messages-empty">Пока нет сообщений. Напишите первое: укажите получателя через @ и текст.</p>';
+    : '<p class="messages-empty">Пока нет сообщений. Напишите первое: выберите получателя кнопкой с человечком.</p>';
 
   feed.scrollTop = feed.scrollHeight;
 
@@ -239,7 +240,8 @@ function getTriggerContext(text, caretPos) {
 
 function filterUsers(query) {
   const q = (query || "").trim().toLowerCase();
-  const list = usersCache || [];
+  const uid = getCurrentUserId();
+  const list = (usersCache || []).filter((u) => u.id !== uid);
   if (!q) return list.slice(0, 15);
   return list
     .filter((u) => u.email.toLowerCase().includes(q))
@@ -269,6 +271,23 @@ function hideSuggestions() {
   if (list) {
     list.hidden = true;
     list.innerHTML = "";
+  }
+  activePicker = null;
+  syncPickerButtonStates();
+}
+
+function syncPickerButtonStates() {
+  const userBtn = document.getElementById("messagesPickUserBtn");
+  const orderBtn = document.getElementById("messagesPickOrderBtn");
+  if (userBtn) {
+    const on = activePicker === "user";
+    userBtn.classList.toggle("messages-composer-tool-btn--active", on);
+    userBtn.setAttribute("aria-expanded", on ? "true" : "false");
+  }
+  if (orderBtn) {
+    const on = activePicker === "order";
+    orderBtn.classList.toggle("messages-composer-tool-btn--active", on);
+    orderBtn.setAttribute("aria-expanded", on ? "true" : "false");
   }
 }
 
@@ -302,10 +321,13 @@ function showSuggestions(items, onPick) {
   });
 }
 
-function applyUserPick(input, ctx, user) {
+function applyUserPick(input, user, ctx = null) {
+  const caret = getTextareaCaret(input);
+  const start = ctx ? ctx.start : caret.start;
+  const end = ctx ? caret.end : caret.end;
   const text = input.value;
-  const before = text.slice(0, ctx.start);
-  const after = text.slice(getTextareaCaret(input).end);
+  const before = text.slice(0, start);
+  const after = text.slice(end);
   const insert = `@${user.email} `;
   input.value = before + insert + after;
   const pos = before.length + insert.length;
@@ -315,10 +337,13 @@ function applyUserPick(input, ctx, user) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-function applyOrderPick(input, ctx, order) {
+function applyOrderPick(input, order, ctx = null) {
+  const caret = getTextareaCaret(input);
+  const start = ctx ? ctx.start : caret.start;
+  const end = ctx ? caret.end : caret.end;
   const text = input.value;
-  const before = text.slice(0, ctx.start);
-  const after = text.slice(getTextareaCaret(input).end);
+  const before = text.slice(0, start);
+  const after = text.slice(end);
   const token = `[[order:${order.id}]]`;
   const insert = `${token} `;
   input.value = before + insert + after;
@@ -332,9 +357,13 @@ function updateComposerSuggestions(input) {
   const caret = getTextareaCaret(input);
   const ctx = getTriggerContext(input.value, caret.start);
   if (!ctx) {
+    if (activePicker) return;
     hideSuggestions();
     return;
   }
+
+  activePicker = ctx.type;
+  syncPickerButtonStates();
 
   if (ctx.type === "user") {
     const users = filterUsers(ctx.query);
@@ -343,7 +372,7 @@ function updateComposerSuggestions(input) {
       hint: u.role || "",
       user: u,
     }));
-    showSuggestions(items, (item) => applyUserPick(input, ctx, item.user));
+    showSuggestions(items, (item) => applyUserPick(input, item.user, ctx));
     return;
   }
 
@@ -354,8 +383,42 @@ function updateComposerSuggestions(input) {
       hint: o.client || "",
       order: o,
     }));
-    showSuggestions(items, (item) => applyOrderPick(input, ctx, item.order));
+    showSuggestions(items, (item) => applyOrderPick(input, item.order, ctx));
   }
+}
+
+function openUserPicker(input) {
+  if (activePicker === "user") {
+    hideSuggestions();
+    return;
+  }
+  activePicker = "user";
+  syncPickerButtonStates();
+  const users = filterUsers("");
+  const items = users.map((u) => ({
+    label: u.email,
+    hint: u.role || "",
+    user: u,
+  }));
+  showSuggestions(items, (item) => applyUserPick(input, item.user));
+  input.focus();
+}
+
+function openOrderPicker(input) {
+  if (activePicker === "order") {
+    hideSuggestions();
+    return;
+  }
+  activePicker = "order";
+  syncPickerButtonStates();
+  const orders = filterOrders("");
+  const items = orders.map((o) => ({
+    label: o.chip,
+    hint: o.client || "",
+    order: o,
+  }));
+  showSuggestions(items, (item) => applyOrderPick(input, item.order));
+  input.focus();
 }
 
 function parseRecipientFromText(text) {
@@ -383,7 +446,7 @@ async function sendMessage() {
   const recipient = composerRecipient || parseRecipientFromText(body);
   if (!recipient) {
     if (msg) {
-      msg.textContent = "Укажите получателя через @ (выберите из списка).";
+      msg.textContent = "Укажите получателя (кнопка с человечком или @ в тексте).";
       msg.classList.add("messages-page-message--error");
     }
     return;
@@ -460,6 +523,21 @@ export function initMessagesSection() {
   const msgEl = document.getElementById("messagesPageMessage");
   if (feed) {
     feed.addEventListener("click", onFeedClick);
+  }
+
+  const userPickBtn = document.getElementById("messagesPickUserBtn");
+  const orderPickBtn = document.getElementById("messagesPickOrderBtn");
+
+  if (userPickBtn && input) {
+    userPickBtn.addEventListener("mousedown", (e) => e.preventDefault());
+    userPickBtn.addEventListener("click", () => {
+      void loadUsersDirectory().then(() => openUserPicker(input));
+    });
+  }
+
+  if (orderPickBtn && input) {
+    orderPickBtn.addEventListener("mousedown", (e) => e.preventDefault());
+    orderPickBtn.addEventListener("click", () => openOrderPicker(input));
   }
 
   if (input) {
