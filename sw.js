@@ -99,9 +99,9 @@ self.addEventListener("message", (event) => {
 self.addEventListener("push", (event) => {
   let data = {
     title: "Заявки",
-    body: "Новая задача",
-    url: "/tasks-all",
-    tag: "new-task",
+    body: "Новое уведомление",
+    url: "/",
+    tag: "orders-site",
   };
   try {
     if (event.data) {
@@ -113,11 +113,11 @@ self.addEventListener("push", (event) => {
   }
 
   const options = {
-    body: data.body || "Новая задача",
+    body: data.body || "Новое уведомление",
     icon: "/img/icon-192.png",
     badge: "/img/icon-192.png",
-    tag: data.tag || "new-task",
-    data: { url: data.url || "/tasks-all" },
+    tag: data.tag || "orders-site",
+    data: { url: data.url || "/" },
     renotify: true,
   };
 
@@ -134,7 +134,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const relUrl = event.notification.data?.url || "/tasks-all";
+  const relUrl = event.notification.data?.url || "/";
   const targetUrl = new URL(relUrl, self.location.origin).href;
 
   event.waitUntil(

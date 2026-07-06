@@ -318,6 +318,10 @@ export function switchSection(sectionId, opts = {}) {
   }
   if (sectionId === "messages") {
     void import("./messages.js").then((m) => m.loadMessages());
+    void import("./push-notifications.js").then((m) => {
+      m.clearPushBadge();
+      m.refreshMessagesPushUi();
+    });
   }
 
   updateBackToOrdersBtnVisibility(sectionId);

@@ -865,6 +865,11 @@
 
     <section id="section-messages" class="content-section">
       <div class="messages-page">
+        <div id="messagesPushBar" class="messages-push-bar" hidden>
+          <p id="messagesPushHint" class="messages-push-hint"></p>
+          <button type="button" id="messagesPushToggleBtn" class="messages-push-toggle-btn">Включить уведомления</button>
+          <p id="messagesPushMessage" class="messages-push-message"></p>
+        </div>
         <div id="messagesFeed" class="messages-feed" role="log" aria-live="polite" aria-label="Сообщения"></div>
         <p id="messagesPageMessage" class="messages-page-message"></p>
         <div class="messages-composer">
@@ -1204,7 +1209,7 @@
         <button type="button" id="settingsSaveAdjustmentsBtn" class="btn-primary settings-save-adjustments-btn settings-save-btn-inactive" disabled>Сохранить</button>
       </div>
       <div id="pushNotificationsCard" class="card push-notifications-card" hidden>
-        <h3 class="push-notifications-title">Уведомления о задачах</h3>
+        <h3 class="push-notifications-title">Уведомления PWA</h3>
         <p id="pushNotificationsHint" class="push-notifications-hint"></p>
         <button type="button" id="pushNotificationsInstallBtn" class="push-notifications-install-btn" hidden>Установить приложение</button>
         <button type="button" id="pushNotificationsToggleBtn" class="btn-primary push-notifications-toggle-btn">Включить уведомления</button>

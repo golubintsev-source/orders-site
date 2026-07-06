@@ -46,3 +46,14 @@ DROP POLICY IF EXISTS "profiles_select_authenticated" ON public.profiles;
 CREATE POLICY "profiles_select_authenticated" ON public.profiles
   FOR SELECT TO authenticated
   USING (true);
+
+-- ---------------------------------------------------------------------------
+-- После деплоя API /api/send-message-push настройте Database Webhook в Supabase:
+--   Table: user_messages
+--   Events: INSERT
+--   URL: https://ВАШ-ДОМЕН/api/send-message-push
+--   HTTP Headers: x-push-webhook-secret = значение PUSH_WEBHOOK_SECRET из Vercel
+--
+-- Получатель должен включить уведомления на странице «Сообщения» (или в Настройках).
+-- Используются те же VAPID-ключи и таблица push_subscriptions, что и для задач.
+-- ---------------------------------------------------------------------------

@@ -19,6 +19,9 @@
     "api/send-task-push.js": {
       "maxDuration": 30
     },
+    "api/send-message-push.js": {
+      "maxDuration": 30
+    },
     "api/push-config.js": {
       "maxDuration": 10
     },

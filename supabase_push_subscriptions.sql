@@ -1,4 +1,4 @@
--- Подписки Web Push для админов (уведомления о новых задачах).
+-- Подписки Web Push (уведомления о задачах для админов и о сообщениях для всех).
 -- Выполнить в Supabase SQL Editor.
 
 CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -30,6 +30,9 @@ CREATE POLICY "Users manage own push subscriptions" ON push_subscriptions
 --   Events: INSERT
 --   URL: https://ВАШ-ДОМЕН/api/send-task-push
 --   HTTP Headers: x-push-webhook-secret = значение PUSH_WEBHOOK_SECRET из Vercel
+--
+-- Аналогично для сообщений (user_messages, INSERT):
+--   URL: https://ВАШ-ДОМЕН/api/send-message-push
 --
 -- VAPID-ключи (локально: npx web-push generate-vapid-keys):
 --   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT=mailto:you@example.com
