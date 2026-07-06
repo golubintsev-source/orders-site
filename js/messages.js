@@ -1,7 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
-import { viewOrder } from "./orders.js";
+import { buildOrderPickerRowHtml, viewOrder } from "./orders.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 const SUGGEST_DEBOUNCE_MS = 120;
@@ -249,21 +249,38 @@ function filterUsers(query) {
 }
 
 function filterOrders(query) {
-  const q = (query || "").trim();
+  const q = (query || "").trim().toLowerCase();
   const orders = state.allOrders || [];
   const out = [];
   for (const o of orders) {
-    const idStr = String(o.id ?? "");
-    const chip = formatOrderIdTypeChip(o.id, o.order_type);
-    const client = (o.client || "").trim();
     if (!q) {
-      out.push({ id: o.id, chip, client });
-    } else if (idStr.includes(q) || chip.toLowerCase().includes(q.toLowerCase()) || client.toLowerCase().includes(q.toLowerCase())) {
-      out.push({ id: o.id, chip, client });
+      out.push(o);
+    } else {
+      const idStr = String(o.id ?? "");
+      const chip = formatOrderIdTypeChip(o.id, o.order_type).toLowerCase();
+      const client = (o.client || "").trim().toLowerCase();
+      const address = (o.address || "").trim().toLowerCase();
+      const description = (o.description || "").trim().toLowerCase();
+      if (
+        idStr.includes(q) ||
+        chip.includes(q) ||
+        client.includes(q) ||
+        address.includes(q) ||
+        description.includes(q)
+      ) {
+        out.push(o);
+      }
     }
     if (out.length >= 15) break;
   }
   return out;
+}
+
+function mapOrderPickerItems(orders) {
+  return orders.map((order) => ({
+    order,
+    orderRowHtml: buildOrderPickerRowHtml(order),
+  }));
 }
 
 function hideSuggestions() {
@@ -271,6 +288,7 @@ function hideSuggestions() {
   if (list) {
     list.hidden = true;
     list.innerHTML = "";
+    list.classList.remove("messages-suggestions--orders");
   }
   activePicker = null;
   syncPickerButtonStates();
@@ -291,7 +309,7 @@ function syncPickerButtonStates() {
   }
 }
 
-function showSuggestions(items, onPick) {
+function showSuggestions(items, onPick, { variant = "default" } = {}) {
   const list = document.getElementById("messagesComposerSuggestions");
   if (!list) return;
   if (!items.length) {
@@ -299,17 +317,40 @@ function showSuggestions(items, onPick) {
     return;
   }
 
-  list.innerHTML = items
-    .map(
-      (item, idx) => `
+  const isOrderVariant = variant === "order";
+  list.classList.toggle("messages-suggestions--orders", isOrderVariant);
+
+  if (isOrderVariant) {
+    list.innerHTML = items
+      .map(
+        (item, idx) => `
+    <li role="option" data-index="${idx}" aria-selected="${idx === 0 ? "true" : "false"}">
+      ${item.orderRowHtml}
+    </li>
+  `,
+      )
+      .join("");
+  } else {
+    list.innerHTML = items
+      .map(
+        (item, idx) => `
     <li role="option" data-index="${idx}" aria-selected="${idx === 0 ? "true" : "false"}">
       <span class="messages-suggestion-text">${escapeHtml(item.label)}</span>
       ${item.hint ? `<span class="messages-suggestion-hint">${escapeHtml(item.hint)}</span>` : ""}
     </li>
   `,
-    )
-    .join("");
+      )
+      .join("");
+  }
   list.hidden = false;
+
+  if (isOrderVariant) {
+    list.querySelectorAll(".td-order-client, .td-order-address, .td-order-description").forEach((cell) => {
+      const full = cell.getAttribute("data-fulltext");
+      if (full) cell.setAttribute("title", full);
+      else cell.removeAttribute("title");
+    });
+  }
 
   list.querySelectorAll("li").forEach((li) => {
     li.addEventListener("mousedown", (e) => {
@@ -378,12 +419,9 @@ function updateComposerSuggestions(input) {
 
   if (ctx.type === "order") {
     const orders = filterOrders(ctx.query);
-    const items = orders.map((o) => ({
-      label: o.chip,
-      hint: o.client || "",
-      order: o,
-    }));
-    showSuggestions(items, (item) => applyOrderPick(input, item.order, ctx));
+    showSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order, ctx), {
+      variant: "order",
+    });
   }
 }
 
@@ -412,12 +450,9 @@ function openOrderPicker(input) {
   activePicker = "order";
   syncPickerButtonStates();
   const orders = filterOrders("");
-  const items = orders.map((o) => ({
-    label: o.chip,
-    hint: o.client || "",
-    order: o,
-  }));
-  showSuggestions(items, (item) => applyOrderPick(input, item.order));
+  showSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order), {
+    variant: "order",
+  });
   input.focus();
 }
 

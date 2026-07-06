@@ -1534,6 +1534,51 @@ function renderOrdersTotals(orders) {
   `;
 }
 
+function buildOrderMainFieldsCellsHtml(order) {
+  const filesCount = state.filesCountMap[order.id] || 0;
+  const phone = order.phone ?? "";
+  const client = order.client ?? "";
+  const address = order.address ?? "";
+  const description = order.description ?? "";
+  const hasPhone = Boolean((phone || "").trim());
+  const orderIdChipClasses = ["status-value", "order-id-chip"];
+  if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
+  if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
+  if (isOrderEditLockedForUserLite(order)) orderIdChipClasses.push("order-id-chip--lock-user-lite");
+  const tasksHighlight =
+    order.tasks_highlight === true ||
+    order.tasks_highlight === 1 ||
+    order.tasks_highlight === "1";
+  if (tasksHighlight) orderIdChipClasses.push("order-id-chip--highlight-tasks");
+  /* Номер в таблице: 4 цифры + «_» + первая буква типа заказа (например 0112_О) */
+  const orderNumberDisplay =
+    order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";
+  return {
+    filesCount,
+    phone,
+    client,
+    address,
+    description,
+    orderIdChipClasses,
+    orderNumberDisplay,
+  };
+}
+
+/** Строка заказа для выпадающего списка на странице «Сообщения» (как в таблице «Заказы»). */
+export function buildOrderPickerRowHtml(order) {
+  const { client, address, description, orderIdChipClasses, orderNumberDisplay } =
+    buildOrderMainFieldsCellsHtml(order);
+  return `<div class="messages-suggestion-order-row" role="presentation">
+    <span class="messages-suggestion-order-cell td-order-id">
+      <span class="${orderIdChipClasses.join(" ")}">${orderNumberDisplay}</span>
+    </span>
+    <span class="messages-suggestion-order-cell td-order-date">${formatDateShortRU(order.order_date)}</span>
+    <span class="messages-suggestion-order-cell td-order-client" data-fulltext="${escapeAttr(client)}">${client ? `<span class="status-value">${escapeHtml(client)}</span>` : ""}</span>
+    <span class="messages-suggestion-order-cell td-order-address" data-fulltext="${escapeAttr(address)}">${address ? `<span class="status-value">${escapeHtml(address)}</span>` : ""}</span>
+    <span class="messages-suggestion-order-cell td-order-description" data-fulltext="${escapeAttr(description)}">${description ? `<span class="status-value">${escapeHtml(description)}</span>` : ""}</span>
+  </div>`;
+}
+
 export function renderOrders(orders) {
   document.dispatchEvent(new CustomEvent("orders-table-will-render"));
   const table = document.querySelector("#ordersTable tbody");
@@ -1547,25 +1592,8 @@ export function renderOrders(orders) {
       : "";
     const trClass = order.__offlinePendingSync ? ' class="tr-order-offline-pending"' : "";
 
-    const filesCount = state.filesCountMap[order.id] || 0;
-
-    const phone = order.phone ?? "";
-    const client = order.client ?? "";
-    const address = order.address ?? "";
-    const description = order.description ?? "";
-    const hasPhone = Boolean((phone || "").trim());
-    const orderIdChipClasses = ["status-value", "order-id-chip"];
-    if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
-    if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
-    if (isOrderEditLockedForUserLite(order)) orderIdChipClasses.push("order-id-chip--lock-user-lite");
-    const tasksHighlight =
-      order.tasks_highlight === true ||
-      order.tasks_highlight === 1 ||
-      order.tasks_highlight === "1";
-    if (tasksHighlight) orderIdChipClasses.push("order-id-chip--highlight-tasks");
-    /* Номер в таблице: 4 цифры + «_» + первая буква типа заказа (например 0112_О) */
-    const orderNumberDisplay =
-      order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";
+    const { filesCount, phone, client, address, description, orderIdChipClasses, orderNumberDisplay } =
+      buildOrderMainFieldsCellsHtml(order);
     const statusDisplayText =
       order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом");
     const row = `
