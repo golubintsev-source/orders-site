@@ -76,6 +76,7 @@ import {
   addOrAppendPendingServerOrderEdit,
   raceWithTimeout,
 } from "./offline-cache.js";
+import { shortLoginByEmail } from "./user-names.js";
 
 function mergedLocalOrdersForOfflineDisplayMeta() {
   const snap = readSnapshot();
@@ -359,13 +360,6 @@ function toComparableNumber(v) {
   if (v == null || v === "") return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
-}
-
-function shortLoginByEmail(email) {
-  const raw = String(email || "").trim();
-  if (!raw) return "неизв..";
-  const login = raw.split("@")[0] || raw;
-  return `${login.slice(0, 5)}..`;
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   initUserPlaceTracking,
   readSavedPlaceForCurrentPage,
 } from "./user-place.js";
+import { updateTopbarUserName } from "./user-names.js";
 
 const params = new URLSearchParams(window.location.search);
 const orderId = params.get("order_id");
@@ -155,6 +156,7 @@ async function loadHistory() {
 async function init() {
   const user = await checkAuth();
   if (!user) return;
+  updateTopbarUserName(user.email);
   await flushPendingAccessLogs(user);
   initUserPlaceTracking(user.id);
   await loadProfile();

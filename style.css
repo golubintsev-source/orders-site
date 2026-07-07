@@ -569,6 +569,17 @@ h2 {
   text-decoration: underline;
 }
 
+.topbar-user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  padding: 4px 6px 4px 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Ссылка-иконка в шапке (например «Расчет окон») */
 .topbar-link.topbar-link-icon {
   display: inline-flex;
@@ -2001,6 +2012,30 @@ h2 {
     padding: 3px 6px;
     font-size: 12px;
   }
+}
+
+#section-settings .settings-window-calc-card {
+  padding: 12px 16px;
+}
+
+#section-settings .settings-window-calc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f6feb;
+  text-decoration: none;
+}
+
+#section-settings .settings-window-calc-link:hover {
+  text-decoration: underline;
+}
+
+#section-settings .settings-window-calc-link img {
+  display: block;
+  width: 28px;
+  height: 28px;
 }
 
 #section-settings .settings-rate-row {

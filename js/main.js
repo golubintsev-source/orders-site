@@ -51,6 +51,7 @@ import { initPushNotifications } from "./push-notifications.js";
 import { initMessagesSection } from "./messages.js";
 import { trySecretLoginFromUrl, getLoginKeyFromUrl } from "./secret-login.js";
 import { initLoginLinksSection, loadLoginLinksSection } from "./login-links.js";
+import { updateTopbarUserName } from "./user-names.js";
 
 window.editOrder = editOrder;
 window.viewOrder = viewOrder;
@@ -90,6 +91,8 @@ async function init() {
   try {
     const user = await checkAuth();
     if (!user) return;
+
+    updateTopbarUserName(user.email);
 
     void flushPendingAccessLogs(user);
 

@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { isAdmin } from "./roles.js";
+import { displayNameByEmail } from "./user-names.js";
 
 export function buildLoginUrl(loginKey) {
   const origin = window.location.origin;
@@ -53,7 +54,7 @@ export async function loadLoginLinksSection() {
     const tr = document.createElement("tr");
 
     const emailTd = document.createElement("td");
-    emailTd.textContent = email;
+    emailTd.textContent = displayNameByEmail(email);
 
     const urlTd = document.createElement("td");
     urlTd.className = "login-links-url-cell";

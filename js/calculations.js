@@ -13,6 +13,7 @@ import {
   logSiteAccess,
   measureNavigationResponseMs,
 } from "./access-log.js";
+import { shortLoginByEmail } from "./user-names.js";
 import {
   readSnapshot,
   persistCalculationsSnapshot,
@@ -290,13 +291,6 @@ function parseCalcAmountInput(raw) {
   const r = tryParseRublesInteger(raw);
   if (r.invalidFormat) return undefined;
   return r.value;
-}
-
-function shortLoginByEmail(email) {
-  const raw = String(email || "").trim();
-  if (!raw) return "неизв..";
-  const login = raw.split("@")[0] || raw;
-  return `${login.slice(0, 5)}..`;
 }
 
 function appendActorToComment(comment) {
