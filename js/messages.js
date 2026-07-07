@@ -1,6 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
-import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
+import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
+import { displayNameByEmail } from "./user-names.js";
 import { buildOrderPickerRowHtml, viewOrder } from "./orders.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
@@ -60,6 +61,14 @@ async function loadUsersDirectory() {
   return usersCachePromise;
 }
 
+function stripRecipientMentionFromBody(body, recipientEmail) {
+  const text = String(body || "");
+  const email = (recipientEmail || "").trim();
+  if (!text || !email) return text.trim();
+  const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(new RegExp(`@${escaped}\\s*`, "gi"), "").trim();
+}
+
 function renderMessageBodyHtml(body) {
   const raw = String(body || "");
   const parts = [];
@@ -101,14 +110,16 @@ function renderMessageItem(row) {
   const uid = getCurrentUserId();
   const isOut = row.sender_id === uid;
   const peerEmail = isOut ? row.recipient_email : row.sender_email;
+  const peerName = displayNameByEmail(peerEmail) || peerEmail || "—";
   const unread = !isOut && !row.read_at;
+  const bodyForDisplay = stripRecipientMentionFromBody(row.body, row.recipient_email);
   return `
     <article class="${messageItemClass(row)}${unread ? " message-item--unread" : ""}" data-message-id="${row.id}">
       <header class="message-item-header">
-        <span class="message-item-peer">${escapeHtml(isOut ? "→ " : "← ")}${escapeHtml(formatTaskAuthorShort(peerEmail))}</span>
+        <span class="message-item-peer">${escapeHtml(isOut ? "→ " : "← ")}${escapeHtml(peerName)}</span>
         <time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>
       </header>
-      <div class="message-item-body">${renderMessageBodyHtml(row.body)}</div>
+      <div class="message-item-body">${renderMessageBodyHtml(bodyForDisplay)}</div>
     </article>
   `;
 }
@@ -502,13 +513,14 @@ async function sendMessage() {
   }
 
   const senderEmail = getCurrentUserEmail();
+  const bodyToSave = stripRecipientMentionFromBody(body, recipient.email);
   const { error } = await supabaseClient.from("user_messages").insert([
     {
       sender_id: uid,
       recipient_id: recipient.id,
       sender_email: senderEmail,
       recipient_email: recipient.email,
-      body,
+      body: bodyToSave,
     },
   ]);
 
