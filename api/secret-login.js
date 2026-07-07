@@ -16,7 +16,8 @@ const crypto = require("crypto");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const ANON_KEY =
+  process.env.SUPABASE_ANON_KEY || "sb_publishable_e1pJB18UsEV-o_M43ROi9w_4mS--LrF";
 
 const SECRET_LOGINS = [
   {
@@ -114,6 +115,41 @@ async function findLoginByToken(token) {
   return findLoginByProfileKey(token);
 }
 
+function extractTokenFromActionLink(actionLink) {
+  if (typeof actionLink !== "string" || !actionLink) return null;
+  try {
+    return new URL(actionLink).searchParams.get("token");
+  } catch {
+    return null;
+  }
+}
+
+async function verifyAuthPayload(payload, adminHeaders) {
+  const verifyHeaderSets = [];
+  if (ANON_KEY) {
+    verifyHeaderSets.push({
+      apikey: ANON_KEY,
+      Authorization: `Bearer ${ANON_KEY}`,
+      "Content-Type": "application/json",
+    });
+  }
+  verifyHeaderSets.push(adminHeaders);
+
+  let lastVerifyError = null;
+  for (const headers of verifyHeaderSets) {
+    const verifyRes = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/verify`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (verifyRes.ok) {
+      return verifyRes.json();
+    }
+    lastVerifyError = `verify ${verifyRes.status}: ${await verifyRes.text()}`;
+  }
+  throw new Error(lastVerifyError || "verify failed");
+}
+
 async function createSessionForEmail(email) {
   const base = SUPABASE_URL.replace(/\/$/, "");
   const adminHeaders = {
@@ -134,30 +170,30 @@ async function createSessionForEmail(email) {
   }
 
   const genData = await genRes.json();
-  const tokenHash = genData?.properties?.hashed_token;
-  if (!tokenHash) {
-    throw new Error("generate_link: missing hashed_token");
+  const props = genData?.properties || {};
+  const tokenHash = props.hashed_token;
+  const plainToken = extractTokenFromActionLink(props.action_link || genData?.action_link);
+  const verifyTypes = [props.verification_type, "magiclink", "email"].filter(
+    (t, i, arr) => typeof t === "string" && t && arr.indexOf(t) === i,
+  );
+
+  const attempts = [];
+  for (const verifyType of verifyTypes) {
+    if (tokenHash) {
+      attempts.push({ token_hash: tokenHash, type: verifyType, email });
+    }
+    if (plainToken) {
+      attempts.push({ token: plainToken, type: verifyType, email });
+    }
   }
 
-  const verifyTypes = [
-    genData?.properties?.verification_type,
-    "magiclink",
-    "email",
-  ].filter((t, i, arr) => typeof t === "string" && t && arr.indexOf(t) === i);
-
   let lastVerifyError = null;
-  for (const verifyType of verifyTypes) {
-    const verifyRes = await fetch(`${base}/auth/v1/verify`, {
-      method: "POST",
-      headers: adminHeaders,
-      body: JSON.stringify({ token_hash: tokenHash, type: verifyType }),
-    });
-
-    if (verifyRes.ok) {
-      return verifyRes.json();
+  for (const payload of attempts) {
+    try {
+      return await verifyAuthPayload(payload, adminHeaders);
+    } catch (e) {
+      lastVerifyError = e.message;
     }
-
-    lastVerifyError = `verify ${verifyRes.status} (${verifyType}): ${await verifyRes.text()}`;
   }
 
   throw new Error(lastVerifyError || "verify failed");
