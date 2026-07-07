@@ -77,15 +77,33 @@ async function supabaseRest(pathWithQuery, options = {}) {
   return res.json();
 }
 
+async function fetchAuthUserEmail(userId) {
+  const base = SUPABASE_URL.replace(/\/$/, "");
+  const res = await fetch(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    headers: {
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      apikey: SERVICE_ROLE_KEY,
+    },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return typeof data?.email === "string" ? data.email.trim() : null;
+}
+
 async function findLoginByProfileKey(token) {
   if (!SERVICE_ROLE_KEY) return null;
   const normalized = normalizeToken(token);
   if (!normalized) return null;
 
   const rows = await supabaseRest(
-    `profiles?login_key=eq.${encodeURIComponent(normalized)}&select=email&limit=1`,
+    `profiles?login_key=eq.${encodeURIComponent(normalized)}&select=id,email&limit=1`,
   );
-  const email = rows?.[0]?.email;
+  const row = rows?.[0];
+  if (!row?.id) return null;
+
+  const authEmail = await fetchAuthUserEmail(row.id);
+  const profileEmail = typeof row.email === "string" ? row.email.trim() : "";
+  const email = authEmail || profileEmail;
   if (!email) return null;
   return { email };
 }
@@ -121,18 +139,28 @@ async function createSessionForEmail(email) {
     throw new Error("generate_link: missing hashed_token");
   }
 
-  const verifyRes = await fetch(`${base}/auth/v1/verify`, {
-    method: "POST",
-    headers: adminHeaders,
-    body: JSON.stringify({ token_hash: tokenHash, type: "email" }),
-  });
+  const verifyTypes = [
+    genData?.properties?.verification_type,
+    "magiclink",
+    "email",
+  ].filter((t, i, arr) => typeof t === "string" && t && arr.indexOf(t) === i);
 
-  if (!verifyRes.ok) {
-    const text = await verifyRes.text();
-    throw new Error(`verify ${verifyRes.status}: ${text}`);
+  let lastVerifyError = null;
+  for (const verifyType of verifyTypes) {
+    const verifyRes = await fetch(`${base}/auth/v1/verify`, {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({ token_hash: tokenHash, type: verifyType }),
+    });
+
+    if (verifyRes.ok) {
+      return verifyRes.json();
+    }
+
+    lastVerifyError = `verify ${verifyRes.status} (${verifyType}): ${await verifyRes.text()}`;
   }
 
-  return verifyRes.json();
+  throw new Error(lastVerifyError || "verify failed");
 }
 
 async function createSessionWithPassword(email, password) {

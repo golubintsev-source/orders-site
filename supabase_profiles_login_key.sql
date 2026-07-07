@@ -3,6 +3,11 @@
 
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS login_key text;
 
+UPDATE public.profiles p
+SET email = u.email
+FROM auth.users u
+WHERE p.id = u.id AND (p.email IS NULL OR btrim(p.email) = '');
+
 UPDATE public.profiles
 SET login_key = gen_random_uuid()::text
 WHERE login_key IS NULL OR login_key = '';

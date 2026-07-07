@@ -44,7 +44,10 @@ export async function trySecretLoginFromUrl() {
         } else if (res.status === 401) {
           text = "Ссылка недействительна или устарела";
         } else if (res.status === 500) {
-          text = "Ошибка авторизации";
+          text =
+            err?.message === "Login lookup failed"
+              ? "Ошибка поиска ключа (проверьте SQL login_key в Supabase)"
+              : "Ошибка авторизации (проверьте email пользователя в Supabase Auth)";
         }
       } catch {
         /* keep default */
