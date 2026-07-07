@@ -7,10 +7,13 @@ import { buildOrderPickerRowHtml, viewOrder } from "./orders.js";
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 const SUGGEST_DEBOUNCE_MS = 120;
 const UNREAD_POLL_MS = 60_000;
+const FEED_POLL_MS = 15_000;
 
 let usersCache = null;
 let usersCachePromise = null;
 let unreadPollTimer = null;
+let feedPollTimer = null;
+let lastFeedMessageAt = null;
 let composerRecipient = null;
 let activePicker = null;
 
@@ -155,6 +158,7 @@ export async function loadMessages() {
   }
 
   const rows = data || [];
+  lastFeedMessageAt = rows.length ? rows[rows.length - 1].created_at : null;
   feed.innerHTML = rows.length
     ? rows.map(renderMessageItem).join("")
     : '<p class="messages-empty">Пока нет сообщений. Напишите первое: выберите получателя кнопкой с человечком.</p>';
@@ -163,6 +167,91 @@ export async function loadMessages() {
 
   await markIncomingMessagesRead(rows);
   void refreshMessagesUnreadBadge();
+}
+
+function getFeedMessageIds() {
+  const feed = document.getElementById("messagesFeed");
+  if (!feed) return new Set();
+  return new Set(
+    [...feed.querySelectorAll("[data-message-id]")]
+      .map((el) => el.getAttribute("data-message-id"))
+      .filter(Boolean),
+  );
+}
+
+function isFeedAtBottom(feed, threshold = 48) {
+  return feed.scrollHeight - feed.scrollTop - feed.clientHeight <= threshold;
+}
+
+function appendMessagesToFeed(rows) {
+  const feed = document.getElementById("messagesFeed");
+  if (!feed || !rows.length) return;
+
+  const existingIds = getFeedMessageIds();
+  const newRows = rows.filter((row) => !existingIds.has(String(row.id)));
+  if (!newRows.length) return;
+
+  const atBottom = isFeedAtBottom(feed);
+  feed.querySelector(".messages-empty")?.remove();
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = newRows.map(renderMessageItem).join("");
+  while (wrapper.firstChild) {
+    feed.appendChild(wrapper.firstChild);
+  }
+
+  for (const row of newRows) {
+    if (!lastFeedMessageAt || row.created_at > lastFeedMessageAt) {
+      lastFeedMessageAt = row.created_at;
+    }
+  }
+
+  if (atBottom) {
+    feed.scrollTop = feed.scrollHeight;
+  }
+}
+
+async function pollNewMessages() {
+  const feed = document.getElementById("messagesFeed");
+  const uid = getCurrentUserId();
+  if (!feed || !uid) return;
+
+  let query = supabaseClient
+    .from("user_messages")
+    .select("id, sender_id, recipient_id, sender_email, recipient_email, body, created_at, read_at")
+    .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
+    .order("created_at", { ascending: true });
+
+  if (lastFeedMessageAt) {
+    query = query.gte("created_at", lastFeedMessageAt);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.warn("Ошибка проверки новых сообщений:", error);
+    return;
+  }
+
+  const rows = data || [];
+  if (!rows.length) return;
+
+  appendMessagesToFeed(rows);
+  await markIncomingMessagesRead(rows);
+  void refreshMessagesUnreadBadge();
+}
+
+export function startMessagesFeedPolling() {
+  stopMessagesFeedPolling();
+  feedPollTimer = window.setInterval(() => {
+    void pollNewMessages();
+  }, FEED_POLL_MS);
+}
+
+export function stopMessagesFeedPolling() {
+  if (feedPollTimer) {
+    window.clearInterval(feedPollTimer);
+    feedPollTimer = null;
+  }
 }
 
 async function markIncomingMessagesRead(rows) {

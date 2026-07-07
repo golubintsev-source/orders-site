@@ -316,8 +316,14 @@ export function switchSection(sectionId, opts = {}) {
     void import("./tasks.js").then((m) => m.loadOrderTasks());
     void import("./push-notifications.js").then((m) => m.clearPushBadge());
   }
+  if (prevSectionId === "messages" && sectionId !== "messages") {
+    void import("./messages.js").then((m) => m.stopMessagesFeedPolling());
+  }
   if (sectionId === "messages") {
-    void import("./messages.js").then((m) => m.loadMessages());
+    void import("./messages.js").then((m) => {
+      void m.loadMessages();
+      m.startMessagesFeedPolling();
+    });
     void import("./push-notifications.js").then((m) => {
       m.clearPushBadge();
       m.refreshMessagesPushUi();
