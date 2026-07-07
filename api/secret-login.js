@@ -1,23 +1,24 @@
 /**
  * Вход без пароля по уникальной ссылке: login.html?key=...
  *
- * Источники ключа (проверяются по порядку):
- *   1. profiles.login_key в Supabase (уникальная ссылка для каждого пользователя)
- *   2. SECRET_LOGIN_TOKEN_* в переменных окружения (обратная совместимость)
+ * Источники ключа:
+ *   1. profiles.login_key в Supabase
+ *   2. SECRET_LOGIN_TOKEN_* в переменных окружения
  *
  * Переменные окружения в Vercel:
  *   SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY — для поиска login_key и создания сессии (предпочтительно)
- *   SECRET_LOGIN_TOKEN_GOLUBINTSEV — опционально, для golubintsev26@gmail.com
- *   SUPABASE_ANON_KEY + SECRET_LOGIN_PASSWORD_GOLUBINTSEV — запасной вариант без service role
+ *   SUPABASE_SERVICE_ROLE_KEY
+ *   SUPABASE_ANON_KEY — legacy JWT-ключ (eyJ...), не sb_publishable_
+ *   SECRET_LOGIN_TOKEN_GOLUBINTSEV / SECRET_LOGIN_PASSWORD_GOLUBINTSEV — опционально
  */
 
 const crypto = require("crypto");
+const { createClient } = require("@supabase/supabase-js");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const ANON_KEY =
-  process.env.SUPABASE_ANON_KEY || "sb_publishable_e1pJB18UsEV-o_M43ROi9w_4mS--LrF";
+const ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const HAS_LEGACY_ANON = typeof ANON_KEY === "string" && ANON_KEY.startsWith("eyJ");
 
 const SECRET_LOGINS = [
   {
@@ -27,10 +28,28 @@ const SECRET_LOGINS = [
   },
 ];
 
+let adminClient = null;
+
+function getAdminClient() {
+  if (!adminClient) {
+    adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+  }
+  return adminClient;
+}
+
+function getAnonClient() {
+  if (!HAS_LEGACY_ANON) return null;
+  return createClient(SUPABASE_URL, ANON_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 function isSecretLoginConfigured() {
   if (!SUPABASE_URL) return false;
   if (SERVICE_ROLE_KEY) return true;
-  return Boolean(ANON_KEY && SECRET_LOGINS.some((e) => e.token && e.password));
+  return Boolean(HAS_LEGACY_ANON && SECRET_LOGINS.some((e) => e.token && e.password));
 }
 
 function timingSafeEqual(a, b) {
@@ -78,17 +97,10 @@ async function supabaseRest(pathWithQuery, options = {}) {
   return res.json();
 }
 
-async function fetchAuthUserEmail(userId) {
-  const base = SUPABASE_URL.replace(/\/$/, "");
-  const res = await fetch(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
-    headers: {
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      apikey: SERVICE_ROLE_KEY,
-    },
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  return typeof data?.email === "string" ? data.email.trim() : null;
+async function fetchAuthUser(userId) {
+  const { data, error } = await getAdminClient().auth.admin.getUserById(userId);
+  if (error || !data?.user) return null;
+  return data.user;
 }
 
 async function findLoginByProfileKey(token) {
@@ -102,11 +114,11 @@ async function findLoginByProfileKey(token) {
   const row = rows?.[0];
   if (!row?.id) return null;
 
-  const authEmail = await fetchAuthUserEmail(row.id);
+  const authUser = await fetchAuthUser(row.id);
   const profileEmail = typeof row.email === "string" ? row.email.trim() : "";
-  const email = authEmail || profileEmail;
+  const email = (authUser?.email || profileEmail || "").trim();
   if (!email) return null;
-  return { email };
+  return { email, userId: row.id };
 }
 
 async function findLoginByToken(token) {
@@ -124,115 +136,138 @@ function extractTokenFromActionLink(actionLink) {
   }
 }
 
-async function verifyAuthPayload(payload, adminHeaders) {
-  const verifyHeaderSets = [];
-  if (ANON_KEY) {
-    verifyHeaderSets.push({
-      apikey: ANON_KEY,
-      Authorization: `Bearer ${ANON_KEY}`,
-      "Content-Type": "application/json",
-    });
-  }
-  verifyHeaderSets.push(adminHeaders);
-
-  let lastVerifyError = null;
-  for (const headers of verifyHeaderSets) {
-    const verifyRes = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/verify`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-    });
-    if (verifyRes.ok) {
-      return verifyRes.json();
-    }
-    lastVerifyError = `verify ${verifyRes.status}: ${await verifyRes.text()}`;
-  }
-  throw new Error(lastVerifyError || "verify failed");
+function sessionFromVerifyData(data) {
+  const session = data?.session;
+  if (!session?.access_token || !session?.refresh_token) return null;
+  return {
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_in: session.expires_in,
+  };
 }
 
-async function createSessionForEmail(email) {
-  const base = SUPABASE_URL.replace(/\/$/, "");
-  const adminHeaders = {
-    Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-    apikey: SERVICE_ROLE_KEY,
-    "Content-Type": "application/json",
-  };
-
-  const genRes = await fetch(`${base}/auth/v1/admin/generate_link`, {
-    method: "POST",
-    headers: adminHeaders,
-    body: JSON.stringify({ type: "magiclink", email }),
-  });
-
-  if (!genRes.ok) {
-    const text = await genRes.text();
-    throw new Error(`generate_link ${genRes.status}: ${text}`);
+async function ensureEmailConfirmed(userId) {
+  const user = await fetchAuthUser(userId);
+  if (!user) {
+    throw new Error(`auth user not found: ${userId}`);
   }
-
-  const genData = await genRes.json();
-  const props = genData?.properties || {};
-  const tokenHash = props.hashed_token;
-  const plainToken = extractTokenFromActionLink(props.action_link || genData?.action_link);
-  const verifyTypes = [props.verification_type, "magiclink", "email"].filter(
-    (t, i, arr) => typeof t === "string" && t && arr.indexOf(t) === i,
-  );
-
-  const attempts = [];
-  for (const verifyType of verifyTypes) {
-    if (tokenHash) {
-      attempts.push({ token_hash: tokenHash, type: verifyType, email });
-    }
-    if (plainToken) {
-      attempts.push({ token: plainToken, type: verifyType, email });
+  if (!user.email_confirmed_at) {
+    const { error } = await getAdminClient().auth.admin.updateUserById(userId, {
+      email_confirm: true,
+    });
+    if (error) {
+      throw new Error(`confirm email failed: ${error.message}`);
     }
   }
+  return user;
+}
 
-  let lastVerifyError = null;
-  for (const payload of attempts) {
-    try {
-      return await verifyAuthPayload(payload, adminHeaders);
-    } catch (e) {
-      lastVerifyError = e.message;
+async function verifyOtpWithClients(params) {
+  const clients = [getAnonClient(), getAdminClient()].filter(Boolean);
+  let lastError = "verifyOtp failed";
+
+  for (const client of clients) {
+    const { data, error } = await client.auth.verifyOtp(params);
+    const session = sessionFromVerifyData(data);
+    if (!error && session) return session;
+    if (error?.message) lastError = error.message;
+  }
+
+  throw new Error(lastError);
+}
+
+async function createSessionWithSdk(email, userId) {
+  let resolvedEmail = email;
+  if (userId) {
+    const user = await ensureEmailConfirmed(userId);
+    if (user.email) resolvedEmail = user.email.trim();
+  }
+
+  let lastError = "verifyOtp failed";
+  for (const linkType of ["magiclink", "recovery"]) {
+    const { data: linkData, error: linkError } = await getAdminClient().auth.admin.generateLink({
+      type: linkType,
+      email: resolvedEmail,
+    });
+    if (linkError) {
+      lastError = `generate_link(${linkType}): ${linkError.message}`;
+      continue;
+    }
+
+    const props = linkData?.properties || {};
+    const verifyTypes = [props.verification_type, linkType, "magiclink", "email"].filter(
+      (t, i, arr) => typeof t === "string" && t && arr.indexOf(t) === i,
+    );
+    const plainToken = extractTokenFromActionLink(props.action_link);
+    const attempts = [];
+
+    if (props.email_otp) {
+      for (const verifyType of ["email", "magiclink", linkType]) {
+        attempts.push({ email: resolvedEmail, token: props.email_otp, type: verifyType });
+      }
+    }
+    for (const verifyType of verifyTypes) {
+      if (props.hashed_token) {
+        attempts.push({ email: resolvedEmail, token_hash: props.hashed_token, type: verifyType });
+      }
+      if (plainToken) {
+        attempts.push({ email: resolvedEmail, token: plainToken, type: verifyType });
+      }
+    }
+
+    for (const params of attempts) {
+      try {
+        return await verifyOtpWithClients(params);
+      } catch (e) {
+        lastError = e.message;
+      }
     }
   }
 
-  throw new Error(lastVerifyError || "verify failed");
+  throw new Error(lastError);
 }
 
 async function createSessionWithPassword(email, password) {
-  const base = SUPABASE_URL.replace(/\/$/, "");
-  const res = await fetch(`${base}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: {
-      apikey: ANON_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`password grant ${res.status}: ${text}`);
+  if (!HAS_LEGACY_ANON) {
+    throw new Error("SUPABASE_ANON_KEY (legacy eyJ...) required for password grant");
   }
 
-  return res.json();
+  const { data, error } = await getAnonClient().auth.signInWithPassword({ email, password });
+  const session = sessionFromVerifyData(data);
+  if (error || !session) {
+    throw new Error(`password grant: ${error?.message || "missing session"}`);
+  }
+  return session;
 }
 
 async function createSessionForLogin(login) {
+  const { email, userId, password } = login;
+
   if (SERVICE_ROLE_KEY) {
     try {
-      return await createSessionForEmail(login.email);
-    } catch (e) {
-      if (login.password && ANON_KEY) {
-        console.warn("secret-login: admin link failed, trying password grant:", e.message);
-        return createSessionWithPassword(login.email, login.password);
+      return await createSessionWithSdk(email, userId);
+    } catch (sdkError) {
+      console.warn("secret-login: sdk failed:", sdkError.message);
+
+      if (password && HAS_LEGACY_ANON) {
+        console.warn("secret-login: trying password grant fallback");
+        return createSessionWithPassword(email, password);
       }
-      throw e;
+
+      if (!HAS_LEGACY_ANON) {
+        throw new Error(
+          "verifyOtp failed; add SUPABASE_ANON_KEY (legacy eyJ...) on Vercel — Supabase → Settings → API → anon public",
+        );
+      }
+
+      throw sdkError;
     }
   }
-  if (login.password && ANON_KEY) {
-    return createSessionWithPassword(login.email, login.password);
+
+  if (password && HAS_LEGACY_ANON) {
+    return createSessionWithPassword(email, password);
   }
+
   throw new Error("No auth method configured for secret login");
 }
 
@@ -283,7 +318,7 @@ module.exports = async (req, res) => {
     login = await findLoginByToken(body?.token);
   } catch (e) {
     console.error("secret-login lookup:", e);
-    return res.status(500).json({ message: "Login lookup failed" });
+    return res.status(500).json({ message: "Login lookup failed", detail: e.message });
   }
   if (!login) {
     return res.status(401).json({ message: "Invalid token" });
@@ -301,6 +336,6 @@ module.exports = async (req, res) => {
     });
   } catch (e) {
     console.error("secret-login:", e);
-    return res.status(500).json({ message: "Login failed" });
+    return res.status(500).json({ message: "Login failed", detail: e.message });
   }
 };

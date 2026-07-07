@@ -44,10 +44,16 @@ export async function trySecretLoginFromUrl() {
         } else if (res.status === 401) {
           text = "Ссылка недействительна или устарела";
         } else if (res.status === 500) {
-          text =
-            err?.message === "Login lookup failed"
-              ? "Ошибка поиска ключа (проверьте SQL login_key в Supabase)"
-              : "Ошибка авторизации (проверьте email пользователя в Supabase Auth)";
+          const detail = typeof err?.detail === "string" ? err.detail : "";
+          if (err?.message === "Login lookup failed") {
+            text = "Ошибка поиска ключа (проверьте SQL login_key в Supabase)";
+          } else if (detail.includes("SUPABASE_ANON_KEY")) {
+            text = "На Vercel добавьте SUPABASE_ANON_KEY — legacy anon key (eyJ...) из Supabase → Settings → API";
+          } else if (detail) {
+            text = `Ошибка авторизации: ${detail}`;
+          } else {
+            text = "Ошибка авторизации (проверьте email пользователя в Supabase Auth)";
+          }
         }
       } catch {
         /* keep default */
