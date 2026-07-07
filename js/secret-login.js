@@ -3,19 +3,24 @@ import { hrefToHome } from "./app-routes.js";
 import { getResumeHref } from "./user-place.js";
 import { flushPendingAccessLogs } from "./access-log.js";
 
+export function getLoginKeyFromUrl() {
+  return new URLSearchParams(window.location.search).get("key")?.trim() || null;
+}
+
 function stripKeyFromUrl() {
   const u = new URL(window.location.href);
+  if (!u.searchParams.has("key")) return;
   u.searchParams.delete("key");
-  const path = u.pathname + u.search;
-  history.replaceState(null, "", path || "/login.html");
+  const path = u.pathname + u.search + u.hash;
+  history.replaceState(null, "", path || "/");
 }
 
 /**
- * Вход по секретной ссылке: login.html?key=...
+ * Вход по персональной ссылке: ?key=... (login.html или любая страница приложения).
  * @returns {Promise<boolean>} true, если параметр key был в URL (успех или ошибка)
  */
 export async function trySecretLoginFromUrl() {
-  const key = new URLSearchParams(window.location.search).get("key")?.trim();
+  const key = getLoginKeyFromUrl();
   if (!key) return false;
 
   const msg = document.getElementById("message");
@@ -35,11 +40,11 @@ export async function trySecretLoginFromUrl() {
       try {
         const err = await res.json();
         if (err?.code === "not_configured" || res.status === 503) {
-          text = "Секретный вход не настроен на сервере";
+          text = "Вход по ссылке не настроен на сервере";
         } else if (res.status === 401) {
-          text = "Ключ в ссылке не совпадает с SECRET_LOGIN_TOKEN_GOLUBINTSEV на Vercel";
+          text = "Ссылка недействительна или устарела";
         } else if (res.status === 500) {
-          text = "Ошибка авторизации (проверьте пароль в Vercel)";
+          text = "Ошибка авторизации";
         }
       } catch {
         /* keep default */

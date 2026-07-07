@@ -26,7 +26,7 @@ import {
   syncOrdersSearchIconAccent,
   getCurrentSectionId,
 } from "./section-nav.js";
-import { canAccessSection } from "./roles.js";
+import { canAccessSection, isAdmin } from "./roles.js";
 import { applyClientFilter } from "./orders.js";
 import {
   getRouteSectionFromUrl,
@@ -49,6 +49,8 @@ import {
 } from "./user-place.js";
 import { initPushNotifications } from "./push-notifications.js";
 import { initMessagesSection } from "./messages.js";
+import { trySecretLoginFromUrl, getLoginKeyFromUrl } from "./secret-login.js";
+import { initLoginLinksSection, loadLoginLinksSection } from "./login-links.js";
 
 window.editOrder = editOrder;
 window.viewOrder = viewOrder;
@@ -74,6 +76,16 @@ async function init() {
   initOrdersTableMobileFit();
   initOrdersTablePinchZoom();
   initAccessLogging();
+
+  if (getLoginKeyFromUrl()) {
+    const handled = await trySecretLoginFromUrl();
+    if (handled) {
+      if (!document.getElementById("message")) {
+        window.location.href = "login.html";
+      }
+      return;
+    }
+  }
 
   try {
     const user = await checkAuth();
@@ -129,6 +141,11 @@ async function init() {
     initRouteSheetSection();
     initAllChangesSection();
     initStatisticsSection();
+
+    if (isAdmin()) {
+      initLoginLinksSection();
+      void loadLoginLinksSection();
+    }
 
     applyPendingOrdersSearchFromHistory();
     await restoreSavedAppContext(user.id);

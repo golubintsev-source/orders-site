@@ -2145,6 +2145,77 @@ h2 {
   color: #b91c1c;
 }
 
+#section-settings .login-links-card {
+  margin-top: 16px;
+}
+
+#section-settings .login-links-title {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+#section-settings .login-links-hint {
+  margin: 0 0 12px;
+  color: #555;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+#section-settings .login-links-table-wrap {
+  overflow-x: auto;
+}
+
+#section-settings .login-links-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+#section-settings .login-links-table th,
+#section-settings .login-links-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e8e8e8;
+  vertical-align: top;
+  text-align: left;
+}
+
+#section-settings .login-links-url-cell code {
+  display: block;
+  word-break: break-all;
+  font-size: 0.82rem;
+}
+
+#section-settings .login-links-actions {
+  white-space: nowrap;
+}
+
+#section-settings .login-links-btn {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+  margin-right: 6px;
+  margin-bottom: 4px;
+}
+
+#section-settings .login-links-btn:hover {
+  background: #f9fafb;
+}
+
+#section-settings .login-links-message {
+  margin: 10px 0 0;
+  font-size: 0.9rem;
+  color: #2e7d32;
+}
+
+#section-settings .login-links-message--error {
+  color: #b91c1c;
+}
+
 .inprogress-picture img {
   width: 100%;
   max-width: 500px;

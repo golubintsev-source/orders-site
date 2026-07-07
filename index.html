@@ -1245,6 +1245,23 @@
         </div>
         <button type="button" id="settingsSaveAdjustmentsBtn" class="btn-primary settings-save-adjustments-btn settings-save-btn-inactive" disabled>Сохранить</button>
       </div>
+      <div id="loginLinksCard" class="card login-links-card" hidden>
+        <h3 class="login-links-title">Персональные ссылки для входа</h3>
+        <p class="login-links-hint">Каждый пользователь входит по своей ссылке без пароля. Передайте ссылку пользователю — при открытии выполняется автоматический вход.</p>
+        <div class="login-links-table-wrap">
+          <table class="login-links-table">
+            <thead>
+              <tr>
+                <th>Пользователь</th>
+                <th>Ссылка</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="loginLinksTableBody"></tbody>
+          </table>
+        </div>
+        <p id="loginLinksMessage" class="login-links-message"></p>
+      </div>
       <div id="pushNotificationsCard" class="card push-notifications-card" hidden>
         <h3 class="push-notifications-title">Уведомления PWA</h3>
         <p id="pushNotificationsHint" class="push-notifications-hint"></p>

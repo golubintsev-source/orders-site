@@ -1,13 +1,15 @@
 /**
- * Секретный вход без пароля для заранее заданных пользователей.
+ * Вход без пароля по уникальной ссылке: login.html?key=...
+ *
+ * Источники ключа (проверяются по порядку):
+ *   1. profiles.login_key в Supabase (уникальная ссылка для каждого пользователя)
+ *   2. SECRET_LOGIN_TOKEN_* в переменных окружения (обратная совместимость)
  *
  * Переменные окружения в Vercel:
  *   SUPABASE_URL
- *   SECRET_LOGIN_TOKEN_GOLUBINTSEV — секрет из URL для golubintsev26@gmail.com
- *
- * Один из вариантов авторизации (достаточно любого):
- *   SUPABASE_SERVICE_ROLE_KEY — service role (предпочтительно, пароль не хранится)
- *   или SUPABASE_ANON_KEY + SECRET_LOGIN_PASSWORD_GOLUBINTSEV — пароль аккаунта на сервере
+ *   SUPABASE_SERVICE_ROLE_KEY — для поиска login_key и создания сессии (предпочтительно)
+ *   SECRET_LOGIN_TOKEN_GOLUBINTSEV — опционально, для golubintsev26@gmail.com
+ *   SUPABASE_ANON_KEY + SECRET_LOGIN_PASSWORD_GOLUBINTSEV — запасной вариант без service role
  */
 
 const crypto = require("crypto");
@@ -42,7 +44,7 @@ function normalizeToken(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function findLoginByToken(token) {
+function findLoginByEnvToken(token) {
   const normalized = normalizeToken(token);
   if (!normalized) return null;
   for (const entry of SECRET_LOGINS) {
@@ -52,6 +54,46 @@ function findLoginByToken(token) {
     }
   }
   return null;
+}
+
+async function supabaseRest(pathWithQuery, options = {}) {
+  const base = SUPABASE_URL.replace(/\/$/, "");
+  const res = await fetch(`${base}/rest/v1/${pathWithQuery}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      apikey: SERVICE_ROLE_KEY,
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase ${res.status}: ${text}`);
+  }
+  if (res.status === 204) return null;
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.includes("json")) return null;
+  return res.json();
+}
+
+async function findLoginByProfileKey(token) {
+  if (!SERVICE_ROLE_KEY) return null;
+  const normalized = normalizeToken(token);
+  if (!normalized) return null;
+
+  const rows = await supabaseRest(
+    `profiles?login_key=eq.${encodeURIComponent(normalized)}&select=email&limit=1`,
+  );
+  const email = rows?.[0]?.email;
+  if (!email) return null;
+  return { email };
+}
+
+async function findLoginByToken(token) {
+  const fromEnv = findLoginByEnvToken(token);
+  if (fromEnv) return fromEnv;
+  return findLoginByProfileKey(token);
 }
 
 async function createSessionForEmail(email) {
@@ -172,7 +214,13 @@ module.exports = async (req, res) => {
     return res.status(400).json({ message: "Invalid JSON body" });
   }
 
-  const login = findLoginByToken(body?.token);
+  let login;
+  try {
+    login = await findLoginByToken(body?.token);
+  } catch (e) {
+    console.error("secret-login lookup:", e);
+    return res.status(500).json({ message: "Login lookup failed" });
+  }
   if (!login) {
     return res.status(401).json({ message: "Invalid token" });
   }
