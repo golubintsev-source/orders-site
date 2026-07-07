@@ -15,7 +15,9 @@ let usersCachePromise = null;
 let unreadPollTimer = null;
 let feedPollTimer = null;
 let lastFeedMessageAt = null;
-let composerRecipient = null;
+let lastMessagePeerId = null;
+/** @type {Map<string, { id: string, email: string }>} */
+let composerRecipients = new Map();
 let activePicker = null;
 
 function escapeHtml(s) {
@@ -33,6 +35,16 @@ function getCurrentUserEmail() {
   const u = state.currentUser;
   if (!u) return "";
   return (u.email || "").trim();
+}
+
+function updateLastMessagePeerId(rows) {
+  if (!rows?.length) {
+    lastMessagePeerId = null;
+    return;
+  }
+  const uid = getCurrentUserId();
+  const last = rows[rows.length - 1];
+  lastMessagePeerId = String(last.sender_id) === String(uid) ? last.recipient_id : last.sender_id;
 }
 
 async function loadUsersDirectory() {
@@ -160,6 +172,7 @@ export async function loadMessages() {
 
   const rows = data || [];
   lastFeedMessageAt = rows.length ? rows[rows.length - 1].created_at : null;
+  updateLastMessagePeerId(rows);
   feed.innerHTML = rows.length
     ? rows.map(renderMessageItem).join("")
     : '<p class="messages-empty">Пока нет сообщений. Напишите первое: выберите получателя кнопкой с человечком.</p>';
@@ -205,6 +218,9 @@ function appendMessagesToFeed(rows) {
     if (!lastFeedMessageAt || row.created_at > lastFeedMessageAt) {
       lastFeedMessageAt = row.created_at;
     }
+  }
+  if (newRows.length) {
+    updateLastMessagePeerId(newRows);
   }
 
   if (atBottom) {
@@ -329,10 +345,6 @@ function setTextareaCaret(el, pos) {
 
 function getTriggerContext(text, caretPos) {
   const before = text.slice(0, caretPos);
-  const atMatch = before.match(/@([\w.@+-]*)$/);
-  if (atMatch) {
-    return { type: "user", query: atMatch[1], start: caretPos - atMatch[0].length };
-  }
   const ampMatch = before.match(/&(\d*)$/);
   if (ampMatch) {
     return { type: "order", query: ampMatch[1], start: caretPos - ampMatch[0].length };
@@ -340,14 +352,18 @@ function getTriggerContext(text, caretPos) {
   return null;
 }
 
-function filterUsers(query) {
+function filterUsers(query, { limit = 15 } = {}) {
   const q = (query || "").trim().toLowerCase();
   const uid = getCurrentUserId();
   const list = (usersCache || []).filter((u) => u.id !== uid);
-  if (!q) return list.slice(0, 15);
+  if (!q) return limit > 0 ? list.slice(0, limit) : list;
   return list
-    .filter((u) => u.email.toLowerCase().includes(q))
-    .slice(0, 15);
+    .filter((u) => {
+      const email = u.email.toLowerCase();
+      const name = displayNameByEmail(u.email).toLowerCase();
+      return email.includes(q) || name.includes(q);
+    })
+    .slice(0, limit > 0 ? limit : list.length);
 }
 
 function normalizeOrderStatus(val) {
@@ -402,7 +418,7 @@ function hideSuggestions() {
   if (list) {
     list.hidden = true;
     list.innerHTML = "";
-    list.classList.remove("messages-suggestions--orders");
+    list.classList.remove("messages-suggestions--orders", "messages-suggestions--recipients");
   }
   activePicker = null;
   syncPickerButtonStates();
@@ -423,7 +439,74 @@ function syncPickerButtonStates() {
   }
 }
 
-function showSuggestions(items, onPick, { variant = "default" } = {}) {
+function syncComposerRecipientsFromList(list) {
+  composerRecipients.clear();
+  list.querySelectorAll(".messages-recipient-checkbox:checked").forEach((input) => {
+    composerRecipients.set(input.value, { id: input.value, email: input.dataset.email });
+  });
+}
+
+function getDefaultRecipientIds(users) {
+  if (composerRecipients.size > 0) {
+    return new Set([...composerRecipients.keys()]);
+  }
+  if (lastMessagePeerId && users.some((u) => String(u.id) === String(lastMessagePeerId))) {
+    return new Set([String(lastMessagePeerId)]);
+  }
+  return new Set();
+}
+
+function showUserRecipientPicker(users) {
+  const list = document.getElementById("messagesComposerSuggestions");
+  if (!list) return;
+  if (!users.length) {
+    hideSuggestions();
+    return;
+  }
+
+  const selectedIds = getDefaultRecipientIds(users);
+  composerRecipients.clear();
+  for (const user of users) {
+    if (selectedIds.has(String(user.id))) {
+      composerRecipients.set(user.id, { id: user.id, email: user.email });
+    }
+  }
+
+  list.classList.remove("messages-suggestions--orders");
+  list.classList.add("messages-suggestions--recipients");
+  list.innerHTML = users
+    .map((user) => {
+      const checked = selectedIds.has(String(user.id));
+      return `
+    <li>
+      <label class="messages-recipient-option">
+        <input
+          type="checkbox"
+          class="messages-recipient-checkbox"
+          value="${escapeHtml(user.id)}"
+          data-email="${escapeHtml(user.email)}"
+          ${checked ? "checked" : ""}
+        />
+        <span class="messages-suggestion-text">${escapeHtml(displayNameByEmail(user.email))}</span>
+      </label>
+    </li>
+  `;
+    })
+    .join("");
+  list.hidden = false;
+
+  list.querySelectorAll(".messages-recipient-checkbox").forEach((input) => {
+    input.addEventListener("change", () => {
+      syncComposerRecipientsFromList(list);
+    });
+  });
+
+  list.onmousedown = (e) => {
+    e.preventDefault();
+  };
+}
+
+function showOrderSuggestions(items, onPick) {
   const list = document.getElementById("messagesComposerSuggestions");
   if (!list) return;
   if (!items.length) {
@@ -431,40 +514,24 @@ function showSuggestions(items, onPick, { variant = "default" } = {}) {
     return;
   }
 
-  const isOrderVariant = variant === "order";
-  list.classList.toggle("messages-suggestions--orders", isOrderVariant);
-
-  if (isOrderVariant) {
-    list.innerHTML = items
-      .map(
-        (item, idx) => `
+  list.classList.remove("messages-suggestions--recipients");
+  list.classList.add("messages-suggestions--orders");
+  list.innerHTML = items
+    .map(
+      (item, idx) => `
     <li role="option" data-index="${idx}" aria-selected="${idx === 0 ? "true" : "false"}">
       ${item.orderRowHtml}
     </li>
   `,
-      )
-      .join("");
-  } else {
-    list.innerHTML = items
-      .map(
-        (item, idx) => `
-    <li role="option" data-index="${idx}" aria-selected="${idx === 0 ? "true" : "false"}">
-      <span class="messages-suggestion-text">${escapeHtml(item.label)}</span>
-      ${item.hint ? `<span class="messages-suggestion-hint">${escapeHtml(item.hint)}</span>` : ""}
-    </li>
-  `,
-      )
-      .join("");
-  }
+    )
+    .join("");
   list.hidden = false;
 
-  if (isOrderVariant) {
-    list.querySelectorAll(".td-order-client, .td-order-address, .td-order-description").forEach((cell) => {
-      const full = cell.getAttribute("data-fulltext");
-      if (full) cell.setAttribute("title", full);
-      else cell.removeAttribute("title");
-    });
-  }
+  list.querySelectorAll(".td-order-client, .td-order-address, .td-order-description").forEach((cell) => {
+    const full = cell.getAttribute("data-fulltext");
+    if (full) cell.setAttribute("title", full);
+    else cell.removeAttribute("title");
+  });
 
   list.querySelectorAll("li").forEach((li) => {
     li.addEventListener("mousedown", (e) => {
@@ -474,22 +541,6 @@ function showSuggestions(items, onPick, { variant = "default" } = {}) {
       if (picked) onPick(picked);
     });
   });
-}
-
-function applyUserPick(input, user, ctx = null) {
-  const caret = getTextareaCaret(input);
-  const start = ctx ? ctx.start : caret.start;
-  const end = ctx ? caret.end : caret.end;
-  const text = input.value;
-  const before = text.slice(0, start);
-  const after = text.slice(end);
-  const insert = `@${user.email} `;
-  input.value = before + insert + after;
-  const pos = before.length + insert.length;
-  setTextareaCaret(input, pos);
-  composerRecipient = { id: user.id, email: user.email };
-  hideSuggestions();
-  input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 function applyOrderPick(input, order, ctx = null) {
@@ -512,7 +563,7 @@ function updateComposerSuggestions(input) {
   const caret = getTextareaCaret(input);
   const ctx = getTriggerContext(input.value, caret.start);
   if (!ctx) {
-    if (activePicker) return;
+    if (activePicker === "user") return;
     hideSuggestions();
     return;
   }
@@ -520,30 +571,10 @@ function updateComposerSuggestions(input) {
   activePicker = ctx.type;
   syncPickerButtonStates();
 
-  if (ctx.type === "user") {
-    const users = filterUsers(ctx.query);
-    const items = users.map((u) => ({
-      label: u.email,
-      hint: u.role || "",
-      user: u,
-    }));
-    showSuggestions(items, (item) => applyUserPick(input, item.user, ctx));
-    return;
-  }
-
   if (ctx.type === "order") {
     const orders = filterOrders(ctx.query);
-    showSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order, ctx), {
-      variant: "order",
-    });
+    showOrderSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order, ctx));
   }
-}
-
-function mapUserPickerItems(users) {
-  return users.map((u) => ({
-    label: displayNameByEmail(u.email),
-    user: u,
-  }));
 }
 
 function openUserPicker(input) {
@@ -553,8 +584,8 @@ function openUserPicker(input) {
   }
   activePicker = "user";
   syncPickerButtonStates();
-  const users = filterUsers("");
-  showSuggestions(mapUserPickerItems(users), (item) => applyUserPick(input, item.user));
+  const users = filterUsers("", { limit: 0 });
+  showUserRecipientPicker(users);
   input.focus();
 }
 
@@ -566,18 +597,8 @@ function openOrderPicker(input) {
   activePicker = "order";
   syncPickerButtonStates();
   const orders = filterOrders("", { onlyOpen: true, limit: 0 });
-  showSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order), {
-    variant: "order",
-  });
+  showOrderSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order));
   input.focus();
-}
-
-function parseRecipientFromText(text) {
-  const m = text.match(/@([\w.@+-]+)/);
-  if (!m) return null;
-  const email = m[1].toLowerCase();
-  const user = (usersCache || []).find((u) => u.email.toLowerCase() === email);
-  return user ? { id: user.id, email: user.email } : null;
 }
 
 async function sendMessage() {
@@ -594,18 +615,10 @@ async function sendMessage() {
 
   await loadUsersDirectory();
 
-  const recipient = composerRecipient || parseRecipientFromText(body);
-  if (!recipient) {
+  const recipientList = [...composerRecipients.values()].filter((recipient) => recipient.id !== uid);
+  if (!recipientList.length) {
     if (msg) {
-      msg.textContent = "Укажите получателя (кнопка с человечком или @ в тексте).";
-      msg.classList.add("messages-page-message--error");
-    }
-    return;
-  }
-
-  if (recipient.id === uid) {
-    if (msg) {
-      msg.textContent = "Нельзя отправить сообщение самому себе.";
+      msg.textContent = "Выберите получателя кнопкой с человечком.";
       msg.classList.add("messages-page-message--error");
     }
     return;
@@ -618,16 +631,15 @@ async function sendMessage() {
   }
 
   const senderEmail = getCurrentUserEmail();
-  const bodyToSave = stripRecipientMentionFromBody(body, recipient.email);
-  const { error } = await supabaseClient.from("user_messages").insert([
-    {
-      sender_id: uid,
-      recipient_id: recipient.id,
-      sender_email: senderEmail,
-      recipient_email: recipient.email,
-      body: bodyToSave,
-    },
-  ]);
+  const inserts = recipientList.map((recipient) => ({
+    sender_id: uid,
+    recipient_id: recipient.id,
+    sender_email: senderEmail,
+    recipient_email: recipient.email,
+    body,
+  }));
+
+  const { error } = await supabaseClient.from("user_messages").insert(inserts);
 
   if (sendBtn) sendBtn.disabled = false;
 
@@ -641,7 +653,7 @@ async function sendMessage() {
   }
 
   input.value = "";
-  composerRecipient = null;
+  composerRecipients.clear();
   hideSuggestions();
   await loadMessages();
 }
@@ -705,6 +717,15 @@ export function initMessagesSection() {
     input.addEventListener("keydown", (e) => {
       const list = document.getElementById("messagesComposerSuggestions");
       if (!list || list.hidden) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          void sendMessage();
+        }
+        return;
+      }
+
+      if (list.classList.contains("messages-suggestions--recipients")) {
+        if (e.key === "Escape") hideSuggestions();
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           void sendMessage();
