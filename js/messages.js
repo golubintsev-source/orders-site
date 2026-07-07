@@ -102,21 +102,22 @@ function renderMessageBodyHtml(body) {
 
 function messageItemClass(row) {
   const uid = getCurrentUserId();
-  if (row.sender_id === uid) return "message-item message-item--out";
+  if (String(row.sender_id) === String(uid)) return "message-item message-item--out";
   return "message-item message-item--in";
 }
 
 function renderMessageItem(row) {
   const uid = getCurrentUserId();
-  const isOut = row.sender_id === uid;
+  const isOut = String(row.sender_id) === String(uid);
   const peerEmail = isOut ? row.recipient_email : row.sender_email;
   const peerName = displayNameByEmail(peerEmail) || peerEmail || "—";
+  const peerLabel = isOut ? peerName : `от ${peerName}`;
   const unread = !isOut && !row.read_at;
   const bodyForDisplay = stripRecipientMentionFromBody(row.body, row.recipient_email);
   return `
     <article class="${messageItemClass(row)}${unread ? " message-item--unread" : ""}" data-message-id="${row.id}">
       <header class="message-item-header">
-        <span class="message-item-peer">${escapeHtml(isOut ? "→ " : "← ")}${escapeHtml(peerName)}</span>
+        <span class="message-item-peer">${escapeHtml(peerLabel)}</span>
         <time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>
       </header>
       <div class="message-item-body">${renderMessageBodyHtml(bodyForDisplay)}</div>
