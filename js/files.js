@@ -918,9 +918,10 @@ function runAttachmentAction(el, action) {
  * Строка файла: как в модалке (превью, имя, мета, Открыть / Скачать / Удалить по правам роли).
  * @param {(fileId: number, orderId: number) => void | Promise<void>} onAdminDelete
  */
-async function createOrderFileRowElement(file, orderId, onAdminDelete) {
+async function createOrderFileRowElement(file, orderId, onAdminDelete, { largePreview = false } = {}) {
   const { fullUrl, previewUrl } = await getSignedUrlsForOrderFileRow(file);
   const isImage = isImageFile(file);
+  const imageSrc = largePreview ? fullUrl || previewUrl : previewUrl;
 
   const row = document.createElement("div");
   row.className = "file-row";
@@ -928,7 +929,7 @@ async function createOrderFileRowElement(file, orderId, onAdminDelete) {
   const preview = document.createElement("div");
   preview.className = "file-preview";
 
-  if (isImage && previewUrl) {
+  if (isImage && imageSrc) {
     const link = document.createElement("a");
     link.href = fullUrl || previewUrl;
     link.target = "_blank";
@@ -936,7 +937,7 @@ async function createOrderFileRowElement(file, orderId, onAdminDelete) {
     link.title = "Открыть полное изображение";
     const img = document.createElement("img");
     img.className = "file-thumb";
-    img.src = previewUrl;
+    img.src = imageSrc;
     img.alt = file.file_name || "";
     img.loading = "lazy";
     img.decoding = "async";
@@ -1057,7 +1058,7 @@ export async function openFilesModal(orderId) {
   list.className = "files-list";
 
   for (const file of files) {
-    const row = await createOrderFileRowElement(file, orderId, removeFile);
+    const row = await createOrderFileRowElement(file, orderId, removeFile, { largePreview: true });
     list.appendChild(row);
   }
 

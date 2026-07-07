@@ -4687,7 +4687,7 @@ th {
 
 .files-modal-content {
   width: 100%;
-  max-width: 700px;
+  max-width: min(960px, calc(100vw - 32px));
   max-height: 85vh;
   overflow: auto;
   background: #fff;
@@ -4819,6 +4819,24 @@ th {
   justify-content: center;
   font-size: 28px;
   background: #f7f7f7;
+}
+
+/* Модалка файлов заказа — крупное превью изображений */
+.files-modal .file-row {
+  grid-template-columns: 600px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.files-modal .file-preview {
+  width: 600px;
+  height: 600px;
+}
+
+.files-modal .file-thumb {
+  width: 600px;
+  height: 600px;
+  object-fit: contain;
+  background: #f5f5f5;
 }
 
 .file-actions {
@@ -5026,22 +5044,30 @@ th {
     min-width: 0;
   }
 
-  /* Файлы в модалке: превью слева, текст и кнопки справа — и на iPhone (раньше была одна колонка) */
+  /* Файлы в модалке: крупное превью сверху на узком экране */
   .files-modal .file-row {
-    grid-template-columns: 64px minmax(0, 1fr);
-    gap: 10px;
-    padding: 8px 10px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 10px 12px;
   }
 
   .files-modal .file-preview,
-  .files-modal .file-thumb,
-  .files-modal .file-icon {
-    width: 64px;
-    height: 64px;
+  .files-modal .file-thumb {
+    width: 100%;
+    max-width: 600px;
+    height: auto;
+    aspect-ratio: 1;
+    max-height: min(600px, 65vh);
   }
 
   .files-modal .file-thumb {
-    object-fit: cover;
+    object-fit: contain;
+    background: #f5f5f5;
+  }
+
+  .files-modal .file-icon {
+    width: 64px;
+    height: 64px;
   }
 
   /* Блок «Уже загружено» — та же сетка строк, что в модалке файлов */
