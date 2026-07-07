@@ -3,6 +3,7 @@ import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
 import { displayNameByEmail } from "./user-names.js";
 import { buildOrderPickerRowHtml, viewOrder } from "./orders.js";
+import { isOrderHiddenForCurrentRole } from "./roles.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 const SUGGEST_DEBOUNCE_MS = 120;
@@ -349,9 +350,21 @@ function filterUsers(query) {
     .slice(0, 15);
 }
 
-function filterOrders(query) {
+function normalizeOrderStatus(val) {
+  if (val === "нет" || val === "оплачен" || val == null || val === "") return "Контакт с клиентом";
+  return val;
+}
+
+function isOpenOrder(order) {
+  return normalizeOrderStatus(order.payment_status) !== "Заказ закрыт";
+}
+
+function filterOrders(query, { onlyOpen = false, limit = 15 } = {}) {
   const q = (query || "").trim().toLowerCase();
-  const orders = state.allOrders || [];
+  let orders = state.allOrders || [];
+  if (onlyOpen) {
+    orders = orders.filter((order) => isOpenOrder(order) && !isOrderHiddenForCurrentRole(order));
+  }
   const out = [];
   for (const o of orders) {
     if (!q) {
@@ -372,7 +385,7 @@ function filterOrders(query) {
         out.push(o);
       }
     }
-    if (out.length >= 15) break;
+    if (limit > 0 && out.length >= limit) break;
   }
   return out;
 }
@@ -552,7 +565,7 @@ function openOrderPicker(input) {
   }
   activePicker = "order";
   syncPickerButtonStates();
-  const orders = filterOrders("");
+  const orders = filterOrders("", { onlyOpen: true, limit: 0 });
   showSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order), {
     variant: "order",
   });
