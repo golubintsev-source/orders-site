@@ -526,6 +526,13 @@ function updateComposerSuggestions(input) {
   }
 }
 
+function mapUserPickerItems(users) {
+  return users.map((u) => ({
+    label: displayNameByEmail(u.email),
+    user: u,
+  }));
+}
+
 function openUserPicker(input) {
   if (activePicker === "user") {
     hideSuggestions();
@@ -534,12 +541,7 @@ function openUserPicker(input) {
   activePicker = "user";
   syncPickerButtonStates();
   const users = filterUsers("");
-  const items = users.map((u) => ({
-    label: u.email,
-    hint: u.role || "",
-    user: u,
-  }));
-  showSuggestions(items, (item) => applyUserPick(input, item.user));
+  showSuggestions(mapUserPickerItems(users), (item) => applyUserPick(input, item.user));
   input.focus();
 }
 
