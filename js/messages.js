@@ -456,6 +456,16 @@ function getDefaultRecipientIds(users) {
   return new Set();
 }
 
+function ensureComposerRecipientsDefault(users) {
+  if (composerRecipients.size > 0) return;
+  const selectedIds = getDefaultRecipientIds(users);
+  for (const user of users) {
+    if (selectedIds.has(String(user.id))) {
+      composerRecipients.set(user.id, { id: user.id, email: user.email });
+    }
+  }
+}
+
 function showUserRecipientPicker(users) {
   const list = document.getElementById("messagesComposerSuggestions");
   if (!list) return;
@@ -613,7 +623,8 @@ async function sendMessage() {
   const uid = getCurrentUserId();
   if (!uid) return;
 
-  await loadUsersDirectory();
+  const users = await loadUsersDirectory();
+  ensureComposerRecipientsDefault(users);
 
   const recipientList = [...composerRecipients.values()].filter((recipient) => recipient.id !== uid);
   if (!recipientList.length) {
