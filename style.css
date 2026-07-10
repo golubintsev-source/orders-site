@@ -5213,45 +5213,96 @@ th {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: #059669;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #34d399 0%, #059669 55%, #047857 100%);
+  color: #fff;
   cursor: pointer;
   flex-shrink: 0;
+  box-shadow:
+    0 2px 10px rgba(5, 150, 105, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
 }
 
 .messages-nav-btn:hover {
-  background: #ecfdf5;
-  color: #047857;
+  filter: brightness(1.06);
+  box-shadow:
+    0 4px 14px rgba(5, 150, 105, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  transform: translateY(-1px);
+}
+
+.messages-nav-btn:active {
+  transform: translateY(0);
+  box-shadow:
+    0 1px 6px rgba(5, 150, 105, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.messages-nav-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(52, 211, 153, 0.45),
+    0 2px 10px rgba(5, 150, 105, 0.38);
 }
 
 .messages-nav-btn--has-unread {
-  color: #047857;
+  animation: messages-nav-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes messages-nav-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 2px 10px rgba(5, 150, 105, 0.38),
+      inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  }
+
+  50% {
+    box-shadow:
+      0 2px 10px rgba(5, 150, 105, 0.38),
+      0 0 0 4px rgba(52, 211, 153, 0.32),
+      inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .messages-nav-btn--has-unread {
+    animation: none;
+  }
 }
 
 .messages-nav-icon {
   display: block;
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.12));
 }
 
 .messages-unread-badge {
   position: absolute;
-  top: -2px;
-  right: -4px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
   border-radius: 999px;
-  background: #dc2626;
+  background: linear-gradient(180deg, #f87171, #dc2626);
   color: #fff;
   font-size: 10px;
-  font-weight: 700;
-  line-height: 16px;
+  font-weight: 800;
+  line-height: 14px;
   text-align: center;
   pointer-events: none;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.45);
 }
 
 .messages-page {
