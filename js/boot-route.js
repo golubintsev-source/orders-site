@@ -13,7 +13,7 @@ const BOOT_LABELS = {
   balance: "Баланс",
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
-  statistics: "Статистика2",
+  statistics: "Статистика",
   "order-tasks": "Задачи",
   messages: "Сообщения",
 };

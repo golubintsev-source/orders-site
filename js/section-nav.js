@@ -74,7 +74,7 @@ const SECTION_LABELS = {
   balance: "Баланс",
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
-  statistics: "Статистика2",
+  statistics: "Статистика",
   messages: "Сообщения",
 };
 
