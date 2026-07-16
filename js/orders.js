@@ -2736,7 +2736,7 @@ export async function viewOrder(orderId) {
   captureOrderFormReturnSection();
   switchSection("new");
   syncOrderIdInUrl(orderId);
-  showOrderViewQr(orderId);
+  await showOrderViewQr(orderId);
   refreshSectionNavLabel();
 
   window.scrollTo({ top: 0, behavior: "smooth" });

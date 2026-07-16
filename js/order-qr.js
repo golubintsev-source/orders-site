@@ -1,5 +1,17 @@
 import { buildOrderViewUrl } from "./app-routes.js";
 
+let qrcodeLoadPromise = null;
+
+function loadQRCodeLib() {
+  if (!qrcodeLoadPromise) {
+    qrcodeLoadPromise = import("https://cdn.jsdelivr.net/npm/qrcode@1.5.4/+esm").catch((err) => {
+      qrcodeLoadPromise = null;
+      throw err;
+    });
+  }
+  return qrcodeLoadPromise;
+}
+
 function getWrap() {
   return document.getElementById("orderViewQrWrap");
 }
@@ -19,35 +31,38 @@ export function hideOrderViewQr() {
 }
 
 /** Показать QR со ссылкой на просмотр заказа. */
-export function showOrderViewQr(orderId) {
+export async function showOrderViewQr(orderId) {
   const wrap = getWrap();
   const canvas = getCanvas();
   if (!wrap || !canvas) return;
 
   const url = buildOrderViewUrl(orderId);
-  const QRCode = typeof window !== "undefined" ? window.QRCode : null;
-  if (!QRCode?.toCanvas) {
-    console.warn("QRCode library is not loaded");
-    wrap.hidden = true;
-    return;
-  }
 
-  QRCode.toCanvas(
-    canvas,
-    url,
-    {
-      errorCorrectionLevel: "M",
-      margin: 1,
-      width: 160,
-      color: { dark: "#111111", light: "#ffffff" },
-    },
-    (err) => {
-      if (err) {
-        console.error("QR generate error:", err);
-        wrap.hidden = true;
-        return;
-      }
-      wrap.hidden = false;
+  try {
+    const mod = await loadQRCodeLib();
+    const toCanvas = mod.default?.toCanvas ?? mod.toCanvas;
+    if (!toCanvas) {
+      console.warn("QRCode.toCanvas is not available");
+      wrap.hidden = true;
+      return;
     }
-  );
+
+    await new Promise((resolve, reject) => {
+      toCanvas(
+        canvas,
+        url,
+        {
+          errorCorrectionLevel: "M",
+          margin: 1,
+          width: 160,
+          color: { dark: "#111111", light: "#ffffff" },
+        },
+        (err) => (err ? reject(err) : resolve())
+      );
+    });
+    wrap.hidden = false;
+  } catch (err) {
+    console.error("QR generate error:", err);
+    wrap.hidden = true;
+  }
 }
