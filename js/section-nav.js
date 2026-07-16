@@ -109,12 +109,6 @@ function updateBackToOrdersBtnVisibility(sectionId) {
   if (btn) btn.hidden = !show;
 }
 
-function updateOrdersTypeToggleVisibility(sectionId) {
-  const wrap = document.querySelector(".orders-type-toggle-wrap");
-  if (!wrap) return;
-  wrap.hidden = sectionId !== "all";
-}
-
 function labelForSection(sectionId) {
   if (sectionId === "new") {
     if (state.viewingOrderId != null) {
@@ -331,7 +325,6 @@ export function switchSection(sectionId, opts = {}) {
   }
 
   updateBackToOrdersBtnVisibility(sectionId);
-  updateOrdersTypeToggleVisibility(sectionId);
   if (sectionId === "all") {
     void import("./ordersTableMobileFit.js").then((m) => m.scheduleApplyOrdersTableMobileFit());
   } else {
@@ -463,7 +456,6 @@ export function initSectionNavDropdown(options = {}) {
   updateDropdownItemsVisibility(currentSectionId);
   updateOrdersSearchBtnVisibility(currentSectionId);
   updateBackToOrdersBtnVisibility(currentSectionId);
-  updateOrdersTypeToggleVisibility(currentSectionId);
 
   const motivationEl = document.getElementById("sectionNavMotivationText");
   if (motivationEl) {
