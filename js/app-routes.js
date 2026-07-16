@@ -102,6 +102,44 @@ export function hrefToOrdersExcelExport() {
   return usesHashOnlyRouting() ? "index.html#orders-excel" : "/?export=orders-excel";
 }
 
+/** Абсолютный URL просмотра заказа (для QR и шаринга). */
+export function buildOrderViewUrl(orderId) {
+  const id = encodeURIComponent(String(orderId));
+  if (usesHashOnlyRouting()) {
+    const u = new URL(window.location.href);
+    u.searchParams.set("order_id", String(orderId));
+    u.hash = "new";
+    return u.href;
+  }
+  return `${window.location.origin}/new?order_id=${id}`;
+}
+
+/** ID заказа из ?order_id= или null. */
+export function getOrderIdFromUrl() {
+  const raw = new URLSearchParams(window.location.search).get("order_id");
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Синхронизировать ?order_id= в адресной строке (replaceState).
+ * @param {number | string | null | undefined} orderId — null/undefined убирает параметр
+ */
+export function syncOrderIdInUrl(orderId) {
+  const u = new URL(window.location.href);
+  if (orderId == null || orderId === "") {
+    if (!u.searchParams.has("order_id")) return;
+    u.searchParams.delete("order_id");
+  } else {
+    const next = String(orderId);
+    if (u.searchParams.get("order_id") === next) return;
+    u.searchParams.set("order_id", next);
+  }
+  const path = u.pathname + u.search + u.hash;
+  history.replaceState(null, "", path || "/");
+}
+
 function stripHashAndExportParam() {
   const u = new URL(window.location.href);
   u.hash = "";
@@ -158,18 +196,27 @@ export function migrateLegacyHashToPathIfNeeded() {
 export function syncBrowserUrlToSection(sectionId) {
   if (!ROUTE_SECTION_IDS.has(sectionId)) return;
 
+  const search = new URLSearchParams(window.location.search);
+  if (sectionId !== "new") {
+    search.delete("order_id");
+  }
+  const searchStr = search.toString();
+  const q = searchStr ? `?${searchStr}` : "";
+
   if (usesHashOnlyRouting()) {
-    const base = window.location.pathname + window.location.search;
+    const base = window.location.pathname + q;
     const targetHash = sectionId === "all" ? "" : `#${sectionId}`;
-    if (window.location.hash === targetHash) return;
-    history.pushState(null, "", `${base}${targetHash}`);
+    const next = `${base}${targetHash}`;
+    if (`${window.location.pathname}${window.location.search}${window.location.hash}` === next) return;
+    history.pushState(null, "", next);
     return;
   }
 
   const want = pathForRouteSection(sectionId);
   const cur = normalizePathname(window.location.pathname);
   const curSection = PATH_TO_SECTION.get(cur);
-  if (curSection === sectionId && !window.location.hash) return;
+  const curSearch = window.location.search || "";
+  if (curSection === sectionId && !window.location.hash && curSearch === q) return;
 
-  history.pushState(null, "", want + window.location.search);
+  history.pushState(null, "", want + q);
 }

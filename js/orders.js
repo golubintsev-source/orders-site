@@ -19,6 +19,8 @@ import {
   STANDALONE_SECTION_NAV_ID,
 } from "./section-nav.js";
 import { scheduleSaveUserPlace } from "./user-place.js";
+import { syncOrderIdInUrl } from "./app-routes.js";
+import { hideOrderViewQr, showOrderViewQr } from "./order-qr.js";
 import { loadAllChanges } from "./all-changes.js";
 import {
   loadFilesCountMap,
@@ -2584,6 +2586,8 @@ export function leaveOrderFormOnCancel() {
 
 export function resetFormMode() {
   state.viewingOrderId = null;
+  hideOrderViewQr();
+  syncOrderIdInUrl(null);
   applyOrderFormReadOnly(false);
   state.editingOrderId = null;
   state.orderFormReturnSectionId = null;
@@ -2689,18 +2693,24 @@ export async function viewOrder(orderId) {
     console.error("Ошибка загрузки заявки:", e);
     setMessage("Ошибка загрузки заявки", "#d32f2f");
     state.viewingOrderId = null;
+    hideOrderViewQr();
+    syncOrderIdInUrl(null);
     return;
   }
   if (data?.error) {
     console.error("Ошибка загрузки заявки:", data.error);
     setMessage("Ошибка загрузки заявки", "#d32f2f");
     state.viewingOrderId = null;
+    hideOrderViewQr();
+    syncOrderIdInUrl(null);
     return;
   }
 
   if (isOrderHiddenForCurrentRole(data)) {
     setMessage("Нет доступа к этому типу заказа", "#d32f2f");
     state.viewingOrderId = null;
+    hideOrderViewQr();
+    syncOrderIdInUrl(null);
     return;
   }
 
@@ -2725,6 +2735,8 @@ export async function viewOrder(orderId) {
 
   captureOrderFormReturnSection();
   switchSection("new");
+  syncOrderIdInUrl(orderId);
+  showOrderViewQr(orderId);
   refreshSectionNavLabel();
 
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2738,6 +2750,8 @@ export async function editOrder(orderId) {
   }
 
   state.viewingOrderId = null;
+  hideOrderViewQr();
+  syncOrderIdInUrl(null);
   applyOrderFormReadOnly(false);
 
   let data = null;

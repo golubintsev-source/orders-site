@@ -148,6 +148,10 @@
           <button type="submit" id="submitBtnTop" class="btn-form-save">Сохранить заказ</button>
           <button type="button" id="cancelEditBtnTop" class="btn-form-cancel" style="display: none;">Отмена</button>
         </div>
+        <div id="orderViewQrWrap" class="order-view-qr-wrap" hidden>
+          <canvas id="orderViewQrCanvas" class="order-view-qr-canvas" width="160" height="160" aria-label="QR-код ссылки на заказ"></canvas>
+          <p class="order-view-qr-hint">Отсканируйте камерой телефона, чтобы открыть этот заказ</p>
+        </div>
         <p id="messageTop"></p>
         <div class="grid">
           <div class="field">
@@ -1309,6 +1313,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/blueimp-load-image@5.16.0/js/load-image.all.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>

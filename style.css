@@ -872,6 +872,38 @@ h2 {
   margin-bottom: 10px;
 }
 
+#section-new .order-view-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #d8dee6;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+#section-new .order-view-qr-wrap[hidden] {
+  display: none;
+}
+
+#section-new .order-view-qr-canvas {
+  display: block;
+  width: 160px;
+  height: 160px;
+  border-radius: 6px;
+  background: #fff;
+}
+
+#section-new .order-view-qr-hint {
+  margin: 0;
+  max-width: 22rem;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #5a6573;
+}
+
 /* Сохранить / Отмена — как «Загрузить», голубая тема в духе Commit в Cursor */
 #section-new .btn-form-save,
 #section-new .btn-form-cancel {

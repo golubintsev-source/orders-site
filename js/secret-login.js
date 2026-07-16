@@ -1,10 +1,24 @@
 import { supabaseClient } from "./config.js";
 import { hrefToHome } from "./app-routes.js";
-import { getResumeHref } from "./user-place.js";
+import { getResumeHref, resolvePlaceHref } from "./user-place.js";
 import { flushPendingAccessLogs } from "./access-log.js";
 
 export function getLoginKeyFromUrl() {
   return new URLSearchParams(window.location.search).get("key")?.trim() || null;
+}
+
+function getSafeNextHref() {
+  const raw = new URLSearchParams(window.location.search).get("next")?.trim();
+  if (!raw) return null;
+  if (raw.startsWith("//") || raw.includes("://")) return null;
+  if (raw.startsWith("/") || /^[a-zA-Z0-9._-]+\.html/.test(raw)) {
+    return resolvePlaceHref(raw);
+  }
+  return null;
+}
+
+function hrefAfterLogin(userId) {
+  return getSafeNextHref() || getResumeHref(userId, hrefToHome());
 }
 
 function stripKeyFromUrl() {
@@ -79,7 +93,7 @@ export async function trySecretLoginFromUrl() {
       await flushPendingAccessLogs(user);
     }
 
-    window.location.href = getResumeHref(user.id, hrefToHome());
+    window.location.href = hrefAfterLogin(user?.id);
     return true;
   } catch (e) {
     console.error("secret-login:", e);

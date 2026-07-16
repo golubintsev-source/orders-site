@@ -29,6 +29,7 @@ import {
 import { canAccessSection, isAdmin } from "./roles.js";
 import { applyClientFilter } from "./orders.js";
 import {
+  getOrderIdFromUrl,
   getRouteSectionFromUrl,
   migrateLegacyHashToPathIfNeeded,
   tryConsumeOrdersExcelExport,
@@ -128,9 +129,12 @@ async function init() {
     initOrderTasksSection();
     initMessagesSection();
 
+    const orderIdFromUrl = getOrderIdFromUrl();
     const savedApp = readSavedPlaceForCurrentPage(user.id)?.app;
     const restoringOrderForm =
-      savedApp?.viewingOrderId != null || savedApp?.editingOrderId != null;
+      orderIdFromUrl != null ||
+      savedApp?.viewingOrderId != null ||
+      savedApp?.editingOrderId != null;
     if (!restoringOrderForm) {
       resetFormMode();
     }
@@ -151,7 +155,12 @@ async function init() {
     }
 
     applyPendingOrdersSearchFromHistory();
-    await restoreSavedAppContext(user.id);
+    if (orderIdFromUrl != null) {
+      await viewOrder(orderIdFromUrl);
+      scheduleSaveUserPlace();
+    } else {
+      await restoreSavedAppContext(user.id);
+    }
     await applySavedScroll(readSavedPlaceForCurrentPage(user.id));
   } catch (err) {
     console.error("Ошибка инициализации:", err);

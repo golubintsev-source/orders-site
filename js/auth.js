@@ -2,8 +2,21 @@ import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
 import { normalizeRole } from "./roles.js";
 import { isNetworkFetchError, raceWithTimeout } from "./offline-cache.js";
+import { captureHref } from "./user-place.js";
 
 const PROFILE_ROLE_CACHE_KEY = "orders_site_cache_profile_role_v1";
+
+function loginPageHref() {
+  try {
+    const next = captureHref();
+    if (!next || next === "/" || next === "/all" || next === "index.html") {
+      return "login.html";
+    }
+    return `login.html?next=${encodeURIComponent(next)}`;
+  } catch {
+    return "login.html";
+  }
+}
 
 function readCachedRoleRaw() {
   try {
@@ -43,7 +56,7 @@ export async function checkAuth() {
   const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
   const sessionUser = sessionData?.session?.user;
   if (sessionError || !sessionUser) {
-    window.location.href = "login.html";
+    window.location.href = loginPageHref();
     return null;
   }
 
@@ -59,7 +72,7 @@ export async function checkAuth() {
           return;
         }
         if (error && !isNetworkFetchError(error)) {
-          window.location.href = "login.html";
+          window.location.href = loginPageHref();
         }
       })
       .catch((e) => {
