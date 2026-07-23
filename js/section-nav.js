@@ -67,7 +67,7 @@ export function updateSectionNavRicherStat() {
 }
 
 const SECTION_LABELS = {
-  all: "Заказы",
+  all: "Заказы2",
   calculations: "Расчеты",
   "tasks-all": "Все задачи",
   "changes-all": "Все изменения",
