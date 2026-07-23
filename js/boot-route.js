@@ -16,6 +16,7 @@ const BOOT_LABELS = {
   statistics: "Статистика",
   "order-tasks": "Задачи",
   messages: "Сообщения",
+  voice: "Голосовое управление",
 };
 
 function applyBootRoute() {

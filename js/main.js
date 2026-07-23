@@ -50,6 +50,7 @@ import {
 } from "./user-place.js";
 import { initPushNotifications } from "./push-notifications.js";
 import { initMessagesSection } from "./messages.js";
+import { initVoiceSection } from "./voice.js";
 import { trySecretLoginFromUrl, getLoginKeyFromUrl } from "./secret-login.js";
 import { initLoginLinksSection, loadLoginLinksSection } from "./login-links.js";
 import { updateTopbarUserName } from "./user-names.js";
@@ -128,6 +129,7 @@ async function init() {
 
     initOrderTasksSection();
     initMessagesSection();
+    initVoiceSection();
 
     const orderIdFromUrl = getOrderIdFromUrl();
     const savedApp = readSavedPlaceForCurrentPage(user.id)?.app;

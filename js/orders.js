@@ -3282,3 +3282,230 @@ export function applyOrderTypeSelectForRole() {
   renderOrderTypeFilterDropdown();
   applyFiltersAndRender();
 }
+
+const VOICE_ORDER_TYPES = new Set(["Окна", "Подоконники", "Аллюминий", "Магазин", "Сетки/мелочь"]);
+const VOICE_PAYMENT_STATUSES = new Set([
+  "Контакт с клиентом",
+  "Замер назначен",
+  "Замер проведен",
+  "Расчет сформирован",
+  "Предложение направлено",
+  "Клиент согласен",
+  "Производство",
+  "Товар передан заказчику",
+  "Монтаж выполнен",
+  "Заказ закрыт",
+]);
+const VOICE_MONEY_TO = new Set(["Дима", "Вова", "Безнал", "Касса"]);
+const VOICE_DELIVERY = new Set(["Доставка", "Самовывоз"]);
+
+function normalizeVoiceMoneyTo(raw) {
+  const s = String(raw || "").trim();
+  return VOICE_MONEY_TO.has(s) ? s : null;
+}
+
+function normalizeVoiceInteger(raw) {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "number" && Number.isFinite(raw)) return Math.round(raw);
+  const r = tryParseRublesInteger(String(raw));
+  if (r.invalidFormat) return null;
+  return r.value;
+}
+
+function normalizeVoiceIsoDate(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return null;
+}
+
+/**
+ * Создать заказ из голосового ассистента (без открытия формы).
+ * @param {Record<string, unknown>} draft
+ * @returns {Promise<{ ok: boolean, orderId?: number|string, message: string, offline?: boolean }>}
+ */
+export async function createOrderFromVoicePayload(draft) {
+  if (!canMutateOrders()) {
+    return { ok: false, message: "Недостаточно прав для создания заказов" };
+  }
+
+  const client = String(draft?.client || "").trim();
+  if (!client) {
+    return { ok: false, message: "Не указан клиент" };
+  }
+
+  let paymentStatus = String(draft?.payment_status || "").trim() || "Контакт с клиентом";
+  if (!VOICE_PAYMENT_STATUSES.has(paymentStatus)) {
+    paymentStatus = "Контакт с клиентом";
+  }
+  if (paymentStatus === "Заказ закрыт" && !isAdmin() && state.currentRole !== "user") {
+    return { ok: false, message: "Статус «Заказ закрыт» недоступен для вашей роли" };
+  }
+
+  let orderType = String(draft?.order_type || "").trim() || null;
+  if (orderType && !VOICE_ORDER_TYPES.has(orderType)) orderType = null;
+  if (isUserLite() && orderType === "Магазин") {
+    return { ok: false, message: "Тип «Магазин» недоступен для вашей роли" };
+  }
+  if (isUserShop()) {
+    orderType = "Магазин";
+  }
+
+  let phone = String(draft?.phone || "").trim() || null;
+  if (phone) {
+    const phoneDigits = phone.replace(/\D/g, "");
+    const phoneValid = phoneDigits.length === 11 && (phoneDigits[0] === "8" || phoneDigits[0] === "7");
+    if (!phoneValid) {
+      return { ok: false, message: "Неверный формат телефона" };
+    }
+  }
+
+  const amount = normalizeVoiceInteger(draft?.amount);
+  const prepayment = normalizeVoiceInteger(draft?.prepayment);
+  if (amount != null && prepayment != null && prepayment > amount) {
+    return { ok: false, message: "Предоплата не может быть больше суммы заказа" };
+  }
+
+  let remainingAmount = normalizeVoiceInteger(draft?.remaining_amount);
+  if (remainingAmount == null && amount != null) {
+    remainingAmount = amount - (prepayment ?? 0);
+  }
+
+  const prepaymentTo = normalizeVoiceMoneyTo(draft?.prepayment_to);
+  if (prepayment != null && prepayment !== 0 && !prepaymentTo) {
+    return { ok: false, message: "Укажите, кому предоплата" };
+  }
+
+  let delivery = String(draft?.delivery || "").trim() || null;
+  if (delivery && !VOICE_DELIVERY.has(delivery)) delivery = null;
+  const deliveryDate = normalizeVoiceIsoDate(draft?.delivery_date);
+  if (delivery && !deliveryDate) {
+    return { ok: false, message: "Укажите дату отправки" };
+  }
+
+  const installation = Boolean(draft?.installation);
+  const installationDate = installation ? normalizeVoiceIsoDate(draft?.installation_date) : null;
+
+  const orderDateIso = normalizeVoiceIsoDate(draft?.order_date);
+  const orderDate = orderDateIso
+    ? `${orderDateIso}T${new Date().toTimeString().slice(0, 8)}`
+    : new Date().toISOString();
+
+  const remainingTo = normalizeVoiceMoneyTo(draft?.remaining_to);
+  if (paymentStatus === "Заказ закрыт" && !remainingTo && remainingAmount !== 0) {
+    return { ok: false, message: "Заказ нельзя закрыть, если он не оплачен" };
+  }
+
+  const orderData = {
+    phone,
+    client,
+    order_type: orderType,
+    address: String(draft?.address || "").trim() || null,
+    payment_status: paymentStatus,
+    order_date: orderDate,
+    order_number: null,
+    description: String(draft?.description || "").trim() || null,
+    amount,
+    prepayment,
+    prepayment_to: prepaymentTo,
+    remaining_amount: remainingAmount,
+    remaining_to: remainingTo,
+    area_m2: parseOrderFormNumber(draft?.area_m2),
+    mosquito_nets: parseOrderFormNumber(draft?.mosquito_nets),
+    construction_count: parseOrderFormNumber(draft?.construction_count),
+    delivery,
+    delivery_date: deliveryDate,
+    installation,
+    installation_date: installationDate,
+    reveals: false,
+    reveals_date: null,
+    installer_payment_amount: null,
+    installer_payment_by: null,
+  };
+
+  const saveVoiceOrderOffline = () => {
+    const insertPayload = insertPayloadFromFormData(orderData);
+    const localId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const tempId = nextOfflineTempOrderId();
+    const displayRow = buildDisplayRowForPendingOrder(orderData, tempId, localId);
+    addPendingOfflineOrder({ localId, displayRow, insertPayload });
+    addPendingOfflineOrderHistory({
+      localId:
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `hist-${Date.now()}`,
+      pending_order_local_id: localId,
+      order_temp_id: tempId,
+      user_email: state.currentUser?.email || "",
+      comment: buildOrderHistoryComment(null, orderData, false),
+    });
+    queueOrderDeltaCalculationsForOffline({
+      orderTempId: tempId,
+      wasEditing: false,
+      orderData,
+    });
+    state.dbUnavailable = true;
+    state.ordersFromCache = true;
+    rebaselineAllOrdersFromStateAndPendingQueue();
+    syncDbUnavailableBanner();
+    return {
+      ok: true,
+      orderId: tempId,
+      offline: true,
+      message: `Заявка сохранена на устройстве (временный номер ${tempId}). Отправится в базу при появлении связи.`,
+    };
+  };
+
+  if (shouldSaveNewOrderToLocalQueue()) {
+    return saveVoiceOrderOffline();
+  }
+
+  let error = null;
+  let savedOrderId = null;
+  try {
+    const result = await raceWithTimeout(supabaseClient.from("orders").insert([orderData]).select().single());
+    error = result.error;
+    if (!error && result.data) savedOrderId = result.data.id;
+  } catch (e) {
+    error = e;
+  }
+
+  if (error && shouldFallbackSaveOrderToLocal(error)) {
+    applyOfflineModeFromDbUnavailable();
+    return saveVoiceOrderOffline();
+  }
+
+  if (error) {
+    console.error("voice create order:", error);
+    return {
+      ok: false,
+      message: `Ошибка при сохранении заявки. ${error.message || error.hint || String(error.code || error)}`,
+    };
+  }
+
+  await writeOrderDeltaCalculations({
+    orderId: savedOrderId,
+    wasEditing: false,
+    orderData,
+  });
+
+  if (savedOrderId && state.currentUser?.email) {
+    await supabaseClient.from("order_history").insert([
+      {
+        order_id: savedOrderId,
+        user_email: state.currentUser.email,
+        comment: buildOrderHistoryComment(null, orderData, false),
+      },
+    ]);
+  }
+
+  await loadOrders();
+  return {
+    ok: true,
+    orderId: savedOrderId,
+    message: `Заявка номер ${savedOrderId} создана.`,
+  };
+}

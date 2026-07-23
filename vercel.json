@@ -27,6 +27,9 @@
     },
     "api/push-status.js": {
       "maxDuration": 10
+    },
+    "api/voice-assistant.js": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
@@ -40,6 +43,7 @@
     { "source": "/statistics", "destination": "/index.html" },
     { "source": "/order-tasks", "destination": "/index.html" },
     { "source": "/messages", "destination": "/index.html" },
+    { "source": "/voice", "destination": "/index.html" },
     { "source": "/all", "destination": "/index.html" }
   ]
 }

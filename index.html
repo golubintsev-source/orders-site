@@ -123,6 +123,20 @@
             </svg>
             <span id="messagesUnreadBadge" class="messages-unread-badge" hidden>0</span>
           </button>
+          <button
+            id="voiceNavBtn"
+            class="voice-nav-btn"
+            type="button"
+            title="Голосовое управление"
+            aria-label="Голосовое управление"
+          >
+            <svg class="voice-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="9" y="2" width="6" height="11" rx="3" stroke="currentColor" stroke-width="2" />
+              <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <path d="M12 18v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <path d="M8 22h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
         </div>
       </nav>
       <div class="topbar-toolbar">
@@ -912,6 +926,51 @@
       </div>
     </section>
 
+    <section id="section-voice" class="content-section">
+      <div class="voice-page">
+        <div class="voice-toolbar">
+          <p class="voice-toolbar-title">Голосовое управление</p>
+          <button type="button" id="voiceClearBtn" class="voice-clear-btn" title="Очистить диалог">Очистить</button>
+        </div>
+        <div id="voiceFeed" class="voice-feed" role="log" aria-live="polite" aria-label="Диалог с ассистентом">
+          <p class="voice-empty">Спросите про заказ голосом или текстом — например: «Какая сумма по последнему заказу?» или «Создай заказ клиенту Иванову на 50 тысяч, адрес Ленина 10».</p>
+        </div>
+        <p id="voicePageMessage" class="voice-page-message"></p>
+        <div class="voice-composer">
+          <button
+            type="button"
+            id="voiceMicBtn"
+            class="voice-mic-btn"
+            title="Нажмите и говорите"
+            aria-label="Голосовой ввод"
+            aria-pressed="false"
+          >
+            <svg class="voice-mic-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="9" y="2" width="6" height="11" rx="3" stroke="currentColor" stroke-width="2" />
+              <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <path d="M12 18v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <path d="M8 22h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
+          <div class="voice-composer-input-wrap">
+            <textarea
+              id="voiceComposerInput"
+              class="voice-composer-input"
+              rows="2"
+              placeholder="Или введите вопрос текстом…"
+              autocomplete="off"
+            ></textarea>
+          </div>
+          <button type="button" id="voiceSendBtn" class="btn-primary voice-send-btn" title="Отправить" aria-label="Отправить">
+            <svg class="voice-send-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <section id="section-route-sheet" class="content-section">
       <div class="card route-sheet-card">
         <div class="route-sheet-dates" role="group" aria-label="Доставка: период по дате отправки">
@@ -1320,6 +1379,6 @@
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=28"></script>
+  <script type="module" src="./js/main.js?v=29"></script>
 </body>
 </html>

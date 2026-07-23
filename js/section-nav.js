@@ -76,6 +76,7 @@ const SECTION_LABELS = {
   settings: "Настройки",
   statistics: "Статистика",
   messages: "Сообщения",
+  voice: "Голосовое управление",
 };
 
 /** Совпадает с URL после boot-route.js (иначе шапка/лупа до main рассинхронизированы). */
@@ -91,6 +92,7 @@ const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "changes-all",
   "order-tasks",
   "messages",
+  "voice",
   "balance",
   "route-sheet",
   "settings",
@@ -322,6 +324,12 @@ export function switchSection(sectionId, opts = {}) {
       m.clearPushBadge();
       m.refreshMessagesPushUi();
     });
+  }
+  if (prevSectionId === "voice" && sectionId !== "voice") {
+    void import("./voice.js").then((m) => m.onVoiceSectionLeave());
+  }
+  if (sectionId === "voice") {
+    void import("./voice.js").then((m) => m.onVoiceSectionEnter());
   }
 
   updateBackToOrdersBtnVisibility(sectionId);
