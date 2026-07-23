@@ -6080,14 +6080,6 @@ th {
   animation: voice-mic-pulse 1.4s ease-in-out infinite;
 }
 
-.voice-mic-btn--active.voice-mic-btn--hearing {
-  box-shadow:
-    0 0 0 calc(4px + (var(--voice-mic-level, 0) * 6px)) rgba(248, 113, 113, 0.4),
-    0 0 16px rgba(220, 38, 38, 0.35);
-  animation: none;
-  transform: scale(calc(1 + (var(--voice-mic-level, 0) * 0.06)));
-}
-
 @keyframes voice-mic-pulse {
   0%,
   100% {
