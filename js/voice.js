@@ -204,30 +204,6 @@ function stopSpeaking() {
   }
 }
 
-/**
- * Отпускает аудиосессию после TTS. На iPhone, если Audio/speechSynthesis
- * ещё «держат» playback, SpeechRecognition часто стартует красной кнопкой,
- * но речь не слышит.
- */
-function releaseTtsPlayback() {
-  stopSpeaking();
-  clearTtsObjectUrl();
-  const audio = ttsAudio;
-  if (!audio) return;
-  try {
-    audio.pause();
-  } catch {
-    /* ignore */
-  }
-  try {
-    audio.removeAttribute("src");
-    audio.src = "";
-    audio.load();
-  } catch {
-    /* ignore */
-  }
-}
-
 function showReplayHint() {
   const feed = document.getElementById("voiceFeed");
   if (!feed || !lastSpeakText) return;
@@ -249,15 +225,6 @@ async function playTtsBlob(blob, utterText) {
     clearTtsObjectUrl();
     audio.removeEventListener("ended", onEnded);
     audio.removeEventListener("error", onError);
-    // После озвучки сразу отпускаем playback — иначе следующий тап микрофона
-    // на iPhone часто даёт «красную кнопку без распознавания».
-    try {
-      audio.removeAttribute("src");
-      audio.src = "";
-      audio.load();
-    } catch {
-      /* ignore */
-    }
   };
   const onError = () => {
     clearTtsObjectUrl();
@@ -829,6 +796,7 @@ function armListenWatchdogs(sessionId) {
 }
 
 function toggleListening() {
+  unlockTtsAudio();
   if (busy) return;
   const Ctor = getSpeechRecognitionCtor();
   if (!Ctor) {
@@ -854,10 +822,12 @@ function toggleListening() {
     return;
   }
 
-  // Важно: НЕ вызываем unlockTtsAudio() перед записью — speak/play перед
-  // SpeechRecognition на iPhone часто даёт «глухой» красный микрофон.
-  // Только отпускаем текущую озвучку и стартуем распознавание в том же жесте.
-  releaseTtsPlayback();
+  // Не pause() на ttsAudio сразу после unlock — iOS иначе может не «запомнить» жест.
+  try {
+    window.speechSynthesis?.cancel();
+  } catch {
+    /* ignore */
+  }
 
   beginListenSession();
   setLiveTranscript("");
@@ -962,15 +932,12 @@ export function initVoiceSection() {
 }
 
 export function onVoiceSectionEnter() {
-  // Разблокируем TTS заранее (не в момент микрофона), чтобы озвучка ответов
-  // работала, а старт записи не переводил iPhone в playback.
-  unlockTtsAudio();
   const input = document.getElementById("voiceComposerInput");
   input?.focus?.({ preventScroll: true });
 }
 
 export function onVoiceSectionLeave() {
-  releaseTtsPlayback();
+  stopSpeaking();
   clearListenTimers();
   setLiveTranscript("");
   if (listening && recognition) {
