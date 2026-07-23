@@ -30,6 +30,9 @@
     },
     "api/voice-assistant.js": {
       "maxDuration": 60
+    },
+    "api/voice-tts.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [

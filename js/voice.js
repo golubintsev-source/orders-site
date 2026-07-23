@@ -11,6 +11,11 @@ let chatHistory = [];
 let pendingOrderDraft = null;
 let listening = false;
 let busy = false;
+/** @type {HTMLAudioElement | null} */
+let currentAudio = null;
+/** @type {SpeechSynthesisVoice | null} */
+let preferredBrowserVoice = null;
+let browserVoicesReady = false;
 
 function escapeHtml(s) {
   return String(s)
@@ -24,14 +29,61 @@ function getSpeechRecognitionCtor() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
-function speak(text) {
-  const utterText = String(text || "").trim();
-  if (!utterText) return;
+function scoreFemaleRuVoice(v) {
+  const name = `${v.name} ${v.lang}`.toLowerCase();
+  let score = 0;
+  if (/^ru\b|ru-ru|russian|русск/.test(v.lang.toLowerCase()) || /russian|русск/.test(name)) score += 40;
+  if (/irina|ирина|elena|елена|milena|милена|katya|катя|natalia|наталья|oksana|оксана|dariya|дария/.test(name)) {
+    score += 50;
+  }
+  if (/female|woman|girl|женский|женщин/.test(name)) score += 30;
+  if (/microsoft|google|premium|neural|natural/.test(name)) score += 10;
+  if (/male|david|paul|mark|мужск/.test(name)) score -= 40;
+  return score;
+}
+
+function pickPreferredBrowserVoice() {
+  const voices = window.speechSynthesis?.getVoices?.() || [];
+  if (!voices.length) return null;
+  let best = null;
+  let bestScore = -Infinity;
+  for (const v of voices) {
+    const s = scoreFemaleRuVoice(v);
+    if (s > bestScore) {
+      bestScore = s;
+      best = v;
+    }
+  }
+  return bestScore >= 40 ? best : voices.find((v) => /^ru/i.test(v.lang)) || best;
+}
+
+function ensureBrowserVoices() {
+  if (browserVoicesReady) return;
+  preferredBrowserVoice = pickPreferredBrowserVoice();
+  if (preferredBrowserVoice || (window.speechSynthesis?.getVoices?.() || []).length) {
+    browserVoicesReady = true;
+  }
+  if (typeof window.speechSynthesis?.addEventListener === "function") {
+    window.speechSynthesis.addEventListener(
+      "voiceschanged",
+      () => {
+        preferredBrowserVoice = pickPreferredBrowserVoice();
+        browserVoicesReady = true;
+      },
+      { once: true },
+    );
+  }
+}
+
+function speakBrowserFallback(utterText) {
   try {
     window.speechSynthesis?.cancel();
+    ensureBrowserVoices();
     const u = new SpeechSynthesisUtterance(utterText);
     u.lang = "ru-RU";
     u.rate = 1;
+    u.pitch = 1.05;
+    if (preferredBrowserVoice) u.voice = preferredBrowserVoice;
     window.speechSynthesis?.speak(u);
   } catch (e) {
     console.warn("speechSynthesis:", e);
@@ -43,6 +95,55 @@ function stopSpeaking() {
     window.speechSynthesis?.cancel();
   } catch {
     /* ignore */
+  }
+  if (currentAudio) {
+    try {
+      currentAudio.pause();
+      currentAudio.removeAttribute("src");
+      currentAudio.load();
+    } catch {
+      /* ignore */
+    }
+    currentAudio = null;
+  }
+}
+
+async function speak(text) {
+  const utterText = String(text || "").trim();
+  if (!utterText) return;
+  stopSpeaking();
+
+  try {
+    const res = await fetch("/api/voice-tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: utterText, voice: "nova" }),
+    });
+    if (!res.ok) {
+      speakBrowserFallback(utterText);
+      return;
+    }
+    const blob = await res.blob();
+    if (!blob || blob.size < 32) {
+      speakBrowserFallback(utterText);
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      if (currentAudio === audio) currentAudio = null;
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      if (currentAudio === audio) currentAudio = null;
+      speakBrowserFallback(utterText);
+    };
+    await audio.play();
+  } catch (e) {
+    console.warn("voice-tts play:", e);
+    speakBrowserFallback(utterText);
   }
 }
 
@@ -340,6 +441,7 @@ function sendFromInput() {
 }
 
 export function initVoiceSection() {
+  ensureBrowserVoices();
   const navBtn = document.getElementById("voiceNavBtn");
   const micBtn = document.getElementById("voiceMicBtn");
   const sendBtn = document.getElementById("voiceSendBtn");
