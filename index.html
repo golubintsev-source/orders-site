@@ -935,7 +935,18 @@
         <div id="voiceFeed" class="voice-feed" role="log" aria-live="polite" aria-label="Диалог с ассистентом">
           <p class="voice-empty">Спросите про заказ голосом или текстом — например: «Какая сумма по последнему заказу?» или «Создай заказ клиенту Иванову на 50 тысяч, адрес Ленина 10».</p>
         </div>
-        <p id="voicePageMessage" class="voice-page-message"></p>
+        <p
+          id="voiceLiveTranscript"
+          class="voice-live-transcript"
+          hidden
+          aria-live="polite"
+        ></p>
+        <p
+          id="voicePageMessage"
+          class="voice-page-message"
+          role="status"
+          aria-live="polite"
+        ></p>
         <div class="voice-composer">
           <button
             type="button"
