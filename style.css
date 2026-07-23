@@ -5988,17 +5988,56 @@ th {
   background: #dbeafe;
 }
 
+.voice-live-transcript {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 8px 16px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: #1e3a8a;
+  background: #eff6ff;
+  border-top: 1px solid #dbeafe;
+  word-break: break-word;
+}
+
+.voice-live-transcript--interim {
+  color: #1d4ed8;
+  font-style: italic;
+}
+
 .voice-page-message {
   flex-shrink: 0;
   margin: 0;
-  min-height: 1.2em;
-  padding: 0 16px 6px;
+  min-height: 1.35em;
+  padding: 6px 16px 8px;
   font-size: 13px;
+  line-height: 1.35;
   color: #4b5563;
+  background: #f8fafc;
+  border-top: 1px solid #eef2f7;
+}
+
+.voice-page-message:empty {
+  display: none;
 }
 
 .voice-page-message--error {
   color: #b91c1c;
+  background: #fef2f2;
+  border-top-color: #fecaca;
+}
+
+.voice-page-message--listening {
+  color: #b91c1c;
+  background: #fff1f2;
+  border-top-color: #fecdd3;
+  font-weight: 600;
+}
+
+.voice-page-message--info {
+  color: #1e40af;
+  background: #eff6ff;
+  border-top-color: #bfdbfe;
 }
 
 .voice-composer {

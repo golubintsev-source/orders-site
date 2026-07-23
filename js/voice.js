@@ -22,6 +22,30 @@ let lastSpeakText = "";
 let preferredBrowserVoice = null;
 let browserVoicesReady = false;
 
+/** Состояние одной сессии распознавания — чтобы onend не «съедал» ошибки и пустые ответы. */
+/** @type {{
+ *   id: number,
+ *   gotSpeech: boolean,
+ *   gotFinal: boolean,
+ *   finals: string[],
+ *   interim: string,
+ *   errorCode: string | null,
+ *   userStop: boolean,
+ *   forceStop: boolean,
+ * } | null} */
+let listenSession = null;
+let listenSessionSeq = 0;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let listenWatchdogTimer = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let listenStartTimer = null;
+/** Не очищать статус до этого момента (ошибки / подсказки должны остаться на экране). */
+let statusHoldUntil = 0;
+
+const LISTEN_MAX_MS = 18000;
+const LISTEN_START_TIMEOUT_MS = 12000;
+const STATUS_HOLD_MS = 4500;
+
 /** Короткий тихий WAV — разблокировка WebKit без слышимого звука. */
 const SILENT_WAV =
   "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
@@ -253,11 +277,58 @@ async function speak(text) {
   }
 }
 
-function setStatus(text, isError = false) {
+/**
+ * @param {string} text
+ * @param {boolean} [isError]
+ * @param {{ holdMs?: number, tone?: "info" | "listening" | "error" | "" }} [opts]
+ */
+function setStatus(text, isError = false, opts = {}) {
   const el = document.getElementById("voicePageMessage");
   if (!el) return;
-  el.textContent = text || "";
-  el.classList.toggle("voice-page-message--error", Boolean(isError && text));
+  const msg = text || "";
+  const holdMs = opts.holdMs ?? (isError && msg ? STATUS_HOLD_MS : 0);
+  if (holdMs > 0) statusHoldUntil = Date.now() + holdMs;
+  else if (!msg) statusHoldUntil = 0;
+
+  el.textContent = msg;
+  const tone = opts.tone || (isError && msg ? "error" : msg ? "info" : "");
+  el.classList.toggle("voice-page-message--error", tone === "error");
+  el.classList.toggle("voice-page-message--listening", tone === "listening");
+  el.classList.toggle("voice-page-message--info", tone === "info");
+}
+
+function setLiveTranscript(text, { interim = false } = {}) {
+  const el = document.getElementById("voiceLiveTranscript");
+  if (!el) return;
+  const t = String(text || "").trim();
+  if (!t) {
+    el.hidden = true;
+    el.textContent = "";
+    el.classList.remove("voice-live-transcript--interim");
+    return;
+  }
+  el.hidden = false;
+  el.classList.toggle("voice-live-transcript--interim", interim);
+  el.textContent = interim ? `Слышу: «${t}»…` : `Распознано: «${t}»`;
+}
+
+function clearListenTimers() {
+  if (listenWatchdogTimer != null) {
+    clearTimeout(listenWatchdogTimer);
+    listenWatchdogTimer = null;
+  }
+  if (listenStartTimer != null) {
+    clearTimeout(listenStartTimer);
+    listenStartTimer = null;
+  }
+}
+
+function forceResetListeningUi(message, isError = true) {
+  clearListenTimers();
+  listening = false;
+  setMicUi(false);
+  setLiveTranscript("");
+  if (message) setStatus(message, isError, { holdMs: STATUS_HOLD_MS, tone: isError ? "error" : "info" });
 }
 
 function setMicUi(active) {
@@ -274,6 +345,25 @@ function setBusyUi(on) {
   const sendBtn = document.getElementById("voiceSendBtn");
   if (btn) btn.disabled = on;
   if (sendBtn) sendBtn.disabled = on;
+}
+
+function recognitionErrorMessage(err) {
+  switch (err) {
+    case "not-allowed":
+    case "service-not-allowed":
+      return "Нет доступа к микрофону. Разрешите микрофон в настройках Safari/браузера и попробуйте снова.";
+    case "no-speech":
+      return "Речь не услышана. Нажмите микрофон и говорите после сигнала «Слушаю…».";
+    case "audio-capture":
+      return "Не удалось получить звук с микрофона. Проверьте, что микрофон не занят другим приложением.";
+    case "network":
+      return "Ошибка сети при распознавании речи. Проверьте интернет и попробуйте ещё раз.";
+    case "bad-grammar":
+    case "language-not-supported":
+      return "Распознавание русской речи недоступно в этом браузере. Введите текст вручную.";
+    default:
+      return `Ошибка распознавания (${err}). Попробуйте ещё раз или введите текст.`;
+  }
 }
 
 function appendBubble(role, text, extraHtml = "") {
@@ -374,12 +464,12 @@ async function confirmPendingOrder() {
     appendBubble("assistant", result.message);
     chatHistory.push({ role: "assistant", content: result.message });
     speak(result.message);
-    setStatus(result.ok ? "" : result.message, !result.ok);
+    setStatus(result.ok ? "" : result.message, !result.ok, result.ok ? undefined : { holdMs: STATUS_HOLD_MS });
   } catch (e) {
     const msg = e?.message || "Не удалось создать заказ";
     appendBubble("assistant", msg);
     speak(msg);
-    setStatus(msg, true);
+    setStatus(msg, true, { holdMs: STATUS_HOLD_MS });
   } finally {
     setBusyUi(false);
   }
@@ -418,6 +508,7 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
   const text = String(rawText || "").trim();
   if (!text || busy) return;
 
+  setLiveTranscript("");
   appendBubble("user", text);
   chatHistory.push({ role: "user", content: text });
 
@@ -432,8 +523,16 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
     }
   }
 
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    const msg = "Нет соединения с интернетом. Проверьте сеть и отправьте сообщение ещё раз.";
+    appendBubble("assistant", msg);
+    setStatus(msg, true, { holdMs: STATUS_HOLD_MS });
+    return;
+  }
+
   setBusyUi(true);
-  setStatus(fromVoice ? "Распознано. Думаю…" : "Думаю…");
+  const short = text.length > 72 ? `${text.slice(0, 70)}…` : text;
+  setStatus(fromVoice ? `Принято: «${short}». Думаю…` : "Думаю…", false, { tone: "info" });
 
   try {
     const data = await callVoiceAssistant(text);
@@ -458,13 +557,93 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
       setStatus("");
     }
   } catch (e) {
-    const msg = e?.message || "Ошибка ассистента";
+    const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+    const msg = offline
+      ? "Нет соединения с интернетом. Ответ ассистента недоступен."
+      : e?.message || "Ошибка ассистента";
     appendBubble("assistant", msg);
     speak(msg);
-    setStatus(msg, true);
+    setStatus(msg, true, { holdMs: STATUS_HOLD_MS });
   } finally {
     setBusyUi(false);
   }
+}
+
+function beginListenSession({ userStop = false } = {}) {
+  listenSessionSeq += 1;
+  listenSession = {
+    id: listenSessionSeq,
+    gotSpeech: false,
+    gotFinal: false,
+    finals: [],
+    interim: "",
+    errorCode: null,
+    userStop,
+    forceStop: false,
+  };
+  return listenSession;
+}
+
+function finishListenSessionWithOutcome(session) {
+  const finals = (session?.finals || []).map((s) => String(s || "").trim()).filter(Boolean);
+  let text = finals.join(" ").replace(/\s+/g, " ").trim();
+
+  // На iOS иногда приходит только interim без final — берём его, чтобы фраза не «пропадала».
+  if (!text) {
+    const interim = String(session?.interim || "").trim();
+    if (interim) text = interim;
+  }
+
+  if (text) {
+    setLiveTranscript(text, { interim: false });
+    setStatus(`Принято: «${text.length > 72 ? `${text.slice(0, 70)}…` : text}»`, false, {
+      tone: "info",
+      holdMs: 2000,
+    });
+    void handleUserText(text, { fromVoice: true });
+    return;
+  }
+
+  setLiveTranscript("");
+
+  if (session?.errorCode && session.errorCode !== "aborted") {
+    // Сообщение уже выставлено в onerror и удерживается.
+    return;
+  }
+
+  if (session?.forceStop) {
+    setStatus("Микрофон завис и был остановлен. Нажмите ещё раз и повторите фразу.", true, {
+      holdMs: STATUS_HOLD_MS,
+    });
+    return;
+  }
+
+  if (session?.userStop) {
+    setStatus("Запись остановлена — фраза не распознана. Можно сказать ещё раз.", false, {
+      tone: "info",
+      holdMs: STATUS_HOLD_MS,
+    });
+    return;
+  }
+
+  if (session?.gotSpeech) {
+    setStatus("Вас слышно было, но текст не распознан. Говорите громче и чётче, затем сделайте паузу.", true, {
+      holdMs: STATUS_HOLD_MS,
+    });
+    return;
+  }
+
+  if (session?.errorCode === "aborted" && !session?.userStop) {
+    setStatus("Распознавание прервалось. Нажмите микрофон и попробуйте снова.", true, {
+      holdMs: STATUS_HOLD_MS,
+    });
+    return;
+  }
+
+  setStatus("Речь не услышана. Нажмите микрофон, дождитесь «Слушаю…» и говорите.", false, {
+    tone: "info",
+    holdMs: STATUS_HOLD_MS,
+  });
 }
 
 function ensureRecognition() {
@@ -473,41 +652,147 @@ function ensureRecognition() {
   if (!Ctor) return null;
   recognition = new Ctor();
   recognition.lang = "ru-RU";
-  recognition.interimResults = false;
+  recognition.interimResults = true;
   recognition.maxAlternatives = 1;
   recognition.continuous = false;
 
   recognition.onstart = () => {
+    if (listenStartTimer != null) {
+      clearTimeout(listenStartTimer);
+      listenStartTimer = null;
+    }
     listening = true;
     setMicUi(true);
-    setStatus("Слушаю…");
+    setStatus("Слушаю… говорите сейчас", false, { tone: "listening" });
   };
 
-  recognition.onend = () => {
-    listening = false;
-    setMicUi(false);
-    if (!busy) setStatus("");
+  recognition.onaudiostart = () => {
+    if (!listening) return;
+    setStatus("Микрофон включён. Слушаю…", false, { tone: "listening" });
   };
 
-  recognition.onerror = (event) => {
-    listening = false;
-    setMicUi(false);
-    const err = event?.error || "error";
-    if (err === "not-allowed" || err === "service-not-allowed") {
-      setStatus("Нет доступа к микрофону. Разрешите микрофон в браузере.", true);
-    } else if (err === "no-speech") {
-      setStatus("Речь не распознана. Попробуйте ещё раз.");
-    } else if (err !== "aborted") {
-      setStatus(`Ошибка распознавания: ${err}`, true);
+  recognition.onspeechstart = () => {
+    if (listenSession) listenSession.gotSpeech = true;
+    setStatus("Слышу вас…", false, { tone: "listening" });
+  };
+
+  recognition.onspeechend = () => {
+    if (!listenSession?.gotFinal) {
+      setStatus("Речь закончилась, распознаю…", false, { tone: "info" });
     }
   };
 
+  recognition.onnomatch = () => {
+    if (listenSession) listenSession.gotSpeech = true;
+    setStatus("Не удалось сопоставить речь с текстом. Попробуйте ещё раз.", true, {
+      holdMs: STATUS_HOLD_MS,
+    });
+  };
+
+  recognition.onend = () => {
+    clearListenTimers();
+    const session = listenSession;
+    listening = false;
+    setMicUi(false);
+    listenSession = null;
+
+    // Сессию уже закрыл watchdog / принудительный сброс — не перезаписываем статус.
+    if (!session) {
+      if (!busy) setLiveTranscript("");
+      return;
+    }
+
+    if (busy) {
+      setLiveTranscript("");
+      return;
+    }
+
+    finishListenSessionWithOutcome(session);
+  };
+
+  recognition.onerror = (event) => {
+    const err = event?.error || "error";
+    if (listenSession) listenSession.errorCode = err;
+
+    // aborted при ручной остановке — сообщение выставит onend
+    if (err === "aborted") return;
+
+    listening = false;
+    setMicUi(false);
+    setLiveTranscript("");
+    setStatus(recognitionErrorMessage(err), true, { holdMs: STATUS_HOLD_MS });
+  };
+
   recognition.onresult = (event) => {
-    const result = event?.results?.[0]?.[0]?.transcript;
-    if (result) void handleUserText(result, { fromVoice: true });
+    if (!listenSession || !event?.results) return;
+    let interim = "";
+    for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      const res = event.results[i];
+      const transcript = String(res?.[0]?.transcript || "").trim();
+      if (!transcript) continue;
+      if (res.isFinal) {
+        listenSession.gotFinal = true;
+        listenSession.finals.push(transcript);
+        listenSession.interim = "";
+        setLiveTranscript(listenSession.finals.join(" "), { interim: false });
+        setStatus(`Распознано: «${transcript}»`, false, { tone: "info" });
+      } else {
+        interim += (interim ? " " : "") + transcript;
+      }
+    }
+    if (interim && !listenSession.gotFinal) {
+      listenSession.interim = interim;
+      listenSession.gotSpeech = true;
+      setLiveTranscript(interim, { interim: true });
+      setStatus("Слышу вас…", false, { tone: "listening" });
+    }
   };
 
   return recognition;
+}
+
+function armListenWatchdogs(sessionId) {
+  clearListenTimers();
+
+  listenStartTimer = setTimeout(() => {
+    if (!listening && listenSession?.id === sessionId && !listenSession.gotFinal) {
+      // onstart так и не пришёл — часто бывает при отказе/зависании на iOS
+      listenSession.forceStop = true;
+      forceResetListeningUi(
+        "Не удалось запустить микрофон. Разрешите доступ к микрофону или обновите страницу.",
+        true,
+      );
+      try {
+        recognition?.abort();
+      } catch {
+        /* ignore */
+      }
+      listenSession = null;
+    }
+  }, LISTEN_START_TIMEOUT_MS);
+
+  listenWatchdogTimer = setTimeout(() => {
+    if (!listening || listenSession?.id !== sessionId) return;
+    if (listenSession) listenSession.forceStop = true;
+    setStatus("Слишком долгое ожидание — останавливаю микрофон…", true, { tone: "error" });
+    try {
+      recognition?.stop();
+    } catch {
+      /* ignore */
+    }
+    // Если onend не пришёл (зависание WebKit) — принудительно сбрасываем UI
+    setTimeout(() => {
+      if (listening && listenSession?.id === sessionId) {
+        forceResetListeningUi("Микрофон завис и был сброшен. Нажмите ещё раз и повторите фразу.", true);
+        try {
+          recognition?.abort();
+        } catch {
+          /* ignore */
+        }
+        listenSession = null;
+      }
+    }, 1600);
+  }, LISTEN_MAX_MS);
 }
 
 function toggleListening() {
@@ -515,17 +800,24 @@ function toggleListening() {
   if (busy) return;
   const Ctor = getSpeechRecognitionCtor();
   if (!Ctor) {
-    setStatus("Голосовой ввод не поддерживается в этом браузере. Используйте Chrome или Edge, либо введите текст.", true);
+    setStatus(
+      "Голосовой ввод не поддерживается в этом браузере. Введите текст вручную (на iPhone лучше Safari актуальной версии).",
+      true,
+      { holdMs: STATUS_HOLD_MS },
+    );
     return;
   }
   const rec = ensureRecognition();
   if (!rec) return;
 
   if (listening) {
+    if (listenSession) listenSession.userStop = true;
+    setStatus("Останавливаю…", false, { tone: "info" });
     try {
       rec.stop();
     } catch {
-      /* ignore */
+      forceResetListeningUi("Запись остановлена.", false);
+      listenSession = null;
     }
     return;
   }
@@ -536,10 +828,19 @@ function toggleListening() {
   } catch {
     /* ignore */
   }
+
+  beginListenSession();
+  setLiveTranscript("");
+  setMicUi(true);
+  setStatus("Подключаю микрофон…", false, { tone: "listening" });
+  armListenWatchdogs(listenSession.id);
+
   try {
     rec.start();
   } catch (e) {
-    setStatus(e?.message || "Не удалось запустить микрофон", true);
+    clearListenTimers();
+    listenSession = null;
+    forceResetListeningUi(e?.message || "Не удалось запустить микрофон", true);
   }
 }
 
@@ -584,6 +885,7 @@ export function initVoiceSection() {
       chatHistory = [];
       pendingOrderDraft = null;
       stopSpeaking();
+      setLiveTranscript("");
       if (feed) {
         feed.innerHTML =
           '<p class="voice-empty">Спросите про заказ голосом или текстом — например: «Какая сумма по последнему заказу?» или «Создай заказ клиенту Иванову на 50 тысяч, адрес Ленина 10».</p>';
@@ -621,7 +923,11 @@ export function initVoiceSection() {
   }
 
   if (!getSpeechRecognitionCtor()) {
-    setStatus("В этом браузере нет распознавания речи — можно писать текстом. Лучше Chrome или Edge.", false);
+    setStatus(
+      "В этом браузере нет распознавания речи — можно писать текстом. На iPhone нужен актуальный Safari.",
+      false,
+      { tone: "info", holdMs: STATUS_HOLD_MS },
+    );
   }
 }
 
@@ -632,11 +938,17 @@ export function onVoiceSectionEnter() {
 
 export function onVoiceSectionLeave() {
   stopSpeaking();
+  clearListenTimers();
+  setLiveTranscript("");
   if (listening && recognition) {
+    if (listenSession) listenSession.userStop = true;
     try {
       recognition.stop();
     } catch {
       /* ignore */
     }
   }
+  listening = false;
+  setMicUi(false);
+  listenSession = null;
 }
