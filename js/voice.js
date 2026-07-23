@@ -11,11 +11,20 @@ let chatHistory = [];
 let pendingOrderDraft = null;
 let listening = false;
 let busy = false;
-/** @type {HTMLAudioElement | null} */
-let currentAudio = null;
+/** Постоянный Audio: iOS разблокирует play() только после жеста пользователя. */
+let ttsAudio = null;
+let ttsAudioUnlocked = false;
+/** @type {string | null} */
+let ttsObjectUrl = null;
+/** Последний текст — если iOS заблокировал play, можно нажать «Прослушать». */
+let lastSpeakText = "";
 /** @type {SpeechSynthesisVoice | null} */
 let preferredBrowserVoice = null;
 let browserVoicesReady = false;
+
+/** Короткий тихий WAV — разблокировка WebKit без слышимого звука. */
+const SILENT_WAV =
+  "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
 function escapeHtml(s) {
   return String(s)
@@ -27,6 +36,60 @@ function escapeHtml(s) {
 
 function getSpeechRecognitionCtor() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function ensureTtsAudioElement() {
+  if (ttsAudio) return ttsAudio;
+  const audio = new Audio();
+  audio.preload = "auto";
+  audio.setAttribute("playsinline", "true");
+  audio.setAttribute("webkit-playsinline", "true");
+  audio.playsInline = true;
+  ttsAudio = audio;
+  return audio;
+}
+
+/**
+ * Вызывать синхронно из click/touch/keydown — иначе iPhone не даст воспроизвести TTS после fetch.
+ */
+function unlockTtsAudio() {
+  const audio = ensureTtsAudioElement();
+  try {
+    // speechSynthesis тоже часто требует жест на iOS
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      const warm = new SpeechSynthesisUtterance(" ");
+      warm.volume = 0;
+      warm.lang = "ru-RU";
+      window.speechSynthesis.speak(warm);
+      window.speechSynthesis.cancel();
+    }
+  } catch {
+    /* ignore */
+  }
+
+  if (ttsAudioUnlocked) return;
+  try {
+    audio.src = SILENT_WAV;
+    const p = audio.play();
+    if (p && typeof p.then === "function") {
+      p.then(() => {
+        ttsAudioUnlocked = true;
+        try {
+          audio.pause();
+          audio.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+      }).catch(() => {
+        /* жест мог быть недостаточным — попробуем снова на следующем тапе */
+      });
+    } else {
+      ttsAudioUnlocked = true;
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 function scoreFemaleRuVoice(v) {
@@ -90,27 +153,81 @@ function speakBrowserFallback(utterText) {
   }
 }
 
+function clearTtsObjectUrl() {
+  if (ttsObjectUrl) {
+    try {
+      URL.revokeObjectURL(ttsObjectUrl);
+    } catch {
+      /* ignore */
+    }
+    ttsObjectUrl = null;
+  }
+}
+
 function stopSpeaking() {
   try {
     window.speechSynthesis?.cancel();
   } catch {
     /* ignore */
   }
-  if (currentAudio) {
-    try {
-      currentAudio.pause();
-      currentAudio.removeAttribute("src");
-      currentAudio.load();
-    } catch {
-      /* ignore */
-    }
-    currentAudio = null;
+  const audio = ttsAudio;
+  if (!audio) return;
+  try {
+    audio.pause();
+    audio.currentTime = 0;
+  } catch {
+    /* ignore */
+  }
+}
+
+function showReplayHint() {
+  const feed = document.getElementById("voiceFeed");
+  if (!feed || !lastSpeakText) return;
+  if (feed.querySelector("[data-voice-replay]")) return;
+  const wrap = document.createElement("div");
+  wrap.className = "voice-replay-wrap";
+  wrap.innerHTML = `<button type="button" class="voice-replay-btn" data-voice-replay="1">▶ Прослушать ответ</button>`;
+  feed.appendChild(wrap);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+async function playTtsBlob(blob, utterText) {
+  const audio = ensureTtsAudioElement();
+  clearTtsObjectUrl();
+  const url = URL.createObjectURL(blob);
+  ttsObjectUrl = url;
+
+  const onEnded = () => {
+    clearTtsObjectUrl();
+    audio.removeEventListener("ended", onEnded);
+    audio.removeEventListener("error", onError);
+  };
+  const onError = () => {
+    clearTtsObjectUrl();
+    audio.removeEventListener("ended", onEnded);
+    audio.removeEventListener("error", onError);
+    speakBrowserFallback(utterText);
+  };
+  audio.addEventListener("ended", onEnded);
+  audio.addEventListener("error", onError);
+
+  audio.src = url;
+  try {
+    await audio.play();
+    ttsAudioUnlocked = true;
+    document.querySelectorAll(".voice-replay-wrap").forEach((el) => el.remove());
+  } catch (e) {
+    console.warn("tts play blocked:", e);
+    speakBrowserFallback(utterText);
+    showReplayHint();
+    setStatus("Нажмите «Прослушать ответ», чтобы услышать голос на iPhone.", false);
   }
 }
 
 async function speak(text) {
   const utterText = String(text || "").trim();
   if (!utterText) return;
+  lastSpeakText = utterText;
   stopSpeaking();
 
   try {
@@ -128,22 +245,11 @@ async function speak(text) {
       speakBrowserFallback(utterText);
       return;
     }
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    currentAudio = audio;
-    audio.onended = () => {
-      URL.revokeObjectURL(url);
-      if (currentAudio === audio) currentAudio = null;
-    };
-    audio.onerror = () => {
-      URL.revokeObjectURL(url);
-      if (currentAudio === audio) currentAudio = null;
-      speakBrowserFallback(utterText);
-    };
-    await audio.play();
+    await playTtsBlob(blob, utterText);
   } catch (e) {
     console.warn("voice-tts play:", e);
     speakBrowserFallback(utterText);
+    showReplayHint();
   }
 }
 
@@ -405,6 +511,7 @@ function ensureRecognition() {
 }
 
 function toggleListening() {
+  unlockTtsAudio();
   if (busy) return;
   const Ctor = getSpeechRecognitionCtor();
   if (!Ctor) {
@@ -423,7 +530,12 @@ function toggleListening() {
     return;
   }
 
-  stopSpeaking();
+  // Не pause() на ttsAudio сразу после unlock — iOS иначе может не «запомнить» жест.
+  try {
+    window.speechSynthesis?.cancel();
+  } catch {
+    /* ignore */
+  }
   try {
     rec.start();
   } catch (e) {
@@ -432,6 +544,7 @@ function toggleListening() {
 }
 
 function sendFromInput() {
+  unlockTtsAudio();
   const input = document.getElementById("voiceComposerInput");
   if (!input) return;
   const text = input.value.trim();
@@ -442,6 +555,7 @@ function sendFromInput() {
 
 export function initVoiceSection() {
   ensureBrowserVoices();
+  ensureTtsAudioElement();
   const navBtn = document.getElementById("voiceNavBtn");
   const micBtn = document.getElementById("voiceMicBtn");
   const sendBtn = document.getElementById("voiceSendBtn");
@@ -451,6 +565,7 @@ export function initVoiceSection() {
 
   if (navBtn) {
     navBtn.addEventListener("click", () => {
+      unlockTtsAudio();
       import("./section-nav.js").then((m) => m.switchSection("voice"));
     });
   }
@@ -465,6 +580,7 @@ export function initVoiceSection() {
 
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
+      unlockTtsAudio();
       chatHistory = [];
       pendingOrderDraft = null;
       stopSpeaking();
@@ -480,6 +596,7 @@ export function initVoiceSection() {
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
+        unlockTtsAudio();
         sendFromInput();
       }
     });
@@ -487,8 +604,16 @@ export function initVoiceSection() {
 
   if (feed) {
     feed.addEventListener("click", (e) => {
+      const replay = e.target?.closest?.("[data-voice-replay]");
+      if (replay) {
+        unlockTtsAudio();
+        document.querySelectorAll(".voice-replay-wrap").forEach((el) => el.remove());
+        if (lastSpeakText) void speak(lastSpeakText);
+        return;
+      }
       const btn = e.target?.closest?.("[data-voice-confirm]");
       if (!btn) return;
+      unlockTtsAudio();
       const v = btn.getAttribute("data-voice-confirm");
       if (v === "yes") void confirmPendingOrder();
       else if (v === "no") cancelPendingOrder(true);

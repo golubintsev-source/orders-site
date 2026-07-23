@@ -5968,6 +5968,26 @@ th {
   color: #6b7280;
 }
 
+.voice-replay-wrap {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.voice-replay-btn {
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.voice-replay-btn:hover {
+  background: #dbeafe;
+}
+
 .voice-page-message {
   flex-shrink: 0;
   margin: 0;
