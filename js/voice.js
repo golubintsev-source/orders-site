@@ -327,11 +327,6 @@ function startMicLevelMonitor() {
       btn.style.setProperty("--voice-mic-level", String(norm));
       btn.classList.toggle("voice-mic-btn--hearing", level > 0.02);
     }
-    // Реальный звук с микрофона — считаем, что «глухой» сеанс маловероятен.
-    if (listenSession && level > 0.035) {
-      listenSession.gotSpeech = listenSession.gotSpeech || false;
-      // помечаем активность микрофона отдельно через peak; speech API может всё ещё молчать
-    }
     micLevelRaf = requestAnimationFrame(tick);
   };
   micLevelRaf = requestAnimationFrame(tick);
