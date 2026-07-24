@@ -3754,18 +3754,18 @@ table {
 
 /* Таблица «Доставка» на iPhone: «Клиент», «Адрес» — 100px; «Описание» 150px; «Клиент» — не более 2 строк + … */
 @media (max-width: 768px) and (hover: none) and (pointer: coarse) {
-  #routeSheetTableDelivery th:nth-child(3),
-  #routeSheetTableDelivery td:nth-child(3),
   #routeSheetTableDelivery th:nth-child(4),
-  #routeSheetTableDelivery td:nth-child(4) {
+  #routeSheetTableDelivery td:nth-child(4),
+  #routeSheetTableDelivery th:nth-child(5),
+  #routeSheetTableDelivery td:nth-child(5) {
     width: 100px;
     min-width: 100px;
     max-width: 100px;
     box-sizing: border-box;
   }
 
-  #routeSheetTableDelivery th:nth-child(6),
-  #routeSheetTableDelivery td:nth-child(6) {
+  #routeSheetTableDelivery th:nth-child(7),
+  #routeSheetTableDelivery td:nth-child(7) {
     width: 150px;
     min-width: 150px;
     max-width: 150px;
@@ -3797,6 +3797,52 @@ table {
 .route-sheet-table td.route-sheet-col-date {
   min-width: 4.25rem;
   white-space: nowrap;
+}
+
+/* «Доставка»: узкая колонка выбора / номера точки маршрута (слева от «Номер»). */
+#routeSheetTableDelivery th.route-sheet-col-route-select,
+#routeSheetTableDelivery td.route-sheet-col-route-select {
+  width: 1.75rem;
+  min-width: 1.75rem;
+  max-width: 2rem;
+  padding-left: 4px;
+  padding-right: 2px;
+  text-align: center;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+#routeSheetTableDelivery .route-sheet-route-select-cb {
+  display: block;
+  margin: 0 auto;
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+  accent-color: #2563eb;
+}
+
+#routeSheetTableDelivery .route-sheet-route-point-num {
+  display: block;
+  box-sizing: border-box;
+  width: 1.5rem;
+  min-width: 1.5rem;
+  max-width: 1.75rem;
+  margin: 0 auto;
+  padding: 1px 0;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #f9fafb;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  color: #111827;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+#routeSheetTableDelivery .route-sheet-route-point-num:focus {
+  outline: none;
 }
 
 .route-sheet-table th.route-sheet-col-remainder,

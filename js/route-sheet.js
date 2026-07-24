@@ -985,6 +985,69 @@ function setComposeRouteButtonBusy(busy) {
   btn.setAttribute("aria-busy", busy ? "true" : "false");
 }
 
+/** Id заказов с отмеченным чекбоксом «в маршрут» в таблице «Доставка». */
+function getRouteSheetDeliverySelectedOrderIds() {
+  const tbody = document.querySelector("#routeSheetTableDelivery tbody");
+  /** @type {Set<string>} */
+  const ids = new Set();
+  if (!tbody) return ids;
+  for (const cb of tbody.querySelectorAll("input.route-sheet-route-select-cb:checked")) {
+    const oid = String(cb.getAttribute("data-order-id") ?? "").trim();
+    if (oid) ids.add(oid);
+  }
+  return ids;
+}
+
+/**
+ * Ячейка выбора: чекбокс до составления маршрута; после — узкое поле с номером точки.
+ * @param {object} order
+ * @param {{ routePointNum?: number | null }} [opts]
+ */
+function routeSelectCellHtml(order, opts = {}) {
+  const oid = escapeAttr(String(order.id ?? ""));
+  const pointNum = opts.routePointNum;
+  if (pointNum != null && Number.isFinite(Number(pointNum)) && Number(pointNum) > 0) {
+    const n = String(Math.trunc(Number(pointNum)));
+    return `<td class="route-sheet-col-route-select">
+    <input type="text" class="route-sheet-route-point-num" value="${escapeAttr(n)}" readonly inputmode="numeric" tabindex="-1" aria-label="Номер точки маршрута ${escapeAttr(n)}" />
+  </td>`;
+  }
+  return `<td class="route-sheet-col-route-select">
+    <input type="checkbox" class="route-sheet-route-select-cb" data-order-id="${oid}" checked aria-label="Включить в маршрут" />
+  </td>`;
+}
+
+/**
+ * После «Составить маршрут»: у участвовавших строк — номер точки вместо чекбокса.
+ * @param {Array<{ stop: { ordersHere?: object[] }, idx: number, along: number }>} orderedStops
+ */
+function applyRouteSheetDeliveryPointNumbers(orderedStops) {
+  const tbody = document.querySelector("#routeSheetTableDelivery tbody");
+  if (!tbody || !Array.isArray(orderedStops) || !orderedStops.length) return;
+
+  /** @type {Map<string, number>} */
+  const orderIdToSeq = new Map();
+  let seq = 0;
+  for (const { stop } of orderedStops) {
+    if (!stop?.ordersHere?.length) continue;
+    seq += 1;
+    for (const o of stop.ordersHere) {
+      const sid = o.id != null ? String(o.id) : "";
+      if (sid) orderIdToSeq.set(sid, seq);
+    }
+  }
+  if (!orderIdToSeq.size) return;
+
+  for (const tr of tbody.querySelectorAll("tr")) {
+    const oid = String(tr.querySelector("td.td-order-id")?.getAttribute("data-order-id") ?? "");
+    const cell = tr.querySelector("td.route-sheet-col-route-select");
+    if (!cell || !oid) continue;
+    const pointNum = orderIdToSeq.get(oid);
+    if (pointNum == null) continue;
+    cell.innerHTML = `<input type="text" class="route-sheet-route-point-num" value="${escapeAttr(String(pointNum))}" readonly inputmode="numeric" tabindex="-1" aria-label="Номер точки маршрута ${escapeAttr(String(pointNum))}" />`;
+  }
+}
+
 /**
  * После «Составить маршрут»: строки «Доставка» — в порядке объезда (как нумерация на карте).
  * Заказы вне trip (офис/рядом и т.п.) остаются внизу в прежнем относительном порядке.
@@ -1037,14 +1100,24 @@ async function composeDeliveryRoute() {
     return;
   }
 
-  const stopsSnapshot = routeDeliveryTripStops.map((s) => ({
-    lat: s.lat,
-    lon: s.lon,
-    ordersHere: s.ordersHere,
-  }));
+  const selectedIds = getRouteSheetDeliverySelectedOrderIds();
+  if (!selectedIds.size) {
+    setRouteDeliveryMapStatus("Отметьте заказы галочками для составления маршрута.", true);
+    return;
+  }
+
+  const stopsSnapshot = routeDeliveryTripStops
+    .map((s) => ({
+      lat: s.lat,
+      lon: s.lon,
+      ordersHere: (s.ordersHere || []).filter((o) => selectedIds.has(String(o.id ?? ""))),
+    }))
+    .filter((s) => s.ordersHere.length > 0);
   if (!stopsSnapshot.length) {
     setRouteDeliveryMapStatus(
-      "Нет адресов для маршрута: укажите координаты или дождитесь окончания загрузки карты.",
+      routeDeliveryTripStops.length
+        ? "Среди отмеченных заказов нет адресов для маршрута: укажите координаты или дождитесь окончания загрузки карты."
+        : "Нет адресов для маршрута: укажите координаты или дождитесь окончания загрузки карты.",
       true,
     );
     return;
@@ -1107,6 +1180,7 @@ async function composeDeliveryRoute() {
     }
 
     reorderRouteSheetDeliveryTbodyByOrderedStops(ordered);
+    applyRouteSheetDeliveryPointNumbers(ordered);
 
     routeDeliveryComposedRouteActive = true;
     setRouteDeliveryTripTimeEstimate(
@@ -1730,10 +1804,15 @@ function syncRouteSheetDeliveryAddressTitles() {
 /**
  * @param {object} order
  * @param {string} [kmDisplay] если передано — колонка «км» (таблица «Доставка»); иначе без колонки («Самовывоз»).
- * @param {{ includeShipDate?: boolean, includeRemainder?: boolean, includeAddressGeoBtn?: boolean }} [opts] «Дата», «Остаток», адрес как в «Заказах» — только «Доставка».
+ * @param {{ includeShipDate?: boolean, includeRemainder?: boolean, includeAddressGeoBtn?: boolean, routePointNum?: number | null }} [opts] «Дата», «Остаток», адрес как в «Заказах» — только «Доставка».
  */
 function rowMainHtml(order, kmDisplay, opts = {}) {
-  const { includeShipDate = false, includeRemainder = false, includeAddressGeoBtn = false } = opts;
+  const {
+    includeShipDate = false,
+    includeRemainder = false,
+    includeAddressGeoBtn = false,
+    routePointNum = null,
+  } = opts;
   const mosk =
     order.area_m2 != null && order.area_m2 !== "" ? escapeHtml(String(order.area_m2)) : "";
   const konst =
@@ -1772,7 +1851,9 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
     descriptionTd = `<td>${escapeHtml(order.description ?? "")}</td>`;
   }
   const hiddenExtra = includeShipDate ? ' class="route-sheet-col-delivery-hidden"' : "";
+  const selectTd = includeShipDate ? routeSelectCellHtml(order, { routePointNum }) : "";
   return `<tr>
+    ${selectTd}
     ${orderIdCellHtml(order)}
     ${dateTd}
     ${clientTd}
