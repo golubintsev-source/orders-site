@@ -103,6 +103,7 @@ const HEADERS_MAIN = [
 
 /** Экспорт таблицы «Доставка» — с километражем от офиса. */
 const HEADERS_DELIVERY = [
+  "№",
   "Номер",
   "Дата",
   "Клиент",
@@ -116,7 +117,7 @@ const HEADERS_DELIVERY = [
  * плюс перенос текста. Без «вписать в ширину 1 стр.» — иначе узкие колонки не растягиваются на лист.
  * Индекс совпадает с HEADERS_DELIVERY.
  */
-const ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS = [11, 10, 22, 27, 19, 10];
+const ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS = [5, 11, 10, 22, 27, 19, 10];
 
 const ROUTE_SHEET_DELIVERY_EXCEL_BORDER_THIN = {
   top: { style: "thin" },
@@ -389,28 +390,68 @@ function filterRouteSheetDeliveryOrdersByShipment(orders, fromKey, toKey, shipme
 }
 
 /**
- * Порядок заказов для выгрузки: как строки в таблице «Доставка» на экране
- * (после «Составить маршрут» — порядок объезда), затем остальные из list по sortByDeliveryThenId.
+ * Заказы для выгрузки «Доставка»: только строки с заполненным номером точки,
+ * отсортированные по этому номеру (возрастание).
  * @param {object[]} list
+ * @returns {{ order: object, pointNum: number }[]}
  */
-function ordersDeliveryListInExportOrder(list) {
-  if (!list.length) return list;
+function ordersDeliveryListForExcelExport(list) {
+  if (!list.length) return [];
   const tbody = document.querySelector("#routeSheetTableDelivery tbody");
   const byId = new Map(list.map((o) => [String(o.id ?? ""), o]));
-  const out = [];
+  /** @type {{ order: object, pointNum: number }[]} */
+  const entries = [];
   const used = new Set();
   if (tbody) {
     for (const tr of tbody.querySelectorAll("tr")) {
+      const numInput = tr.querySelector("input.route-sheet-route-point-num");
+      if (!numInput) continue;
+      const raw = String(numInput.value ?? "").trim();
+      if (!raw) continue;
+      const pointNum = Number(raw);
+      if (!Number.isFinite(pointNum) || pointNum <= 0) continue;
       const oid = String(tr.querySelector("td.td-order-id")?.getAttribute("data-order-id") ?? "");
-      if (!oid) continue;
-      const o = byId.get(oid);
-      if (!o || used.has(oid)) continue;
+      if (!oid || used.has(oid)) continue;
+      const order = byId.get(oid);
+      if (!order) continue;
       used.add(oid);
-      out.push(o);
+      entries.push({ order, pointNum: Math.trunc(pointNum) });
     }
   }
-  const tail = list.filter((o) => !used.has(String(o.id ?? ""))).sort(sortByDeliveryThenId);
-  return out.concat(tail);
+  entries.sort((a, b) => a.pointNum - b.pointNum || String(a.order.id).localeCompare(String(b.order.id)));
+  return entries;
+}
+
+/**
+ * Подсветка и чекбокс по результату распознавания адреса.
+ * Нераспознанный адрес: светло-жёлтая строка + снятый чекбокс (по умолчанию не в маршруте).
+ * @param {object[]} orders
+ * @param {boolean} recognized
+ */
+function syncRouteSheetDeliveryAddressRecognition(orders, recognized) {
+  if (!orders?.length) return;
+  const tbody = document.querySelector("#routeSheetTableDelivery tbody");
+  if (!tbody) return;
+  const idSet = new Set(orders.map((o) => String(o.id ?? "")));
+  for (const tr of tbody.querySelectorAll("tr")) {
+    const oid = String(tr.querySelector("td.td-order-id")?.getAttribute("data-order-id") ?? "");
+    if (!oid || !idSet.has(oid)) continue;
+    const cell = tr.querySelector("td.route-sheet-col-route-select");
+    if (recognized) {
+      tr.classList.remove("route-sheet-row--addr-unrecognized");
+      if (!cell) continue;
+      const numInput = cell.querySelector("input.route-sheet-route-point-num");
+      if (numInput) continue;
+      const cb = cell.querySelector("input.route-sheet-route-select-cb");
+      if (cb) cb.checked = true;
+      else cell.innerHTML = `<input type="checkbox" class="route-sheet-route-select-cb" data-order-id="${escapeAttr(oid)}" checked aria-label="Включить в маршрут" />`;
+    } else {
+      tr.classList.add("route-sheet-row--addr-unrecognized");
+      if (!cell) continue;
+      // Номер точки у нераспознанного адреса сбрасываем в снятый чекбокс.
+      cell.innerHTML = routeSelectUncheckedCheckboxHtml(oid);
+    }
+  }
 }
 
 function isRouteSheetSectionActive() {
@@ -1568,6 +1609,7 @@ async function runDeliveryPipeline(deliveryRows, gen) {
     const noGeoOrders = deliveryRows.filter((o) => deliveryPipelineGroupKey(o) === "");
     for (const o of noGeoOrders) deliveryKmByOrderId.set(o.id, /** @type {null} */ (null));
     updateKmCellsForOrders(noGeoOrders);
+    syncRouteSheetDeliveryAddressRecognition(noGeoOrders, false);
 
     const withGeo = deliveryRows.filter((o) => deliveryPipelineGroupKey(o) !== "");
     if (withGeo.length === 0) {
@@ -1610,6 +1652,14 @@ async function runDeliveryPipeline(deliveryRows, gen) {
         } else deliveryKmByOrderId.set(o.id, null);
       }
       updateKmCellsForOrders(withGeo);
+      syncRouteSheetDeliveryAddressRecognition(
+        withGeo.filter((o) => isRouteSheetOfficeAddress(o.address)),
+        true,
+      );
+      syncRouteSheetDeliveryAddressRecognition(
+        withGeo.filter((o) => !isRouteSheetOfficeAddress(o.address)),
+        false,
+      );
       routeDeliveryMap.setView(officeLL, 15);
       setRouteDeliveryMapStatus("");
       scheduleInvalidateRouteDeliveryMap();
@@ -1662,6 +1712,7 @@ async function runDeliveryPipeline(deliveryRows, gen) {
         const kmEntry = makeDeliveryKmEntry(km, coords.lat);
         for (const o of ordersHere) deliveryKmByOrderId.set(o.id, kmEntry);
         updateKmCellsForOrders(ordersHere);
+        syncRouteSheetDeliveryAddressRecognition(ordersHere, true);
         if (i < orderedKeys.length - 1) await sleep(250);
         continue;
       }
@@ -1673,6 +1724,7 @@ async function runDeliveryPipeline(deliveryRows, gen) {
           deliveryKmByOrderId.set(o.id, makeDeliveryKmEntry(0, ROUTE_SHEET_OFFICE_LAT));
         }
         updateKmCellsForOrders(ordersHere);
+        syncRouteSheetDeliveryAddressRecognition(ordersHere, true);
         latLngs.push(officeLL);
         if (i < orderedKeys.length - 1) await sleep(NOMINATIM_DELAY_MS);
         continue;
@@ -1714,6 +1766,7 @@ async function runDeliveryPipeline(deliveryRows, gen) {
         failedGeocode.push(displayAddr);
         for (const o of ordersHere) deliveryKmByOrderId.set(o.id, /** @type {null} */ (null));
         updateKmCellsForOrders(ordersHere);
+        syncRouteSheetDeliveryAddressRecognition(ordersHere, false);
         if (i < orderedKeys.length - 1) await sleep(NOMINATIM_DELAY_MS);
         continue;
       }
@@ -1753,6 +1806,7 @@ async function runDeliveryPipeline(deliveryRows, gen) {
       const kmEntryAddr = makeDeliveryKmEntry(km, coords.lat);
       for (const o of ordersHere) deliveryKmByOrderId.set(o.id, kmEntryAddr);
       updateKmCellsForOrders(ordersHere);
+      syncRouteSheetDeliveryAddressRecognition(ordersHere, true);
 
       if (dbKey && !fromDbFull) {
         void persistRouteSheetAddressGeo(dbKey, coords.lat, coords.lon, km).catch((e) =>
@@ -2268,7 +2322,7 @@ function rowMainValues(order) {
   ];
 }
 
-function rowDeliveryMainValues(order) {
+function rowDeliveryMainValues(order, pointNum) {
   const kmEntry = deliveryKmByOrderId.get(order.id);
   const kmCell = formatKmCellDisplay(kmEntry);
   const clientBase = String(order.client ?? "").trim();
@@ -2286,6 +2340,7 @@ function rowDeliveryMainValues(order) {
     }
   }
   return [
+    pointNum,
     routeSheetOrderChipPlain(order) || "",
     formatDateShortRU(order.delivery_date),
     clientWithPhone,
@@ -2319,10 +2374,22 @@ export async function exportRouteSheetDeliveryExcel() {
   );
   const manual = manualDeliveryOrdersInRange(fromKey, toKey);
   const list = base.concat(manual);
-  const orderedList = ordersDeliveryListInExportOrder(list);
-  const rows = orderedList.map(rowDeliveryMainValues);
+  const numberedEntries = ordersDeliveryListForExcelExport(list);
   const msgEl = document.getElementById("routeSheetMessage");
   const exportBtn = document.getElementById("routeSheetExportDeliveryBtn");
+
+  if (!numberedEntries.length) {
+    if (msgEl) {
+      msgEl.textContent =
+        "Нет строк для выгрузки: составьте маршрут или укажите номера точек у заказов доставки.";
+    }
+    return;
+  }
+
+  // В Excel: только строки с номерами точек, по возрастанию номера; первая колонка — эти номера.
+  const rows = numberedEntries.map(({ order, pointNum }) =>
+    rowDeliveryMainValues(order, pointNum),
+  );
 
   const ExcelJS = getExcelJsConstructor();
   const html2canvas = globalThis.html2canvas;

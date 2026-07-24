@@ -3821,6 +3821,12 @@ table {
   accent-color: #2563eb;
 }
 
+/* Адрес не распознан на карте — светло-жёлтая строка, чекбокс снят. */
+#routeSheetTableDelivery tbody tr.route-sheet-row--addr-unrecognized,
+#routeSheetTableDelivery tbody tr.route-sheet-row--addr-unrecognized > td {
+  background-color: #fff3bf;
+}
+
 #routeSheetTableDelivery .route-sheet-route-point-num {
   display: block;
   box-sizing: border-box;
