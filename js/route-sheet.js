@@ -1021,7 +1021,7 @@ function routePointNumInputHtml(pointNum) {
 }
 
 /**
- * Если номер точки стёрт — заменить поле на снятый чекбокс.
+ * Если номер точки стёрт — заменить поле на снятый чекбокс (только после ухода фокуса).
  * @param {HTMLInputElement} input
  */
 function maybeConvertClearedRoutePointNumToCheckbox(input) {
@@ -1032,6 +1032,18 @@ function maybeConvertClearedRoutePointNumToCheckbox(input) {
   const oid = String(tr?.querySelector("td.td-order-id")?.getAttribute("data-order-id") ?? "").trim();
   if (!cell || !oid) return;
   cell.innerHTML = routeSelectUncheckedCheckboxHtml(oid);
+}
+
+/** Курсор в конец поля номера точки (удобнее править на телефоне). */
+function placeRoutePointNumCaretAtEnd(input) {
+  if (!(input instanceof HTMLInputElement)) return;
+  if (!input.classList.contains("route-sheet-route-point-num")) return;
+  const len = String(input.value ?? "").length;
+  try {
+    input.setSelectionRange(len, len);
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -2941,15 +2953,39 @@ export function initRouteSheetSection() {
 
   if (routeSheetSection && !routeSheetSection.dataset.routeSheetPointNumBound) {
     routeSheetSection.dataset.routeSheetPointNumBound = "1";
+    routeSheetSection.addEventListener("focusin", (e) => {
+      const input = e.target;
+      if (!(input instanceof HTMLInputElement)) return;
+      if (!input.classList.contains("route-sheet-route-point-num")) return;
+      if (!routeSheetSection.contains(input)) return;
+      // На телефоне позиция курсора от тапа часто приходит после focus — ставим в конец с задержкой.
+      placeRoutePointNumCaretAtEnd(input);
+      requestAnimationFrame(() => placeRoutePointNumCaretAtEnd(input));
+      setTimeout(() => placeRoutePointNumCaretAtEnd(input), 0);
+      setTimeout(() => placeRoutePointNumCaretAtEnd(input), 50);
+    });
+    routeSheetSection.addEventListener("mouseup", (e) => {
+      const input = e.target;
+      if (!(input instanceof HTMLInputElement)) return;
+      if (!input.classList.contains("route-sheet-route-point-num")) return;
+      if (!routeSheetSection.contains(input)) return;
+      placeRoutePointNumCaretAtEnd(input);
+    });
+    routeSheetSection.addEventListener("touchend", (e) => {
+      const input = e.target;
+      if (!(input instanceof HTMLInputElement)) return;
+      if (!input.classList.contains("route-sheet-route-point-num")) return;
+      if (!routeSheetSection.contains(input)) return;
+      setTimeout(() => placeRoutePointNumCaretAtEnd(input), 0);
+    });
     routeSheetSection.addEventListener("input", (e) => {
       const input = e.target;
       if (!(input instanceof HTMLInputElement)) return;
       if (!input.classList.contains("route-sheet-route-point-num")) return;
       if (!routeSheetSection.contains(input)) return;
-      // Разрешаем только цифры при вводе; пустое значение → снятый чекбокс.
+      // Только цифры; пустое поле в чекбокс не превращаем, пока фокус в поле.
       const digitsOnly = String(input.value ?? "").replace(/\D+/g, "");
       if (digitsOnly !== input.value) input.value = digitsOnly;
-      maybeConvertClearedRoutePointNumToCheckbox(input);
     });
     routeSheetSection.addEventListener("blur", (e) => {
       const input = e.target;
