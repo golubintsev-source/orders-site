@@ -3,6 +3,12 @@ import { canMutateOrders, isOrderHiddenForCurrentRole } from "./roles.js";
 import { createOrderFromVoicePayload } from "./orders.js";
 import { formatAmountWholeRubles } from "./format.js";
 
+const VOICE_CHAT_STORAGE_PREFIX = "orders_site_voice_chat_v1:";
+/** Сколько реплик хранить на странице и в localStorage (в LLM уходит только хвост). */
+const MAX_STORED_CHAT_MESSAGES = 80;
+const VOICE_EMPTY_HTML =
+  '<p class="voice-empty">Спросите про заказ голосом или текстом — например: «Какая сумма по последнему заказу?» или «Создай заказ клиенту Иванову на 50 тысяч, адрес Ленина 10».</p>';
+
 /** @type {SpeechRecognition | null} */
 let recognition = null;
 /** @type {{ role: string, content: string }[]} */
@@ -56,6 +62,87 @@ function escapeHtml(s) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function voiceChatStorageKey() {
+  const id = state.currentUser?.id;
+  return id ? `${VOICE_CHAT_STORAGE_PREFIX}${id}` : `${VOICE_CHAT_STORAGE_PREFIX}anon`;
+}
+
+function persistChatHistory() {
+  try {
+    const toSave = chatHistory.slice(-MAX_STORED_CHAT_MESSAGES).map((m) => ({
+      role: m.role,
+      content: String(m.content || "").slice(0, 2000),
+    }));
+    localStorage.setItem(voiceChatStorageKey(), JSON.stringify(toSave));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function loadChatHistoryFromStorage() {
+  try {
+    const raw = localStorage.getItem(voiceChatStorageKey());
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (m) =>
+          m &&
+          (m.role === "user" || m.role === "assistant") &&
+          typeof m.content === "string" &&
+          m.content.trim(),
+      )
+      .slice(-MAX_STORED_CHAT_MESSAGES)
+      .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
+  } catch {
+    return [];
+  }
+}
+
+function clearPersistedChatHistory() {
+  try {
+    localStorage.removeItem(voiceChatStorageKey());
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Добавить реплику в историю и сразу сохранить на диск. */
+function pushChat(role, content) {
+  chatHistory.push({ role, content: String(content || "") });
+  if (chatHistory.length > MAX_STORED_CHAT_MESSAGES) {
+    chatHistory = chatHistory.slice(-MAX_STORED_CHAT_MESSAGES);
+  }
+  persistChatHistory();
+}
+
+function renderFeedFromHistory() {
+  const feed = document.getElementById("voiceFeed");
+  if (!feed) return;
+  if (!chatHistory.length) {
+    feed.innerHTML = VOICE_EMPTY_HTML;
+    return;
+  }
+  feed.innerHTML = "";
+  for (const m of chatHistory) {
+    appendBubble(m.role, m.content);
+  }
+}
+
+function restoreChatHistoryIfNeeded() {
+  if (chatHistory.length) {
+    // Уже в памяти (переключение разделов без перезагрузки) — лента в DOM обычно цела.
+    const feed = document.getElementById("voiceFeed");
+    if (feed && !feed.querySelector(".voice-bubble") && chatHistory.length) {
+      renderFeedFromHistory();
+    }
+    return;
+  }
+  chatHistory = loadChatHistoryFromStorage();
+  if (chatHistory.length) renderFeedFromHistory();
 }
 
 function getSpeechRecognitionCtor() {
@@ -462,12 +549,13 @@ async function confirmPendingOrder() {
   try {
     const result = await createOrderFromVoicePayload(draft);
     appendBubble("assistant", result.message);
-    chatHistory.push({ role: "assistant", content: result.message });
+    pushChat("assistant", result.message);
     speak(result.message);
     setStatus(result.ok ? "" : result.message, !result.ok, result.ok ? undefined : { holdMs: STATUS_HOLD_MS });
   } catch (e) {
     const msg = e?.message || "Не удалось создать заказ";
     appendBubble("assistant", msg);
+    pushChat("assistant", msg);
     speak(msg);
     setStatus(msg, true, { holdMs: STATUS_HOLD_MS });
   } finally {
@@ -481,7 +569,7 @@ function cancelPendingOrder(announce = true) {
   if (!announce) return;
   const msg = "Создание заказа отменено.";
   appendBubble("assistant", msg);
-  chatHistory.push({ role: "assistant", content: msg });
+  pushChat("assistant", msg);
   speak(msg);
   setStatus("");
 }
@@ -510,7 +598,7 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
 
   setLiveTranscript("");
   appendBubble("user", text);
-  chatHistory.push({ role: "user", content: text });
+  pushChat("user", text);
 
   if (pendingOrderDraft) {
     if (isAffirmative(text)) {
@@ -526,6 +614,7 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     const msg = "Нет соединения с интернетом. Проверьте сеть и отправьте сообщение ещё раз.";
     appendBubble("assistant", msg);
+    pushChat("assistant", msg);
     setStatus(msg, true, { holdMs: STATUS_HOLD_MS });
     return;
   }
@@ -546,13 +635,13 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
           ? speakText
           : `${speakText} Подтвердите создание: скажите «да» или нажмите «Создать».`;
       appendBubble("assistant", confirmAsk, renderConfirmCard(data.order));
-      chatHistory.push({ role: "assistant", content: confirmAsk });
+      pushChat("assistant", confirmAsk);
       speak(confirmAsk);
       setStatus("");
     } else {
       pendingOrderDraft = null;
       appendBubble("assistant", speakText);
-      chatHistory.push({ role: "assistant", content: speakText });
+      pushChat("assistant", speakText);
       speak(speakText);
       setStatus("");
     }
@@ -562,6 +651,7 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
       ? "Нет соединения с интернетом. Ответ ассистента недоступен."
       : e?.message || "Ошибка ассистента";
     appendBubble("assistant", msg);
+    pushChat("assistant", msg);
     speak(msg);
     setStatus(msg, true, { holdMs: STATUS_HOLD_MS });
   } finally {
@@ -883,16 +973,18 @@ export function initVoiceSection() {
     clearBtn.addEventListener("click", () => {
       unlockTtsAudio();
       chatHistory = [];
+      clearPersistedChatHistory();
       pendingOrderDraft = null;
       stopSpeaking();
       setLiveTranscript("");
       if (feed) {
-        feed.innerHTML =
-          '<p class="voice-empty">Спросите про заказ голосом или текстом — например: «Какая сумма по последнему заказу?» или «Создай заказ клиенту Иванову на 50 тысяч, адрес Ленина 10».</p>';
+        feed.innerHTML = VOICE_EMPTY_HTML;
       }
       setStatus("");
     });
   }
+
+  restoreChatHistoryIfNeeded();
 
   if (input) {
     input.addEventListener("keydown", (e) => {
@@ -932,6 +1024,7 @@ export function initVoiceSection() {
 }
 
 export function onVoiceSectionEnter() {
+  restoreChatHistoryIfNeeded();
   const input = document.getElementById("voiceComposerInput");
   input?.focus?.({ preventScroll: true });
 }
