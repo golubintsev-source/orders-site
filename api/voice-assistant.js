@@ -53,6 +53,162 @@ const RU_COUNT_WORDS = {
   десяти: 10,
 };
 
+/** Служебные слова речи — не использовать как ключ поиска заказа. */
+const MENTION_STOP_WORDS = new Set([
+  "заказ",
+  "заказа",
+  "заказу",
+  "заказе",
+  "заказом",
+  "заказы",
+  "заказов",
+  "заказам",
+  "номер",
+  "номера",
+  "номеру",
+  "номером",
+  "клиент",
+  "клиента",
+  "клиенту",
+  "клиентом",
+  "клиенте",
+  "адрес",
+  "адреса",
+  "адресу",
+  "адресом",
+  "адресе",
+  "описание",
+  "описания",
+  "описанию",
+  "описанием",
+  "комментарий",
+  "комментария",
+  "статус",
+  "статуса",
+  "сумма",
+  "суммы",
+  "сумму",
+  "дата",
+  "даты",
+  "дату",
+  "доставка",
+  "доставки",
+  "монтаж",
+  "монтажа",
+  "оплата",
+  "оплаты",
+  "предоплата",
+  "остаток",
+  "тип",
+  "типа",
+  "скажи",
+  "назови",
+  "покажи",
+  "найди",
+  "подскажи",
+  "расскажи",
+  "какой",
+  "какая",
+  "какие",
+  "какое",
+  "каков",
+  "какова",
+  "сколько",
+  "когда",
+  "где",
+  "кто",
+  "что",
+  "чей",
+  "чья",
+  "чье",
+  "чьё",
+  "про",
+  "для",
+  "это",
+  "этот",
+  "эта",
+  "эти",
+  "того",
+  "той",
+  "там",
+  "тут",
+  "есть",
+  "был",
+  "была",
+  "было",
+  "были",
+  "будет",
+  "можно",
+  "нужно",
+  "надо",
+  "пожалуйста",
+  "мне",
+  "нас",
+  "вас",
+  "его",
+  "ее",
+  "её",
+  "их",
+  "наш",
+  "ваш",
+  "или",
+  "либо",
+  "также",
+  "ещё",
+  "еще",
+  "уже",
+  "только",
+  "сейчас",
+  "сегодня",
+  "вчера",
+  "завтра",
+  "на",
+  "по",
+  "в",
+  "во",
+  "с",
+  "со",
+  "из",
+  "к",
+  "ко",
+  "о",
+  "об",
+  "обо",
+  "от",
+  "до",
+  "без",
+  "при",
+  "за",
+  "под",
+  "над",
+  "и",
+  "а",
+  "но",
+  "да",
+  "нет",
+  "ли",
+  "же",
+  "бы",
+  "то",
+  "не",
+  "ни",
+  "новый",
+  "новая",
+  "новое",
+  "новые",
+  "последний",
+  "последняя",
+  "последнее",
+  "последние",
+  "последнего",
+  "создай",
+  "создать",
+  "добавь",
+  "добавить",
+  "оформи",
+  "оформить",
+]);
+
 function readJsonBody(req) {
   if (req.body != null && typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
     return Promise.resolve(req.body);
@@ -91,6 +247,178 @@ function parseRuCountToken(token) {
     return n >= 1 && n <= 20 ? n : null;
   }
   return RU_COUNT_WORDS[token] || null;
+}
+
+function formatOrderChip(order) {
+  if (order?.id == null || order.id === "") return "";
+  const letter = String(order.order_type || "")
+    .trim()
+    .charAt(0)
+    .toLowerCase();
+  const idNum = Number(order.id);
+  if (Number.isFinite(idNum) && idNum < 0) {
+    const tail = String(Math.abs(idNum) % 10000).padStart(4, "0");
+    return letter ? `офл.${tail}_${letter}` : `офл.${tail}`;
+  }
+  const base = String(order.id).padStart(4, "0");
+  return letter ? `${base}_${letter}` : base;
+}
+
+/**
+ * Тексты полей, по которым голос ищет упомянутый заказ:
+ * номер (id / chip / order_number), клиент, описание, адрес.
+ */
+function orderMentionFields(order) {
+  const idStr = order?.id != null && order.id !== "" ? String(order.id) : "";
+  const padded = idStr ? idStr.padStart(4, "0") : "";
+  const chip = formatOrderChip(order);
+  return {
+    id: normalizeRu(idStr),
+    padded: normalizeRu(padded),
+    chip: normalizeRu(chip.replace(/[._]/g, " ")),
+    order_number: normalizeRu(order?.order_number),
+    client: normalizeRu(order?.client),
+    description: normalizeRu(order?.description),
+    address: normalizeRu(order?.address),
+  };
+}
+
+function fieldContainsNeedle(fieldValue, needle) {
+  if (!fieldValue || !needle) return false;
+  if (fieldValue.includes(needle)) return true;
+  // «0973» / «973» — номер без ведущих нулей
+  if (/^\d+$/.test(needle) && /^\d+$/.test(fieldValue)) {
+    return String(Number(fieldValue)) === String(Number(needle));
+  }
+  // Морфология без стеммера: «Иванова» ≈ «Иванов», «Петровой» ≈ «Петрова»
+  if (/^\d+$/.test(needle) || needle.length < 3) return false;
+  for (const word of fieldValue.split(" ")) {
+    if (word.length < 3) continue;
+    let shared = 0;
+    const n = Math.min(word.length, needle.length);
+    while (shared < n && word[shared] === needle[shared]) shared += 1;
+    const minLen = Math.min(word.length, needle.length);
+    const needShared = Math.max(4, Math.ceil(minLen * 0.7));
+    if (shared >= needShared) return true;
+  }
+  return false;
+}
+
+function extractMentionNeedles(message) {
+  const t = normalizeRu(message);
+  if (!t) return [];
+
+  const needles = [];
+  const push = (raw, { priority = false } = {}) => {
+    const n = normalizeRu(raw);
+    if (!n || n.length < 2) return;
+    if (MENTION_STOP_WORDS.has(n) && !/^\d+$/.test(n)) return;
+    needles.push({ text: n, priority: Boolean(priority) || /^\d+$/.test(n) });
+  };
+
+  // Явные хвосты: «заказ Иванова», «по адресу Ленина 5», «клиент Петров», «описание кухня»
+  const patterned = [
+    /(?:^|\s)заказ(?:а|у|ом|е)?\s+(.+)$/u,
+    /(?:^|\s)клиент(?:а|у|ом|е)?\s+(.+)$/u,
+    /(?:^|\s)по\s+адресу\s+(.+)$/u,
+    /(?:^|\s)адрес(?:а|у|ом|е)?\s+(.+)$/u,
+    /(?:^|\s)описани(?:е|я|ю|ем)\s+(.+)$/u,
+    /(?:^|\s)номер(?:а|у|ом)?\s+(.+)$/u,
+  ];
+  for (const re of patterned) {
+    const m = t.match(re);
+    if (!m?.[1]) continue;
+    const tail = m[1]
+      .split(/\s+/)
+      .filter((w) => w && !MENTION_STOP_WORDS.has(w))
+      .join(" ");
+    if (tail) push(tail, { priority: true });
+  }
+
+  for (const m of t.matchAll(/\d+/g)) {
+    push(m[0], { priority: true });
+  }
+
+  const tokens = t.split(" ").filter(Boolean);
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    if (MENTION_STOP_WORDS.has(tok) && !/^\d+$/.test(tok)) continue;
+    if (tok.length >= 3 || /^\d+$/.test(tok)) push(tok);
+    if (i + 1 < tokens.length) {
+      const a = tokens[i];
+      const b = tokens[i + 1];
+      if (MENTION_STOP_WORDS.has(a) || MENTION_STOP_WORDS.has(b)) continue;
+      if (a.length >= 2 && b.length >= 2) push(`${a} ${b}`);
+    }
+    if (i + 2 < tokens.length) {
+      const a = tokens[i];
+      const b = tokens[i + 1];
+      const c = tokens[i + 2];
+      if (MENTION_STOP_WORDS.has(a) || MENTION_STOP_WORDS.has(b) || MENTION_STOP_WORDS.has(c)) continue;
+      if (a.length >= 2 && b.length >= 2 && c.length >= 2) push(`${a} ${b} ${c}`);
+    }
+  }
+
+  // Уникальные, более длинные / приоритетные первыми
+  const byText = new Map();
+  for (const n of needles) {
+    const prev = byText.get(n.text);
+    if (!prev || (n.priority && !prev.priority) || n.text.length > prev.text.length) {
+      byText.set(n.text, n);
+    }
+  }
+  return [...byText.values()].sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority ? -1 : 1;
+    return b.text.length - a.text.length;
+  });
+}
+
+/**
+ * Поиск заказа по упоминанию в речи: номер, клиент (часть), описание (часть), адрес (часть).
+ * @returns {{ order: object, score: number, matchedFields: string[] }[]}
+ */
+function findOrdersByMention(message, orders, { limit = 15 } = {}) {
+  const needles = extractMentionNeedles(message);
+  if (!needles.length || !Array.isArray(orders) || !orders.length) return [];
+
+  const scored = [];
+  for (const order of orders) {
+    const fields = orderMentionFields(order);
+    let score = 0;
+    const matchedFields = new Set();
+
+    for (const needle of needles) {
+      for (const [name, value] of Object.entries(fields)) {
+        if (!fieldContainsNeedle(value, needle.text)) continue;
+        matchedFields.add(name === "padded" || name === "chip" ? "id" : name);
+        const lenBoost = needle.text.length >= 6 ? 4 : needle.text.length >= 4 ? 3 : 2;
+        const priorityBoost = needle.priority ? 3 : 0;
+        const idBoost = name === "id" || name === "padded" || name === "chip" || name === "order_number" ? 12 : 0;
+        // Полное совпадение поля (имя клиента целиком и т.п.)
+        const exactBoost = value === needle.text ? 5 : 0;
+        score += lenBoost + priorityBoost + idBoost + exactBoost;
+      }
+    }
+
+    if (score > 0 && matchedFields.size > 0) {
+      scored.push({ order, score, matchedFields: [...matchedFields] });
+    }
+  }
+
+  scored.sort((a, b) => b.score - a.score || Number(b.order.id) - Number(a.order.id));
+  // Отсекаем слабый шум относительно лучшего совпадения
+  const best = scored[0]?.score || 0;
+  const minKeep = Math.max(4, Math.floor(best * 0.45));
+  return scored.filter((s) => s.score >= minKeep).slice(0, limit);
+}
+
+function messageLooksLikeOrderMention(message) {
+  const t = normalizeRu(message);
+  if (!t) return false;
+  if (/\d/.test(t)) return true;
+  return /(?:^|\s)(?:заказ(?:а|у|ом|е|ы|ов)?|клиент(?:а|у|ом|е)?|адрес(?:а|у|ом|е)?|описани(?:е|я|ю|ем)?|номер(?:а|у|ом)?|у)(?:\s|$)/u.test(
+    t
+  );
 }
 
 /**
@@ -175,13 +503,15 @@ function buildSystemPrompt({ canCreateOrders, nowIso, facts }) {
 4) Номера заказов в speak пиши ЦИФРАМИ как в данных (например 973), не прописью.
 5) «Последний заказ» / «последние N» = первые N элементов массива (он уже отсортирован: новые сверху по id).
 6) Если данных не хватает или список пуст — скажи об этом честно, без вымышленных id и сумм.
+7) Когда пользователь упоминает заказ, ищи его по полям: id (номер), order_number, client (клиент — можно часть имени), description (описание — можно часть текста), address (адрес — можно часть адреса). Частичное совпадение достаточно.
+8) Если дан блок MATCHED_ORDERS_BY_MENTION — это кандидаты, найденные кодом по полям из п.7. Отвечай по ним в первую очередь. Если кандидат один — считай, что речь о нём. Если несколько — action "clarify", коротко перечисли номера и клиентов. Если блок пуст, а пользователь явно ссылался на заказ/клиента/адрес/описание — скажи, что такого заказа в данных нет (не выдумывай).
 
 SITE_ORDERS_FACTS:
 - заказов в срезе: ${facts.count}
 - самый новый id: ${facts.newest_id ?? "нет"}
 - последние id (новые слева, до 40 шт.): ${recentLine}
 
-Поля заказа в JSON: id, client, phone, address, description, order_type, payment_status, order_date, amount, prepayment, prepayment_to, remaining_amount, remaining_to, delivery, delivery_date, installation, installation_date, area_m2.
+Поля заказа в JSON: id, order_number, client, phone, address, description, order_type, payment_status, order_date, amount, prepayment, prepayment_to, remaining_amount, remaining_to, delivery, delivery_date, installation, installation_date, area_m2.
 
 Действия (поле action):
 - "answer" — обычный ответ по данным (вопросы о сумме, адресе, клиенте, статусе, номерах и т.п.)
@@ -235,6 +565,7 @@ function compactOrders(orders) {
   const list = orders.slice(0, max);
   return list.map((o) => ({
     id: o.id != null && o.id !== "" ? Number(o.id) || o.id : null,
+    order_number: o.order_number ?? null,
     client: o.client ?? null,
     phone: o.phone ?? null,
     address: o.address ?? null,
@@ -324,11 +655,38 @@ module.exports = async (req, res) => {
     return res.status(200).json(deterministic);
   }
 
+  const mentionMatches = messageLooksLikeOrderMention(message)
+    ? findOrdersByMention(message, orders)
+    : [];
+  const matchedOrdersPayload = mentionMatches.map(({ order, score, matchedFields }) => ({
+    id: order.id,
+    order_number: order.order_number ?? null,
+    client: order.client ?? null,
+    address: order.address ?? null,
+    description: order.description ?? null,
+    order_type: order.order_type ?? null,
+    payment_status: order.payment_status ?? null,
+    amount: order.amount ?? null,
+    matched_fields: matchedFields,
+    match_score: score,
+  }));
+
   const messages = [
     { role: "system", content: buildSystemPrompt({ canCreateOrders, nowIso, facts }) },
     {
       role: "system",
       content: `SITE_ORDERS_JSON (${orders.length} шт., новые сверху по id):\n${JSON.stringify(orders)}`,
+    },
+    {
+      role: "system",
+      content:
+        matchedOrdersPayload.length > 0
+          ? `MATCHED_ORDERS_BY_MENTION (${matchedOrdersPayload.length} шт., поиск по id/order_number/client/description/address, частичные совпадения):\n${JSON.stringify(matchedOrdersPayload)}`
+          : `MATCHED_ORDERS_BY_MENTION: []${
+              messageLooksLikeOrderMention(message)
+                ? " — по номеру, клиенту, описанию и адресу совпадений не найдено."
+                : ""
+            }`,
     },
     ...history,
     { role: "user", content: message.slice(0, 4000) },
@@ -373,3 +731,8 @@ module.exports = async (req, res) => {
     return res.status(500).json({ message: e?.message || "Ошибка голосового ассистента" });
   }
 };
+
+module.exports.findOrdersByMention = findOrdersByMention;
+module.exports.extractMentionNeedles = extractMentionNeedles;
+module.exports.messageLooksLikeOrderMention = messageLooksLikeOrderMention;
+module.exports.normalizeRu = normalizeRu;
