@@ -985,17 +985,53 @@ function setComposeRouteButtonBusy(busy) {
   btn.setAttribute("aria-busy", busy ? "true" : "false");
 }
 
-/** Id заказов с отмеченным чекбоксом «в маршрут» в таблице «Доставка». */
+/**
+ * Id заказов, участвующих в маршруте: есть номер точки или отмечен чекбокс.
+ * Не участвуют только строки с пустым (снятым) чекбоксом.
+ */
 function getRouteSheetDeliverySelectedOrderIds() {
   const tbody = document.querySelector("#routeSheetTableDelivery tbody");
   /** @type {Set<string>} */
   const ids = new Set();
   if (!tbody) return ids;
-  for (const cb of tbody.querySelectorAll("input.route-sheet-route-select-cb:checked")) {
-    const oid = String(cb.getAttribute("data-order-id") ?? "").trim();
-    if (oid) ids.add(oid);
+  for (const tr of tbody.querySelectorAll("tr")) {
+    const oid = String(tr.querySelector("td.td-order-id")?.getAttribute("data-order-id") ?? "").trim();
+    if (!oid) continue;
+    const numInput = tr.querySelector("input.route-sheet-route-point-num");
+    if (numInput && String(numInput.value ?? "").trim() !== "") {
+      ids.add(oid);
+      continue;
+    }
+    const cb = tr.querySelector("input.route-sheet-route-select-cb");
+    if (cb?.checked) ids.add(oid);
   }
   return ids;
+}
+
+/** HTML снятого чекбокса «в маршрут» (после удаления номера точки). */
+function routeSelectUncheckedCheckboxHtml(orderId) {
+  const oid = escapeAttr(String(orderId ?? ""));
+  return `<input type="checkbox" class="route-sheet-route-select-cb" data-order-id="${oid}" aria-label="Включить в маршрут" />`;
+}
+
+/** HTML редактируемого поля номера точки маршрута. */
+function routePointNumInputHtml(pointNum) {
+  const n = String(pointNum);
+  return `<input type="text" class="route-sheet-route-point-num" value="${escapeAttr(n)}" inputmode="numeric" aria-label="Номер точки маршрута ${escapeAttr(n)}" />`;
+}
+
+/**
+ * Если номер точки стёрт — заменить поле на снятый чекбокс.
+ * @param {HTMLInputElement} input
+ */
+function maybeConvertClearedRoutePointNumToCheckbox(input) {
+  if (!input?.classList?.contains("route-sheet-route-point-num")) return;
+  if (String(input.value ?? "").trim() !== "") return;
+  const cell = input.closest("td.route-sheet-col-route-select");
+  const tr = input.closest("tr");
+  const oid = String(tr?.querySelector("td.td-order-id")?.getAttribute("data-order-id") ?? "").trim();
+  if (!cell || !oid) return;
+  cell.innerHTML = routeSelectUncheckedCheckboxHtml(oid);
 }
 
 /**
@@ -1009,7 +1045,7 @@ function routeSelectCellHtml(order, opts = {}) {
   if (pointNum != null && Number.isFinite(Number(pointNum)) && Number(pointNum) > 0) {
     const n = String(Math.trunc(Number(pointNum)));
     return `<td class="route-sheet-col-route-select">
-    <input type="text" class="route-sheet-route-point-num" value="${escapeAttr(n)}" readonly inputmode="numeric" tabindex="-1" aria-label="Номер точки маршрута ${escapeAttr(n)}" />
+    ${routePointNumInputHtml(n)}
   </td>`;
   }
   return `<td class="route-sheet-col-route-select">
@@ -1044,7 +1080,7 @@ function applyRouteSheetDeliveryPointNumbers(orderedStops) {
     if (!cell || !oid) continue;
     const pointNum = orderIdToSeq.get(oid);
     if (pointNum == null) continue;
-    cell.innerHTML = `<input type="text" class="route-sheet-route-point-num" value="${escapeAttr(String(pointNum))}" readonly inputmode="numeric" tabindex="-1" aria-label="Номер точки маршрута ${escapeAttr(String(pointNum))}" />`;
+    cell.innerHTML = routePointNumInputHtml(pointNum);
   }
 }
 
@@ -1102,7 +1138,10 @@ async function composeDeliveryRoute() {
 
   const selectedIds = getRouteSheetDeliverySelectedOrderIds();
   if (!selectedIds.size) {
-    setRouteDeliveryMapStatus("Отметьте заказы галочками для составления маршрута.", true);
+    setRouteDeliveryMapStatus(
+      "Отметьте заказы галочками или оставьте номера точек для составления маршрута.",
+      true,
+    );
     return;
   }
 
@@ -2898,6 +2937,27 @@ export function initRouteSheetSection() {
       e.preventDefault();
       openOrderIdActionsMenu(idTd);
     });
+  }
+
+  if (routeSheetSection && !routeSheetSection.dataset.routeSheetPointNumBound) {
+    routeSheetSection.dataset.routeSheetPointNumBound = "1";
+    routeSheetSection.addEventListener("input", (e) => {
+      const input = e.target;
+      if (!(input instanceof HTMLInputElement)) return;
+      if (!input.classList.contains("route-sheet-route-point-num")) return;
+      if (!routeSheetSection.contains(input)) return;
+      // Разрешаем только цифры при вводе; пустое значение → снятый чекбокс.
+      const digitsOnly = String(input.value ?? "").replace(/\D+/g, "");
+      if (digitsOnly !== input.value) input.value = digitsOnly;
+      maybeConvertClearedRoutePointNumToCheckbox(input);
+    });
+    routeSheetSection.addEventListener("blur", (e) => {
+      const input = e.target;
+      if (!(input instanceof HTMLInputElement)) return;
+      if (!input.classList.contains("route-sheet-route-point-num")) return;
+      if (!routeSheetSection.contains(input)) return;
+      maybeConvertClearedRoutePointNumToCheckbox(input);
+    }, true);
   }
 
   const deliveryBtn = document.getElementById("routeSheetExportDeliveryBtn");

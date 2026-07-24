@@ -3831,7 +3831,7 @@ table {
   padding: 1px 0;
   border: 1px solid #d1d5db;
   border-radius: 4px;
-  background: #f9fafb;
+  background: #fff;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.2;
@@ -3842,7 +3842,9 @@ table {
 }
 
 #routeSheetTableDelivery .route-sheet-route-point-num:focus {
-  outline: none;
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+  border-color: #2563eb;
 }
 
 .route-sheet-table th.route-sheet-col-remainder,
