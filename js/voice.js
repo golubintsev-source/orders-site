@@ -500,7 +500,7 @@ function buildOrdersContext() {
     .slice()
     .sort((a, b) => Number(b.id) - Number(a.id));
   return list.slice(0, 280).map((o) => ({
-    id: o.id,
+    id: o.id != null && o.id !== "" ? Number(o.id) || o.id : null,
     client: o.client ?? null,
     phone: o.phone ?? null,
     address: o.address ?? null,
@@ -580,11 +580,12 @@ async function callVoiceAssistant(message) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       message,
-      history: chatHistory.slice(-10),
+      history: chatHistory.slice(0, -1).slice(-10),
       orders: buildOrdersContext(),
       canCreateOrders: canMutateOrders(),
     }),
   });
+  // history: без текущего user-сообщения (оно уходит в message), иначе дубль путает модель.
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data?.message || `Ошибка сервера (${res.status})`);
