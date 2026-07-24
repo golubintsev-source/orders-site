@@ -501,6 +501,7 @@ function buildOrdersContext() {
     .sort((a, b) => Number(b.id) - Number(a.id));
   return list.slice(0, 280).map((o) => ({
     id: o.id != null && o.id !== "" ? Number(o.id) || o.id : null,
+    order_number: o.order_number ?? null,
     client: o.client ?? null,
     phone: o.phone ?? null,
     address: o.address ?? null,
