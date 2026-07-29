@@ -38,8 +38,6 @@ let browserVoicesReady = false;
  *   errorCode: string | null,
  *   userStop: boolean,
  *   forceStop: boolean,
- *   restartCount: number,
- *   audioStarted: boolean,
  * } | null} */
 let listenSession = null;
 let listenSessionSeq = 0;
@@ -47,20 +45,16 @@ let listenSessionSeq = 0;
 let listenWatchdogTimer = null;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let listenStartTimer = null;
-/** @type {ReturnType<typeof setTimeout> | null} */
-let deafRestartTimer = null;
 /** Не очищать статус до этого момента (ошибки / подсказки должны остаться на экране). */
 let statusHoldUntil = 0;
+/** Идёт асинхронная подготовка микрофона (getUserMedia) — не давать второй старт. */
+let startingListen = false;
 
 const LISTEN_MAX_MS = 18000;
 const LISTEN_START_TIMEOUT_MS = 12000;
 const STATUS_HOLD_MS = 4500;
-/**
- * Если после onaudiostart нет речи/текста — типичный «глухой» сеанс iOS после TTS.
- * Таймаут намеренно длиннее паузы перед фразой; не больше одного авто-перезапуска.
- */
-const DEAF_RESTART_MS = 4500;
-const MAX_DEAF_RESTARTS = 1;
+/** Пауза после остановки getUserMedia, чтобы WebKit отдал микрофон SpeechRecognition. */
+const CAPTURE_PRIME_SETTLE_MS = 140;
 
 /** Короткий тихий WAV — разблокировка WebKit без слышимого звука. */
 const SILENT_WAV =
@@ -294,10 +288,15 @@ function isWebKitSpeech() {
   return typeof window.webkitSpeechRecognition === "function";
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Перед записью останавливаем озвучку, но НЕ вызываем unlockTtsAudio():
  * silent WAV / warm utterance переводят iOS в playback и SpeechRecognition
  * часто стартует с красной кнопкой «Слушаю…», не слыша речь.
+ * Не делаем src="" / load() — это раньше ломало и TTS, и распознавание (#6/#7).
  */
 function prepareAudioSessionForListening() {
   try {
@@ -315,6 +314,48 @@ function prepareAudioSessionForListening() {
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * Коротко открываем и сразу закрываем микрофон через getUserMedia.
+ * На iPhone после TTS аудиосессия остаётся в playback; этот «прайм»
+ * переводит её в запись. Поток НЕ держим открытым — иначе он конкурирует
+ * с webkitSpeechRecognition (как в откатанном #4).
+ * @returns {Promise<boolean>} false если отказано в доступе
+ */
+async function primeCaptureSession() {
+  if (!navigator.mediaDevices?.getUserMedia) return true;
+  let stream = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+  } catch (e) {
+    const name = e?.name || "";
+    if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError") {
+      return false;
+    }
+    // Другие ошибки (NotFound и т.п.) — всё равно пробуем SpeechRecognition.
+    console.warn("primeCaptureSession:", e);
+    return true;
+  }
+  try {
+    for (const track of stream.getTracks()) {
+      try {
+        track.stop();
+      } catch {
+        /* ignore */
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  await sleep(CAPTURE_PRIME_SETTLE_MS);
+  return true;
 }
 
 function disposeRecognition() {
@@ -344,73 +385,6 @@ function disposeRecognition() {
 function markSpeechHeard() {
   if (!listenSession) return;
   listenSession.gotSpeech = true;
-  if (deafRestartTimer != null) {
-    clearTimeout(deafRestartTimer);
-    deafRestartTimer = null;
-  }
-}
-
-/**
- * Авто-перезапуск только для симптома из бага: onaudiostart уже был,
- * а речи/текста нет. Без getUserMedia — он раньше конкурировал с WebKit STT.
- */
-function armDeafRestart(sessionId) {
-  if (deafRestartTimer != null) {
-    clearTimeout(deafRestartTimer);
-    deafRestartTimer = null;
-  }
-  deafRestartTimer = setTimeout(() => {
-    const session = listenSession;
-    if (!session || session.id !== sessionId) return;
-    if (
-      !listening ||
-      busy ||
-      session.userStop ||
-      session.gotFinal ||
-      session.gotSpeech ||
-      session.interim ||
-      !session.audioStarted
-    ) {
-      return;
-    }
-
-    if (session.restartCount >= MAX_DEAF_RESTARTS) {
-      session.forceStop = true;
-      setStatus(
-        "Микрофон не слышит речь. Нажмите микрофон ещё раз или проверьте доступ в настройках Safari.",
-        true,
-        { holdMs: STATUS_HOLD_MS },
-      );
-      try {
-        recognition?.stop();
-      } catch {
-        /* ignore */
-      }
-      setTimeout(() => {
-        if (listening && listenSession?.id === sessionId) {
-          forceResetListeningUi(
-            "Микрофон не получает голос. Закройте другие приложения с микрофоном и попробуйте снова.",
-            true,
-          );
-          disposeRecognition();
-          listenSession = null;
-        }
-      }, 1200);
-      return;
-    }
-
-    const nextRestart = session.restartCount + 1;
-    // Снимаем обработчики до abort, чтобы запоздалый onend не сбросил новую сессию.
-    disposeRecognition();
-    clearListenTimers();
-    listening = false;
-    listenSession = null;
-    setStatus("Микрофон молчит — перезапускаю запись…", false, { tone: "info" });
-    setTimeout(() => {
-      if (busy || listening) return;
-      startListening({ restartCount: nextRestart });
-    }, 280);
-  }, DEAF_RESTART_MS);
 }
 
 function showReplayHint() {
@@ -538,15 +512,12 @@ function clearListenTimers() {
     clearTimeout(listenStartTimer);
     listenStartTimer = null;
   }
-  if (deafRestartTimer != null) {
-    clearTimeout(deafRestartTimer);
-    deafRestartTimer = null;
-  }
 }
 
 function forceResetListeningUi(message, isError = true) {
   clearListenTimers();
   listening = false;
+  startingListen = false;
   setMicUi(false);
   setLiveTranscript("");
   if (message) setStatus(message, isError, { holdMs: STATUS_HOLD_MS, tone: isError ? "error" : "info" });
@@ -795,7 +766,7 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
   }
 }
 
-function beginListenSession({ restartCount = 0 } = {}) {
+function beginListenSession() {
   listenSessionSeq += 1;
   listenSession = {
     id: listenSessionSeq,
@@ -806,8 +777,6 @@ function beginListenSession({ restartCount = 0 } = {}) {
     errorCode: null,
     userStop: false,
     forceStop: false,
-    restartCount,
-    audioStarted: false,
   };
   return listenSession;
 }
@@ -894,14 +863,13 @@ function ensureRecognition() {
       listenStartTimer = null;
     }
     listening = true;
+    startingListen = false;
     setMicUi(true);
     setStatus("Слушаю… говорите сейчас", false, { tone: "listening" });
-    if (listenSession) armDeafRestart(listenSession.id);
   };
 
   recognition.onaudiostart = () => {
     if (!listening) return;
-    if (listenSession) listenSession.audioStarted = true;
     setStatus("Микрофон включён. Слушаю…", false, { tone: "listening" });
   };
 
@@ -927,6 +895,7 @@ function ensureRecognition() {
     clearListenTimers();
     const session = listenSession;
     listening = false;
+    startingListen = false;
     setMicUi(false);
     listenSession = null;
 
@@ -952,6 +921,7 @@ function ensureRecognition() {
     if (err === "aborted") return;
 
     listening = false;
+    startingListen = false;
     setMicUi(false);
     setLiveTranscript("");
     setStatus(recognitionErrorMessage(err), true, { holdMs: STATUS_HOLD_MS });
@@ -1023,11 +993,12 @@ function armListenWatchdogs(sessionId) {
 }
 
 /**
- * @param {{ restartCount?: number }} [opts]
+ * Запуск распознавания. На WebKit после TTS сначала коротко праймим
+ * getUserMedia (и сразу закрываем), без авто-перезапусков сессии —
+ * они давали цикл «завис → восстановился → завис».
  */
-function startListening(opts = {}) {
-  if (busy) return;
-  const restartCount = opts.restartCount || 0;
+async function startListening() {
+  if (busy || startingListen || listening) return;
   const Ctor = getSpeechRecognitionCtor();
   if (!Ctor) {
     setStatus(
@@ -1038,21 +1009,47 @@ function startListening(opts = {}) {
     return;
   }
 
+  startingListen = true;
+
   // Останавливаем озвучку без silent WAV / speechSynthesis warm —
   // иначе iPhone часто даёт «Микрофон включён. Слушаю…» без распознавания.
   prepareAudioSessionForListening();
 
-  const rec = ensureRecognition();
-  if (!rec) return;
-
-  beginListenSession({ restartCount });
-  setLiveTranscript("");
   setMicUi(true);
-  setStatus(
-    restartCount > 0 ? "Перезапуск микрофона… говорите сейчас" : "Подключаю микрофон…",
-    false,
-    { tone: "listening" },
-  );
+  setLiveTranscript("");
+  setStatus("Подключаю микрофон…", false, { tone: "listening" });
+
+  // На WebKit после любой озвучки/unlock нужен прайм. Делаем его всегда:
+  // коротко и без удержания потока — иначе легко поймать «глухой» STT.
+  if (isWebKitSpeech()) {
+    const ok = await primeCaptureSession();
+    // Пользователь мог нажать «стоп» пока ждали getUserMedia.
+    if (!startingListen) return;
+    if (!ok) {
+      forceResetListeningUi(
+        "Нет доступа к микрофону. Разрешите микрофон в настройках Safari/браузера и попробуйте снова.",
+        true,
+      );
+      return;
+    }
+    if (busy) {
+      startingListen = false;
+      setMicUi(false);
+      return;
+    }
+  }
+
+  if (!startingListen) return;
+
+  const rec = ensureRecognition();
+  if (!rec) {
+    startingListen = false;
+    forceResetListeningUi("Не удалось запустить распознавание речи.", true);
+    return;
+  }
+
+  beginListenSession();
+  setStatus("Подключаю микрофон…", false, { tone: "listening" });
   armListenWatchdogs(listenSession.id);
 
   try {
@@ -1089,8 +1086,10 @@ function toggleListening() {
     return;
   }
 
-  if (listening) {
+  if (listening || startingListen) {
     if (listenSession) listenSession.userStop = true;
+    const wasOnlyPriming = startingListen && !listening;
+    startingListen = false;
     setStatus("Останавливаю…", false, { tone: "info" });
     try {
       recognition?.stop();
@@ -1098,13 +1097,20 @@ function toggleListening() {
       forceResetListeningUi("Запись остановлена.", false);
       disposeRecognition();
       listenSession = null;
+      return;
+    }
+    if (wasOnlyPriming) {
+      clearListenTimers();
+      disposeRecognition();
+      listenSession = null;
+      forceResetListeningUi("Запись остановлена.", false);
     }
     return;
   }
 
   // Разблокировку TTS делаем на других жестах / входе в раздел —
   // не прямо перед SpeechRecognition.
-  startListening();
+  void startListening();
 }
 
 function sendFromInput() {
@@ -1209,6 +1215,7 @@ export function onVoiceSectionLeave() {
   stopSpeaking();
   clearListenTimers();
   setLiveTranscript("");
+  startingListen = false;
   if (listening && recognition) {
     if (listenSession) listenSession.userStop = true;
     try {
