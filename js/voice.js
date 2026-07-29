@@ -38,6 +38,8 @@ let browserVoicesReady = false;
  *   errorCode: string | null,
  *   userStop: boolean,
  *   forceStop: boolean,
+ *   restartCount: number,
+ *   audioStarted: boolean,
  * } | null} */
 let listenSession = null;
 let listenSessionSeq = 0;
@@ -45,12 +47,20 @@ let listenSessionSeq = 0;
 let listenWatchdogTimer = null;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let listenStartTimer = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let deafRestartTimer = null;
 /** Не очищать статус до этого момента (ошибки / подсказки должны остаться на экране). */
 let statusHoldUntil = 0;
 
 const LISTEN_MAX_MS = 18000;
 const LISTEN_START_TIMEOUT_MS = 12000;
 const STATUS_HOLD_MS = 4500;
+/**
+ * Если после onaudiostart нет речи/текста — типичный «глухой» сеанс iOS после TTS.
+ * Таймаут намеренно длиннее паузы перед фразой; не больше одного авто-перезапуска.
+ */
+const DEAF_RESTART_MS = 4500;
+const MAX_DEAF_RESTARTS = 1;
 
 /** Короткий тихий WAV — разблокировка WebKit без слышимого звука. */
 const SILENT_WAV =
@@ -162,24 +172,13 @@ function ensureTtsAudioElement() {
 
 /**
  * Вызывать синхронно из click/touch/keydown — иначе iPhone не даст воспроизвести TTS после fetch.
+ * Не вызывать непосредственно перед SpeechRecognition.start(): silent WAV / warm utterance
+ * оставляют аудиосессию в playback и микрофон «глухнет».
  */
 function unlockTtsAudio() {
-  const audio = ensureTtsAudioElement();
-  try {
-    // speechSynthesis тоже часто требует жест на iOS
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      const warm = new SpeechSynthesisUtterance(" ");
-      warm.volume = 0;
-      warm.lang = "ru-RU";
-      window.speechSynthesis.speak(warm);
-      window.speechSynthesis.cancel();
-    }
-  } catch {
-    /* ignore */
-  }
-
   if (ttsAudioUnlocked) return;
+  const audio = ensureTtsAudioElement();
+
   try {
     audio.src = SILENT_WAV;
     const p = audio.play();
@@ -291,6 +290,129 @@ function stopSpeaking() {
   }
 }
 
+function isWebKitSpeech() {
+  return typeof window.webkitSpeechRecognition === "function";
+}
+
+/**
+ * Перед записью останавливаем озвучку, но НЕ вызываем unlockTtsAudio():
+ * silent WAV / warm utterance переводят iOS в playback и SpeechRecognition
+ * часто стартует с красной кнопкой «Слушаю…», не слыша речь.
+ */
+function prepareAudioSessionForListening() {
+  try {
+    window.speechSynthesis?.cancel();
+  } catch {
+    /* ignore */
+  }
+  const audio = ttsAudio;
+  if (!audio) return;
+  try {
+    if (!audio.paused) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function disposeRecognition() {
+  if (!recognition) return;
+  const rec = recognition;
+  recognition = null;
+  try {
+    rec.onstart = null;
+    rec.onend = null;
+    rec.onerror = null;
+    rec.onresult = null;
+    rec.onaudiostart = null;
+    rec.onspeechstart = null;
+    rec.onspeechend = null;
+    rec.onnomatch = null;
+    rec.onaudioend = null;
+  } catch {
+    /* ignore */
+  }
+  try {
+    rec.abort();
+  } catch {
+    /* ignore */
+  }
+}
+
+function markSpeechHeard() {
+  if (!listenSession) return;
+  listenSession.gotSpeech = true;
+  if (deafRestartTimer != null) {
+    clearTimeout(deafRestartTimer);
+    deafRestartTimer = null;
+  }
+}
+
+/**
+ * Авто-перезапуск только для симптома из бага: onaudiostart уже был,
+ * а речи/текста нет. Без getUserMedia — он раньше конкурировал с WebKit STT.
+ */
+function armDeafRestart(sessionId) {
+  if (deafRestartTimer != null) {
+    clearTimeout(deafRestartTimer);
+    deafRestartTimer = null;
+  }
+  deafRestartTimer = setTimeout(() => {
+    const session = listenSession;
+    if (!session || session.id !== sessionId) return;
+    if (
+      !listening ||
+      busy ||
+      session.userStop ||
+      session.gotFinal ||
+      session.gotSpeech ||
+      session.interim ||
+      !session.audioStarted
+    ) {
+      return;
+    }
+
+    if (session.restartCount >= MAX_DEAF_RESTARTS) {
+      session.forceStop = true;
+      setStatus(
+        "Микрофон не слышит речь. Нажмите микрофон ещё раз или проверьте доступ в настройках Safari.",
+        true,
+        { holdMs: STATUS_HOLD_MS },
+      );
+      try {
+        recognition?.stop();
+      } catch {
+        /* ignore */
+      }
+      setTimeout(() => {
+        if (listening && listenSession?.id === sessionId) {
+          forceResetListeningUi(
+            "Микрофон не получает голос. Закройте другие приложения с микрофоном и попробуйте снова.",
+            true,
+          );
+          disposeRecognition();
+          listenSession = null;
+        }
+      }, 1200);
+      return;
+    }
+
+    const nextRestart = session.restartCount + 1;
+    // Снимаем обработчики до abort, чтобы запоздалый onend не сбросил новую сессию.
+    disposeRecognition();
+    clearListenTimers();
+    listening = false;
+    listenSession = null;
+    setStatus("Микрофон молчит — перезапускаю запись…", false, { tone: "info" });
+    setTimeout(() => {
+      if (busy || listening) return;
+      startListening({ restartCount: nextRestart });
+    }, 280);
+  }, DEAF_RESTART_MS);
+}
+
 function showReplayHint() {
   const feed = document.getElementById("voiceFeed");
   if (!feed || !lastSpeakText) return;
@@ -312,6 +434,14 @@ async function playTtsBlob(blob, utterText) {
     clearTtsObjectUrl();
     audio.removeEventListener("ended", onEnded);
     audio.removeEventListener("error", onError);
+    // Мягко отпускаем playback после озвучки. Не трогаем src/load —
+    // жёсткий сброс раньше ломал разблокировку Audio на iPhone.
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch {
+      /* ignore */
+    }
   };
   const onError = () => {
     clearTtsObjectUrl();
@@ -407,6 +537,10 @@ function clearListenTimers() {
   if (listenStartTimer != null) {
     clearTimeout(listenStartTimer);
     listenStartTimer = null;
+  }
+  if (deafRestartTimer != null) {
+    clearTimeout(deafRestartTimer);
+    deafRestartTimer = null;
   }
 }
 
@@ -661,7 +795,7 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
   }
 }
 
-function beginListenSession({ userStop = false } = {}) {
+function beginListenSession({ restartCount = 0 } = {}) {
   listenSessionSeq += 1;
   listenSession = {
     id: listenSessionSeq,
@@ -670,8 +804,10 @@ function beginListenSession({ userStop = false } = {}) {
     finals: [],
     interim: "",
     errorCode: null,
-    userStop,
+    userStop: false,
     forceStop: false,
+    restartCount,
+    audioStarted: false,
   };
   return listenSession;
 }
@@ -739,6 +875,10 @@ function finishListenSessionWithOutcome(session) {
 }
 
 function ensureRecognition() {
+  // На WebKit/iOS один экземпляр часто «глухнет» после TTS — создаём заново.
+  if (recognition && isWebKitSpeech()) {
+    disposeRecognition();
+  }
   if (recognition) return recognition;
   const Ctor = getSpeechRecognitionCtor();
   if (!Ctor) return null;
@@ -756,15 +896,17 @@ function ensureRecognition() {
     listening = true;
     setMicUi(true);
     setStatus("Слушаю… говорите сейчас", false, { tone: "listening" });
+    if (listenSession) armDeafRestart(listenSession.id);
   };
 
   recognition.onaudiostart = () => {
     if (!listening) return;
+    if (listenSession) listenSession.audioStarted = true;
     setStatus("Микрофон включён. Слушаю…", false, { tone: "listening" });
   };
 
   recognition.onspeechstart = () => {
-    if (listenSession) listenSession.gotSpeech = true;
+    markSpeechHeard();
     setStatus("Слышу вас…", false, { tone: "listening" });
   };
 
@@ -775,7 +917,7 @@ function ensureRecognition() {
   };
 
   recognition.onnomatch = () => {
-    if (listenSession) listenSession.gotSpeech = true;
+    markSpeechHeard();
     setStatus("Не удалось сопоставить речь с текстом. Попробуйте ещё раз.", true, {
       holdMs: STATUS_HOLD_MS,
     });
@@ -826,6 +968,7 @@ function ensureRecognition() {
         listenSession.gotFinal = true;
         listenSession.finals.push(transcript);
         listenSession.interim = "";
+        markSpeechHeard();
         setLiveTranscript(listenSession.finals.join(" "), { interim: false });
         setStatus(`Распознано: «${transcript}»`, false, { tone: "info" });
       } else {
@@ -834,7 +977,7 @@ function ensureRecognition() {
     }
     if (interim && !listenSession.gotFinal) {
       listenSession.interim = interim;
-      listenSession.gotSpeech = true;
+      markSpeechHeard();
       setLiveTranscript(interim, { interim: true });
       setStatus("Слышу вас…", false, { tone: "listening" });
     }
@@ -854,11 +997,7 @@ function armListenWatchdogs(sessionId) {
         "Не удалось запустить микрофон. Разрешите доступ к микрофону или обновите страницу.",
         true,
       );
-      try {
-        recognition?.abort();
-      } catch {
-        /* ignore */
-      }
+      disposeRecognition();
       listenSession = null;
     }
   }, LISTEN_START_TIMEOUT_MS);
@@ -876,19 +1015,69 @@ function armListenWatchdogs(sessionId) {
     setTimeout(() => {
       if (listening && listenSession?.id === sessionId) {
         forceResetListeningUi("Микрофон завис и был сброшен. Нажмите ещё раз и повторите фразу.", true);
-        try {
-          recognition?.abort();
-        } catch {
-          /* ignore */
-        }
+        disposeRecognition();
         listenSession = null;
       }
     }, 1600);
   }, LISTEN_MAX_MS);
 }
 
+/**
+ * @param {{ restartCount?: number }} [opts]
+ */
+function startListening(opts = {}) {
+  if (busy) return;
+  const restartCount = opts.restartCount || 0;
+  const Ctor = getSpeechRecognitionCtor();
+  if (!Ctor) {
+    setStatus(
+      "Голосовой ввод не поддерживается в этом браузере. Введите текст вручную (на iPhone лучше Safari актуальной версии).",
+      true,
+      { holdMs: STATUS_HOLD_MS },
+    );
+    return;
+  }
+
+  // Останавливаем озвучку без silent WAV / speechSynthesis warm —
+  // иначе iPhone часто даёт «Микрофон включён. Слушаю…» без распознавания.
+  prepareAudioSessionForListening();
+
+  const rec = ensureRecognition();
+  if (!rec) return;
+
+  beginListenSession({ restartCount });
+  setLiveTranscript("");
+  setMicUi(true);
+  setStatus(
+    restartCount > 0 ? "Перезапуск микрофона… говорите сейчас" : "Подключаю микрофон…",
+    false,
+    { tone: "listening" },
+  );
+  armListenWatchdogs(listenSession.id);
+
+  try {
+    rec.start();
+  } catch (e) {
+    // InvalidStateError — экземпляр ещё «занят»; пересоздаём и пробуем один раз.
+    disposeRecognition();
+    const retry = ensureRecognition();
+    if (!retry) {
+      clearListenTimers();
+      listenSession = null;
+      forceResetListeningUi(e?.message || "Не удалось запустить микрофон", true);
+      return;
+    }
+    try {
+      retry.start();
+    } catch (e2) {
+      clearListenTimers();
+      listenSession = null;
+      forceResetListeningUi(e2?.message || "Не удалось запустить микрофон", true);
+    }
+  }
+}
+
 function toggleListening() {
-  unlockTtsAudio();
   if (busy) return;
   const Ctor = getSpeechRecognitionCtor();
   if (!Ctor) {
@@ -899,41 +1088,23 @@ function toggleListening() {
     );
     return;
   }
-  const rec = ensureRecognition();
-  if (!rec) return;
 
   if (listening) {
     if (listenSession) listenSession.userStop = true;
     setStatus("Останавливаю…", false, { tone: "info" });
     try {
-      rec.stop();
+      recognition?.stop();
     } catch {
       forceResetListeningUi("Запись остановлена.", false);
+      disposeRecognition();
       listenSession = null;
     }
     return;
   }
 
-  // Не pause() на ttsAudio сразу после unlock — iOS иначе может не «запомнить» жест.
-  try {
-    window.speechSynthesis?.cancel();
-  } catch {
-    /* ignore */
-  }
-
-  beginListenSession();
-  setLiveTranscript("");
-  setMicUi(true);
-  setStatus("Подключаю микрофон…", false, { tone: "listening" });
-  armListenWatchdogs(listenSession.id);
-
-  try {
-    rec.start();
-  } catch (e) {
-    clearListenTimers();
-    listenSession = null;
-    forceResetListeningUi(e?.message || "Не удалось запустить микрофон", true);
-  }
+  // Разблокировку TTS делаем на других жестах / входе в раздел —
+  // не прямо перед SpeechRecognition.
+  startListening();
 }
 
 function sendFromInput() {
@@ -1026,6 +1197,9 @@ export function initVoiceSection() {
 }
 
 export function onVoiceSectionEnter() {
+  // Разблокируем TTS при входе в раздел (не в момент микрофона), чтобы озвучка
+  // ответов работала, а старт записи не переводил iPhone в playback.
+  unlockTtsAudio();
   restoreChatHistoryIfNeeded();
   const input = document.getElementById("voiceComposerInput");
   input?.focus?.({ preventScroll: true });
