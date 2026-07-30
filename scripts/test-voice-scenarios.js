@@ -144,4 +144,67 @@ function assert(cond, msg) {
   assert(r.action === "answer", "no rights create");
 }
 
+{
+  // Модель часто возвращает полный объект с null по неизменённым полям —
+  // пустые client/status не должны попасть в патч правки.
+  const r = finalizeAssistantPayload(
+    {
+      action: "propose_update_order",
+      speak: "Добавляю описание. Подтвердите изменение?",
+      order_id: 1015,
+      order: {
+        client: null,
+        payment_status: null,
+        description: "Обязательно провести повторный замер",
+        address: null,
+      },
+    },
+    { canCreateOrders: true, orders, mentionMatches: [] }
+  );
+  assert(r.action === "propose_update_order", `null client/status stripped: ${r.action}`);
+  assert(r.order && r.order.description === "Обязательно провести повторный замер", "description kept");
+  assert(!("client" in r.order), "empty client removed from patch");
+  assert(!("payment_status" in r.order), "empty status removed from patch");
+  assert("address" in r.order && r.order.address === null, "null address kept for optional clear");
+}
+
+{
+  const { normalizeUpdatePatch } = require("../api/voice-assistant.js");
+  const p = normalizeUpdatePatch({
+    client: "",
+    payment_status: null,
+    description: "x",
+  });
+  assert(p.description === "x", "normalize keeps description");
+  assert(!("client" in p) && !("payment_status" in p), "normalize drops empty required");
+}
+
+{
+  // Карточка подтверждения правки: Клиент/Статус показываем из текущего заказа,
+  // если в патче их нет (иначе UI рисует «—»).
+  function mergeUpdateConfirmDisplay(existing, patch) {
+    const display = { ...(patch && typeof patch === "object" ? patch : {}) };
+    if (display.client == null || display.client === "") {
+      display.client = existing?.client ?? null;
+    }
+    if (display.payment_status == null || display.payment_status === "") {
+      display.payment_status = existing?.payment_status ?? null;
+    }
+    return display;
+  }
+  const d = mergeUpdateConfirmDisplay(orders[0], {
+    description: "Обязательно провести повторный замер",
+  });
+  assert(d.client === "Иванов", `confirm card client: ${d.client}`);
+  assert(d.payment_status === "Производство", `confirm card status: ${d.payment_status}`);
+  assert(d.description === "Обязательно провести повторный замер", "confirm card description");
+
+  const d2 = mergeUpdateConfirmDisplay(orders[0], {
+    client: "Новый клиент",
+    description: "текст",
+  });
+  assert(d2.client === "Новый клиент", "patch client overrides existing");
+  assert(d2.payment_status === "Производство", "status still from existing");
+}
+
 console.log("ok: voice scenarios (info / create / update)");

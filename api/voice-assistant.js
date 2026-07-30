@@ -683,6 +683,18 @@ function patchHasChanges(patch) {
   });
 }
 
+/**
+ * Патч правки: убрать пустые client/status (модель часто заполняет весь объект null-ами).
+ * Остальные null оставляем — ими можно очистить необязательное поле.
+ */
+function normalizeUpdatePatch(patch) {
+  if (!patch || typeof patch !== "object") return null;
+  const out = { ...patch };
+  if (out.client == null || out.client === "") delete out.client;
+  if (out.payment_status == null || out.payment_status === "") delete out.payment_status;
+  return out;
+}
+
 function buildSystemPrompt({ canCreateOrders, nowIso, facts }) {
   const recentLine =
     facts.recent_ids_newest_first.length > 0
@@ -876,6 +888,7 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
         order_id: null,
       };
     }
+    order = normalizeUpdatePatch(order);
     if (!patchHasChanges(order)) {
       return {
         speak: `Заказ ${orderId} найден. Что добавить или изменить?`,
@@ -1095,3 +1108,4 @@ module.exports.tryDeterministicLastOrdersAnswer = tryDeterministicLastOrdersAnsw
 module.exports.finalizeAssistantPayload = finalizeAssistantPayload;
 module.exports.missingCreateRequired = missingCreateRequired;
 module.exports.sanitizeOrderDraft = sanitizeOrderDraft;
+module.exports.normalizeUpdatePatch = normalizeUpdatePatch;

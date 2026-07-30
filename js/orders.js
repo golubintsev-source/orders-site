@@ -3729,7 +3729,11 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
   const cleanPatch = {};
   if (patch && typeof patch === "object") {
     for (const key of VOICE_PATCHABLE_KEYS) {
-      if (key in patch) cleanPatch[key] = patch[key];
+      if (!(key in patch)) continue;
+      const v = patch[key];
+      // Пустые client/status в патче = «не менять» (модель часто шлёт null по неизменённым полям).
+      if ((key === "client" || key === "payment_status") && (v == null || v === "")) continue;
+      cleanPatch[key] = v;
     }
   }
   if (Object.keys(cleanPatch).length === 0) {

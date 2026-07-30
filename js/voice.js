@@ -635,11 +635,38 @@ function renderIncompleteCreateCard(draft) {
   </div>`;
 }
 
+/** Найти заказ в локальном списке для карточки подтверждения правки. */
+function findOrderForVoiceConfirm(orderId) {
+  const idNum = Number(orderId);
+  return (
+    (state.allOrders || []).find((o) => {
+      if (!o || o.deleted_at != null) return false;
+      return Number(o.id) === idNum || o.id === orderId;
+    }) || null
+  );
+}
+
+/**
+ * Для карточки правки: патч содержит только изменяемые поля, а Клиент/Статус
+ * в списке обязательные — подставляем текущие значения заказа, если в патче пусто.
+ */
+function buildUpdateConfirmDisplay(orderId, patch) {
+  const existing = findOrderForVoiceConfirm(orderId);
+  const display = { ...(patch && typeof patch === "object" ? patch : {}) };
+  if (display.client == null || display.client === "") {
+    display.client = existing?.client ?? null;
+  }
+  if (display.payment_status == null || display.payment_status === "") {
+    display.payment_status = existing?.payment_status ?? null;
+  }
+  return display;
+}
+
 function renderUpdateConfirmCard(orderId, patch) {
   return `<div class="voice-confirm-card" role="group" aria-label="Подтверждение изменения заказа">
     <p class="voice-confirm-title">Изменить заказ ${escapeHtml(String(orderId))}?</p>
     <ul class="voice-confirm-list">
-      ${buildConfirmListHtml(patch)}
+      ${buildConfirmListHtml(buildUpdateConfirmDisplay(orderId, patch))}
     </ul>
     <div class="voice-confirm-actions">
       <button type="button" class="btn-primary voice-confirm-yes" data-voice-confirm="yes">Сохранить</button>
