@@ -803,6 +803,7 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
     const data = await callVoiceAssistant(text);
     const speakText = String(data?.speak || "Готово.").trim();
     const action = data?.action || "answer";
+    clearConfirmCards();
 
     if (action === "propose_create_order" && data?.order && canMutateOrders()) {
       pendingVoiceAction = { kind: "create", draft: data.order };
