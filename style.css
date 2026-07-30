@@ -5880,6 +5880,8 @@ th {
   flex-direction: column;
   min-height: calc(100vh - 120px);
   max-height: calc(100vh - 120px);
+  min-height: calc(100dvh - 120px);
+  max-height: calc(100dvh - 120px);
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
@@ -6120,7 +6122,7 @@ th {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px 12px 12px;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
 }
@@ -6225,6 +6227,8 @@ th {
   .voice-page {
     min-height: calc(100vh - 100px);
     max-height: calc(100vh - 100px);
+    min-height: calc(100dvh - 100px);
+    max-height: calc(100dvh - 100px);
     border-radius: 0;
     border-left: none;
     border-right: none;
