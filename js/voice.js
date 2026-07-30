@@ -1063,9 +1063,8 @@ function toggleListening() {
     return;
   }
 
-  // Разблокировку TTS делаем на жесте (вход в раздел / другие кнопки),
-  // а также здесь — до старта STT, чтобы следующий ответ озвучился.
-  unlockTtsAudio();
+  // AudioContext уже разблокирован на входе в раздел / других жестах.
+  // Не трогаем аудио здесь сверх stopSpeaking внутри startListening.
   startListening();
 }
 
