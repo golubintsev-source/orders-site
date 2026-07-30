@@ -1299,7 +1299,7 @@ function startListening(opts = {}) {
     return;
   }
 
-  beginListenSession();
+  beginListenSession({ auto });
   armListenWatchdogs(listenSession.id, { auto });
 
   try {
