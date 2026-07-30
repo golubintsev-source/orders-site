@@ -1,20 +1,27 @@
 import { state } from "./state.js";
 import { canMutateOrders, isOrderHiddenForCurrentRole } from "./roles.js";
-import { createOrderFromVoicePayload } from "./orders.js";
+import { createOrderFromVoicePayload, updateOrderFromVoicePayload } from "./orders.js";
 import { formatAmountWholeRubles } from "./format.js";
 
 const VOICE_CHAT_STORAGE_PREFIX = "orders_site_voice_chat_v1:";
 /** Сколько реплик хранить на странице и в localStorage (в LLM уходит только хвост). */
 const MAX_STORED_CHAT_MESSAGES = 80;
 const VOICE_EMPTY_HTML =
-  '<p class="voice-empty">Спросите про заказ голосом или текстом — например: «Какая сумма по последнему заказу?» или «Создай заказ клиенту Иванову на 50 тысяч, адрес Ленина 10».</p>';
+  '<p class="voice-empty">Три сценария: спросить про заказы (сумма, адрес, клиент…); создать заказ (нужны клиент и статус); изменить заказ (по номеру, клиенту, адресу или описанию).</p>';
 
 /** @type {SpeechRecognition | null} */
 let recognition = null;
 /** @type {{ role: string, content: string }[]} */
 let chatHistory = [];
-/** @type {Record<string, unknown> | null} */
-let pendingOrderDraft = null;
+/**
+ * Ожидание подтверждения создания/правки.
+ * @type {null | {
+ *   kind: "create" | "update" | "incomplete_create",
+ *   draft: Record<string, unknown>,
+ *   orderId?: number|string|null,
+ * }}
+ */
+let pendingVoiceAction = null;
 let listening = false;
 let busy = false;
 /**
@@ -556,26 +563,86 @@ function appendBubble(role, text, extraHtml = "") {
   feed.scrollTop = feed.scrollHeight;
 }
 
-function renderConfirmCard(draft) {
-  const client = String(draft?.client || "—");
-  const amount =
-    draft?.amount != null && draft.amount !== ""
-      ? `${formatAmountWholeRubles(Number(draft.amount))} ₽`
-      : "—";
-  const address = String(draft?.address || "—");
-  const status = String(draft?.payment_status || "Контакт с клиентом");
-  const type = String(draft?.order_type || "—");
+function formatDraftFieldValue(key, value) {
+  if (value == null || value === "") return "—";
+  if (key === "amount" || key === "prepayment" || key === "remaining_amount") {
+    return `${formatAmountWholeRubles(Number(value))} ₽`;
+  }
+  if (key === "installation") return value ? "да" : "нет";
+  return String(value);
+}
+
+function buildConfirmListHtml(draft, { highlightMissing = false } = {}) {
+  const rows = [
+    ["client", "Клиент", true],
+    ["payment_status", "Статус", true],
+    ["phone", "Телефон", false],
+    ["address", "Адрес", false],
+    ["description", "Описание", false],
+    ["order_type", "Тип", false],
+    ["amount", "Сумма", false],
+    ["prepayment", "Предоплата", false],
+    ["prepayment_to", "Кому предоплата", false],
+    ["remaining_amount", "Остаток", false],
+    ["remaining_to", "Кому остаток", false],
+    ["delivery", "Доставка", false],
+    ["delivery_date", "Дата доставки", false],
+    ["installation", "Монтаж", false],
+    ["installation_date", "Дата монтажа", false],
+  ];
+  return rows
+    .map(([key, label, required]) => {
+      const raw = draft?.[key];
+      const empty = raw == null || raw === "";
+      if (empty && !required) return "";
+      const missing = highlightMissing && required && empty;
+      const value = missing ? "не указано" : formatDraftFieldValue(key, raw);
+      const cls = missing ? ' class="voice-confirm-missing"' : "";
+      return `<li${cls}><span>${label}${required ? " *" : ""}</span> ${escapeHtml(value)}</li>`;
+    })
+    .filter(Boolean)
+    .join("");
+}
+
+function renderCreateConfirmCard(draft) {
   return `<div class="voice-confirm-card" role="group" aria-label="Подтверждение создания заказа">
     <p class="voice-confirm-title">Создать заказ?</p>
     <ul class="voice-confirm-list">
-      <li><span>Клиент</span> ${escapeHtml(client)}</li>
-      <li><span>Сумма</span> ${escapeHtml(amount)}</li>
-      <li><span>Адрес</span> ${escapeHtml(address)}</li>
-      <li><span>Тип</span> ${escapeHtml(type)}</li>
-      <li><span>Статус</span> ${escapeHtml(status)}</li>
+      ${buildConfirmListHtml(draft)}
     </ul>
     <div class="voice-confirm-actions">
       <button type="button" class="btn-primary voice-confirm-yes" data-voice-confirm="yes">Создать</button>
+      <button type="button" class="voice-confirm-no" data-voice-confirm="no">Отмена</button>
+    </div>
+    <p class="voice-confirm-hint">Или скажите «да» / «нет»</p>
+  </div>`;
+}
+
+function renderIncompleteCreateCard(draft) {
+  const missing = [];
+  if (!String(draft?.client || "").trim()) missing.push("клиент");
+  if (!String(draft?.payment_status || "").trim()) missing.push("статус");
+  const missingText = missing.length ? missing.join(" и ") : "обязательные поля";
+  return `<div class="voice-confirm-card voice-confirm-card--incomplete" role="group" aria-label="Не хватает данных для заказа">
+    <p class="voice-confirm-title">Нужны обязательные данные</p>
+    <p class="voice-confirm-missing-lead">Укажите: ${escapeHtml(missingText)} — голосом или текстом.</p>
+    <ul class="voice-confirm-list">
+      ${buildConfirmListHtml(draft, { highlightMissing: true })}
+    </ul>
+    <div class="voice-confirm-actions">
+      <button type="button" class="voice-confirm-no" data-voice-confirm="no">Отмена</button>
+    </div>
+  </div>`;
+}
+
+function renderUpdateConfirmCard(orderId, patch) {
+  return `<div class="voice-confirm-card" role="group" aria-label="Подтверждение изменения заказа">
+    <p class="voice-confirm-title">Изменить заказ ${escapeHtml(String(orderId))}?</p>
+    <ul class="voice-confirm-list">
+      ${buildConfirmListHtml(patch)}
+    </ul>
+    <div class="voice-confirm-actions">
+      <button type="button" class="btn-primary voice-confirm-yes" data-voice-confirm="yes">Сохранить</button>
       <button type="button" class="voice-confirm-no" data-voice-confirm="no">Отмена</button>
     </div>
     <p class="voice-confirm-hint">Или скажите «да» / «нет»</p>
@@ -620,7 +687,9 @@ function isAffirmative(text) {
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return /^(да|ага|угу|ок|окей|подтверждаю|создай|создать|согласен|хорошо|верно)(\s|$)/.test(t);
+  return /^(да|ага|угу|ок|окей|подтверждаю|создай|создать|измени|изменить|сохрани|сохранить|согласен|хорошо|верно)(\s|$)/.test(
+    t
+  );
 }
 
 function isNegative(text) {
@@ -632,21 +701,25 @@ function isNegative(text) {
   return /^(нет|не|отмена|отменить|не надо|стоп)(\s|$)/.test(t);
 }
 
-async function confirmPendingOrder() {
-  const draft = pendingOrderDraft;
-  pendingOrderDraft = null;
+async function confirmPendingAction() {
+  const pending = pendingVoiceAction;
+  pendingVoiceAction = null;
   clearConfirmCards();
-  if (!draft) return;
+  if (!pending || pending.kind === "incomplete_create") return;
+
   setBusyUi(true);
-  setStatus("Создаю заказ…");
+  const isUpdate = pending.kind === "update";
+  setStatus(isUpdate ? "Сохраняю изменения…" : "Создаю заказ…");
   try {
-    const result = await createOrderFromVoicePayload(draft);
+    const result = isUpdate
+      ? await updateOrderFromVoicePayload(pending.orderId, pending.draft)
+      : await createOrderFromVoicePayload(pending.draft);
     appendBubble("assistant", result.message);
     pushChat("assistant", result.message);
     speak(result.message);
     setStatus(result.ok ? "" : result.message, !result.ok, result.ok ? undefined : { holdMs: STATUS_HOLD_MS });
   } catch (e) {
-    const msg = e?.message || "Не удалось создать заказ";
+    const msg = e?.message || (isUpdate ? "Не удалось изменить заказ" : "Не удалось создать заказ");
     appendBubble("assistant", msg);
     pushChat("assistant", msg);
     speak(msg);
@@ -656,11 +729,17 @@ async function confirmPendingOrder() {
   }
 }
 
-function cancelPendingOrder(announce = true) {
-  pendingOrderDraft = null;
+function cancelPendingAction(announce = true) {
+  const kind = pendingVoiceAction?.kind;
+  pendingVoiceAction = null;
   clearConfirmCards();
   if (!announce) return;
-  const msg = "Создание заказа отменено.";
+  const msg =
+    kind === "update"
+      ? "Изменение заказа отменено."
+      : kind === "incomplete_create"
+        ? "Создание заказа отменено."
+        : "Создание заказа отменено.";
   appendBubble("assistant", msg);
   pushChat("assistant", msg);
   speak(msg);
@@ -694,15 +773,18 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
   appendBubble("user", text);
   pushChat("user", text);
 
-  if (pendingOrderDraft) {
+  if (pendingVoiceAction && pendingVoiceAction.kind !== "incomplete_create") {
     if (isAffirmative(text)) {
-      await confirmPendingOrder();
+      await confirmPendingAction();
       return;
     }
     if (isNegative(text)) {
-      cancelPendingOrder(true);
+      cancelPendingAction(true);
       return;
     }
+  } else if (pendingVoiceAction?.kind === "incomplete_create" && isNegative(text)) {
+    cancelPendingAction(true);
+    return;
   }
 
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
@@ -721,19 +803,48 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
     const data = await callVoiceAssistant(text);
     const speakText = String(data?.speak || "Готово.").trim();
     const action = data?.action || "answer";
+    clearConfirmCards();
 
     if (action === "propose_create_order" && data?.order && canMutateOrders()) {
-      pendingOrderDraft = data.order;
+      pendingVoiceAction = { kind: "create", draft: data.order };
       const confirmAsk =
         speakText.includes("?") || /подтверд|создать|верно/i.test(speakText)
           ? speakText
           : `${speakText} Подтвердите создание: скажите «да» или нажмите «Создать».`;
-      appendBubble("assistant", confirmAsk, renderConfirmCard(data.order));
+      appendBubble("assistant", confirmAsk, renderCreateConfirmCard(data.order));
       pushChat("assistant", confirmAsk);
       speak(confirmAsk);
       setStatus("");
+    } else if (
+      action === "propose_update_order" &&
+      data?.order &&
+      data?.order_id != null &&
+      canMutateOrders()
+    ) {
+      pendingVoiceAction = { kind: "update", draft: data.order, orderId: data.order_id };
+      const confirmAsk =
+        speakText.includes("?") || /подтверд|изменить|сохранить|верно/i.test(speakText)
+          ? speakText
+          : `${speakText} Подтвердите изменение: скажите «да» или нажмите «Сохранить».`;
+      appendBubble("assistant", confirmAsk, renderUpdateConfirmCard(data.order_id, data.order));
+      pushChat("assistant", confirmAsk);
+      speak(confirmAsk);
+      setStatus("");
+    } else if (action === "clarify" && data?.order && canMutateOrders()) {
+      const missingClient = !String(data.order.client || "").trim();
+      const missingStatus = !String(data.order.payment_status || "").trim();
+      if (missingClient || missingStatus) {
+        pendingVoiceAction = { kind: "incomplete_create", draft: data.order };
+        appendBubble("assistant", speakText, renderIncompleteCreateCard(data.order));
+      } else {
+        pendingVoiceAction = null;
+        appendBubble("assistant", speakText);
+      }
+      pushChat("assistant", speakText);
+      speak(speakText);
+      setStatus("");
     } else {
-      pendingOrderDraft = null;
+      pendingVoiceAction = null;
       appendBubble("assistant", speakText);
       pushChat("assistant", speakText);
       speak(speakText);
@@ -1108,7 +1219,7 @@ export function initVoiceSection() {
       unlockTtsAudio();
       chatHistory = [];
       clearPersistedChatHistory();
-      pendingOrderDraft = null;
+      pendingVoiceAction = null;
       stopSpeaking();
       setLiveTranscript("");
       if (feed) {
@@ -1143,8 +1254,8 @@ export function initVoiceSection() {
       if (!btn) return;
       unlockTtsAudio();
       const v = btn.getAttribute("data-voice-confirm");
-      if (v === "yes") void confirmPendingOrder();
-      else if (v === "no") cancelPendingOrder(true);
+      if (v === "yes") void confirmPendingAction();
+      else if (v === "no") cancelPendingAction(true);
     });
   }
 

@@ -3386,9 +3386,12 @@ export async function createOrderFromVoicePayload(draft) {
     return { ok: false, message: "Не указан клиент" };
   }
 
-  let paymentStatus = String(draft?.payment_status || "").trim() || "Контакт с клиентом";
+  let paymentStatus = String(draft?.payment_status || "").trim();
+  if (!paymentStatus) {
+    return { ok: false, message: "Не указан статус" };
+  }
   if (!VOICE_PAYMENT_STATUSES.has(paymentStatus)) {
-    paymentStatus = "Контакт с клиентом";
+    return { ok: false, message: "Неизвестный статус. Укажите один из допустимых статусов." };
   }
   if (paymentStatus === "Заказ закрыт" && !isAdmin() && state.currentRole !== "user") {
     return { ok: false, message: "Статус «Заказ закрыт» недоступен для вашей роли" };
@@ -3559,5 +3562,390 @@ export async function createOrderFromVoicePayload(draft) {
     ok: true,
     orderId: savedOrderId,
     message: `Заявка номер ${savedOrderId} создана.`,
+  };
+}
+
+const VOICE_PATCHABLE_KEYS = [
+  "client",
+  "phone",
+  "address",
+  "description",
+  "order_type",
+  "payment_status",
+  "order_date",
+  "amount",
+  "prepayment",
+  "prepayment_to",
+  "remaining_amount",
+  "remaining_to",
+  "delivery",
+  "delivery_date",
+  "installation",
+  "installation_date",
+  "area_m2",
+  "mosquito_nets",
+  "construction_count",
+];
+
+function findLocalOrderForVoice(orderId) {
+  const idNum = Number(orderId);
+  return (state.allOrders || []).find((o) => {
+    if (!o || o.deleted_at != null) return false;
+    return Number(o.id) === idNum || o.id === orderId;
+  });
+}
+
+function buildOrderDataFromExistingAndPatch(existing, patch) {
+  const amount =
+    patch && "amount" in patch ? normalizeVoiceInteger(patch.amount) : normalizeVoiceInteger(existing.amount);
+  const prepayment =
+    patch && "prepayment" in patch
+      ? normalizeVoiceInteger(patch.prepayment)
+      : normalizeVoiceInteger(existing.prepayment);
+
+  let remainingAmount;
+  if (patch && "remaining_amount" in patch) {
+    remainingAmount = normalizeVoiceInteger(patch.remaining_amount);
+  } else if (patch && ("amount" in patch || "prepayment" in patch) && amount != null) {
+    remainingAmount = amount - (prepayment ?? 0);
+  } else {
+    remainingAmount = normalizeVoiceInteger(existing.remaining_amount);
+  }
+
+  let paymentStatus = String(
+    patch && "payment_status" in patch ? patch.payment_status : existing.payment_status || ""
+  ).trim();
+  let orderType = String(
+    patch && "order_type" in patch ? patch.order_type ?? "" : existing.order_type || ""
+  ).trim() || null;
+  if (orderType && !VOICE_ORDER_TYPES.has(orderType)) orderType = existing.order_type || null;
+
+  let delivery = String(
+    patch && "delivery" in patch ? patch.delivery ?? "" : existing.delivery || ""
+  ).trim() || null;
+  if (delivery && !VOICE_DELIVERY.has(delivery)) delivery = existing.delivery || null;
+
+  const deliveryDate =
+    patch && "delivery_date" in patch
+      ? normalizeVoiceIsoDate(patch.delivery_date)
+      : normalizeVoiceIsoDate(existing.delivery_date);
+
+  const installation =
+    patch && "installation" in patch ? Boolean(patch.installation) : Boolean(existing.installation);
+  const installationDate = installation
+    ? patch && "installation_date" in patch
+      ? normalizeVoiceIsoDate(patch.installation_date)
+      : normalizeVoiceIsoDate(existing.installation_date)
+    : null;
+
+  const orderDateIso =
+    patch && "order_date" in patch
+      ? normalizeVoiceIsoDate(patch.order_date)
+      : normalizeVoiceIsoDate(existing.order_date);
+  const orderDate = orderDateIso
+    ? String(existing.order_date || "").startsWith(orderDateIso)
+      ? existing.order_date
+      : `${orderDateIso}T${new Date().toTimeString().slice(0, 8)}`
+    : existing.order_date || new Date().toISOString();
+
+  const client = String(
+    patch && "client" in patch ? patch.client ?? "" : existing.client || ""
+  ).trim();
+  const phoneRaw = patch && "phone" in patch ? patch.phone : existing.phone;
+  const phone = String(phoneRaw || "").trim() || null;
+
+  const prepaymentTo =
+    patch && "prepayment_to" in patch
+      ? normalizeVoiceMoneyTo(patch.prepayment_to)
+      : normalizeVoiceMoneyTo(existing.prepayment_to);
+  const remainingTo =
+    patch && "remaining_to" in patch
+      ? normalizeVoiceMoneyTo(patch.remaining_to)
+      : normalizeVoiceMoneyTo(existing.remaining_to);
+
+  return {
+    phone,
+    client,
+    order_type: orderType,
+    address: String(
+      patch && "address" in patch ? patch.address ?? "" : existing.address || ""
+    ).trim() || null,
+    payment_status: paymentStatus || null,
+    order_date: orderDate,
+    order_number: existing.order_number ?? null,
+    description: String(
+      patch && "description" in patch ? patch.description ?? "" : existing.description || ""
+    ).trim() || null,
+    amount,
+    prepayment,
+    prepayment_to: prepaymentTo,
+    remaining_amount: remainingAmount,
+    remaining_to: remainingTo,
+    area_m2:
+      patch && "area_m2" in patch
+        ? parseOrderFormNumber(patch.area_m2)
+        : parseOrderFormNumber(existing.area_m2),
+    mosquito_nets:
+      patch && "mosquito_nets" in patch
+        ? parseOrderFormNumber(patch.mosquito_nets)
+        : parseOrderFormNumber(existing.mosquito_nets),
+    construction_count:
+      patch && "construction_count" in patch
+        ? parseOrderFormNumber(patch.construction_count)
+        : parseOrderFormNumber(existing.construction_count),
+    delivery,
+    delivery_date: deliveryDate,
+    installation,
+    installation_date: installationDate,
+    reveals: Boolean(existing.reveals),
+    reveals_date: existing.reveals_date ?? null,
+    installer_payment_amount: normalizeVoiceInteger(existing.installer_payment_amount),
+    installer_payment_by: existing.installer_payment_by ?? null,
+  };
+}
+
+/**
+ * Обновить заказ из голосового ассистента (патч полей, без открытия формы).
+ * @param {number|string} orderId
+ * @param {Record<string, unknown>} patch
+ * @returns {Promise<{ ok: boolean, orderId?: number|string, message: string, offline?: boolean }>}
+ */
+export async function updateOrderFromVoicePayload(orderId, patch) {
+  if (!canMutateOrders()) {
+    return { ok: false, message: "Недостаточно прав для редактирования заказов" };
+  }
+
+  const existing = findLocalOrderForVoice(orderId);
+  if (!existing) {
+    return { ok: false, message: `Заказ номер ${orderId} не найден` };
+  }
+  if (isOrderHiddenForCurrentRole(existing)) {
+    return { ok: false, message: "Нет доступа к этому типу заказа" };
+  }
+  if (isUserLite() && isOrderEditLockedForUserLite(existing)) {
+    return { ok: false, message: "Редактирование этого заказа для вашей роли отключено" };
+  }
+
+  const cleanPatch = {};
+  if (patch && typeof patch === "object") {
+    for (const key of VOICE_PATCHABLE_KEYS) {
+      if (key in patch) cleanPatch[key] = patch[key];
+    }
+  }
+  if (Object.keys(cleanPatch).length === 0) {
+    return { ok: false, message: "Не указано, какие поля изменить" };
+  }
+
+  const orderData = buildOrderDataFromExistingAndPatch(existing, cleanPatch);
+
+  if (!orderData.client) {
+    return { ok: false, message: "Клиент обязателен — нельзя оставить пустым" };
+  }
+  if (!orderData.payment_status) {
+    return { ok: false, message: "Статус обязателен — нельзя оставить пустым" };
+  }
+  if (!VOICE_PAYMENT_STATUSES.has(orderData.payment_status)) {
+    return { ok: false, message: "Неизвестный статус. Укажите один из допустимых статусов." };
+  }
+  if (orderData.payment_status === "Заказ закрыт" && !isAdmin() && state.currentRole !== "user") {
+    return { ok: false, message: "Статус «Заказ закрыт» недоступен для вашей роли" };
+  }
+
+  if (isUserLite() && orderData.order_type === "Магазин") {
+    return { ok: false, message: "Тип «Магазин» недоступен для вашей роли" };
+  }
+  if (isUserShop()) {
+    orderData.order_type = "Магазин";
+  }
+
+  if (orderData.phone) {
+    const phoneDigits = orderData.phone.replace(/\D/g, "");
+    const phoneValid = phoneDigits.length === 11 && (phoneDigits[0] === "8" || phoneDigits[0] === "7");
+    if (!phoneValid) {
+      return { ok: false, message: "Неверный формат телефона" };
+    }
+  }
+
+  if (
+    orderData.amount != null &&
+    orderData.prepayment != null &&
+    orderData.prepayment > orderData.amount
+  ) {
+    return { ok: false, message: "Предоплата не может быть больше суммы заказа" };
+  }
+  if (orderData.prepayment != null && orderData.prepayment !== 0 && !orderData.prepayment_to) {
+    return { ok: false, message: "Укажите, кому предоплата" };
+  }
+  if (orderData.delivery && !orderData.delivery_date) {
+    return { ok: false, message: "Укажите дату отправки" };
+  }
+  if (
+    orderData.payment_status === "Заказ закрыт" &&
+    !orderData.remaining_to &&
+    orderData.remaining_amount !== 0
+  ) {
+    return { ok: false, message: "Заказ нельзя закрыть, если он не оплачен" };
+  }
+
+  const prevSnapshot = cloneOrderWithoutOfflineMeta(existing);
+  const historyComment = buildOrderHistoryComment(prevSnapshot, orderData, true);
+  if (historyComment === "Сохранено без изменений") {
+    return { ok: false, message: "Нет изменений для сохранения" };
+  }
+
+  const initialSums = {
+    prepayment: existing.prepayment,
+    remaining_amount: existing.remaining_amount,
+    installer_payment_amount: existing.installer_payment_amount,
+  };
+  const initialParticipants = {
+    prepayment_to: existing.prepayment_to,
+    remaining_to: existing.remaining_to,
+    installer_payment_by: existing.installer_payment_by,
+  };
+
+  const idNum = Number(orderId);
+
+  if (isOfflineClientOrderId(idNum)) {
+    const localId = existing.__offlineLocalId;
+    if (!localId) {
+      return { ok: false, message: "Не удалось обновить локальную заявку" };
+    }
+    const insertPayload = insertPayloadFromFormData(orderData);
+    const displayRow = buildDisplayRowForPendingOrder(orderData, idNum, localId);
+    updatePendingOfflineOrder(localId, displayRow, insertPayload);
+    addPendingOfflineOrderHistory({
+      localId:
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `hist-${Date.now()}`,
+      pending_order_local_id: localId,
+      order_temp_id: idNum,
+      user_email: state.currentUser?.email || "",
+      comment: historyComment,
+    });
+    queueOrderDeltaCalculationsForOffline({
+      orderTempId: idNum,
+      wasEditing: true,
+      initialSums,
+      initialParticipants,
+      orderData,
+    });
+    state.dbUnavailable = true;
+    state.ordersFromCache = true;
+    rebaselineAllOrdersFromStateAndPendingQueue();
+    syncDbUnavailableBanner();
+    return {
+      ok: true,
+      orderId: idNum,
+      offline: true,
+      message: `Заявка номер ${idNum} обновлена на устройстве. Отправится в базу при появлении связи.`,
+    };
+  }
+
+  if (isOfflineDataMode()) {
+    const changedAt = new Date().toISOString();
+    addOrAppendPendingServerOrderEdit({
+      orderId: idNum,
+      orderData,
+      prevSnapshot,
+      historyComment,
+      user_email: state.currentUser?.email || "",
+      changedAt,
+      initialSums,
+      initialParticipants,
+    });
+    queueOrderDeltaCalculationsForOffline({
+      orderTempId: idNum,
+      wasEditing: true,
+      initialSums,
+      initialParticipants,
+      orderData,
+    });
+    state.dbUnavailable = true;
+    state.ordersFromCache = true;
+    rebaselineAllOrdersFromStateAndPendingQueue();
+    syncDbUnavailableBanner();
+    return {
+      ok: true,
+      orderId: idNum,
+      offline: true,
+      message: `Изменения заказа ${idNum} сохранены на устройстве; отправка в базу при появлении связи.`,
+    };
+  }
+
+  let error = null;
+  let savedOrderId = idNum;
+  try {
+    const result = await raceWithTimeout(
+      supabaseClient.from("orders").update(orderData).eq("id", idNum).select().single()
+    );
+    error = result.error;
+    if (!error && result.data) savedOrderId = result.data.id;
+  } catch (e) {
+    error = e;
+  }
+
+  if (error && shouldFallbackSaveOrderToLocal(error)) {
+    applyOfflineModeFromDbUnavailable();
+    const changedAt = new Date().toISOString();
+    addOrAppendPendingServerOrderEdit({
+      orderId: idNum,
+      orderData,
+      prevSnapshot,
+      historyComment,
+      user_email: state.currentUser?.email || "",
+      changedAt,
+      initialSums,
+      initialParticipants,
+    });
+    queueOrderDeltaCalculationsForOffline({
+      orderTempId: idNum,
+      wasEditing: true,
+      initialSums,
+      initialParticipants,
+      orderData,
+    });
+    rebaselineAllOrdersFromStateAndPendingQueue();
+    syncDbUnavailableBanner();
+    return {
+      ok: true,
+      orderId: idNum,
+      offline: true,
+      message: `Изменения заказа ${idNum} сохранены на устройстве; отправка в базу при появлении связи.`,
+    };
+  }
+
+  if (error) {
+    console.error("voice update order:", error);
+    return {
+      ok: false,
+      message: `Ошибка при обновлении заявки. ${error.message || error.hint || String(error.code || error)}`,
+    };
+  }
+
+  await writeOrderDeltaCalculations({
+    orderId: savedOrderId,
+    wasEditing: true,
+    initialSums,
+    initialParticipants,
+    orderData,
+  });
+
+  if (savedOrderId && state.currentUser?.email) {
+    await supabaseClient.from("order_history").insert([
+      {
+        order_id: savedOrderId,
+        user_email: state.currentUser.email,
+        comment: historyComment,
+      },
+    ]);
+  }
+
+  await loadOrders();
+  return {
+    ok: true,
+    orderId: savedOrderId,
+    message: `Заявка номер ${savedOrderId} обновлена.`,
   };
 }

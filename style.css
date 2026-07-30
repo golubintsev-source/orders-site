@@ -6022,6 +6022,27 @@ th {
   color: #6b7280;
 }
 
+.voice-confirm-card--incomplete {
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+
+.voice-confirm-card--incomplete .voice-confirm-title {
+  color: #92400e;
+}
+
+.voice-confirm-missing-lead {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #78350f;
+}
+
+.voice-confirm-list li.voice-confirm-missing span,
+.voice-confirm-list li.voice-confirm-missing {
+  color: #b45309;
+  font-weight: 600;
+}
+
 .voice-replay-wrap {
   align-self: flex-start;
   margin-top: 2px;
