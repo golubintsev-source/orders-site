@@ -18,6 +18,7 @@ import {
   filesModalTitle,
   setMessage,
 } from "./dom.js";
+import { ensureCropperLibs } from "./lazy-cdn.js";
 
 /** Выбранные к загрузке файлы; повторный выбор через «Загрузить» добавляет к списку, а не заменяет. */
 const pendingAttachments = [];
@@ -251,6 +252,15 @@ function openCropModalForAttachment(file) {
  */
 async function mergeNewAttachmentFiles(picked) {
   if (!picked.length) return;
+
+  const needsCrop = picked.some((f) => isCroppableImageFile(f));
+  if (needsCrop) {
+    try {
+      await ensureCropperLibs();
+    } catch (e) {
+      console.warn("Библиотеки обрезки фото:", e);
+    }
+  }
 
   for (const file of picked) {
     let toAdd = file;

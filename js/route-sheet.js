@@ -11,6 +11,7 @@ import { closeOrderIdActionsMenu, openOrderIdActionsMenu } from "./ui.js";
 import { setMessage } from "./dom.js";
 import { supabaseClient } from "./config.js";
 import { downloadXlsxBuffer } from "./xlsxDownload.js";
+import { ensureExcelJs, ensureHtml2Canvas, ensureLeaflet, ensureXlsx } from "./lazy-cdn.js";
 
 const MAIN_ORDER_TYPES = new Set(["Окна", "Подоконники", "Аллюминий", "Сетки/мелочь"]);
 const SHOP_TYPE = "Магазин";
@@ -1591,6 +1592,14 @@ function scheduleInvalidateRouteDeliveryMap() {
  * @param {number} gen
  */
 async function runDeliveryPipeline(deliveryRows, gen) {
+  try {
+    await ensureLeaflet();
+  } catch (e) {
+    console.error(e);
+    setRouteDeliveryMapStatus("Карта: не удалось загрузить библиотеку. Обновите страницу.", true);
+    return;
+  }
+
   const L = globalThis.L;
   if (!L) {
     setRouteDeliveryMapStatus("Карта: библиотека не загружена. Обновите страницу.", true);
@@ -2286,9 +2295,12 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(headers, rows, mapCanvas)
  * @param {string} filePrefix
  * @param {{ deliveryPrintLayout?: boolean }} [opts]
  */
-function exportSheet(headers, rows, sheetName, filePrefix, opts = {}) {
-  const XLSX = globalThis.XLSX;
-  if (XLSX == null) {
+async function exportSheet(headers, rows, sheetName, filePrefix, opts = {}) {
+  let XLSX;
+  try {
+    XLSX = await ensureXlsx();
+  } catch (e) {
+    console.error(e);
     const msgEl = document.getElementById("routeSheetMessage");
     if (msgEl) msgEl.textContent = "Не удалось загрузить модуль Excel. Обновите страницу.";
     return;
@@ -2391,21 +2403,28 @@ export async function exportRouteSheetDeliveryExcel() {
     rowDeliveryMainValues(order, pointNum),
   );
 
+  if (exportBtn) exportBtn.disabled = true;
+  if (msgEl) msgEl.textContent = "Готовим Excel с картой…";
+
+  try {
+    await Promise.all([ensureExcelJs(), ensureHtml2Canvas(), ensureLeaflet()]);
+  } catch (e) {
+    console.warn("Модули Excel/карты:", e);
+  }
+
   const ExcelJS = getExcelJsConstructor();
   const html2canvas = globalThis.html2canvas;
   if (!ExcelJS || !html2canvas) {
-    exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka", {
+    await exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka", {
       deliveryPrintLayout: true,
     });
     if (msgEl) {
       msgEl.textContent =
         "Карта в файл не добавлена: не загрузились модули Excel/снимок экрана. Обновите страницу.";
     }
+    if (exportBtn) exportBtn.disabled = false;
     return;
   }
-
-  if (exportBtn) exportBtn.disabled = true;
-  if (msgEl) msgEl.textContent = "Готовим Excel с картой…";
 
   try {
     ensureRouteDeliveryMap();
@@ -2424,7 +2443,7 @@ export async function exportRouteSheetDeliveryExcel() {
     }
   } catch (e) {
     console.error(e);
-    exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka", {
+    await exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka", {
       deliveryPrintLayout: true,
     });
     if (msgEl) {
@@ -2436,7 +2455,7 @@ export async function exportRouteSheetDeliveryExcel() {
   }
 }
 
-export function exportRouteSheetPickupExcel() {
+export async function exportRouteSheetPickupExcel() {
   const { fromKey, toKey, valid } = getRangeFromDom();
   if (!valid || fromKey > toKey) return;
   const list = filterMainOrdersByShipment(
@@ -2446,7 +2465,7 @@ export function exportRouteSheetPickupExcel() {
     DELIVERY_PICKUP,
   );
   const rows = list.map(rowMainValues);
-  exportSheet(HEADERS_MAIN, rows, "Самовывоз", "marshrutnyy_list_samovyvoz");
+  await exportSheet(HEADERS_MAIN, rows, "Самовывоз", "marshrutnyy_list_samovyvoz");
 }
 
 function clearRouteSheetAddressGeoPopoverFields() {
@@ -3071,7 +3090,7 @@ export function initRouteSheetSection() {
   }
   if (pickupBtn && !pickupBtn.dataset.routeSheetBound) {
     pickupBtn.dataset.routeSheetBound = "1";
-    pickupBtn.addEventListener("click", () => exportRouteSheetPickupExcel());
+    pickupBtn.addEventListener("click", () => void exportRouteSheetPickupExcel());
   }
 
   const composeRouteBtn = document.getElementById("routeSheetComposeRouteBtn");

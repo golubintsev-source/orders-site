@@ -9,12 +9,7 @@ import {
   viewOrder,
   deleteOrder,
 } from "./orders.js";
-import { bindCalculationsSection, loadCalculations } from "./calculations.js";
-import { initRouteSheetSection } from "./route-sheet.js";
 import { loadSettings } from "./settings.js";
-import { initOrderTasksSection } from "./tasks.js";
-import { initAllChangesSection } from "./all-changes.js";
-import { initStatisticsSection } from "./statistics.js";
 import { openFilesModal, removeFile } from "./files.js";
 import { setMessage } from "./dom.js";
 import { initOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
@@ -48,11 +43,7 @@ import {
   scheduleSaveUserPlace,
   shouldRedirectToSavedPlace,
 } from "./user-place.js";
-import { initPushNotifications } from "./push-notifications.js";
-import { initMessagesSection } from "./messages.js";
-import { initVoiceSection } from "./voice.js";
 import { trySecretLoginFromUrl, getLoginKeyFromUrl } from "./secret-login.js";
-import { initLoginLinksSection, loadLoginLinksSection } from "./login-links.js";
 import { updateTopbarUserName } from "./user-names.js";
 
 window.editOrder = editOrder;
@@ -70,6 +61,42 @@ function ensureBootOrFallback() {
   });
   document.getElementById("section-all")?.classList.add("active");
   document.documentElement.setAttribute("data-route-boot", "1");
+}
+
+/** Тяжёлые разделы — после первой отрисовки заказов, чтобы не раздувать критический путь. */
+async function initSecondarySections() {
+  const [{ bindCalculationsSection, loadCalculations }, { initRouteSheetSection }, { initOrderTasksSection }, { initAllChangesSection }, { initStatisticsSection }, { initPushNotifications }, { initMessagesSection }, { initVoiceSection }] =
+    await Promise.all([
+      import("./calculations.js"),
+      import("./route-sheet.js"),
+      import("./tasks.js"),
+      import("./all-changes.js"),
+      import("./statistics.js"),
+      import("./push-notifications.js"),
+      import("./messages.js"),
+      import("./voice.js"),
+    ]);
+
+  void initPushNotifications();
+  initOrderTasksSection();
+  initMessagesSection();
+  initVoiceSection();
+
+  if (canAccessSection("calculations")) {
+    bindCalculationsSection();
+    if (getCurrentSectionId() === "calculations") {
+      void loadCalculations();
+    }
+  }
+  initRouteSheetSection();
+  initAllChangesSection();
+  initStatisticsSection();
+
+  if (isAdmin()) {
+    const { initLoginLinksSection, loadLoginLinksSection } = await import("./login-links.js");
+    initLoginLinksSection();
+    void loadLoginLinksSection();
+  }
 }
 
 async function init() {
@@ -121,15 +148,10 @@ async function init() {
 
     await Promise.all([loadProfile(), loadSettings()]);
     refreshSectionNavAfterProfile();
-    void initPushNotifications();
     applyRouteOnLoad();
     ensurePopstateRouting();
 
     await ordersPromise;
-
-    initOrderTasksSection();
-    initMessagesSection();
-    initVoiceSection();
 
     const orderIdFromUrl = getOrderIdFromUrl();
     const savedApp = readSavedPlaceForCurrentPage(user.id)?.app;
@@ -141,22 +163,11 @@ async function init() {
       resetFormMode();
     }
 
-    if (canAccessSection("calculations")) {
-      bindCalculationsSection();
-      if (getCurrentSectionId() === "calculations") {
-        void loadCalculations();
-      }
-    }
-    initRouteSheetSection();
-    initAllChangesSection();
-    initStatisticsSection();
-
-    if (isAdmin()) {
-      initLoginLinksSection();
-      void loadLoginLinksSection();
-    }
-
     applyPendingOrdersSearchFromHistory();
+
+    // Разделы вне критического пути заказов, но нужны до restore (маршрут/задачи).
+    await initSecondarySections();
+
     if (orderIdFromUrl != null) {
       await viewOrder(orderIdFromUrl);
       scheduleSaveUserPlace();
