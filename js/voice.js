@@ -17,11 +17,17 @@ let chatHistory = [];
 let pendingOrderDraft = null;
 let listening = false;
 let busy = false;
-/** Постоянный Audio: iOS разблокирует play() только после жеста пользователя. */
-let ttsAudio = null;
+/**
+ * TTS через Web Audio API, НЕ через HTMLAudioElement.
+ * На iOS Safari HTMLAudioElement после озвучки оставляет AVAudioSession в playback,
+ * и следующий webkitSpeechRecognition показывает «Слушаю…» (onaudiostart), но речь
+ * не слышит — подтверждено в WICG/speech-api#96 и несколькими прошлыми фикс-PR.
+ */
+/** @type {AudioContext | null} */
+let ttsCtx = null;
 let ttsAudioUnlocked = false;
-/** @type {string | null} */
-let ttsObjectUrl = null;
+/** @type {AudioBufferSourceNode | null} */
+let ttsSource = null;
 /** Последний текст — если iOS заблокировал play, можно нажать «Прослушать». */
 let lastSpeakText = "";
 /** @type {SpeechSynthesisVoice | null} */
@@ -47,18 +53,12 @@ let listenWatchdogTimer = null;
 let listenStartTimer = null;
 /** Не очищать статус до этого момента (ошибки / подсказки должны остаться на экране). */
 let statusHoldUntil = 0;
-/** Идёт асинхронная подготовка микрофона (getUserMedia) — не давать второй старт. */
+/** Короткий guard от двойного старта (InvalidStateError / повторный тап). */
 let startingListen = false;
 
 const LISTEN_MAX_MS = 18000;
 const LISTEN_START_TIMEOUT_MS = 12000;
 const STATUS_HOLD_MS = 4500;
-/** Пауза после остановки getUserMedia, чтобы WebKit отдал микрофон SpeechRecognition. */
-const CAPTURE_PRIME_SETTLE_MS = 140;
-
-/** Короткий тихий WAV — разблокировка WebKit без слышимого звука. */
-const SILENT_WAV =
-  "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
 function escapeHtml(s) {
   return String(s)
@@ -153,46 +153,48 @@ function getSpeechRecognitionCtor() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
-function ensureTtsAudioElement() {
-  if (ttsAudio) return ttsAudio;
-  const audio = new Audio();
-  audio.preload = "auto";
-  audio.setAttribute("playsinline", "true");
-  audio.setAttribute("webkit-playsinline", "true");
-  audio.playsInline = true;
-  ttsAudio = audio;
-  return audio;
+function getAudioContextCtor() {
+  return window.AudioContext || window.webkitAudioContext || null;
+}
+
+function ensureTtsAudioContext() {
+  if (ttsCtx) return ttsCtx;
+  const Ctor = getAudioContextCtor();
+  if (!Ctor) return null;
+  try {
+    ttsCtx = new Ctor();
+  } catch (e) {
+    console.warn("AudioContext:", e);
+    return null;
+  }
+  return ttsCtx;
 }
 
 /**
- * Вызывать синхронно из click/touch/keydown — иначе iPhone не даст воспроизвести TTS после fetch.
- * Не вызывать непосредственно перед SpeechRecognition.start(): silent WAV / warm utterance
- * оставляют аудиосессию в playback и микрофон «глухнет».
+ * Вызывать синхронно из click/touch/keydown — иначе iPhone не даст озвучку после fetch.
+ * Разблокируем AudioContext (resume), без HTMLAudioElement / silent WAV:
+ * они оставляют аудиосессию в playback и микрофон «глухнет» на следующем распознавании.
  */
 function unlockTtsAudio() {
-  if (ttsAudioUnlocked) return;
-  const audio = ensureTtsAudioElement();
-
-  try {
-    audio.src = SILENT_WAV;
-    const p = audio.play();
-    if (p && typeof p.then === "function") {
-      p.then(() => {
+  const ctx = ensureTtsAudioContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") {
+    try {
+      const p = ctx.resume();
+      if (p && typeof p.then === "function") {
+        p.then(() => {
+          ttsAudioUnlocked = true;
+        }).catch(() => {
+          /* жест мог быть недостаточным — попробуем снова на следующем тапе */
+        });
+      } else {
         ttsAudioUnlocked = true;
-        try {
-          audio.pause();
-          audio.currentTime = 0;
-        } catch {
-          /* ignore */
-        }
-      }).catch(() => {
-        /* жест мог быть недостаточным — попробуем снова на следующем тапе */
-      });
-    } else {
-      ttsAudioUnlocked = true;
+      }
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* ignore */
+  } else {
+    ttsAudioUnlocked = true;
   }
 }
 
@@ -257,14 +259,20 @@ function speakBrowserFallback(utterText) {
   }
 }
 
-function clearTtsObjectUrl() {
-  if (ttsObjectUrl) {
-    try {
-      URL.revokeObjectURL(ttsObjectUrl);
-    } catch {
-      /* ignore */
-    }
-    ttsObjectUrl = null;
+function stopTtsSource() {
+  const src = ttsSource;
+  ttsSource = null;
+  if (!src) return;
+  try {
+    // stop() должен вызвать onended у ожидающего playTtsViaWebAudio.
+    src.stop(0);
+  } catch {
+    /* already stopped */
+  }
+  try {
+    src.disconnect();
+  } catch {
+    /* ignore */
   }
 }
 
@@ -274,88 +282,20 @@ function stopSpeaking() {
   } catch {
     /* ignore */
   }
-  const audio = ttsAudio;
-  if (!audio) return;
-  try {
-    audio.pause();
-    audio.currentTime = 0;
-  } catch {
-    /* ignore */
-  }
+  stopTtsSource();
 }
 
 function isWebKitSpeech() {
   return typeof window.webkitSpeechRecognition === "function";
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
- * Перед записью останавливаем озвучку, но НЕ вызываем unlockTtsAudio():
- * silent WAV / warm utterance переводят iOS в playback и SpeechRecognition
- * часто стартует с красной кнопкой «Слушаю…», не слыша речь.
- * Не делаем src="" / load() — это раньше ломало и TTS, и распознавание (#6/#7).
+ * Перед записью останавливаем озвучку (Web Audio source + speechSynthesis).
+ * Не трогаем HTMLAudioElement — его больше нет в TTS-пути.
+ * Не вызываем unlock/silent WAV прямо перед SpeechRecognition.
  */
 function prepareAudioSessionForListening() {
-  try {
-    window.speechSynthesis?.cancel();
-  } catch {
-    /* ignore */
-  }
-  const audio = ttsAudio;
-  if (!audio) return;
-  try {
-    if (!audio.paused) {
-      audio.pause();
-      audio.currentTime = 0;
-    }
-  } catch {
-    /* ignore */
-  }
-}
-
-/**
- * Коротко открываем и сразу закрываем микрофон через getUserMedia.
- * На iPhone после TTS аудиосессия остаётся в playback; этот «прайм»
- * переводит её в запись. Поток НЕ держим открытым — иначе он конкурирует
- * с webkitSpeechRecognition (как в откатанном #4).
- * @returns {Promise<boolean>} false если отказано в доступе
- */
-async function primeCaptureSession() {
-  if (!navigator.mediaDevices?.getUserMedia) return true;
-  let stream = null;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-    });
-  } catch (e) {
-    const name = e?.name || "";
-    if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError") {
-      return false;
-    }
-    // Другие ошибки (NotFound и т.п.) — всё равно пробуем SpeechRecognition.
-    console.warn("primeCaptureSession:", e);
-    return true;
-  }
-  try {
-    for (const track of stream.getTracks()) {
-      try {
-        track.stop();
-      } catch {
-        /* ignore */
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  await sleep(CAPTURE_PRIME_SETTLE_MS);
-  return true;
+  stopSpeaking();
 }
 
 function disposeRecognition() {
@@ -398,41 +338,86 @@ function showReplayHint() {
   feed.scrollTop = feed.scrollHeight;
 }
 
-async function playTtsBlob(blob, utterText) {
-  const audio = ensureTtsAudioElement();
-  clearTtsObjectUrl();
-  const url = URL.createObjectURL(blob);
-  ttsObjectUrl = url;
-
-  const onEnded = () => {
-    clearTtsObjectUrl();
-    audio.removeEventListener("ended", onEnded);
-    audio.removeEventListener("error", onError);
-    // Мягко отпускаем playback после озвучки. Не трогаем src/load —
-    // жёсткий сброс раньше ломал разблокировку Audio на iPhone.
+/**
+ * decodeAudioData: Promise в современных браузерах, callbacks в старом Safari.
+ * ArrayBuffer копируем — Safari его detaches.
+ */
+function decodeAudioBuffer(ctx, arrayBuffer) {
+  return new Promise((resolve, reject) => {
+    const copy = arrayBuffer.slice(0);
+    let settled = false;
+    const ok = (buf) => {
+      if (settled) return;
+      settled = true;
+      resolve(buf);
+    };
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err || new Error("decodeAudioData failed"));
+    };
     try {
-      audio.pause();
-      audio.currentTime = 0;
-    } catch {
-      /* ignore */
+      const ret = ctx.decodeAudioData(copy, ok, fail);
+      if (ret && typeof ret.then === "function") {
+        ret.then(ok, fail);
+      }
+    } catch (e) {
+      fail(e);
     }
-  };
-  const onError = () => {
-    clearTtsObjectUrl();
-    audio.removeEventListener("ended", onEnded);
-    audio.removeEventListener("error", onError);
-    speakBrowserFallback(utterText);
-  };
-  audio.addEventListener("ended", onEnded);
-  audio.addEventListener("error", onError);
+  });
+}
 
-  audio.src = url;
+/**
+ * Декодирует и проигрывает TTS через Web Audio API.
+ * HTMLAudioElement намеренно не используем — на iPhone он ломает следующий STT.
+ */
+async function playTtsViaWebAudio(blob) {
+  const ctx = ensureTtsAudioContext();
+  if (!ctx) throw new Error("no AudioContext");
+
+  if (ctx.state === "suspended") {
+    try {
+      await ctx.resume();
+    } catch {
+      /* продолжим — start() может всё равно сработать */
+    }
+  }
+
+  const ab = await blob.arrayBuffer();
+  const audioBuffer = await decodeAudioBuffer(ctx, ab);
+
+  stopTtsSource();
+  const source = ctx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(ctx.destination);
+  ttsSource = source;
+
+  await new Promise((resolve, reject) => {
+    source.onended = () => {
+      if (ttsSource === source) ttsSource = null;
+      try {
+        source.disconnect();
+      } catch {
+        /* ignore */
+      }
+      resolve();
+    };
+    try {
+      source.start(0);
+      ttsAudioUnlocked = true;
+    } catch (e) {
+      if (ttsSource === source) ttsSource = null;
+      reject(e);
+    }
+  });
+}
+
+async function playTtsBlob(blob, utterText) {
   try {
-    await audio.play();
-    ttsAudioUnlocked = true;
+    await playTtsViaWebAudio(blob);
     document.querySelectorAll(".voice-replay-wrap").forEach((el) => el.remove());
   } catch (e) {
-    console.warn("tts play blocked:", e);
+    console.warn("tts web-audio play:", e);
     speakBrowserFallback(utterText);
     showReplayHint();
     setStatus("Нажмите «Прослушать ответ», чтобы услышать голос на iPhone.", false);
@@ -446,10 +431,12 @@ async function speak(text) {
   stopSpeaking();
 
   try {
+    // На WebKit просим WAV — decodeAudioData для MP3 на Safari менее надёжен.
+    const format = isWebKitSpeech() ? "wav" : "mp3";
     const res = await fetch("/api/voice-tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: utterText, voice: "nova" }),
+      body: JSON.stringify({ text: utterText, voice: "nova", format }),
     });
     if (!res.ok) {
       speakBrowserFallback(utterText);
@@ -993,11 +980,11 @@ function armListenWatchdogs(sessionId) {
 }
 
 /**
- * Запуск распознавания. На WebKit после TTS сначала коротко праймим
- * getUserMedia (и сразу закрываем), без авто-перезапусков сессии —
- * они давали цикл «завис → восстановился → завис».
+ * Запуск распознавания синхронно из жеста пользователя.
+ * Не делаем await getUserMedia перед start() — жест теряется, а прайм
+ * не лечил корень (HTMLAudioElement). TTS теперь через Web Audio API.
  */
-async function startListening() {
+function startListening() {
   if (busy || startingListen || listening) return;
   const Ctor = getSpeechRecognitionCtor();
   if (!Ctor) {
@@ -1011,35 +998,12 @@ async function startListening() {
 
   startingListen = true;
 
-  // Останавливаем озвучку без silent WAV / speechSynthesis warm —
-  // иначе iPhone часто даёт «Микрофон включён. Слушаю…» без распознавания.
+  // Останавливаем озвучку (Web Audio / speechSynthesis) без silent WAV.
   prepareAudioSessionForListening();
 
   setMicUi(true);
   setLiveTranscript("");
   setStatus("Подключаю микрофон…", false, { tone: "listening" });
-
-  // На WebKit после любой озвучки/unlock нужен прайм. Делаем его всегда:
-  // коротко и без удержания потока — иначе легко поймать «глухой» STT.
-  if (isWebKitSpeech()) {
-    const ok = await primeCaptureSession();
-    // Пользователь мог нажать «стоп» пока ждали getUserMedia.
-    if (!startingListen) return;
-    if (!ok) {
-      forceResetListeningUi(
-        "Нет доступа к микрофону. Разрешите микрофон в настройках Safari/браузера и попробуйте снова.",
-        true,
-      );
-      return;
-    }
-    if (busy) {
-      startingListen = false;
-      setMicUi(false);
-      return;
-    }
-  }
-
-  if (!startingListen) return;
 
   const rec = ensureRecognition();
   if (!rec) {
@@ -1049,7 +1013,6 @@ async function startListening() {
   }
 
   beginListenSession();
-  setStatus("Подключаю микрофон…", false, { tone: "listening" });
   armListenWatchdogs(listenSession.id);
 
   try {
@@ -1088,7 +1051,6 @@ function toggleListening() {
 
   if (listening || startingListen) {
     if (listenSession) listenSession.userStop = true;
-    const wasOnlyPriming = startingListen && !listening;
     startingListen = false;
     setStatus("Останавливаю…", false, { tone: "info" });
     try {
@@ -1097,20 +1059,13 @@ function toggleListening() {
       forceResetListeningUi("Запись остановлена.", false);
       disposeRecognition();
       listenSession = null;
-      return;
-    }
-    if (wasOnlyPriming) {
-      clearListenTimers();
-      disposeRecognition();
-      listenSession = null;
-      forceResetListeningUi("Запись остановлена.", false);
     }
     return;
   }
 
-  // Разблокировку TTS делаем на других жестах / входе в раздел —
-  // не прямо перед SpeechRecognition.
-  void startListening();
+  // AudioContext уже разблокирован на входе в раздел / других жестах.
+  // Не трогаем аудио здесь сверх stopSpeaking внутри startListening.
+  startListening();
 }
 
 function sendFromInput() {
@@ -1125,7 +1080,7 @@ function sendFromInput() {
 
 export function initVoiceSection() {
   ensureBrowserVoices();
-  ensureTtsAudioElement();
+  // AudioContext создаём только по жесту (unlockTtsAudio) — иначе iOS держит suspended.
   const navBtn = document.getElementById("voiceNavBtn");
   const micBtn = document.getElementById("voiceMicBtn");
   const sendBtn = document.getElementById("voiceSendBtn");
@@ -1203,8 +1158,8 @@ export function initVoiceSection() {
 }
 
 export function onVoiceSectionEnter() {
-  // Разблокируем TTS при входе в раздел (не в момент микрофона), чтобы озвучка
-  // ответов работала, а старт записи не переводил iPhone в playback.
+  // Разблокируем AudioContext при входе в раздел (жест навигации), чтобы озвучка
+  // ответов работала после fetch, не используя HTMLAudioElement.
   unlockTtsAudio();
   restoreChatHistoryIfNeeded();
   const input = document.getElementById("voiceComposerInput");
