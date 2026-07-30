@@ -53,7 +53,7 @@ function assert(cond, msg) {
 
 {
   const r = tryDeterministicLastOrdersAnswer("какой адрес последнего заказа", orders);
-  assert(r == null, "address ask should defer to LLM, not return order number");
+  assert(r && /Ленина|адрес/i.test(r.speak), `address ask should return address, got ${r && r.speak}`);
 }
 
 {

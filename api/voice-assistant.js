@@ -434,12 +434,20 @@ function formatRubSpeak(val) {
   return rounded < 0 ? `минус ${abs}` : abs;
 }
 
+const LAST_ORDER_FIELD_LABELS = {
+  id: "номер",
+  amount: "сумма",
+  address: "адрес",
+  client: "клиент",
+  description: "описание",
+  status: "статус",
+  phone: "телефон",
+};
+
 /**
- * Какое поле спрашивают про «последние N»: id | amount | null (не наша зона).
- * Для адреса/клиента/статуса и т.п. возвращаем null — пусть отвечает LLM.
+ * Какое поле спрашивают про «последние N»: id | amount | address | … | null (LLM).
  */
 function detectLastOrdersAskField(t) {
-  // Сумма / стоимость / цена — до проверки «номеров», иначе «стоимость» перехватывается как id.
   if (
     /сумм|стоимост|цен[аеуы]|сколько\s+(?:стоит|вышло|составляет|денег)|на\s+какую\s+сумм|какая\s+цена/.test(
       t
@@ -447,26 +455,41 @@ function detectLastOrdersAskField(t) {
   ) {
     return "amount";
   }
-  // Другие атрибуты — не подменять ответом «номер …».
-  if (
-    /адрес|клиент|телефон|статус|описан|доставк|монтаж|предоплат|остат|тип\s+заказ|дат[аеуы]|когда|куда|кому/.test(
-      t
-    )
-  ) {
+  if (/адрес/.test(t)) return "address";
+  if (/клиент|заказчик/.test(t)) return "client";
+  if (/описан|комментар/.test(t)) return "description";
+  if (/статус/.test(t)) return "status";
+  if (/телефон/.test(t)) return "phone";
+  // Смешанные / сложные атрибуты — в LLM.
+  if (/доставк|монтаж|предоплат|остат|тип\s+заказ|дат[аеуы]|когда|куда|кому/.test(t)) {
     return null;
   }
   return "id";
 }
 
+function readOrderAskValue(order, field) {
+  if (field === "id") return order?.id != null ? String(order.id) : null;
+  if (field === "amount") return formatRubSpeak(order?.amount);
+  if (field === "status") {
+    const s = String(order?.payment_status || "").trim();
+    return s || null;
+  }
+  const raw = order?.[field === "description" ? "description" : field];
+  const s = String(raw ?? "").trim();
+  return s || null;
+}
+
 /**
  * Простые фактологические вопросы про «последние N заказов» отвечаем без LLM —
  * иначе gpt-4o-mini часто выдумывает id, игнорируя JSON.
- * Вопросы про сумму/стоимость тоже закрываем детерминированно (не номером заказа).
  */
 function tryDeterministicLastOrdersAnswer(message, orders) {
   const t = normalizeRu(message);
   if (!t || !/заказ/.test(t)) return null;
-  if (/созда|добав|оформ|запиш|завед/.test(t)) return null;
+  // Создание / правка — не перехватывать.
+  if (/созда|добав|оформ|запиш|завед|измени|отредактир|поменя|обнови|дополн|внеси|редактир/.test(t)) {
+    return null;
+  }
   if (!/последн|свеж/.test(t)) return null;
 
   const askField = detectLastOrdersAskField(t);
@@ -475,7 +498,6 @@ function tryDeterministicLastOrdersAnswer(message, orders) {
   const countAlt = Object.keys(RU_COUNT_WORDS).join("|");
   const countToken = `(?:\\d+|${countAlt})`;
 
-  // «последний заказ» / «номер последнего» → 1
   let n = null;
   const mDigitAfter = t.match(new RegExp(`последн\\p{L}*\\s+(${countToken})\\s+заказ`, "u"));
   const mDigitBefore = t.match(new RegExp(`(${countToken})\\s+последн\\p{L}*\\s+заказ`, "u"));
@@ -486,21 +508,23 @@ function tryDeterministicLastOrdersAnswer(message, orders) {
     n == null &&
     (/последн(?:ий|его|ему|им|ем)\s+заказ/u.test(t) ||
       /номер\p{L}*\s+последн(?:ий|его|ему)/u.test(t) ||
-      /(?:сумм|стоимост|цен[аеуы]).*последн|последн.*(?:сумм|стоимост|цен[аеуы])/u.test(t))
+      /(?:сумм|стоимост|цен[аеуы]|адрес|клиент|описан|статус|телефон).*последн|последн.*(?:сумм|стоимост|цен[аеуы]|адрес|клиент|описан|статус|телефон)/u.test(
+        t
+      ))
   ) {
     n = 1;
   }
   if (n == null) return null;
   n = Math.min(n, 20);
 
+  const label = LAST_ORDER_FIELD_LABELS[askField] || "данные";
+
   if (!orders.length) {
     return {
-      speak:
-        askField === "amount"
-          ? "В доступных данных сейчас нет заказов — не могу назвать сумму."
-          : "В доступных данных сейчас нет заказов — не могу назвать номера.",
+      speak: `В доступных данных сейчас нет заказов — не могу назвать ${label}.`,
       action: "answer",
       order: null,
+      order_id: null,
     };
   }
 
@@ -511,28 +535,37 @@ function tryDeterministicLastOrdersAnswer(message, orders) {
       speak: "В данных нет номеров заказов.",
       action: "answer",
       order: null,
+      order_id: null,
     };
   }
 
-  if (askField === "amount") {
+  if (askField !== "id") {
     if (slice.length === 1) {
       const order = slice[0];
-      const rub = formatRubSpeak(order.amount);
+      const value = readOrderAskValue(order, askField);
       const speak =
-        rub != null
-          ? `Сумма последнего заказа номер ${order.id} — ${rub} рублей.`
-          : `По последнему заказу номер ${order.id} сумма не указана.`;
-      return { speak, action: "answer", order: null };
+        value != null
+          ? askField === "amount"
+            ? `Сумма последнего заказа номер ${order.id} — ${value} рублей.`
+            : `По последнему заказу номер ${order.id} ${label} — ${value}.`
+          : askField === "amount"
+            ? `По последнему заказу номер ${order.id} сумма не указана.`
+            : `По последнему заказу номер ${order.id} ${label} не указан.`;
+      return { speak, action: "answer", order: null, order_id: null };
     }
 
     const parts = slice.map((o) => {
-      const rub = formatRubSpeak(o.amount);
-      return rub != null ? `${o.id} — ${rub} рублей` : `${o.id} — сумма не указана`;
+      const value = readOrderAskValue(o, askField);
+      if (askField === "amount") {
+        return value != null ? `${o.id} — ${value} рублей` : `${o.id} — сумма не указана`;
+      }
+      return value != null ? `${o.id} — ${value}` : `${o.id} — ${label} не указан`;
     });
     return {
-      speak: `Суммы последних ${slice.length} заказов: ${parts.join("; ")}.`,
+      speak: `${label[0].toUpperCase()}${label.slice(1)} последних ${slice.length} заказов: ${parts.join("; ")}.`,
       action: "answer",
       order: null,
+      order_id: null,
     };
   }
 
@@ -542,7 +575,7 @@ function tryDeterministicLastOrdersAnswer(message, orders) {
       ? `Последний заказ — номер ${idsText}.`
       : `Последние ${ids.length} по номеру: ${idsText}.`;
 
-  return { speak, action: "answer", order: null };
+  return { speak, action: "answer", order: null, order_id: null };
 }
 
 function buildOrdersFacts(orders) {
@@ -554,25 +587,153 @@ function buildOrdersFacts(orders) {
   };
 }
 
+const VOICE_ORDER_DRAFT_KEYS = [
+  "client",
+  "phone",
+  "address",
+  "description",
+  "order_type",
+  "payment_status",
+  "order_date",
+  "amount",
+  "prepayment",
+  "prepayment_to",
+  "remaining_amount",
+  "remaining_to",
+  "delivery",
+  "delivery_date",
+  "installation",
+  "installation_date",
+  "area_m2",
+  "mosquito_nets",
+  "construction_count",
+];
+
+function sanitizeOrderDraft(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  for (const key of VOICE_ORDER_DRAFT_KEYS) {
+    if (!(key in raw)) continue;
+    const v = raw[key];
+    if (v == null || v === "") {
+      out[key] = null;
+      continue;
+    }
+    if (key === "installation") {
+      out[key] = Boolean(v);
+      continue;
+    }
+    if (
+      key === "amount" ||
+      key === "prepayment" ||
+      key === "remaining_amount" ||
+      key === "area_m2" ||
+      key === "mosquito_nets" ||
+      key === "construction_count"
+    ) {
+      const n = Number(v);
+      out[key] = Number.isFinite(n) ? Math.round(n) : null;
+      continue;
+    }
+    out[key] = String(v).trim() || null;
+  }
+  return out;
+}
+
+function missingCreateRequired(draft) {
+  const missing = [];
+  if (!String(draft?.client || "").trim()) missing.push("клиент");
+  if (!String(draft?.payment_status || "").trim()) missing.push("статус");
+  return missing;
+}
+
+function listDraftParamsForSpeak(draft) {
+  if (!draft) return "";
+  const parts = [];
+  const push = (label, value) => {
+    if (value == null || value === "") return;
+    parts.push(`${label}: ${value}`);
+  };
+  push("клиент", draft.client);
+  push("статус", draft.payment_status);
+  push("телефон", draft.phone);
+  push("адрес", draft.address);
+  push("описание", draft.description);
+  push("тип", draft.order_type);
+  if (draft.amount != null) push("сумма", `${formatRubSpeak(draft.amount)} рублей`);
+  if (draft.prepayment != null) push("предоплата", `${formatRubSpeak(draft.prepayment)} рублей`);
+  push("кому предоплата", draft.prepayment_to);
+  if (draft.remaining_amount != null) {
+    push("остаток", `${formatRubSpeak(draft.remaining_amount)} рублей`);
+  }
+  push("кому остаток", draft.remaining_to);
+  push("доставка", draft.delivery);
+  push("дата доставки", draft.delivery_date);
+  if (draft.installation) push("монтаж", "да");
+  push("дата монтажа", draft.installation_date);
+  return parts.join("; ");
+}
+
+function patchHasChanges(patch) {
+  if (!patch || typeof patch !== "object") return false;
+  return Object.keys(patch).some((k) => {
+    if (!VOICE_ORDER_DRAFT_KEYS.includes(k)) return false;
+    const v = patch[k];
+    return v != null && v !== "";
+  });
+}
+
 function buildSystemPrompt({ canCreateOrders, nowIso, facts }) {
   const recentLine =
     facts.recent_ids_newest_first.length > 0
       ? facts.recent_ids_newest_first.join(", ")
       : "(пусто)";
 
+  const mutateLine = canCreateOrders
+    ? "Создание и редактирование заказов РАЗРЕШЕНЫ."
+    : "Создание и редактирование заказов ЗАПРЕЩЕНЫ для этой роли — только ответы по данным (сценарий 1).";
+
   return `Ты голосовой ассистент сайта учёта заказов. Отвечай кратко, по-русски, фразами удобными для озвучки (1–3 предложения).
 
 Сейчас: ${nowIso}
+${mutateLine}
+
+ТРИ ОСНОВНЫХ СЦЕНАРИЯ (выбери один):
+
+=== СЦЕНАРИЙ 1. ЗАПРОС ИНФОРМАЦИИ ===
+Пользователь спрашивает данные по одному или нескольким заказам: сумма/стоимость, адрес, клиент, описание, статус, телефон, тип, даты, предоплата и т.п.
+- action: "answer" (или "clarify", если непонятно какой заказ).
+- Ищи заказ по id, order_number, client, description, address (частичное совпадение ок).
+- Можно отвечать сразу по нескольким заказам.
+- order = null, order_id = null.
+
+=== СЦЕНАРИЙ 2. СОЗДАНИЕ НОВОГО ЗАКАЗА ===
+Пользователь хочет создать заказ (создай / новый заказ / оформи / добавь заявку…).
+Обязательные поля: client (клиент) и payment_status (статус). Остальное — по желанию.
+- Если не хватает клиента и/или статуса → action "clarify", спроси недостающее. Можно вернуть частичный order с уже известными полями.
+- Когда обязательные поля есть → action "propose_create_order", заполни order всеми извлечёнными полями.
+- В speak ПЕРЕД подтверждением ПЕРЕЧИСЛИ все параметры заказа (клиент, статус и всё остальное, что указано). Спроси подтверждение («создать?» / «верно?»).
+- Создание на сайте подтвердит пользователь кнопкой или голосом «да»/«нет». Не утверждай, что заказ уже создан.
+
+=== СЦЕНАРИЙ 3. РЕДАКТИРОВАНИЕ ЗАКАЗА ===
+Пользователь хочет изменить / отредактировать / дополнить / обновить существующий заказ (поля: адрес, сумма, статус, клиент, описание…).
+- Найди заказ по номеру, клиенту, адресу или описанию (см. MATCHED_ORDERS_BY_MENTION).
+- Если подходит несколько → action "clarify", перечисли номера и клиентов, попроси выбрать.
+- Если заказ один, но не сказано что менять → action "clarify", спроси какие поля добавить или изменить.
+- Когда заказ известен и есть поля для изменения → action "propose_update_order":
+  order_id = id заказа, order = ТОЛЬКО изменяемые поля (патч).
+- В speak перечисли номер заказа и что именно изменится (старое→новое, если известно). Спроси подтверждение.
+- После слияния клиент и статус не должны стать пустыми. Если патч обнуляет обязательное — clarify.
 
 ЖЁСТКИЕ ПРАВИЛА ПО ДАННЫМ:
-1) Единственный источник правды — блок SITE_ORDERS_FACTS и SITE_ORDERS_JSON ниже. Не опирайся на догадки и не «восстанавливай» номера из головы.
-2) Номера заказов (поле id) копируй ТОЛЬКО из этих блоков. ЗАПРЕЩЕНО выдумывать, округлять, продолжать последовательности (типа 990, 989, 988) и менять цифры.
-3) Если в истории диалога уже был неверный номер — исправь ответ по SITE_ORDERS_FACTS/JSON, а не по истории.
-4) Номера заказов в speak пиши ЦИФРАМИ как в данных (например 973), не прописью.
-5) «Последний заказ» / «последние N» = первые N элементов массива (он уже отсортирован: новые сверху по id).
-6) Если данных не хватает или список пуст — скажи об этом честно, без вымышленных id и сумм.
-7) Когда пользователь упоминает заказ, ищи его по полям: id (номер), order_number, client (клиент — можно часть имени), description (описание — можно часть текста), address (адрес — можно часть адреса). Частичное совпадение достаточно.
-8) Если дан блок MATCHED_ORDERS_BY_MENTION — это кандидаты, найденные кодом по полям из п.7. Отвечай по ним в первую очередь. Если кандидат один — считай, что речь о нём. Если несколько — action "clarify", коротко перечисли номера и клиентов. Если блок пуст, а пользователь явно ссылался на заказ/клиента/адрес/описание — скажи, что такого заказа в данных нет (не выдумывай).
+1) Единственный источник правды — SITE_ORDERS_FACTS и SITE_ORDERS_JSON. Не выдумывай номера и суммы.
+2) id копируй ТОЛЬКО из этих блоков / MATCHED_ORDERS_BY_MENTION.
+3) Если в истории был неверный номер — исправь по фактам, не по истории.
+4) Номера в speak — ЦИФРАМИ (973), не прописью.
+5) «Последний заказ» / «последние N» = первые N элементов массива (новые сверху по id).
+6) Пустые данные — скажи честно.
+7) Поиск упоминания: id, order_number, client, description, address; частичное совпадение достаточно.
+8) MATCHED_ORDERS_BY_MENTION — приоритетные кандидаты. 1 шт. → это тот заказ; несколько → clarify; пусто при явном упоминании → «не найден».
 
 SITE_ORDERS_FACTS:
 - заказов в срезе: ${facts.count}
@@ -581,28 +742,20 @@ SITE_ORDERS_FACTS:
 
 Поля заказа в JSON: id, order_number, client, phone, address, description, order_type, payment_status, order_date, amount, prepayment, prepayment_to, remaining_amount, remaining_to, delivery, delivery_date, installation, installation_date, area_m2.
 
-Действия (поле action):
-- "answer" — обычный ответ по данным (вопросы о сумме, адресе, клиенте, статусе, номерах и т.п.)
-- "clarify" — нужно уточнение у пользователя
-- "propose_create_order" — пользователь хочет СОЗДАТЬ новый заказ; заполни order извлечёнными полями. Создание на сайте подтвердит пользователь отдельно. ${
-    canCreateOrders
-      ? "Создание заказов разрешено."
-      : "Создание заказов ЗАПРЕЩЕНО для этой роли — откажи и предложи только ответы по данным."
-  }
-
-Допустимые значения при создании:
+Допустимые значения:
 - order_type: ${ORDER_TYPES.join(" | ")} или null
-- payment_status: ${PAYMENT_STATUSES.join(" | ")}. Если не сказано — "Контакт с клиентом"
+- payment_status: ${PAYMENT_STATUSES.join(" | ")}
 - prepayment_to / remaining_to: ${MONEY_TO.join(" | ")} или null
 - delivery: ${DELIVERY.join(" | ")} или null
-- amount, prepayment, remaining_amount — целые рубли (числа) или null
+- amount, prepayment, remaining_amount — целые рубли или null
 - installation — boolean
-- даты — ISO YYYY-MM-DD или null; order_date можно оставить null (подставится сейчас)
+- даты — ISO YYYY-MM-DD или null
 
 Верни ТОЛЬКО JSON-объект без markdown:
 {
   "speak": "текст для озвучки",
-  "action": "answer" | "clarify" | "propose_create_order",
+  "action": "answer" | "clarify" | "propose_create_order" | "propose_update_order",
+  "order_id": number|null,
   "order": null | {
     "client": string|null,
     "phone": string|null,
@@ -625,6 +778,138 @@ SITE_ORDERS_FACTS:
     "construction_count": number|null
   }
 }`;
+}
+
+/**
+ * Постобработка ответа модели: обязательные поля, права, order_id.
+ */
+function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatches }) {
+  let action = ["answer", "clarify", "propose_create_order", "propose_update_order"].includes(
+    parsed?.action
+  )
+    ? parsed.action
+    : "answer";
+  let speak = String(parsed?.speak || "Не удалось сформировать ответ.").slice(0, 1500);
+  let order = sanitizeOrderDraft(parsed?.order);
+  let orderId =
+    parsed?.order_id != null && parsed.order_id !== ""
+      ? Number(parsed.order_id) || parsed.order_id
+      : null;
+
+  if (action === "propose_create_order") {
+    if (!canCreateOrders) {
+      return {
+        speak: "Создание заказов недоступно для вашей роли.",
+        action: "answer",
+        order: null,
+        order_id: null,
+      };
+    }
+    if (!order) order = {};
+    const missing = missingCreateRequired(order);
+    if (missing.length) {
+      return {
+        speak:
+          speak && /клиент|статус|укаж|нужн/i.test(speak)
+            ? speak
+            : `Чтобы создать заказ, укажите обязательные данные: ${missing.join(" и ")}.`,
+        action: "clarify",
+        order,
+        order_id: null,
+      };
+    }
+    if (order.payment_status && !PAYMENT_STATUSES.includes(order.payment_status)) {
+      return {
+        speak: `Статус «${order.payment_status}» не из списка. Назовите один из допустимых статусов.`,
+        action: "clarify",
+        order,
+        order_id: null,
+      };
+    }
+    const listed = listDraftParamsForSpeak(order);
+    if (listed && !/подтверд|создать\?|верно\?/i.test(speak)) {
+      speak = `Параметры заказа: ${listed}. Создать заказ?`;
+    } else if (listed && !speak.includes(String(order.client || ""))) {
+      speak = `${speak} Параметры: ${listed}.`;
+    }
+    return { speak, action: "propose_create_order", order, order_id: null };
+  }
+
+  if (action === "propose_update_order") {
+    if (!canCreateOrders) {
+      return {
+        speak: "Редактирование заказов недоступно для вашей роли.",
+        action: "answer",
+        order: null,
+        order_id: null,
+      };
+    }
+    if (orderId == null && mentionMatches.length === 1) {
+      orderId = mentionMatches[0].order.id;
+    }
+    if (orderId == null && mentionMatches.length > 1) {
+      const list = mentionMatches
+        .slice(0, 8)
+        .map((m) => `${m.order.id}${m.order.client ? ` (${m.order.client})` : ""}`)
+        .join(", ");
+      return {
+        speak: `Подходит несколько заказов: ${list}. Назовите номер нужного.`,
+        action: "clarify",
+        order: null,
+        order_id: null,
+      };
+    }
+    if (orderId == null) {
+      return {
+        speak: "Не понял, какой заказ изменить. Назовите номер, клиента, адрес или описание.",
+        action: "clarify",
+        order: null,
+        order_id: null,
+      };
+    }
+    const exists = orders.some((o) => Number(o.id) === Number(orderId) || o.id === orderId);
+    if (!exists) {
+      return {
+        speak: `Заказ номер ${orderId} в доступных данных не найден.`,
+        action: "answer",
+        order: null,
+        order_id: null,
+      };
+    }
+    if (!patchHasChanges(order)) {
+      return {
+        speak: `Заказ ${orderId} найден. Что добавить или изменить?`,
+        action: "clarify",
+        order: null,
+        order_id: orderId,
+      };
+    }
+    if (
+      order.payment_status != null &&
+      order.payment_status !== "" &&
+      !PAYMENT_STATUSES.includes(order.payment_status)
+    ) {
+      return {
+        speak: `Статус «${order.payment_status}» не из списка. Назовите допустимый статус.`,
+        action: "clarify",
+        order,
+        order_id: orderId,
+      };
+    }
+    if (!/подтверд|изменить\?|сохранить\?|верно\?/i.test(speak)) {
+      const listed = listDraftParamsForSpeak(order);
+      speak = `Изменить заказ ${orderId}: ${listed}. Сохранить изменения?`;
+    }
+    return { speak, action: "propose_update_order", order, order_id: orderId };
+  }
+
+  // clarify с частичным черновиком создания — оставляем order для карточки
+  if (action === "clarify" && order && !patchHasChanges(order) && !missingCreateRequired(order).length) {
+    // пустой объект не нужен
+    order = null;
+  }
+
+  return { speak, action, order: action === "clarify" ? order : null, order_id: orderId };
 }
 
 function compactOrders(orders) {
@@ -730,11 +1015,17 @@ module.exports = async (req, res) => {
     id: order.id,
     order_number: order.order_number ?? null,
     client: order.client ?? null,
+    phone: order.phone ?? null,
     address: order.address ?? null,
     description: order.description ?? null,
     order_type: order.order_type ?? null,
     payment_status: order.payment_status ?? null,
     amount: order.amount ?? null,
+    prepayment: order.prepayment ?? null,
+    remaining_amount: order.remaining_amount ?? null,
+    delivery: order.delivery ?? null,
+    delivery_date: order.delivery_date ?? null,
+    installation: Boolean(order.installation),
     matched_fields: matchedFields,
     match_score: score,
   }));
@@ -783,17 +1074,13 @@ module.exports = async (req, res) => {
 
     const content = data?.choices?.[0]?.message?.content;
     const parsed = extractJsonObject(content);
-    const action = ["answer", "clarify", "propose_create_order"].includes(parsed?.action)
-      ? parsed.action
-      : "answer";
-    const speak = String(parsed?.speak || "Не удалось сформировать ответ.").slice(0, 1500);
+    const finalized = finalizeAssistantPayload(parsed, {
+      canCreateOrders,
+      orders,
+      mentionMatches,
+    });
 
-    let order = null;
-    if (action === "propose_create_order" && canCreateOrders && parsed?.order && typeof parsed.order === "object") {
-      order = parsed.order;
-    }
-
-    return res.status(200).json({ speak, action, order });
+    return res.status(200).json(finalized);
   } catch (e) {
     console.error("voice-assistant:", e);
     return res.status(500).json({ message: e?.message || "Ошибка голосового ассистента" });
@@ -805,3 +1092,6 @@ module.exports.extractMentionNeedles = extractMentionNeedles;
 module.exports.messageLooksLikeOrderMention = messageLooksLikeOrderMention;
 module.exports.normalizeRu = normalizeRu;
 module.exports.tryDeterministicLastOrdersAnswer = tryDeterministicLastOrdersAnswer;
+module.exports.finalizeAssistantPayload = finalizeAssistantPayload;
+module.exports.missingCreateRequired = missingCreateRequired;
+module.exports.sanitizeOrderDraft = sanitizeOrderDraft;
