@@ -41,6 +41,17 @@ let lastSpeakText = "";
 let preferredBrowserVoice = null;
 let browserVoicesReady = false;
 
+/**
+ * Режим диалога: после ответа ассистента снова слушаем без повторного нажатия.
+ * Выход: 10 с тишины, уход со страницы/в другое приложение, ручная остановка.
+ */
+let conversationMode = false;
+/** До этого момента держим/перезапускаем слушание в текущем «раунде» тишины. */
+let conversationListenDeadline = 0;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let autoListenTimer = null;
+let pageInactiveListenersBound = false;
+
 /** Состояние одной сессии распознавания — чтобы onend не «съедал» ошибки и пустые ответы. */
 /** @type {{
  *   id: number,
@@ -63,9 +74,12 @@ let statusHoldUntil = 0;
 /** Короткий guard от двойного старта (InvalidStateError / повторный тап). */
 let startingListen = false;
 
-const LISTEN_MAX_MS = 18000;
+/** Сколько ждать речь в режиме диалога, затем снова синяя кнопка. */
+const CONVERSATION_LISTEN_MS = 10000;
 const LISTEN_START_TIMEOUT_MS = 12000;
 const STATUS_HOLD_MS = 4500;
+/** Пауза после TTS перед авто-стартом STT (аудиосессия iOS). */
+const AUTO_LISTEN_AFTER_TTS_MS = 320;
 
 function escapeHtml(s) {
   return String(s)
@@ -252,18 +266,31 @@ function ensureBrowserVoices() {
 }
 
 function speakBrowserFallback(utterText) {
-  try {
-    window.speechSynthesis?.cancel();
-    ensureBrowserVoices();
-    const u = new SpeechSynthesisUtterance(utterText);
-    u.lang = "ru-RU";
-    u.rate = 1;
-    u.pitch = 1.05;
-    if (preferredBrowserVoice) u.voice = preferredBrowserVoice;
-    window.speechSynthesis?.speak(u);
-  } catch (e) {
-    console.warn("speechSynthesis:", e);
-  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    try {
+      window.speechSynthesis?.cancel();
+      ensureBrowserVoices();
+      const u = new SpeechSynthesisUtterance(utterText);
+      u.lang = "ru-RU";
+      u.rate = 1;
+      u.pitch = 1.05;
+      if (preferredBrowserVoice) u.voice = preferredBrowserVoice;
+      u.onend = done;
+      u.onerror = done;
+      window.speechSynthesis?.speak(u);
+      // На случай если onend не придёт (часть WebKit).
+      setTimeout(done, Math.min(45000, Math.max(2500, String(utterText).length * 120)));
+    } catch (e) {
+      console.warn("speechSynthesis:", e);
+      done();
+    }
+  });
 }
 
 function stopTtsSource() {
@@ -425,7 +452,7 @@ async function playTtsBlob(blob, utterText) {
     document.querySelectorAll(".voice-replay-wrap").forEach((el) => el.remove());
   } catch (e) {
     console.warn("tts web-audio play:", e);
-    speakBrowserFallback(utterText);
+    await speakBrowserFallback(utterText);
     showReplayHint();
     setStatus("Нажмите «Прослушать ответ», чтобы услышать голос на iPhone.", false);
   }
@@ -446,18 +473,18 @@ async function speak(text) {
       body: JSON.stringify({ text: utterText, voice: "nova", format }),
     });
     if (!res.ok) {
-      speakBrowserFallback(utterText);
+      await speakBrowserFallback(utterText);
       return;
     }
     const blob = await res.blob();
     if (!blob || blob.size < 32) {
-      speakBrowserFallback(utterText);
+      await speakBrowserFallback(utterText);
       return;
     }
     await playTtsBlob(blob, utterText);
   } catch (e) {
     console.warn("voice-tts play:", e);
-    speakBrowserFallback(utterText);
+    await speakBrowserFallback(utterText);
     showReplayHint();
   }
 }
@@ -508,10 +535,152 @@ function clearListenTimers() {
   }
 }
 
+function clearAutoListenTimer() {
+  if (autoListenTimer != null) {
+    clearTimeout(autoListenTimer);
+    autoListenTimer = null;
+  }
+}
+
+function isPageActiveForVoice() {
+  if (typeof document === "undefined") return false;
+  if (document.visibilityState && document.visibilityState !== "visible") return false;
+  if (document.hidden) return false;
+  return true;
+}
+
+function beginConversationListenRound() {
+  conversationListenDeadline = Date.now() + CONVERSATION_LISTEN_MS;
+}
+
+function conversationListenRemainingMs() {
+  if (!conversationMode || !conversationListenDeadline) return 0;
+  return Math.max(0, conversationListenDeadline - Date.now());
+}
+
+function shouldKeepListeningAfterSilence() {
+  return (
+    conversationMode &&
+    isPageActiveForVoice() &&
+    !busy &&
+    conversationListenRemainingMs() > 400
+  );
+}
+
+/**
+ * Выйти из режима диалога (синяя кнопка). Опционально остановить микрофон.
+ * @param {{ stopMic?: boolean, quiet?: boolean }} [opts]
+ */
+function exitConversationMode({ stopMic = false, quiet = true } = {}) {
+  conversationMode = false;
+  conversationListenDeadline = 0;
+  clearAutoListenTimer();
+  if (stopMic && (listening || startingListen)) {
+    if (listenSession) listenSession.userStop = true;
+    startingListen = false;
+    try {
+      recognition?.stop();
+    } catch {
+      clearListenTimers();
+      listening = false;
+      disposeRecognition();
+      listenSession = null;
+      setMicUi(false);
+    }
+  } else if (!listening && !startingListen) {
+    setMicUi(false);
+  }
+  if (quiet && !busy && Date.now() >= statusHoldUntil) {
+    setStatus("");
+  }
+}
+
+function scheduleAutoListen() {
+  clearAutoListenTimer();
+  if (!conversationMode || busy) return;
+  if (!isPageActiveForVoice()) {
+    exitConversationMode({ stopMic: true, quiet: true });
+    return;
+  }
+  if (listening || startingListen) return;
+
+  autoListenTimer = setTimeout(() => {
+    autoListenTimer = null;
+    if (!conversationMode || busy || listening || startingListen) return;
+    if (!isPageActiveForVoice()) {
+      exitConversationMode({ stopMic: true, quiet: true });
+      return;
+    }
+    beginConversationListenRound();
+    startListening({ auto: true });
+  }, AUTO_LISTEN_AFTER_TTS_MS);
+}
+
+/** После ответа ассистента — снова слушаем, если диалог ещё активен. */
+async function speakThenMaybeListen(text) {
+  try {
+    await speak(text);
+  } catch (e) {
+    console.warn("speakThenMaybeListen:", e);
+  }
+  if (conversationMode && !busy) scheduleAutoListen();
+}
+
+function handlePageBecameInactive() {
+  if (!conversationMode && !listening && !startingListen && autoListenTimer == null) return;
+  clearAutoListenTimer();
+  conversationMode = false;
+  conversationListenDeadline = 0;
+  stopSpeaking();
+  clearListenTimers();
+  setLiveTranscript("");
+  startingListen = false;
+  if (listening && recognition) {
+    if (listenSession) listenSession.userStop = true;
+    try {
+      recognition.stop();
+    } catch {
+      disposeRecognition();
+      listenSession = null;
+    }
+  }
+  listening = false;
+  setMicUi(false);
+  if (!busy) setStatus("");
+}
+
+function bindPageInactiveListeners() {
+  if (pageInactiveListenersBound || typeof document === "undefined") return;
+  pageInactiveListenersBound = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" || document.hidden) {
+      handlePageBecameInactive();
+    }
+  });
+  window.addEventListener("pagehide", () => {
+    handlePageBecameInactive();
+  });
+  window.addEventListener("blur", () => {
+    // Короткая задержка: системные диалоги/жесты иногда дают ложный blur.
+    setTimeout(() => {
+      if (typeof document.hasFocus === "function" && document.hasFocus()) return;
+      if (!isPageActiveForVoice() || (typeof document.hasFocus === "function" && !document.hasFocus())) {
+        handlePageBecameInactive();
+      }
+    }, 120);
+  });
+  document.addEventListener("freeze", () => {
+    handlePageBecameInactive();
+  });
+}
+
 function forceResetListeningUi(message, isError = true) {
   clearListenTimers();
+  clearAutoListenTimer();
   listening = false;
   startingListen = false;
+  conversationMode = false;
+  conversationListenDeadline = 0;
   setMicUi(false);
   setLiveTranscript("");
   if (message) setStatus(message, isError, { holdMs: STATUS_HOLD_MS, tone: isError ? "error" : "info" });
@@ -743,14 +912,16 @@ async function confirmPendingAction() {
       : await createOrderFromVoicePayload(pending.draft);
     appendBubble("assistant", result.message);
     pushChat("assistant", result.message);
-    speak(result.message);
     setStatus(result.ok ? "" : result.message, !result.ok, result.ok ? undefined : { holdMs: STATUS_HOLD_MS });
+    setBusyUi(false);
+    await speakThenMaybeListen(result.message);
   } catch (e) {
     const msg = e?.message || (isUpdate ? "Не удалось изменить заказ" : "Не удалось создать заказ");
     appendBubble("assistant", msg);
     pushChat("assistant", msg);
-    speak(msg);
     setStatus(msg, true, { holdMs: STATUS_HOLD_MS });
+    setBusyUi(false);
+    await speakThenMaybeListen(msg);
   } finally {
     setBusyUi(false);
   }
@@ -769,8 +940,8 @@ function cancelPendingAction(announce = true) {
         : "Создание заказа отменено.";
   appendBubble("assistant", msg);
   pushChat("assistant", msg);
-  speak(msg);
   setStatus("");
+  void speakThenMaybeListen(msg);
 }
 
 async function callVoiceAssistant(message) {
@@ -819,6 +990,7 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
     appendBubble("assistant", msg);
     pushChat("assistant", msg);
     setStatus(msg, true, { holdMs: STATUS_HOLD_MS });
+    if (conversationMode) await speakThenMaybeListen(msg);
     return;
   }
 
@@ -840,8 +1012,9 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
           : `${speakText} Подтвердите создание: скажите «да» или нажмите «Создать».`;
       appendBubble("assistant", confirmAsk, renderCreateConfirmCard(data.order));
       pushChat("assistant", confirmAsk);
-      speak(confirmAsk);
       setStatus("");
+      setBusyUi(false);
+      await speakThenMaybeListen(confirmAsk);
     } else if (
       action === "propose_update_order" &&
       data?.order &&
@@ -855,8 +1028,9 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
           : `${speakText} Подтвердите изменение: скажите «да» или нажмите «Сохранить».`;
       appendBubble("assistant", confirmAsk, renderUpdateConfirmCard(data.order_id, data.order));
       pushChat("assistant", confirmAsk);
-      speak(confirmAsk);
       setStatus("");
+      setBusyUi(false);
+      await speakThenMaybeListen(confirmAsk);
     } else if (action === "clarify" && data?.order && canMutateOrders()) {
       const missingClient = !String(data.order.client || "").trim();
       const missingStatus = !String(data.order.payment_status || "").trim();
@@ -868,14 +1042,16 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
         appendBubble("assistant", speakText);
       }
       pushChat("assistant", speakText);
-      speak(speakText);
       setStatus("");
+      setBusyUi(false);
+      await speakThenMaybeListen(speakText);
     } else {
       pendingVoiceAction = null;
       appendBubble("assistant", speakText);
       pushChat("assistant", speakText);
-      speak(speakText);
       setStatus("");
+      setBusyUi(false);
+      await speakThenMaybeListen(speakText);
     }
   } catch (e) {
     const offline = typeof navigator !== "undefined" && navigator.onLine === false;
@@ -884,8 +1060,9 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
       : e?.message || "Ошибка ассистента";
     appendBubble("assistant", msg);
     pushChat("assistant", msg);
-    speak(msg);
     setStatus(msg, true, { holdMs: STATUS_HOLD_MS });
+    setBusyUi(false);
+    await speakThenMaybeListen(msg);
   } finally {
     setBusyUi(false);
   }
@@ -928,12 +1105,16 @@ function finishListenSessionWithOutcome(session) {
 
   setLiveTranscript("");
 
-  if (session?.errorCode && session.errorCode !== "aborted") {
+  if (session?.errorCode && session.errorCode !== "aborted" && session.errorCode !== "no-speech") {
     // Сообщение уже выставлено в onerror и удерживается.
+    conversationMode = false;
+    conversationListenDeadline = 0;
     return;
   }
 
   if (session?.forceStop) {
+    conversationMode = false;
+    conversationListenDeadline = 0;
     setStatus("Микрофон завис и был остановлен. Нажмите ещё раз и повторите фразу.", true, {
       holdMs: STATUS_HOLD_MS,
     });
@@ -941,10 +1122,25 @@ function finishListenSessionWithOutcome(session) {
   }
 
   if (session?.userStop) {
-    setStatus("Запись остановлена — фраза не распознана. Можно сказать ещё раз.", false, {
-      tone: "info",
-      holdMs: STATUS_HOLD_MS,
-    });
+    conversationMode = false;
+    conversationListenDeadline = 0;
+    setStatus("", false);
+    return;
+  }
+
+  // Тишина / no-speech: в режиме диалога держим слушание до дедлайна 10 с,
+  // затем возвращаемся к синей кнопке без повторного нажатия.
+  if (shouldKeepListeningAfterSilence()) {
+    setTimeout(() => {
+      if (!shouldKeepListeningAfterSilence() || listening || startingListen || busy) return;
+      startListening({ auto: true, continueRound: true });
+    }, 140);
+    return;
+  }
+
+  if (conversationMode) {
+    exitConversationMode({ quiet: true });
+    setStatus("", false);
     return;
   }
 
@@ -1042,11 +1238,14 @@ function ensureRecognition() {
     const err = event?.error || "error";
     if (listenSession) listenSession.errorCode = err;
 
-    // aborted при ручной остановке — сообщение выставит onend
-    if (err === "aborted") return;
+    // aborted / no-speech — исход выставит onend (в т.ч. авто-продолжение диалога)
+    if (err === "aborted" || err === "no-speech") return;
 
     listening = false;
     startingListen = false;
+    conversationMode = false;
+    conversationListenDeadline = 0;
+    clearAutoListenTimer();
     setMicUi(false);
     setLiveTranscript("");
     setStatus(recognitionErrorMessage(err), true, { holdMs: STATUS_HOLD_MS });
@@ -1097,9 +1296,37 @@ function armListenWatchdogs(sessionId) {
     }
   }, LISTEN_START_TIMEOUT_MS);
 
+  const maxMs = conversationMode
+    ? Math.max(800, conversationListenRemainingMs() || CONVERSATION_LISTEN_MS)
+    : CONVERSATION_LISTEN_MS;
+
   listenWatchdogTimer = setTimeout(() => {
     if (!listening || listenSession?.id !== sessionId) return;
     if (listenSession) listenSession.forceStop = true;
+    // В режиме диалога по истечении 10 с тишины — тихий выход (синяя кнопка).
+    if (conversationMode && !listenSession?.gotSpeech && !listenSession?.gotFinal) {
+      listenSession.forceStop = false;
+      listenSession.userStop = false;
+      conversationListenDeadline = 0;
+      try {
+        recognition?.stop();
+      } catch {
+        /* ignore */
+      }
+      setTimeout(() => {
+        if (listening && listenSession?.id === sessionId) {
+          exitConversationMode({ quiet: true });
+          listening = false;
+          startingListen = false;
+          setMicUi(false);
+          disposeRecognition();
+          listenSession = null;
+          setLiveTranscript("");
+          setStatus("", false);
+        }
+      }, 1600);
+      return;
+    }
     setStatus("Слишком долгое ожидание — останавливаю микрофон…", true, { tone: "error" });
     try {
       recognition?.stop();
@@ -1114,18 +1341,21 @@ function armListenWatchdogs(sessionId) {
         listenSession = null;
       }
     }, 1600);
-  }, LISTEN_MAX_MS);
+  }, maxMs);
 }
 
 /**
- * Запуск распознавания синхронно из жеста пользователя.
- * Не делаем await getUserMedia перед start() — жест теряется, а прайм
- * не лечил корень (HTMLAudioElement). TTS теперь через Web Audio API.
+ * Запуск распознавания.
+ * Первый старт — из жеста пользователя; дальше в режиме диалога — автоматически после ответа.
+ * @param {{ auto?: boolean, continueRound?: boolean }} [opts]
  */
-function startListening() {
+function startListening(opts = {}) {
+  const auto = Boolean(opts.auto);
+  const continueRound = Boolean(opts.continueRound);
   if (busy || startingListen || listening) return;
   const Ctor = getSpeechRecognitionCtor();
   if (!Ctor) {
+    conversationMode = false;
     setStatus(
       "Голосовой ввод не поддерживается в этом браузере. Введите текст вручную (на iPhone лучше Safari актуальной версии).",
       true,
@@ -1134,7 +1364,16 @@ function startListening() {
     return;
   }
 
+  if (!isPageActiveForVoice()) {
+    exitConversationMode({ quiet: true });
+    return;
+  }
+
   startingListen = true;
+  conversationMode = true;
+  if (!continueRound || !conversationListenDeadline || conversationListenDeadline <= Date.now()) {
+    beginConversationListenRound();
+  }
 
   // Останавливаем озвучку (Web Audio / speechSynthesis) без silent WAV.
   prepareAudioSessionForListening();
@@ -1162,7 +1401,12 @@ function startListening() {
     if (!retry) {
       clearListenTimers();
       listenSession = null;
-      forceResetListeningUi(e?.message || "Не удалось запустить микрофон", true);
+      forceResetListeningUi(
+        auto
+          ? "Не удалось снова включить слушание. Нажмите микрофон."
+          : e?.message || "Не удалось запустить микрофон",
+        !auto,
+      );
       return;
     }
     try {
@@ -1170,7 +1414,12 @@ function startListening() {
     } catch (e2) {
       clearListenTimers();
       listenSession = null;
-      forceResetListeningUi(e2?.message || "Не удалось запустить микрофон", true);
+      forceResetListeningUi(
+        auto
+          ? "Не удалось снова включить слушание. Нажмите микрофон."
+          : e2?.message || "Не удалось запустить микрофон",
+        !auto,
+      );
     }
   }
 }
@@ -1187,14 +1436,17 @@ function toggleListening() {
     return;
   }
 
-  if (listening || startingListen) {
+  if (listening || startingListen || autoListenTimer != null) {
+    clearAutoListenTimer();
+    conversationMode = false;
+    conversationListenDeadline = 0;
     if (listenSession) listenSession.userStop = true;
     startingListen = false;
     setStatus("Останавливаю…", false, { tone: "info" });
     try {
       recognition?.stop();
     } catch {
-      forceResetListeningUi("Запись остановлена.", false);
+      forceResetListeningUi("", false);
       disposeRecognition();
       listenSession = null;
     }
@@ -1203,7 +1455,7 @@ function toggleListening() {
 
   // AudioContext уже разблокирован на входе в раздел / других жестах.
   // Не трогаем аудио здесь сверх stopSpeaking внутри startListening.
-  startListening();
+  startListening({ auto: false });
 }
 
 function sendFromInput() {
@@ -1218,6 +1470,7 @@ function sendFromInput() {
 
 export function initVoiceSection() {
   ensureBrowserVoices();
+  bindPageInactiveListeners();
   // AudioContext создаём только по жесту (unlockTtsAudio) — иначе iOS держит suspended.
   const navBtn = document.getElementById("voiceNavBtn");
   const micBtn = document.getElementById("voiceMicBtn");
@@ -1244,6 +1497,7 @@ export function initVoiceSection() {
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
       unlockTtsAudio();
+      exitConversationMode({ stopMic: true, quiet: true });
       chatHistory = [];
       clearPersistedChatHistory();
       pendingVoiceAction = null;
@@ -1274,7 +1528,12 @@ export function initVoiceSection() {
       if (replay) {
         unlockTtsAudio();
         document.querySelectorAll(".voice-replay-wrap").forEach((el) => el.remove());
-        if (lastSpeakText) void speak(lastSpeakText);
+        if (lastSpeakText) {
+          void (async () => {
+            await speak(lastSpeakText);
+            if (conversationMode && !busy) scheduleAutoListen();
+          })();
+        }
         return;
       }
       const btn = e.target?.closest?.("[data-voice-confirm]");
@@ -1305,6 +1564,9 @@ export function onVoiceSectionEnter() {
 }
 
 export function onVoiceSectionLeave() {
+  clearAutoListenTimer();
+  conversationMode = false;
+  conversationListenDeadline = 0;
   stopSpeaking();
   clearListenTimers();
   setLiveTranscript("");
