@@ -422,14 +422,55 @@ function messageLooksLikeOrderMention(message) {
 }
 
 /**
+ * Целые рубли для озвучки: «50 000».
+ * @returns {string|null}
+ */
+function formatRubSpeak(val) {
+  if (val == null || val === "") return null;
+  const num = Number(val);
+  if (!Number.isFinite(num)) return null;
+  const rounded = Math.round(num);
+  const abs = String(Math.abs(rounded)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return rounded < 0 ? `минус ${abs}` : abs;
+}
+
+/**
+ * Какое поле спрашивают про «последние N»: id | amount | null (не наша зона).
+ * Для адреса/клиента/статуса и т.п. возвращаем null — пусть отвечает LLM.
+ */
+function detectLastOrdersAskField(t) {
+  // Сумма / стоимость / цена — до проверки «номеров», иначе «стоимость» перехватывается как id.
+  if (
+    /сумм|стоимост|цен[аеуы]|сколько\s+(?:стоит|вышло|составляет|денег)|на\s+какую\s+сумм|какая\s+цена/.test(
+      t
+    )
+  ) {
+    return "amount";
+  }
+  // Другие атрибуты — не подменять ответом «номер …».
+  if (
+    /адрес|клиент|телефон|статус|описан|доставк|монтаж|предоплат|остат|тип\s+заказ|дат[аеуы]|когда|куда|кому/.test(
+      t
+    )
+  ) {
+    return null;
+  }
+  return "id";
+}
+
+/**
  * Простые фактологические вопросы про «последние N заказов» отвечаем без LLM —
  * иначе gpt-4o-mini часто выдумывает id, игнорируя JSON.
+ * Вопросы про сумму/стоимость тоже закрываем детерминированно (не номером заказа).
  */
 function tryDeterministicLastOrdersAnswer(message, orders) {
   const t = normalizeRu(message);
   if (!t || !/заказ/.test(t)) return null;
   if (/созда|добав|оформ|запиш|завед/.test(t)) return null;
   if (!/последн|свеж/.test(t)) return null;
+
+  const askField = detectLastOrdersAskField(t);
+  if (askField == null) return null;
 
   const countAlt = Object.keys(RU_COUNT_WORDS).join("|");
   const countToken = `(?:\\d+|${countAlt})`;
@@ -444,7 +485,8 @@ function tryDeterministicLastOrdersAnswer(message, orders) {
   if (
     n == null &&
     (/последн(?:ий|его|ему|им|ем)\s+заказ/u.test(t) ||
-      /номер\p{L}*\s+последн(?:ий|его|ему)/u.test(t))
+      /номер\p{L}*\s+последн(?:ий|его|ему)/u.test(t) ||
+      /(?:сумм|стоимост|цен[аеуы]).*последн|последн.*(?:сумм|стоимост|цен[аеуы])/u.test(t))
   ) {
     n = 1;
   }
@@ -453,16 +495,42 @@ function tryDeterministicLastOrdersAnswer(message, orders) {
 
   if (!orders.length) {
     return {
-      speak: "В доступных данных сейчас нет заказов — не могу назвать номера.",
+      speak:
+        askField === "amount"
+          ? "В доступных данных сейчас нет заказов — не могу назвать сумму."
+          : "В доступных данных сейчас нет заказов — не могу назвать номера.",
       action: "answer",
       order: null,
     };
   }
 
-  const ids = orders.slice(0, n).map((o) => o.id).filter((id) => id != null);
+  const slice = orders.slice(0, n);
+  const ids = slice.map((o) => o.id).filter((id) => id != null);
   if (!ids.length) {
     return {
       speak: "В данных нет номеров заказов.",
+      action: "answer",
+      order: null,
+    };
+  }
+
+  if (askField === "amount") {
+    if (slice.length === 1) {
+      const order = slice[0];
+      const rub = formatRubSpeak(order.amount);
+      const speak =
+        rub != null
+          ? `Сумма последнего заказа номер ${order.id} — ${rub} рублей.`
+          : `По последнему заказу номер ${order.id} сумма не указана.`;
+      return { speak, action: "answer", order: null };
+    }
+
+    const parts = slice.map((o) => {
+      const rub = formatRubSpeak(o.amount);
+      return rub != null ? `${o.id} — ${rub} рублей` : `${o.id} — сумма не указана`;
+    });
+    return {
+      speak: `Суммы последних ${slice.length} заказов: ${parts.join("; ")}.`,
       action: "answer",
       order: null,
     };
@@ -736,3 +804,4 @@ module.exports.findOrdersByMention = findOrdersByMention;
 module.exports.extractMentionNeedles = extractMentionNeedles;
 module.exports.messageLooksLikeOrderMention = messageLooksLikeOrderMention;
 module.exports.normalizeRu = normalizeRu;
+module.exports.tryDeterministicLastOrdersAnswer = tryDeterministicLastOrdersAnswer;
