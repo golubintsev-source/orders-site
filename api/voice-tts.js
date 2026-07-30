@@ -77,11 +77,15 @@ module.exports = async (req, res) => {
   const requested = String(body?.voice || OPENAI_TTS_VOICE).trim().toLowerCase();
   const voice = FEMALE_VOICES.has(requested) ? requested : "nova";
 
+  const ALLOWED_FORMATS = new Set(["mp3", "wav", "opus", "aac", "flac", "pcm"]);
+  const requestedFormat = String(body?.format || "mp3").trim().toLowerCase();
+  const responseFormat = ALLOWED_FORMATS.has(requestedFormat) ? requestedFormat : "mp3";
+
   const payload = {
     model: OPENAI_TTS_MODEL,
     voice,
     input: text,
-    response_format: "mp3",
+    response_format: responseFormat,
   };
 
   // Инструкция тона — поддерживается gpt-4o-mini-tts
@@ -112,7 +116,19 @@ module.exports = async (req, res) => {
     }
 
     const buf = Buffer.from(await upstream.arrayBuffer());
-    res.setHeader("Content-Type", "audio/mpeg");
+    const contentType =
+      responseFormat === "wav"
+        ? "audio/wav"
+        : responseFormat === "opus"
+          ? "audio/opus"
+          : responseFormat === "aac"
+            ? "audio/aac"
+            : responseFormat === "flac"
+              ? "audio/flac"
+              : responseFormat === "pcm"
+                ? "audio/pcm"
+                : "audio/mpeg";
+    res.setHeader("Content-Type", contentType);
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).send(buf);
   } catch (e) {
