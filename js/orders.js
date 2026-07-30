@@ -21,7 +21,6 @@ import {
 import { scheduleSaveUserPlace } from "./user-place.js";
 import { syncOrderIdInUrl } from "./app-routes.js";
 import { hideOrderViewQr, showOrderViewQr } from "./order-qr.js";
-import { loadAllChanges } from "./all-changes.js";
 import {
   loadFilesCountMap,
   getFilesWord,
@@ -183,7 +182,7 @@ function refreshOrdersDependentSections() {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadAllTasks());
   } else if (getCurrentSectionId() === "changes-all") {
-    void loadAllChanges();
+    void import("./all-changes.js").then((m) => m.loadAllChanges());
   } else if (getCurrentSectionId() === "order-tasks") {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadOrderTasks());
@@ -192,12 +191,58 @@ function refreshOrdersDependentSections() {
   }
 }
 
+/** Колонки для списка/фильтров/маршрутного листа — без select("*"), меньше JSON и быстрее ответ. */
+const ORDERS_LIST_SELECT = [
+  "id",
+  "order_date",
+  "client",
+  "phone",
+  "address",
+  "description",
+  "payment_status",
+  "amount",
+  "prepayment",
+  "prepayment_to",
+  "remaining_amount",
+  "remaining_to",
+  "delivery",
+  "delivery_date",
+  "installation",
+  "installation_date",
+  "area_m2",
+  "installer_payment_amount",
+  "installer_payment_by",
+  "installer_rate_per_m2",
+  "reveals",
+  "reveals_date",
+  "mosquito_nets",
+  "construction_count",
+  "order_type",
+  "order_number",
+  "lock_edit_for_user_lite",
+  "tasks_highlight",
+  "coordinates",
+].join(",");
+
 export async function loadOrders() {
-  const { data, error } = await supabaseClient
+  let { data, error } = await supabaseClient
     .from("orders")
-    .select("*")
+    .select(ORDERS_LIST_SELECT)
     .is("deleted_at", null)
     .order("id", { ascending: false });
+
+  // Если в БД ещё нет части колонок из миграций — fallback на select("*").
+  if (error) {
+    const againStar = await supabaseClient
+      .from("orders")
+      .select("*")
+      .is("deleted_at", null)
+      .order("id", { ascending: false });
+    if (!againStar.error) {
+      data = againStar.data;
+      error = null;
+    }
+  }
 
   if (!error && data) {
     state.dbUnavailable = false;
@@ -206,7 +251,7 @@ export async function loadOrders() {
       await syncPendingOfflineDataToSupabase();
       const again = await supabaseClient
         .from("orders")
-        .select("*")
+        .select(ORDERS_LIST_SELECT)
         .is("deleted_at", null)
         .order("id", { ascending: false });
       finalData = again.error ? data : again.data || data;
@@ -1259,9 +1304,11 @@ export function applyFiltersAndRender() {
 
 function escapeHtml(s) {
   if (s == null || s === "") return "";
-  const div = document.createElement("div");
-  div.textContent = s;
-  return div.innerHTML;
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function escapeAttr(s) {
@@ -1578,9 +1625,11 @@ export function buildOrderPickerRowHtml(order) {
 export function renderOrders(orders) {
   document.dispatchEvent(new CustomEvent("orders-table-will-render"));
   const table = document.querySelector("#ordersTable tbody");
-  table.innerHTML = "";
+  if (!table) return;
 
-  orders.forEach((order) => {
+  const parts = new Array(orders.length);
+  for (let i = 0; i < orders.length; i++) {
+    const order = orders[i];
     const allowDeleteThisRow =
       canDeleteOrders() && (!state.ordersFromCache || isOfflineClientOrderId(Number(order.id)));
     const deleteButton = allowDeleteThisRow
@@ -1592,7 +1641,7 @@ export function renderOrders(orders) {
       buildOrderMainFieldsCellsHtml(order);
     const statusDisplayText =
       order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом");
-    const row = `
+    parts[i] = `
       <tr${trClass}>
         <td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}" data-lock-edit-user-lite="${isOrderEditLockedForUserLite(order) ? "1" : "0"}">
           <span class="${orderIdChipClasses.join(" ")}">
@@ -1637,28 +1686,31 @@ export function renderOrders(orders) {
         <td class="td-actions td-delete">${deleteButton}</td>
       </tr>
     `;
+  }
 
-    table.innerHTML += row;
+  table.innerHTML = parts.join("");
+
+  // Подсказки по обрезке текста и sync скролла — после первой отрисовки, чтобы не блокировать paint.
+  requestAnimationFrame(() => {
+    table.querySelectorAll(".td-order-client, .td-order-address, .td-order-description, .td-order-status").forEach((cell) => {
+      const full = cell.getAttribute("data-fulltext");
+      if (!full) return;
+      const chip = cell.querySelector(".status-value");
+      const truncated =
+        chip && chip.scrollWidth > chip.clientWidth + 0.5
+          ? true
+          : cell.scrollWidth > cell.clientWidth + 0.5;
+      if (truncated) cell.setAttribute("title", full);
+      else cell.removeAttribute("title");
+    });
+
+    ensureOrdersScrollSync();
+    updateOrdersScrollSpacerWidth();
+    syncOrdersScrollPositions();
+    applyOrdersTableMobileFit();
+    syncOrdersTableOuterWidthForTouch();
   });
 
-  table.querySelectorAll(".td-order-client, .td-order-address, .td-order-description, .td-order-status").forEach((cell) => {
-    const full = cell.getAttribute("data-fulltext");
-    if (!full) return;
-    const chip = cell.querySelector(".status-value");
-    const truncated =
-      chip && chip.scrollWidth > chip.clientWidth + 0.5
-        ? true
-        : cell.scrollWidth > cell.clientWidth + 0.5;
-    if (truncated) cell.setAttribute("title", full);
-    else cell.removeAttribute("title");
-  });
-
-  // Синхронизация горизонтальной прокрутки: сверху и снизу
-  ensureOrdersScrollSync();
-  updateOrdersScrollSpacerWidth();
-  syncOrdersScrollPositions();
-  applyOrdersTableMobileFit();
-  syncOrdersTableOuterWidthForTouch();
   renderOrdersTotals(orders);
 }
 

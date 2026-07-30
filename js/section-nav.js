@@ -1,13 +1,10 @@
 import { state } from "./state.js";
 import { loadBalance } from "./balance.js";
-import { bumpRouteDeliveryMapGeneration, loadRouteSheet } from "./route-sheet.js";
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
 import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite, isUserShop } from "./roles.js";
 import { getRouteSectionFromUrl, hrefToOrdersExcelExport, syncBrowserUrlToSection } from "./app-routes.js";
-import { loadAllChanges } from "./all-changes.js";
-import { loadStatistics } from "./statistics.js";
 import { scheduleSaveUserPlace } from "./user-place.js";
 import {
   consumeSectionSwitchMs,
@@ -286,10 +283,10 @@ export function switchSection(sectionId, opts = {}) {
     loadBalance();
   }
   if (sectionId === "route-sheet") {
-    loadRouteSheet();
+    void import("./route-sheet.js").then((m) => m.loadRouteSheet());
   }
   if (prevSectionId === "route-sheet" && sectionId !== "route-sheet") {
-    bumpRouteDeliveryMapGeneration();
+    void import("./route-sheet.js").then((m) => m.bumpRouteDeliveryMapGeneration());
   }
   if (sectionId === "calculations") {
     void import("./calculations.js").then((m) => m.loadCalculations());
@@ -300,10 +297,10 @@ export function switchSection(sectionId, opts = {}) {
     void import("./push-notifications.js").then((m) => m.clearPushBadge());
   }
   if (sectionId === "changes-all") {
-    void loadAllChanges();
+    void import("./all-changes.js").then((m) => m.loadAllChanges());
   }
   if (sectionId === "statistics") {
-    void loadStatistics({ refreshDefaultRange: true });
+    void import("./statistics.js").then((m) => m.loadStatistics({ refreshDefaultRange: true }));
   }
   if (sectionId === "settings") {
     void import("./push-notifications.js").then((m) => m.refreshPushNotificationsUi());

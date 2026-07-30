@@ -3,6 +3,7 @@ import { formatAmount, formatDateShortRU, formatOrderIdTypeChip } from "./format
 import { getFilteredCalculationRows, getCalcDisplayComment, getCalcDisplayAuthor } from "./calculations.js";
 import { readSnapshot } from "./offline-cache.js";
 import { downloadXlsxBuffer } from "./xlsxDownload.js";
+import { ensureXlsx } from "./lazy-cdn.js";
 
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 
@@ -168,8 +169,11 @@ export function getCalculationRowValuesForExcel(row, orderById) {
 }
 
 export async function exportCalculationsToExcel() {
-  const XLSX = globalThis.XLSX;
-  if (XLSX == null) {
+  let XLSX;
+  try {
+    XLSX = await ensureXlsx();
+  } catch (e) {
+    console.error(e);
     const msgEl = document.getElementById("calculationsMessage");
     if (msgEl) {
       msgEl.textContent = "Не удалось загрузить модуль Excel. Обновите страницу.";

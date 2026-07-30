@@ -1,6 +1,7 @@
 import { getFilteredOrders, getOrderRowValuesForExcel, ORDERS_EXCEL_HEADERS } from "./orders.js";
 import { setMessage } from "./dom.js";
 import { downloadXlsxBuffer } from "./xlsxDownload.js";
+import { ensureXlsx } from "./lazy-cdn.js";
 
 function excelFileNameTimestamp() {
   const d = new Date();
@@ -26,9 +27,12 @@ function applyAutoColumnWidths(ws, aoa) {
   ws["!cols"] = cols;
 }
 
-export function exportOrdersToExcel() {
-  const XLSX = globalThis.XLSX;
-  if (XLSX == null) {
+export async function exportOrdersToExcel() {
+  let XLSX;
+  try {
+    XLSX = await ensureXlsx();
+  } catch (e) {
+    console.error(e);
     setMessage("Не удалось загрузить модуль Excel. Обновите страницу.", "#d32f2f");
     return;
   }
