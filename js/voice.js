@@ -143,6 +143,12 @@ function pushChat(role, content) {
   persistChatHistory();
 }
 
+function scrollVoiceFeedToEnd() {
+  const feed = document.getElementById("voiceFeed");
+  if (!feed) return;
+  feed.scrollTop = feed.scrollHeight;
+}
+
 function renderFeedFromHistory() {
   const feed = document.getElementById("voiceFeed");
   if (!feed) return;
@@ -154,6 +160,7 @@ function renderFeedFromHistory() {
   for (const m of chatHistory) {
     appendBubble(m.role, m.content);
   }
+  scrollVoiceFeedToEnd();
 }
 
 function restoreChatHistoryIfNeeded() {
@@ -1464,8 +1471,15 @@ export function onVoiceSectionEnter() {
   // ответов работала после fetch, не используя HTMLAudioElement.
   unlockTtsAudio();
   restoreChatHistoryIfNeeded();
+  // Не фокусируем поле ввода: на iPhone focus открывает клавиатуру и панель
+  // с галочкой, перекрывая историю и кнопку микрофона. Клавиатура — только
+  // по явному тапу в поле; голос — по синей кнопке слева.
   const input = document.getElementById("voiceComposerInput");
-  input?.focus?.({ preventScroll: true });
+  input?.blur?.();
+  // После восстановления ленты показываем последнее сообщение над композером.
+  requestAnimationFrame(() => {
+    scrollVoiceFeedToEnd();
+  });
 }
 
 export function onVoiceSectionLeave() {
@@ -1474,6 +1488,7 @@ export function onVoiceSectionLeave() {
   clearListenTimers();
   setLiveTranscript("");
   startingListen = false;
+  document.getElementById("voiceComposerInput")?.blur?.();
   if (listening && recognition) {
     if (listenSession) listenSession.userStop = true;
     try {
