@@ -1,7 +1,13 @@
 /**
  * Открытие/скачивание вложений на iPhone (особенно PWA): прямая ссылка target="_blank"
- * на xlsx и др. office-файлы даёт белый экран. Загружаем blob и отдаём через Share или download.
+ * на office-файлы даёт белый экран. Таблицы (xlsx/xls/csv) открываем во встроенном
+ * просмотрщике; остальные office-файлы — через Share или download.
  */
+
+import {
+  isSpreadsheetAttachment,
+  openSpreadsheetViewer,
+} from "./spreadsheetViewer.js";
 
 export function isIosDevice() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent || "");
@@ -17,6 +23,8 @@ export function needsIosBlobDelivery(fileName, mimeType) {
   if (INLINE_RISKY_MIME.test(mimeType || "")) return true;
   return false;
 }
+
+export { isSpreadsheetAttachment };
 
 function guessMimeFromName(fileName) {
   const n = (fileName || "").toLowerCase();
@@ -46,13 +54,19 @@ async function fetchAsOctetBlob(url) {
 }
 
 /**
- * «Открыть» на iOS: Share sheet (Excel/Numbers) или переход к blob в том же окне PWA.
+ * «Открыть» на iOS: таблицы — встроенный просмотр; остальное — Share sheet или blob.
  * @param {string} url подписанный URL
  * @param {string} fileName
  * @param {string | null | undefined} mimeType
  */
 export async function openAttachmentOnIos(url, fileName, mimeType) {
   const name = fileName || "file";
+
+  if (isSpreadsheetAttachment(name, mimeType)) {
+    await openSpreadsheetViewer(url, name);
+    return;
+  }
+
   const blob = await fetchAsOctetBlob(url);
   const shareMime = mimeType || guessMimeFromName(name);
   const file = new File([blob], name, { type: shareMime });
