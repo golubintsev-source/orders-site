@@ -5,11 +5,9 @@ import { formatOrderIdTypeChip } from "./format.js";
 import {
   downloadAttachmentOnIos,
   isIosDevice,
-  isSpreadsheetAttachment,
   needsIosBlobDelivery,
   openAttachmentOnIos,
 } from "./attachmentActions.js";
-import { openSpreadsheetViewer } from "./spreadsheetViewer.js";
 import {
   attachmentsInput,
   fileUploadText,
@@ -979,18 +977,13 @@ async function createOrderFileRowElement(file, orderId, onAdminDelete, { largePr
   actions.className = "file-actions";
 
   if (fullUrl) {
-    const spreadsheet = isSpreadsheetAttachment(fullName, file.mime_type);
     const useIosBlob =
       isIosDevice() && needsIosBlobDelivery(fullName, file.mime_type);
-    const openInApp = spreadsheet || useIosBlob;
 
-    const openEl = document.createElement(openInApp ? "button" : "a");
+    const openEl = document.createElement(useIosBlob ? "button" : "a");
     openEl.className = "file-action-btn";
     openEl.textContent = "Открыть";
-    if (spreadsheet) {
-      openEl.type = "button";
-      runAttachmentAction(openEl, () => openSpreadsheetViewer(fullUrl, fullName));
-    } else if (useIosBlob) {
+    if (useIosBlob) {
       openEl.type = "button";
       runAttachmentAction(openEl, () =>
         openAttachmentOnIos(fullUrl, fullName, file.mime_type),
