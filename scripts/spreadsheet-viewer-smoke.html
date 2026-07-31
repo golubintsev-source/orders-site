@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>Spreadsheet viewer smoke test</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <p id="out">running…</p>
+  <script type="module">
+    import { isSpreadsheetAttachment, openSpreadsheetViewer } from "/js/spreadsheetViewer.js";
+    import { ensureXlsx } from "/js/lazy-cdn.js";
+
+    const out = document.getElementById("out");
+    function fail(msg) {
+      out.textContent = "FAIL: " + msg;
+      out.dataset.status = "fail";
+      throw new Error(msg);
+    }
+
+    try {
+      if (!isSpreadsheetAttachment("Реализация.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
+        fail("xlsx detection");
+      }
+      if (isSpreadsheetAttachment("a.docx", "application/msword")) fail("docx false positive");
+
+      const XLSX = await ensureXlsx();
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([
+        ["№", "Товар", "Количество", "Цена", "Сумма"],
+        [1, "Соединитель импоста PROPLEX, метр", 2, 1500, 3000],
+        ["", "Итого", "", "", 3000],
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, "Реализация");
+      const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([buf], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+
+      await openSpreadsheetViewer(url, "Реализация товаров.xlsx");
+
+      const modal = document.getElementById("spreadsheetViewerModal");
+      if (!modal || modal.style.display === "none") fail("modal not shown");
+
+      const table = modal.querySelector(".spreadsheet-viewer-table");
+      if (!table) fail("table missing");
+
+      const text = table.textContent;
+      if (!text.includes("Товар") || !text.includes("PROPLEX") || !text.includes("Итого")) {
+        fail("table content: " + text.slice(0, 200));
+      }
+      // Ensure we didn't truncate with ellipsis in cell text
+      const cells = [...table.querySelectorAll("td,th")].map((c) => c.textContent);
+      if (cells.some((t) => t.includes("…") || t.includes("..."))) {
+        fail("truncated cells: " + cells.join("|"));
+      }
+
+      out.textContent = "OK";
+      out.dataset.status = "ok";
+    } catch (e) {
+      out.textContent = "FAIL: " + (e && e.message ? e.message : e);
+      out.dataset.status = "fail";
+    }
+  </script>
+</body>
+</html>
