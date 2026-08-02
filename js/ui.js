@@ -558,6 +558,41 @@ export function bindUIEvents() {
     return decodeEl.textContent || raw;
   }
 
+  /** Копирование полного адреса в буфер (клик по адресу в «Доставке»). */
+  async function copyTextToClipboard(text) {
+    const value = String(text ?? "").trim();
+    if (!value) return false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+    } catch {
+      /* fall through */
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = value;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
+  function showRouteSheetDeliveryAddressTooltipAndCopy(anchorEl, text) {
+    const full = String(text ?? "").trim();
+    if (!full) return;
+    showFloatingCellTooltip(anchorEl, full);
+    void copyTextToClipboard(full);
+  }
+
   function showFloatingCellTooltip(anchorEl, text, opts) {
     opts = opts || {};
     const useHtml = Boolean(opts.html);
@@ -773,6 +808,15 @@ export function bindUIEvents() {
       if (!inner) return;
       e.preventDefault();
       e.stopPropagation();
+      const inAddress = Boolean(inner.closest("td.td-order-address"));
+      if (inAddress) {
+        const raw = inner.getAttribute("data-fulltext");
+        const text = decodeDataFulltext(raw);
+        if (String(text).trim()) {
+          showRouteSheetDeliveryAddressTooltipAndCopy(inner, text);
+          return;
+        }
+      }
       showRouteSheetDeliveryClampTooltip(inner);
     }
 
@@ -789,7 +833,7 @@ export function bindUIEvents() {
         if (!String(text).trim()) return;
         e.preventDefault();
         e.stopPropagation();
-        showFloatingCellTooltip(addrInner, text);
+        showRouteSheetDeliveryAddressTooltipAndCopy(addrInner, text);
         return;
       }
       const addrTd = e.target.closest("td.td-order-address");
@@ -801,7 +845,11 @@ export function bindUIEvents() {
       ) {
         e.preventDefault();
         e.stopPropagation();
-        showCellTooltip(addrTd);
+        const raw = addrTd.getAttribute("data-fulltext") || addrTd.getAttribute("title");
+        const text = decodeDataFulltext(raw);
+        if (String(text).trim()) {
+          showRouteSheetDeliveryAddressTooltipAndCopy(addrTd, text);
+        }
         return;
       }
       onRouteSheetDeliveryClampShow(e);

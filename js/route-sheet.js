@@ -266,7 +266,7 @@ function orderIdCellHtml(order) {
   </td>`;
 }
 
-/** Колонка «Адрес» в таблице «Доставка» — как `td.td-order-address` в #ordersTable; клик по значению — полный текст (см. `onRouteSheetDeliveryTablePointer` в ui.js). */
+/** Колонка «Адрес» в таблице «Доставка» — как `td.td-order-address` в #ordersTable; клик по значению — полный текст и копирование в буфер (см. `onRouteSheetDeliveryTablePointer` в ui.js). */
 function deliveryAddressCellHtml(order) {
   const addr = order.address ?? "";
   const addrStr = String(addr);
