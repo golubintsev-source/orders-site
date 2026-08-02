@@ -18,7 +18,18 @@
     return false;
   }
 
-  if (!isIos() || !isStandalonePwa()) return;
+  function forceEnabled() {
+    try {
+      if (new URLSearchParams(window.location.search).get("ptr") === "1") return true;
+      if (window.localStorage?.getItem("iosPtrDebug") === "1") return true;
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }
+
+  // Production: only iOS/iPadOS installed PWA. `?ptr=1` / localStorage iosPtrDebug=1 for QA.
+  if (!forceEnabled() && (!isIos() || !isStandalonePwa())) return;
 
   const MAX_PULL = 96;
   const TRIGGER_PULL = 62;
