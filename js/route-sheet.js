@@ -2853,6 +2853,7 @@ async function confirmRouteSheetPointByNo() {
 function initRouteSheetPointByNoDialog() {
   const dlg = document.getElementById("routeSheetPointByNoDialog");
   const openBtn = document.getElementById("routeSheetPointByNoOpenBtn");
+  const closeBtn = document.getElementById("routeSheetPointByNoCloseBtn");
   const cancelBtn = document.getElementById("routeSheetPointByNoCancelBtn");
   const confirmBtn = document.getElementById("routeSheetPointByNoConfirmBtn");
 
@@ -2860,6 +2861,7 @@ function initRouteSheetPointByNoDialog() {
   dlg.dataset.routeSheetPointByNoBound = "1";
 
   openBtn.addEventListener("click", () => openRouteSheetPointByNoDialog());
+  if (closeBtn) closeBtn.addEventListener("click", () => closeRouteSheetPointByNoDialog());
   if (cancelBtn) cancelBtn.addEventListener("click", () => closeRouteSheetPointByNoDialog());
   if (confirmBtn) confirmBtn.addEventListener("click", () => void confirmRouteSheetPointByNo());
   dlg.addEventListener("close", () => clearRouteSheetPointByNoError());
@@ -2962,6 +2964,7 @@ function confirmRouteSheetAddPoint() {
 function initRouteSheetAddPointDialog() {
   const dlg = document.getElementById("routeSheetAddPointDialog");
   const openBtn = document.getElementById("routeSheetAddPointOpenBtn");
+  const closeBtn = document.getElementById("routeSheetAddPointCloseBtn");
   const cancelBtn = document.getElementById("routeSheetAddPointCancelBtn");
   const confirmBtn = document.getElementById("routeSheetAddPointConfirmBtn");
   const typeEl = document.getElementById("routeSheetAddPointOrderType");
@@ -2982,6 +2985,7 @@ function initRouteSheetAddPointDialog() {
   }
 
   openBtn.addEventListener("click", () => openRouteSheetAddPointDialog());
+  if (closeBtn) closeBtn.addEventListener("click", () => closeRouteSheetAddPointDialog());
   if (cancelBtn) cancelBtn.addEventListener("click", () => closeRouteSheetAddPointDialog());
   if (confirmBtn) confirmBtn.addEventListener("click", () => confirmRouteSheetAddPoint());
   dlg.addEventListener("close", () => clearRouteSheetAddPointFormError());

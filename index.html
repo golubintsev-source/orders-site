@@ -1004,7 +1004,21 @@
         </div>
         <dialog id="routeSheetAddPointDialog" class="route-sheet-add-point-dialog" aria-labelledby="routeSheetAddPointDialogTitle">
           <div class="route-sheet-add-point-dialog-panel">
-            <h3 id="routeSheetAddPointDialogTitle" class="route-sheet-add-point-dialog-title">Добавить точку доставки</h3>
+            <div class="route-sheet-add-point-dialog-header">
+              <h3 id="routeSheetAddPointDialogTitle" class="route-sheet-add-point-dialog-title">Добавить точку доставки</h3>
+              <button
+                type="button"
+                id="routeSheetAddPointCloseBtn"
+                class="route-sheet-add-point-dialog-close"
+                aria-label="Закрыть"
+                title="Закрыть"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
             <div class="route-sheet-add-point-fields">
               <label class="route-sheet-add-point-field">
                 <span class="route-sheet-add-point-label">Номер</span>
@@ -1078,7 +1092,21 @@
           aria-labelledby="routeSheetPointByNoDialogTitle"
         >
           <div class="route-sheet-add-point-dialog-panel">
-            <h3 id="routeSheetPointByNoDialogTitle" class="route-sheet-add-point-dialog-title">Точка по номеру заказа</h3>
+            <div class="route-sheet-add-point-dialog-header">
+              <h3 id="routeSheetPointByNoDialogTitle" class="route-sheet-add-point-dialog-title">Точка по номеру заказа</h3>
+              <button
+                type="button"
+                id="routeSheetPointByNoCloseBtn"
+                class="route-sheet-add-point-dialog-close"
+                aria-label="Закрыть"
+                title="Закрыть"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
             <label class="route-sheet-add-point-field route-sheet-add-point-field--wide">
               <span class="route-sheet-add-point-label">Номер заказа</span>
               <input
