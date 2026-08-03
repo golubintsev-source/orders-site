@@ -854,6 +854,126 @@ export async function uploadFiles(orderId) {
   resetFileUpload();
 }
 
+/**
+ * Скопировать уже загруженный файл из Storage (например фото из чата) в заявку как order_files.
+ * @param {number|string} orderId
+ * @param {{ storagePath: string, thumbnailPath?: string|null, fileName?: string|null, mimeType?: string|null, fileSize?: number|null }} meta
+ */
+export async function attachStorageFileToOrder(orderId, meta) {
+  if (!state.currentUser?.id) {
+    throw new Error("Нет авторизации для прикрепления файла");
+  }
+  const storagePath = (meta?.storagePath || "").trim();
+  if (!orderId || !storagePath) {
+    throw new Error("Недостаточно данных для прикрепления файла");
+  }
+
+  const { data: blob, error: downloadError } = await supabaseClient.storage
+    .from("order-files")
+    .download(storagePath);
+  if (downloadError || !blob) {
+    const hint = downloadError?.message ? ` (${downloadError.message})` : "";
+    throw new Error(`Не удалось скачать фото${hint}`);
+  }
+
+  const rawName = String(meta?.fileName || "").trim() || "photo.jpg";
+  const safeName = rawName.replace(/[^\w.\-]+/g, "_").replace(/^\.+$/, "") || "photo.jpg";
+  const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const filePath = `${state.currentUser.id}/${orderId}/${stamp}_${safeName}`;
+  const mimeType = meta?.mimeType || blob.type || "image/jpeg";
+
+  const uploadBody = await blobBodyForStorageUpload(blob);
+  const { error: uploadError } = await supabaseClient.storage.from("order-files").upload(filePath, uploadBody, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: mimeType,
+  });
+  if (uploadError) {
+    const hint = uploadError.message ? ` (${uploadError.message})` : "";
+    throw new Error(`Ошибка загрузки файла в заказ${hint}`);
+  }
+
+  let thumbnailStoragePath = null;
+  const sourceThumb = String(meta?.thumbnailPath || "").trim();
+  if (sourceThumb) {
+    const { data: thumbBlob, error: thumbDlError } = await supabaseClient.storage
+      .from("order-files")
+      .download(sourceThumb);
+    if (!thumbDlError && thumbBlob && thumbBlob.size > 0) {
+      const thumbMime = thumbBlob.type || "image/webp";
+      const thumbExt = thumbMime === "image/jpeg" ? "jpg" : "webp";
+      thumbnailStoragePath = `${state.currentUser.id}/${orderId}/${stamp}_thumb.${thumbExt}`;
+      const thumbUploadBody = await blobBodyForStorageUpload(thumbBlob);
+      const { error: thumbUpError } = await supabaseClient.storage
+        .from("order-files")
+        .upload(thumbnailStoragePath, thumbUploadBody, {
+          cacheControl: "86400",
+          upsert: false,
+          contentType: thumbMime,
+        });
+      if (thumbUpError) {
+        console.warn("Миниатюра при прикреплении к заказу не загружена:", thumbUpError);
+        thumbnailStoragePath = null;
+      }
+    }
+  }
+
+  if (!thumbnailStoragePath) {
+    const isRasterImage =
+      mimeType.startsWith("image/") && mimeType !== "image/svg+xml" && mimeType !== "image/gif";
+    if (isRasterImage) {
+      const fileForThumb = new File([blob], safeName, { type: mimeType });
+      const thumbBlob = await buildThumbnailBlob(fileForThumb);
+      if (thumbBlob && thumbBlob.size > 0) {
+        const thumbExt = thumbBlob.type === "image/jpeg" ? "jpg" : "webp";
+        thumbnailStoragePath = `${state.currentUser.id}/${orderId}/${stamp}_thumb.${thumbExt}`;
+        const thumbUploadBody = await blobBodyForStorageUpload(thumbBlob);
+        const { error: thumbErr } = await supabaseClient.storage
+          .from("order-files")
+          .upload(thumbnailStoragePath, thumbUploadBody, {
+            cacheControl: "86400",
+            upsert: false,
+            contentType: thumbBlob.type || "image/webp",
+          });
+        if (thumbErr) {
+          console.warn("Миниатюра при прикреплении к заказу не загружена:", thumbErr);
+          thumbnailStoragePath = null;
+        }
+      }
+    }
+  }
+
+  const fileSize =
+    meta?.fileSize != null && Number.isFinite(Number(meta.fileSize))
+      ? Number(meta.fileSize)
+      : blob.size ?? null;
+
+  const { error: dbError } = await supabaseClient.from("order_files").insert([
+    {
+      order_id: orderId,
+      file_name: rawName,
+      storage_path: filePath,
+      thumbnail_storage_path: thumbnailStoragePath,
+      mime_type: mimeType || null,
+      file_size: fileSize,
+      uploaded_by: state.currentUser.id,
+    },
+  ]);
+
+  if (dbError) {
+    console.error("Ошибка записи файла в БД:", dbError);
+    if (thumbnailStoragePath) {
+      await supabaseClient.storage.from("order-files").remove([thumbnailStoragePath]).catch(() => {});
+    }
+    await supabaseClient.storage.from("order-files").remove([filePath]).catch(() => {});
+    throw new Error("Файл загружен, но не записан в БД");
+  }
+
+  await writeFileChangeToHistory(orderId, "добавлен файл (1 шт.)");
+  await loadFilesCountMap();
+  return { storagePath: filePath, thumbnailPath: thumbnailStoragePath };
+}
+
 export async function loadFilesCountMap() {
   const { data, error } = await supabaseClient
     .from("order_files")
