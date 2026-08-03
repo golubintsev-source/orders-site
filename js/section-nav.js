@@ -374,12 +374,11 @@ export function switchSection(sectionId, opts = {}) {
     void import("./push-notifications.js").then((m) => m.clearPushBadge());
   }
   if (prevSectionId === "messages" && sectionId !== "messages") {
-    void import("./messages.js").then((m) => m.stopMessagesFeedPolling());
+    void import("./messages.js").then((m) => m.stopMessagesPolling());
   }
   if (sectionId === "messages") {
     void import("./messages.js").then((m) => {
-      void m.loadMessages();
-      m.startMessagesFeedPolling();
+      m.onMessagesSectionEnter();
     });
     void import("./push-notifications.js").then((m) => {
       m.clearPushBadge();

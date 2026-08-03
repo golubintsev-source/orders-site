@@ -9,13 +9,21 @@ const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 const SUGGEST_DEBOUNCE_MS = 120;
 const UNREAD_POLL_MS = 60_000;
 const FEED_POLL_MS = 15_000;
+const CHAT_LIST_POLL_MS = 20_000;
+/** Специальный peer id для общего чата (все переписки). */
+const CHAT_PEER_ALL = "all";
 
 let usersCache = null;
 let usersCachePromise = null;
 let unreadPollTimer = null;
 let feedPollTimer = null;
+let chatListPollTimer = null;
 let lastFeedMessageAt = null;
 let lastMessagePeerId = null;
+/** @type {"list" | "dialog"} */
+let messagesView = "list";
+/** @type {string | null} null на списке; CHAT_PEER_ALL или uuid в диалоге */
+let activePeerId = null;
 /** @type {Map<string, { id: string, email: string }>} */
 let composerRecipients = new Map();
 let activePicker = null;
@@ -69,6 +77,64 @@ function updateLastMessagePeerId(rows) {
   const uid = getCurrentUserId();
   const last = rows[rows.length - 1];
   lastMessagePeerId = String(last.sender_id) === String(uid) ? last.recipient_id : last.sender_id;
+}
+
+function isGeneralChat() {
+  return activePeerId === CHAT_PEER_ALL;
+}
+
+function isPeerChat() {
+  return Boolean(activePeerId) && activePeerId !== CHAT_PEER_ALL;
+}
+
+function messageBelongsToPeer(row, peerId, uid) {
+  if (!peerId || peerId === CHAT_PEER_ALL) return true;
+  const me = String(uid);
+  const peer = String(peerId);
+  const sid = String(row.sender_id);
+  const rid = String(row.recipient_id);
+  return (sid === me && rid === peer) || (sid === peer && rid === me);
+}
+
+function peerIdFromMessage(row, uid) {
+  return String(row.sender_id) === String(uid) ? String(row.recipient_id) : String(row.sender_id);
+}
+
+/** Время в списке чатов: HH:MM сегодня, иначе число дня месяца. */
+function formatChatListTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (d >= startOfToday) {
+    const h = d.getHours();
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${h}:${min}`;
+  }
+  return String(d.getDate());
+}
+
+function previewMessageBody(body, recipientEmail) {
+  const stripped = stripRecipientMentionFromBody(body, recipientEmail);
+  return String(stripped || "")
+    .replace(/\[\[order:(\d+)\]\]/g, (_, id) => `#${id}`)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function avatarInitial(name) {
+  const s = String(name || "").trim();
+  return s ? s.charAt(0).toUpperCase() : "?";
+}
+
+function avatarHue(seed) {
+  const str = String(seed || "");
+  let hash = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return hash % 360;
 }
 
 async function loadUsersDirectory() {
@@ -192,36 +258,32 @@ function renderMessageItem(row) {
   const isOut = String(row.sender_id) === String(uid);
   const peerEmail = isOut ? row.recipient_email : row.sender_email;
   const peerName = displayNameByEmail(peerEmail) || peerEmail || "—";
+  const showPeer = isGeneralChat();
   const peerLabel = isOut ? peerName : `от ${peerName}`;
   const state = messageDeliveryState(row, isOut);
   const bodyForDisplay = stripRecipientMentionFromBody(row.body, row.recipient_email);
   const statusAttr = isOut ? ` data-delivery-status="${state.status}"` : "";
-  const metaTrailing = isOut
-    ? `${renderOutgoingTicksHtml(state)}<time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>`
-    : `<time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>`;
-  return `
-    <article class="${messageItemClass(row)}" data-message-id="${row.id}"${statusAttr}>
-      <header class="message-item-header">
+  const timeHtml = `<time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>`;
+  const metaTrailing = isOut ? `${renderOutgoingTicksHtml(state)}${timeHtml}` : timeHtml;
+  const headerHtml = showPeer
+    ? `<header class="message-item-header">
         <span class="message-item-peer">${escapeHtml(peerLabel)}</span>
         <span class="message-item-meta">${metaTrailing}</span>
-      </header>
+      </header>`
+    : `<header class="message-item-header message-item-header--compact">
+        <span class="message-item-meta">${metaTrailing}</span>
+      </header>`;
+  return `
+    <article class="${messageItemClass(row)}" data-message-id="${row.id}"${statusAttr}>
+      ${headerHtml}
       <div class="message-item-body">${renderMessageBodyHtml(bodyForDisplay)}</div>
     </article>
   `;
 }
 
-export async function loadMessages() {
-  const feed = document.getElementById("messagesFeed");
-  const msg = document.getElementById("messagesPageMessage");
-  if (!feed) return;
-
+async function fetchAllUserMessages() {
   const uid = getCurrentUserId();
-  if (!uid) return;
-
-  if (msg) {
-    msg.textContent = "";
-    msg.classList.remove("messages-page-message--error");
-  }
+  if (!uid) return { rows: [], error: null };
 
   let { data, error } = await supabaseClient
     .from("user_messages")
@@ -239,6 +301,235 @@ export async function loadMessages() {
     deliveredAtSupported = deliveredAtSupported !== false;
   }
 
+  return { rows: data || [], error };
+}
+
+function buildChatListEntries(users, rows) {
+  const uid = getCurrentUserId();
+  const byPeer = new Map();
+
+  for (const row of rows) {
+    const peerId = peerIdFromMessage(row, uid);
+    if (!peerId) continue;
+    let bucket = byPeer.get(peerId);
+    if (!bucket) {
+      bucket = { messages: [], last: null };
+      byPeer.set(peerId, bucket);
+    }
+    bucket.messages.push(row);
+    if (!bucket.last || row.created_at >= bucket.last.created_at) {
+      bucket.last = row;
+    }
+  }
+
+  const others = (users || []).filter((u) => String(u.id) !== String(uid));
+  const userEntries = others.map((user) => {
+    const bucket = byPeer.get(String(user.id));
+    const last = bucket?.last || null;
+    const count = bucket?.messages?.length || 0;
+    const name = displayNameByEmail(user.email) || user.email || "—";
+    return {
+      peerId: String(user.id),
+      kind: "user",
+      name,
+      email: user.email,
+      count,
+      last,
+      sortAt: last?.created_at || "",
+    };
+  });
+
+  userEntries.sort((a, b) => {
+    if (a.sortAt && b.sortAt) return a.sortAt < b.sortAt ? 1 : a.sortAt > b.sortAt ? -1 : 0;
+    if (a.sortAt) return -1;
+    if (b.sortAt) return 1;
+    return a.name.localeCompare(b.name, "ru");
+  });
+
+  const generalLast = rows.length ? rows[rows.length - 1] : null;
+  const general = {
+    peerId: CHAT_PEER_ALL,
+    kind: "general",
+    name: "Общий чат",
+    email: "",
+    count: rows.length,
+    last: generalLast,
+    sortAt: generalLast?.created_at || "",
+  };
+
+  return [general, ...userEntries];
+}
+
+function renderChatListTicks(last, uid) {
+  if (!last) return "";
+  const isOut = String(last.sender_id) === String(uid);
+  if (!isOut) return "";
+  const state = messageDeliveryState(last, true);
+  return renderOutgoingTicksHtml(state);
+}
+
+function renderChatListItem(entry) {
+  const uid = getCurrentUserId();
+  const last = entry.last;
+  const preview = last
+    ? previewMessageBody(last.body, last.recipient_email)
+    : "Нет сообщений";
+  const time = last ? formatChatListTime(last.created_at) : "";
+  const ticks = renderChatListTicks(last, uid);
+  const countLabel = entry.count > 0 ? String(entry.count) : "";
+  const hue = avatarHue(entry.peerId === CHAT_PEER_ALL ? "general" : entry.email || entry.peerId);
+  const initial = entry.kind === "general" ? "#" : avatarInitial(entry.name);
+  const unread =
+    last &&
+    String(last.recipient_id) === String(uid) &&
+    !last.read_at;
+
+  return `
+    <button
+      type="button"
+      class="messages-chat-item${unread ? " messages-chat-item--unread" : ""}${entry.kind === "general" ? " messages-chat-item--general" : ""}"
+      role="listitem"
+      data-peer-id="${escapeHtml(entry.peerId)}"
+    >
+      <span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" aria-hidden="true">${escapeHtml(initial)}</span>
+      <span class="messages-chat-item-main">
+        <span class="messages-chat-item-top">
+          <span class="messages-chat-item-name">${escapeHtml(entry.name)}</span>
+          <span class="messages-chat-item-time-wrap">
+            ${ticks}
+            <time class="messages-chat-item-time">${escapeHtml(time)}</time>
+          </span>
+        </span>
+        <span class="messages-chat-item-bottom">
+          <span class="messages-chat-item-preview">${escapeHtml(preview || " ")}</span>
+          ${countLabel ? `<span class="messages-chat-item-count" title="Сообщений в переписке">${escapeHtml(countLabel)}</span>` : ""}
+        </span>
+      </span>
+    </button>
+  `;
+}
+
+export async function loadChatList() {
+  const list = document.getElementById("messagesChatList");
+  const msg = document.getElementById("messagesChatListMessage");
+  if (!list) return;
+
+  const uid = getCurrentUserId();
+  if (!uid) return;
+
+  if (msg) {
+    msg.textContent = "";
+    msg.classList.remove("messages-page-message--error");
+  }
+
+  const [users, { rows, error }] = await Promise.all([loadUsersDirectory(), fetchAllUserMessages()]);
+
+  if (error) {
+    console.error("Ошибка загрузки сообщений:", error);
+    if (msg) {
+      msg.textContent = "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
+      msg.classList.add("messages-page-message--error");
+    }
+    list.innerHTML = "";
+    return;
+  }
+
+  const entries = buildChatListEntries(users, rows);
+  list.innerHTML = entries.map(renderChatListItem).join("");
+  void refreshMessagesUnreadBadge();
+}
+
+function setMessagesView(view) {
+  messagesView = view;
+  const listView = document.getElementById("messagesChatListView");
+  const dialogView = document.getElementById("messagesDialogView");
+  if (listView) listView.hidden = view !== "list";
+  if (dialogView) dialogView.hidden = view !== "dialog";
+  document.getElementById("section-messages")?.classList.toggle("messages-section--dialog", view === "dialog");
+}
+
+function syncComposerForActivePeer() {
+  const userPickBtn = document.getElementById("messagesPickUserBtn");
+  const input = document.getElementById("messagesComposerInput");
+  composerRecipients.clear();
+
+  if (isPeerChat()) {
+    const users = usersCache || [];
+    const peer = users.find((u) => String(u.id) === String(activePeerId));
+    if (peer) {
+      composerRecipients.set(peer.id, { id: peer.id, email: peer.email });
+    }
+    if (userPickBtn) userPickBtn.hidden = true;
+    if (input) input.placeholder = "Сообщение…";
+  } else {
+    if (userPickBtn) userPickBtn.hidden = false;
+    if (input) input.placeholder = "Новое сообщение…";
+  }
+  hideSuggestions();
+}
+
+function updateDialogHeader() {
+  const title = document.getElementById("messagesDialogTitle");
+  const subtitle = document.getElementById("messagesDialogSubtitle");
+  if (!title) return;
+
+  if (isGeneralChat()) {
+    title.textContent = "Общий чат";
+    if (subtitle) {
+      subtitle.textContent = "Все переписки";
+      subtitle.hidden = false;
+    }
+    return;
+  }
+
+  const users = usersCache || [];
+  const peer = users.find((u) => String(u.id) === String(activePeerId));
+  const name = peer ? displayNameByEmail(peer.email) || peer.email : "Чат";
+  title.textContent = name;
+  if (subtitle) {
+    subtitle.textContent = peer?.email || "";
+    subtitle.hidden = !peer?.email;
+  }
+}
+
+export function showMessagesChatList() {
+  activePeerId = null;
+  lastFeedMessageAt = null;
+  setMessagesView("list");
+  stopMessagesFeedPolling();
+  startChatListPolling();
+  void loadChatList();
+}
+
+export async function openMessagesDialog(peerId) {
+  activePeerId = peerId || CHAT_PEER_ALL;
+  lastFeedMessageAt = null;
+  setMessagesView("dialog");
+  stopChatListPolling();
+  await loadUsersDirectory();
+  updateDialogHeader();
+  syncComposerForActivePeer();
+  await loadMessages();
+  startMessagesFeedPolling();
+}
+
+export async function loadMessages() {
+  const feed = document.getElementById("messagesFeed");
+  const msg = document.getElementById("messagesPageMessage");
+  if (!feed) return;
+
+  const uid = getCurrentUserId();
+  if (!uid) return;
+
+  if (messagesView !== "dialog" || !activePeerId) return;
+
+  if (msg) {
+    msg.textContent = "";
+    msg.classList.remove("messages-page-message--error");
+  }
+
+  const { rows: allRows, error } = await fetchAllUserMessages();
+
   if (error) {
     console.error("Ошибка загрузки сообщений:", error);
     if (msg) {
@@ -249,17 +540,26 @@ export async function loadMessages() {
     return;
   }
 
-  const rows = data || [];
+  const rows = allRows.filter((row) => messageBelongsToPeer(row, activePeerId, uid));
   lastFeedMessageAt = rows.length ? rows[rows.length - 1].created_at : null;
   updateLastMessagePeerId(rows);
+
+  const emptyText = isGeneralChat()
+    ? "Пока нет сообщений. Напишите первое: выберите получателя кнопкой с человечком."
+    : "Пока нет сообщений в этой переписке. Напишите первое.";
+
   feed.innerHTML = rows.length
     ? rows.map(renderMessageItem).join("")
-    : '<p class="messages-empty">Пока нет сообщений. Напишите первое: выберите получателя кнопкой с человечком.</p>';
+    : `<p class="messages-empty">${emptyText}</p>`;
 
   feed.scrollTop = feed.scrollHeight;
 
   await markIncomingMessagesRead(rows);
   void refreshMessagesUnreadBadge();
+}
+
+export function onMessagesSectionEnter() {
+  showMessagesChatList();
 }
 
 function getFeedMessageIds() {
@@ -280,8 +580,12 @@ function appendMessagesToFeed(rows) {
   const feed = document.getElementById("messagesFeed");
   if (!feed || !rows.length) return;
 
+  const uid = getCurrentUserId();
+  const scoped = rows.filter((row) => messageBelongsToPeer(row, activePeerId, uid));
+  if (!scoped.length) return;
+
   const existingIds = getFeedMessageIds();
-  const newRows = rows.filter((row) => !existingIds.has(String(row.id)));
+  const newRows = scoped.filter((row) => !existingIds.has(String(row.id)));
   if (!newRows.length) return;
 
   const atBottom = isFeedAtBottom(feed);
@@ -367,7 +671,7 @@ async function syncOutgoingReadStatus() {
 async function pollNewMessages() {
   const feed = document.getElementById("messagesFeed");
   const uid = getCurrentUserId();
-  if (!feed || !uid) return;
+  if (!feed || !uid || messagesView !== "dialog" || !activePeerId) return;
 
   let query = supabaseClient
     .from("user_messages")
@@ -398,7 +702,7 @@ async function pollNewMessages() {
     return;
   }
 
-  const rows = data || [];
+  const rows = (data || []).filter((row) => messageBelongsToPeer(row, activePeerId, uid));
   if (rows.length) {
     appendMessagesToFeed(rows);
     await markIncomingMessagesRead(rows);
@@ -410,6 +714,7 @@ async function pollNewMessages() {
 
 export function startMessagesFeedPolling() {
   stopMessagesFeedPolling();
+  if (messagesView !== "dialog") return;
   feedPollTimer = window.setInterval(() => {
     void pollNewMessages();
   }, FEED_POLL_MS);
@@ -420,6 +725,26 @@ export function stopMessagesFeedPolling() {
     window.clearInterval(feedPollTimer);
     feedPollTimer = null;
   }
+}
+
+function startChatListPolling() {
+  stopChatListPolling();
+  if (messagesView !== "list") return;
+  chatListPollTimer = window.setInterval(() => {
+    if (messagesView === "list") void loadChatList();
+  }, CHAT_LIST_POLL_MS);
+}
+
+function stopChatListPolling() {
+  if (chatListPollTimer) {
+    window.clearInterval(chatListPollTimer);
+    chatListPollTimer = null;
+  }
+}
+
+export function stopMessagesPolling() {
+  stopMessagesFeedPolling();
+  stopChatListPolling();
 }
 
 async function markIncomingMessagesDelivered(ids) {
@@ -852,12 +1177,28 @@ async function sendMessage() {
   if (!uid) return;
 
   const users = await loadUsersDirectory();
-  ensureComposerRecipientsDefault(users);
+
+  if (isPeerChat()) {
+    const peer = users.find((u) => String(u.id) === String(activePeerId));
+    if (!peer) {
+      if (msg) {
+        msg.textContent = "Не удалось определить получателя.";
+        msg.classList.add("messages-page-message--error");
+      }
+      return;
+    }
+    composerRecipients.clear();
+    composerRecipients.set(peer.id, { id: peer.id, email: peer.email });
+  } else {
+    ensureComposerRecipientsDefault(users);
+  }
 
   const recipientList = [...composerRecipients.values()].filter((recipient) => recipient.id !== uid);
   if (!recipientList.length) {
     if (msg) {
-      msg.textContent = "Выберите получателя кнопкой с человечком.";
+      msg.textContent = isPeerChat()
+        ? "Не удалось определить получателя."
+        : "Выберите получателя кнопкой с человечком.";
       msg.classList.add("messages-page-message--error");
     }
     return;
@@ -892,7 +1233,9 @@ async function sendMessage() {
   }
 
   input.value = "";
-  composerRecipients.clear();
+  if (!isPeerChat()) {
+    composerRecipients.clear();
+  }
   hideSuggestions();
   await loadMessages();
 }
@@ -907,16 +1250,36 @@ function onFeedClick(e) {
   void viewOrder(orderId);
 }
 
+function onChatListClick(e) {
+  const item = e.target.closest(".messages-chat-item[data-peer-id]");
+  if (!item) return;
+  const peerId = item.getAttribute("data-peer-id");
+  if (!peerId) return;
+  void openMessagesDialog(peerId);
+}
+
 export function initMessagesSection() {
   const navBtn = document.getElementById("messagesNavBtn");
   const sendBtn = document.getElementById("messagesSendBtn");
   const input = document.getElementById("messagesComposerInput");
   const feed = document.getElementById("messagesFeed");
+  const chatList = document.getElementById("messagesChatList");
+  const backBtn = document.getElementById("messagesBackBtn");
 
   if (navBtn) {
     navBtn.addEventListener("click", () => {
       import("./section-nav.js").then((m) => m.switchSection("messages"));
     });
+  }
+
+  if (backBtn) {
+    backBtn.addEventListener("click", () => {
+      showMessagesChatList();
+    });
+  }
+
+  if (chatList) {
+    chatList.addEventListener("click", onChatListClick);
   }
 
   if (sendBtn) {
@@ -934,6 +1297,7 @@ export function initMessagesSection() {
   if (userPickBtn && input) {
     userPickBtn.addEventListener("mousedown", (e) => e.preventDefault());
     userPickBtn.addEventListener("click", () => {
+      if (isPeerChat()) return;
       void loadUsersDirectory().then(() => openUserPicker(input));
     });
   }
@@ -1000,4 +1364,4 @@ export function initMessagesSection() {
   startUnreadPolling();
 }
 
-export { ORDER_TOKEN_RE };
+export { ORDER_TOKEN_RE, CHAT_PEER_ALL };
