@@ -17,7 +17,10 @@ CREATE TABLE IF NOT EXISTS public.group_messages (
   sender_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
   sender_email text NOT NULL DEFAULT '',
   body text NOT NULL DEFAULT '',
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  reply_to_id bigint REFERENCES public.group_messages (id) ON DELETE SET NULL,
+  edited_at timestamptz,
+  deleted_at timestamptz
 );
 
 CREATE INDEX IF NOT EXISTS idx_group_messages_chat_created ON public.group_messages (chat_id, created_at);
@@ -59,3 +62,9 @@ CREATE POLICY "group_messages_insert_member" ON public.group_messages
         AND auth.uid() = ANY (g.member_ids)
     )
   );
+
+DROP POLICY IF EXISTS "group_messages_update_sender" ON public.group_messages;
+CREATE POLICY "group_messages_update_sender" ON public.group_messages
+  FOR UPDATE TO authenticated
+  USING (sender_id = auth.uid())
+  WITH CHECK (sender_id = auth.uid());
