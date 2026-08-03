@@ -1,7 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
-import { displayNameByEmail } from "./user-names.js";
+import { avatarLogoUrl, displayNameByEmail } from "./user-names.js";
 import { buildOrderPickerRowHtml, viewOrder } from "./orders.js";
 import { isOrderHiddenForCurrentRole } from "./roles.js";
 import {
@@ -821,7 +821,12 @@ function renderChatListItem(entry) {
   const countLabel = unreadCount > 0 ? (unreadCount > 99 ? "99+" : String(unreadCount)) : "";
   const hue = avatarHue(entry.kind === "group" ? entry.peerId : entry.email || entry.peerId);
   const initial = avatarInitial(entry.name);
+  const logoUrl =
+    entry.kind === "group" ? null : avatarLogoUrl({ email: entry.email, name: entry.name });
   const unread = entry.kind !== "group" && unreadCount > 0;
+  const avatarHtml = logoUrl
+    ? `<span class="messages-chat-avatar messages-chat-avatar--logo" aria-hidden="true"><img src="${escapeHtml(logoUrl)}" alt="" width="48" height="48" decoding="async"></span>`
+    : `<span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" aria-hidden="true">${escapeHtml(initial)}</span>`;
 
   return `
     <button
@@ -830,7 +835,7 @@ function renderChatListItem(entry) {
       role="listitem"
       data-peer-id="${escapeHtml(entry.peerId)}"
     >
-      <span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" aria-hidden="true">${escapeHtml(initial)}</span>
+      ${avatarHtml}
       <span class="messages-chat-item-main">
         <span class="messages-chat-item-top">
           <span class="messages-chat-item-name">${escapeHtml(entry.name)}</span>
