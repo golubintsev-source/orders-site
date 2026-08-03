@@ -8,6 +8,10 @@ CREATE TABLE IF NOT EXISTS app_settings (
 INSERT INTO app_settings (key, value) VALUES ('installer_rate_per_m2', '1400')
   ON CONFLICT (key) DO NOTHING;
 
+-- ФИО водителя для маршрутного листа / доставки
+INSERT INTO app_settings (key, value) VALUES ('driver_name', '')
+  ON CONFLICT (key) DO NOTHING;
+
 -- Корректировки баланса по участникам (целые рубли, могут быть отрицательными)
 INSERT INTO app_settings (key, value) VALUES
   ('balance_adj_dima', '0'),

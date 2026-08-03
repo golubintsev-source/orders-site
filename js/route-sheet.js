@@ -3010,6 +3010,25 @@ export function initRouteSheetSection() {
     toEl.addEventListener("change", onChange);
   }
 
+  const mlDateEl = document.getElementById("routeSheetMlDate");
+  if (mlDateEl && !mlDateEl.dataset.routeSheetBound) {
+    mlDateEl.dataset.routeSheetBound = "1";
+    if (!mlDateEl.value) mlDateEl.value = getTomorrowIsoDate();
+  }
+
+  const driverEl = document.getElementById("routeSheetDriver");
+  if (driverEl && !driverEl.dataset.routeSheetBound) {
+    driverEl.dataset.routeSheetBound = "1";
+    if (!driverEl.value) driverEl.value = String(state.driverName ?? "").trim();
+    const markEdited = () => {
+      const current = String(driverEl.value ?? "").trim().replace(/\s+/g, " ");
+      const saved = String(state.driverName ?? "").trim().replace(/\s+/g, " ");
+      driverEl.dataset.userEdited = current !== saved ? "1" : "";
+    };
+    driverEl.addEventListener("input", markEdited);
+    driverEl.addEventListener("change", markEdited);
+  }
+
   const routeSheetSection = document.getElementById("section-route-sheet");
   if (routeSheetSection && !routeSheetSection.dataset.routeSheetOrderIdMenuBound) {
     routeSheetSection.dataset.routeSheetOrderIdMenuBound = "1";
