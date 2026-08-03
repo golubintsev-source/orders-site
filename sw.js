@@ -114,8 +114,8 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: data.body || "Новое уведомление",
-    icon: "/img/icon-192.png",
-    badge: "/img/icon-192.png",
+    icon: "/img/icon-192.png?v=20260803",
+    badge: "/img/icon-192.png?v=20260803",
     tag: data.tag || "orders-site",
     data: { url: data.url || "/" },
     renotify: true,
