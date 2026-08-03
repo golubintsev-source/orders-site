@@ -196,7 +196,10 @@
 
           <div class="field">
             <label>Адрес</label>
-            <input type="text" id="address" />
+            <div class="address-input-wrap">
+              <input type="text" id="address" autocomplete="off" />
+              <ul id="addressSuggestions" class="client-suggestions" hidden role="listbox" aria-label="Подсказки: адреса из заказов"></ul>
+            </div>
           </div>
 
           <div class="field full">
