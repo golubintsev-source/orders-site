@@ -656,8 +656,10 @@ function syncPickerButtonStates() {
 
 function syncComposerRecipientsFromList(list) {
   composerRecipients.clear();
-  list.querySelectorAll(".messages-recipient-checkbox:checked").forEach((input) => {
-    composerRecipients.set(input.value, { id: input.value, email: input.dataset.email });
+  list.querySelectorAll(".messages-recipient-option[aria-checked='true']").forEach((btn) => {
+    const mark = btn.querySelector(".messages-recipient-checkbox");
+    if (!mark?.dataset.value) return;
+    composerRecipients.set(mark.dataset.value, { id: mark.dataset.value, email: mark.dataset.email });
   });
 }
 
@@ -704,24 +706,35 @@ function showUserRecipientPicker(users) {
       const checked = selectedIds.has(String(user.id));
       return `
     <li>
-      <label class="messages-recipient-option">
-        <input
-          type="checkbox"
+      <button
+        type="button"
+        class="messages-recipient-option"
+        role="checkbox"
+        aria-checked="${checked ? "true" : "false"}"
+      >
+        <span
           class="messages-recipient-checkbox"
-          value="${escapeHtml(user.id)}"
+          data-value="${escapeHtml(user.id)}"
           data-email="${escapeHtml(user.email)}"
-          ${checked ? "checked" : ""}
-        />
+          aria-hidden="true"
+        ></span>
         <span class="messages-suggestion-text">${escapeHtml(displayNameByEmail(user.email))}</span>
-      </label>
+      </button>
     </li>
   `;
     })
     .join("");
   list.hidden = false;
 
-  list.querySelectorAll(".messages-recipient-checkbox").forEach((input) => {
-    input.addEventListener("change", () => {
+  list.querySelectorAll(".messages-recipient-option").forEach((btn) => {
+    const mark = btn.querySelector(".messages-recipient-checkbox");
+    if (mark && btn.getAttribute("aria-checked") === "true") {
+      mark.classList.add("messages-recipient-checkbox--checked");
+    }
+    btn.addEventListener("click", () => {
+      const on = btn.getAttribute("aria-checked") !== "true";
+      btn.setAttribute("aria-checked", on ? "true" : "false");
+      if (mark) mark.classList.toggle("messages-recipient-checkbox--checked", on);
       syncComposerRecipientsFromList(list);
     });
   });
