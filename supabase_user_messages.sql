@@ -16,12 +16,15 @@ CREATE TABLE IF NOT EXISTS public.user_messages (
   recipient_email text NOT NULL DEFAULT '',
   body text NOT NULL DEFAULT '',
   created_at timestamptz NOT NULL DEFAULT now(),
+  delivered_at timestamptz,
   read_at timestamptz
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_messages_created_at ON public.user_messages (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_messages_recipient_unread ON public.user_messages (recipient_id)
   WHERE read_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_user_messages_recipient_undelivered ON public.user_messages (recipient_id)
+  WHERE delivered_at IS NULL;
 
 ALTER TABLE public.user_messages ENABLE ROW LEVEL SECURITY;
 

@@ -5691,6 +5691,7 @@ th {
   padding: 8px 12px 10px;
   border-radius: 12px;
   background: #f3f4f6;
+  position: relative;
 }
 
 .message-item--out {
@@ -5706,6 +5707,65 @@ th {
 
 .message-item--unread {
   box-shadow: inset 3px 0 0 #dc2626;
+}
+
+.message-item--out.message-item--undelivered {
+  box-shadow: inset 3px 0 0 #f59e0b;
+  background: #fff7ed;
+}
+
+.message-item--out.message-item--delivered {
+  box-shadow: inset 3px 0 0 #2563eb;
+  background: #eff6ff;
+}
+
+.message-item--out.message-item--read {
+  box-shadow: none;
+  background: #dbeafe;
+}
+
+.message-item--out.message-item--unread.message-item--delivered {
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.message-item--out.message-item--unread.message-item--undelivered {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.message-item-ticks {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin: 0 0 6px;
+  min-height: 14px;
+}
+
+.message-tick-box {
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #2563eb;
+  border-radius: 3px;
+  background: transparent;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.message-tick-box--checked {
+  background: #2563eb;
+}
+
+.message-tick-box--checked::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .message-item-header {
