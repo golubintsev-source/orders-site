@@ -2198,6 +2198,7 @@ function cancelLongPress() {
     longPressTimer = null;
   }
   longPressMessageEl = null;
+  longPressFromPhoto = false;
 }
 
 function onFeedPointerDown(e) {
@@ -2277,6 +2278,8 @@ function highlightMessageInFeed(messageId) {
 function onMessageActionMenuClick(e) {
   const btn = e.target.closest("[data-action]");
   if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
   const action = btn.getAttribute("data-action");
   const row = actionMenuMessageId ? feedMessagesById.get(String(actionMenuMessageId)) : null;
   hideMessageActionMenu();
@@ -2288,7 +2291,9 @@ function onMessageActionMenuClick(e) {
     startEditMessage(row);
   } else if (action === "attach-to-order") {
     const meta = readAttachPhotoMetaFromRow(row);
-    if (meta) openAttachPhotoToOrderPicker(meta);
+    if (!meta) return;
+    // Открываем после текущего click, иначе document-слушатель сразу закроет список заказов.
+    queueMicrotask(() => openAttachPhotoToOrderPicker(meta));
   } else if (action === "delete") {
     void deleteOwnMessage(row);
   }
@@ -2847,7 +2852,8 @@ export function initMessagesSection() {
     if (activePicker === "attach-to-order") {
       const suggestions = document.getElementById("messagesComposerSuggestions");
       const onSuggestions = suggestions && !suggestions.hidden && suggestions.contains(e.target);
-      if (!onSuggestions) {
+      const onActionMenu = Boolean(e.target.closest("#messagesActionMenu"));
+      if (!onSuggestions && !onActionMenu) {
         hideSuggestions();
       }
     }
