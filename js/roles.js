@@ -61,24 +61,19 @@ export function canDeleteOrders() {
   return isAdmin() || state.currentRole === "user";
 }
 
-/** Разделы меню, закрытые для user_lite. */
+/** Разделы меню, закрытые для отдельных ролей. Настройки доступны всем (блок уведомлений). */
 export function canAccessSection(sectionId) {
   if (isUserShop()) {
     return (
       sectionId !== "balance" &&
-      sectionId !== "settings" &&
       sectionId !== "statistics" &&
       sectionId !== "calculations"
     );
   }
-  if ((sectionId === "settings" || sectionId === "statistics") && !isAdmin()) return false;
+  if (sectionId === "statistics" && !isAdmin()) return false;
   if (sectionId === "orders-excel" && isUserLite()) return false;
   if (!isUserLite()) return true;
-  return (
-    sectionId !== "balance" &&
-    sectionId !== "settings" &&
-    sectionId !== "calculations"
-  );
+  return sectionId !== "balance" && sectionId !== "calculations";
 }
 
 export function isSectionHiddenFromNav(sectionId) {
@@ -88,17 +83,12 @@ export function isSectionHiddenFromNav(sectionId) {
   if (isUserShop()) {
     return (
       sectionId === "balance" ||
-      sectionId === "settings" ||
       sectionId === "statistics" ||
       sectionId === "calculations"
     );
   }
-  if ((sectionId === "settings" || sectionId === "statistics") && !isAdmin()) return true;
+  if (sectionId === "statistics" && !isAdmin()) return true;
   if (sectionId === "orders-excel" && isUserLite()) return true;
   if (!isUserLite()) return false;
-  return (
-    sectionId === "balance" ||
-    sectionId === "settings" ||
-    sectionId === "calculations"
-  );
+  return sectionId === "balance" || sectionId === "calculations";
 }

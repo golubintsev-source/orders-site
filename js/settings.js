@@ -226,3 +226,14 @@ export function getDefaultInstallerRatePerM2() {
 export function getDriverName() {
   return normalizeDriverName(state.driverName);
 }
+
+/** Блоки настроек кроме уведомлений — только для админов. */
+export function applySettingsAdminBlocksVisibility() {
+  const showAdmin = isAdmin();
+  document.querySelectorAll(".settings-admin-only").forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    // loginLinksCard управляется отдельно в login-links.js
+    if (el.id === "loginLinksCard") return;
+    el.hidden = !showAdmin;
+  });
+}
