@@ -2113,14 +2113,15 @@ function formatRouteSheetMlTitleDate(isoYmd) {
 }
 
 /**
- * Две строки над таблицей Excel «Доставка»: заголовок с датой МЛ и ФИО водителя.
+ * Две строки над таблицей Excel «Доставка»: заголовок с датой МЛ и «Водитель:» + ФИО.
  * @returns {string[][]}
  */
 function buildRouteSheetDeliveryExcelPreamble() {
   const { mlDateKey, driverName } = getRouteSheetMlMetaFromDom();
   const datePart = formatRouteSheetMlTitleDate(mlDateKey);
   const title = datePart ? `Маршрутный лист на ${datePart}` : "Маршрутный лист";
-  return [[title], [driverName]];
+  const driverLine = driverName ? `Водитель: ${driverName}` : "Водитель:";
+  return [[title], [driverLine]];
 }
 
 function applyAutoColumnWidths(ws, aoa) {
