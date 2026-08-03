@@ -82,10 +82,13 @@ function truncate(text, max) {
 }
 
 function notificationBodyFromMessage(record) {
+  const hasPhoto = Boolean(record.attachment_storage_path);
   const raw = String(record.body || "")
     .replace(/\[\[order:\d+\]\]/g, "заказ")
     .replace(/\s+/g, " ")
     .trim();
+  if (hasPhoto && raw) return truncate(`Фото · ${raw}`, 120);
+  if (hasPhoto) return "Фото";
   return truncate(raw, 120);
 }
 
