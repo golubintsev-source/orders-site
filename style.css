@@ -6234,6 +6234,7 @@ th {
   background: #fff;
   box-shadow: 0 1px 1px rgba(15, 23, 42, 0.06);
   -webkit-touch-callout: none;
+  -webkit-user-select: none;
   user-select: none;
   touch-action: manipulation;
 }
@@ -6397,7 +6398,9 @@ th {
   line-height: 1.4;
   color: #111827;
   word-break: break-word;
-  user-select: text;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .message-item-attachment {
