@@ -6721,13 +6721,14 @@ th {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  /* Только safe-area снизу — без лишних +10px пустой полосы под полем. */
+  padding: 10px 12px env(safe-area-inset-bottom, 0px);
   border-top: 1px solid #dbe3ec;
   background: rgba(255, 255, 255, 0.96);
 }
 
 html.keyboard-open .messages-composer {
-  padding-bottom: 10px;
+  padding-bottom: 0;
 }
 
 .messages-composer-tools {
