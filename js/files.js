@@ -35,10 +35,95 @@ function applyPendingToAttachmentsInput() {
   attachmentsInput.files = dt.files;
 }
 
-function isCroppableImageFile(file) {
+export function isCroppableImageFile(file) {
   if (!file?.type?.startsWith("image/")) return false;
   if (file.type === "image/svg+xml" || file.type === "image/gif") return false;
   return true;
+}
+
+/**
+ * Загрузить библиотеки обрезки и открыть модалку (как при выборе фото к заявке).
+ * @returns {Promise<File | null>} null — отмена
+ */
+export async function cropImageAttachment(file) {
+  if (!isCroppableImageFile(file)) return file;
+  try {
+    await ensureCropperLibs();
+  } catch (e) {
+    console.warn("Библиотеки обрезки фото:", e);
+  }
+  try {
+    return await openCropModalForAttachment(file);
+  } catch (e) {
+    console.warn("Обрезка фото:", e);
+    return file;
+  }
+}
+
+/**
+ * Сжатие + миниатюра + загрузка фото в bucket order-files (путь …/messages/…).
+ * Правила сжатия — те же, что для файлов заявки.
+ * @returns {Promise<{ storagePath: string, thumbnailPath: string | null, mimeType: string, fileName: string, fileSize: number }>}
+ */
+export async function uploadChatPhoto(file) {
+  if (!state.currentUser?.id) {
+    throw new Error("Нет авторизации для загрузки фото");
+  }
+  if (!file) {
+    throw new Error("Нет файла для загрузки");
+  }
+
+  const fileToUpload = await compressImageForWebIfNeeded(file);
+  const rawName = (fileToUpload.name || file.name || "").trim() || "photo.jpg";
+  const safeName = rawName.replace(/[^\w.\-]+/g, "_").replace(/^\.+$/, "") || "photo.jpg";
+  const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const filePath = `${state.currentUser.id}/messages/${stamp}_${safeName}`;
+
+  const uploadBody = await blobBodyForStorageUpload(fileToUpload);
+  const { error: uploadError } = await supabaseClient.storage
+    .from("order-files")
+    .upload(filePath, uploadBody, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: fileToUpload.type || "application/octet-stream",
+    });
+
+  if (uploadError) {
+    const hint = uploadError.message ? ` (${uploadError.message})` : "";
+    throw new Error(`Ошибка загрузки фото${hint}`);
+  }
+
+  let thumbnailStoragePath = null;
+  const isRasterImage =
+    fileToUpload.type?.startsWith("image/") &&
+    fileToUpload.type !== "image/svg+xml" &&
+    fileToUpload.type !== "image/gif";
+
+  if (isRasterImage) {
+    const thumbBlob = await buildThumbnailBlob(fileToUpload);
+    if (thumbBlob && thumbBlob.size > 0) {
+      const thumbExt = thumbBlob.type === "image/jpeg" ? "jpg" : "webp";
+      thumbnailStoragePath = `${state.currentUser.id}/messages/${stamp}_thumb.${thumbExt}`;
+      const thumbUploadBody = await blobBodyForStorageUpload(thumbBlob);
+      const { error: thumbErr } = await supabaseClient.storage.from("order-files").upload(thumbnailStoragePath, thumbUploadBody, {
+        cacheControl: "86400",
+        upsert: false,
+        contentType: thumbBlob.type || "image/webp",
+      });
+      if (thumbErr) {
+        console.warn("Миниатюра сообщения не загружена:", thumbErr);
+        thumbnailStoragePath = null;
+      }
+    }
+  }
+
+  return {
+    storagePath: filePath,
+    thumbnailPath: thumbnailStoragePath,
+    mimeType: fileToUpload.type || "image/jpeg",
+    fileName: file.name || fileToUpload.name || safeName,
+    fileSize: fileToUpload.size ?? 0,
+  };
 }
 
 /**
@@ -89,7 +174,7 @@ function createOrientedImageObjectUrl(file) {
  * Модалка Cropper.js: обрезка фото перед добавлением в список (в т.ч. после «Снять фото»).
  * @returns {Promise<File | null>} null — отмена; File — результат (JPEG после обрезки или исходный)
  */
-function openCropModalForAttachment(file) {
+export function openCropModalForAttachment(file) {
   return new Promise((resolve) => {
     if (typeof window.Cropper === "undefined") {
       resolve(file);
@@ -519,7 +604,7 @@ const THUMB_MAX_LONG_EDGE = 280;
 /**
  * Миниатюра для списков (редактирование, модалка). Только растр; SVG/GIF — null.
  */
-async function buildThumbnailBlob(imageFile) {
+export async function buildThumbnailBlob(imageFile) {
   if (!imageFile?.type?.startsWith("image/")) return null;
   if (imageFile.type === "image/svg+xml" || imageFile.type === "image/gif") return null;
 
@@ -593,7 +678,7 @@ const COMPRESS_INITIAL_MAX_EDGE = 1600;
  * Сжимает крупные растровые фото под веб (WebP или JPEG), цель сильного уменьшения (~×20 от исходного для тяжёлых фото).
  * GIF/SVG не трогаем; при ошибке декодирования — исходный файл.
  */
-async function compressImageForWebIfNeeded(file) {
+export async function compressImageForWebIfNeeded(file) {
   if (!file?.type?.startsWith("image/")) return file;
   if (file.type === "image/svg+xml" || file.type === "image/gif") return file;
 
@@ -660,7 +745,7 @@ async function compressImageForWebIfNeeded(file) {
  * Safari/iOS: supabase-js отдаёт тело запроса как ReadableStream; WebKit отвечает
  * «ReadableStream uploading is not supported». Собираем обычный Blob из буфера.
  */
-async function blobBodyForStorageUpload(blob) {
+export async function blobBodyForStorageUpload(blob) {
   const buf = await blob.arrayBuffer();
   return new Blob([buf], { type: blob.type || "application/octet-stream" });
 }

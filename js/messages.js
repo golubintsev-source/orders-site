@@ -4,6 +4,7 @@ import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
 import { displayNameByEmail } from "./user-names.js";
 import { buildOrderPickerRowHtml, viewOrder } from "./orders.js";
 import { isOrderHiddenForCurrentRole } from "./roles.js";
+import { cropImageAttachment, getSignedFileUrl, uploadChatPhoto } from "./files.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 const SUGGEST_DEBOUNCE_MS = 120;
@@ -12,6 +13,8 @@ const FEED_POLL_MS = 15_000;
 const CHAT_LIST_POLL_MS = 20_000;
 /** Префикс peer id для группового чата. */
 const GROUP_PEER_PREFIX = "group:";
+const ATTACHMENT_SELECT_COLS =
+  "attachment_storage_path, attachment_thumbnail_path, attachment_mime_type, attachment_file_name, attachment_file_size";
 
 let usersCache = null;
 let usersCachePromise = null;
@@ -33,14 +36,24 @@ let activePicker = null;
 let deliveredAtSupported = null;
 /** null = unknown, true/false after first probe */
 let groupChatsSupported = null;
+/** null = unknown, true/false after first probe */
+let attachmentColumnsSupported = null;
+/** @type {{ file: File, previewUrl: string } | null} */
+let pendingChatPhoto = null;
 
 const MESSAGE_SELECT_WITH_DELIVERED =
   "id, sender_id, recipient_id, sender_email, recipient_email, body, created_at, read_at, delivered_at";
 const MESSAGE_SELECT_BASIC =
   "id, sender_id, recipient_id, sender_email, recipient_email, body, created_at, read_at";
 
+function withAttachmentColumns(base) {
+  if (attachmentColumnsSupported === false) return base;
+  return `${base}, ${ATTACHMENT_SELECT_COLS}`;
+}
+
 function messageSelectColumns() {
-  return deliveredAtSupported === false ? MESSAGE_SELECT_BASIC : MESSAGE_SELECT_WITH_DELIVERED;
+  const base = deliveredAtSupported === false ? MESSAGE_SELECT_BASIC : MESSAGE_SELECT_WITH_DELIVERED;
+  return withAttachmentColumns(base);
 }
 
 function noteDeliveredAtSupport(error) {
@@ -54,6 +67,40 @@ function noteDeliveredAtSupport(error) {
     return true;
   }
   return false;
+}
+
+function noteAttachmentSupport(error) {
+  if (!error) {
+    attachmentColumnsSupported = true;
+    return false;
+  }
+  const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""}`.toLowerCase();
+  if (
+    msg.includes("attachment_storage_path") ||
+    msg.includes("attachment_thumbnail_path") ||
+    msg.includes("attachment_mime_type") ||
+    msg.includes("attachment_file_name") ||
+    msg.includes("attachment_file_size")
+  ) {
+    attachmentColumnsSupported = false;
+    return true;
+  }
+  return false;
+}
+
+function messageHasAttachment(row) {
+  return Boolean(row?.attachment_storage_path);
+}
+
+function attachmentFieldsFromUpload(uploaded) {
+  if (!uploaded) return {};
+  return {
+    attachment_storage_path: uploaded.storagePath,
+    attachment_thumbnail_path: uploaded.thumbnailPath,
+    attachment_mime_type: uploaded.mimeType,
+    attachment_file_name: uploaded.fileName,
+    attachment_file_size: uploaded.fileSize,
+  };
 }
 
 function escapeHtml(s) {
@@ -163,12 +210,18 @@ function formatChatListTime(iso) {
   return `${d.getDate()} ${CHAT_LIST_MONTHS_GENITIVE[d.getMonth()]}`;
 }
 
-function previewMessageBody(body, recipientEmail) {
+function previewMessageBody(body, recipientEmail, row = null) {
+  if (messageHasAttachment(row) && !String(body || "").trim()) {
+    return "Фото";
+  }
   const stripped = stripRecipientMentionFromBody(body, recipientEmail);
-  return String(stripped || "")
+  const text = String(stripped || "")
     .replace(/\[\[order:(\d+)\]\]/g, (_, id) => `#${id}`)
     .replace(/\s+/g, " ")
     .trim();
+  if (messageHasAttachment(row) && text) return `Фото · ${text}`;
+  if (messageHasAttachment(row)) return "Фото";
+  return text;
 }
 
 function avatarInitial(name) {
@@ -301,6 +354,17 @@ function applyOutgoingStatusToElement(el, { delivered, read }) {
   ticks.innerHTML = status === "sent" ? TICK_SVG_SINGLE : TICK_SVG_DOUBLE;
 }
 
+function renderMessageAttachmentHtml(row) {
+  if (!messageHasAttachment(row)) return "";
+  const alt = escapeHtml(row.attachment_file_name || "Фото");
+  return `<div class="message-item-attachment" data-storage-path="${escapeHtml(row.attachment_storage_path || "")}" data-thumb-path="${escapeHtml(row.attachment_thumbnail_path || "")}">
+      <div class="message-item-photo-loading" aria-hidden="true">Загрузка…</div>
+      <a class="message-item-photo-link" href="#" target="_blank" rel="noopener noreferrer" title="Открыть полное изображение" hidden>
+        <img class="message-item-photo" alt="${alt}" loading="lazy" decoding="async" />
+      </a>
+    </div>`;
+}
+
 function renderMessageItem(row) {
   const uid = getCurrentUserId();
   const isOut = String(row.sender_id) === String(uid);
@@ -310,6 +374,8 @@ function renderMessageItem(row) {
   const peerLabel = isOut ? "Вы" : peerName;
   const state = messageDeliveryState(row, isOut);
   const bodyForDisplay = stripRecipientMentionFromBody(row.body, row.recipient_email);
+  const bodyHtml = renderMessageBodyHtml(bodyForDisplay);
+  const attachmentHtml = renderMessageAttachmentHtml(row);
   const showTicks = isOut && !isGroupChat();
   const statusAttr = showTicks ? ` data-delivery-status="${state.status}"` : "";
   const timeHtml = `<time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>`;
@@ -322,12 +388,46 @@ function renderMessageItem(row) {
     : `<header class="message-item-header message-item-header--compact">
         <span class="message-item-meta">${metaTrailing}</span>
       </header>`;
+  const textBlock = bodyHtml
+    ? `<div class="message-item-body message-item-body-text">${bodyHtml}</div>`
+    : "";
   return `
     <article class="${messageItemClass(row)}" data-message-id="${row.id}"${statusAttr}>
       ${headerHtml}
-      <div class="message-item-body">${renderMessageBodyHtml(bodyForDisplay)}</div>
+      ${attachmentHtml}
+      ${textBlock}
     </article>
   `;
+}
+
+async function hydrateMessageAttachments(root = document.getElementById("messagesFeed")) {
+  if (!root) return;
+  const nodes = [...root.querySelectorAll(".message-item-attachment[data-storage-path]")];
+  await Promise.all(
+    nodes.map(async (el) => {
+      if (el.dataset.hydrated === "1") return;
+      const storagePath = el.getAttribute("data-storage-path") || "";
+      const thumbPath = el.getAttribute("data-thumb-path") || "";
+      if (!storagePath) return;
+      const [fullUrl, thumbUrl] = await Promise.all([
+        getSignedFileUrl(storagePath),
+        thumbPath ? getSignedFileUrl(thumbPath) : Promise.resolve(null),
+      ]);
+      const previewUrl = thumbUrl || fullUrl;
+      const loading = el.querySelector(".message-item-photo-loading");
+      const link = el.querySelector(".message-item-photo-link");
+      const img = el.querySelector(".message-item-photo");
+      if (!previewUrl || !link || !img) {
+        if (loading) loading.textContent = "Фото недоступно";
+        return;
+      }
+      img.src = previewUrl;
+      link.href = fullUrl || previewUrl;
+      link.hidden = false;
+      if (loading) loading.remove();
+      el.dataset.hydrated = "1";
+    })
+  );
 }
 
 async function fetchAllUserMessages() {
@@ -340,14 +440,23 @@ async function fetchAllUserMessages() {
     .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
     .order("created_at", { ascending: true });
 
+  if (error && noteAttachmentSupport(error)) {
+    ({ data, error } = await supabaseClient
+      .from("user_messages")
+      .select(messageSelectColumns())
+      .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
+      .order("created_at", { ascending: true }));
+  }
+
   if (error && noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
     ({ data, error } = await supabaseClient
       .from("user_messages")
-      .select(MESSAGE_SELECT_BASIC)
+      .select(messageSelectColumns())
       .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
       .order("created_at", { ascending: true }));
   } else if (!error) {
     deliveredAtSupported = deliveredAtSupported !== false;
+    if (attachmentColumnsSupported !== false) attachmentColumnsSupported = true;
   }
 
   return { rows: data || [], error };
@@ -386,11 +495,22 @@ async function fetchMyGroupChats() {
 async function fetchGroupMessages(chatId) {
   if (!chatId || groupChatsSupported === false) return { rows: [], error: null };
 
-  const { data, error } = await supabaseClient
+  const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
+  let select = withAttachmentColumns(selectBase);
+  let { data, error } = await supabaseClient
     .from("group_messages")
-    .select("id, chat_id, sender_id, sender_email, body, created_at")
+    .select(select)
     .eq("chat_id", chatId)
     .order("created_at", { ascending: true });
+
+  if (error && noteAttachmentSupport(error)) {
+    select = withAttachmentColumns(selectBase);
+    ({ data, error } = await supabaseClient
+      .from("group_messages")
+      .select(select)
+      .eq("chat_id", chatId)
+      .order("created_at", { ascending: true }));
+  }
 
   if (error) {
     if (noteGroupChatsSupport(error)) return { rows: [], error: null };
@@ -398,17 +518,29 @@ async function fetchGroupMessages(chatId) {
   }
 
   groupChatsSupported = true;
+  if (attachmentColumnsSupported !== false) attachmentColumnsSupported = true;
   return { rows: data || [], error: null };
 }
 
 async function fetchLastGroupMessagesByChat(chatIds) {
   if (!chatIds?.length || groupChatsSupported === false) return new Map();
 
-  const { data, error } = await supabaseClient
+  const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
+  let select = withAttachmentColumns(selectBase);
+  let { data, error } = await supabaseClient
     .from("group_messages")
-    .select("id, chat_id, sender_id, sender_email, body, created_at")
+    .select(select)
     .in("chat_id", chatIds)
     .order("created_at", { ascending: false });
+
+  if (error && noteAttachmentSupport(error)) {
+    select = withAttachmentColumns(selectBase);
+    ({ data, error } = await supabaseClient
+      .from("group_messages")
+      .select(select)
+      .in("chat_id", chatIds)
+      .order("created_at", { ascending: false }));
+  }
 
   if (error) {
     if (noteGroupChatsSupport(error)) return new Map();
@@ -513,7 +645,7 @@ function renderChatListItem(entry) {
   const uid = getCurrentUserId();
   const last = entry.last;
   const preview = last
-    ? previewMessageBody(last.body, last.recipient_email)
+    ? previewMessageBody(last.body, last.recipient_email, last)
     : "Нет сообщений";
   const time = last ? formatChatListTime(last.created_at) : "";
   const ticks = entry.kind === "group" ? "" : renderChatListTicks(last, uid);
@@ -600,6 +732,8 @@ function syncComposerForActivePeer() {
   const userPickBtn = document.getElementById("messagesPickUserBtn");
   const input = document.getElementById("messagesComposerInput");
   composerRecipients.clear();
+  clearPendingChatPhoto();
+  closeAttachPhotoMenu();
 
   if (isPeerChat()) {
     const users = usersCache || [];
@@ -726,6 +860,7 @@ export async function loadMessages() {
     : `<p class="messages-empty">${emptyText}</p>`;
 
   feed.scrollTop = feed.scrollHeight;
+  void hydrateMessageAttachments(feed);
 
   if (!isGroupChat()) {
     await markIncomingMessagesRead(rows);
@@ -786,6 +921,7 @@ function appendMessagesToFeed(rows) {
   if (atBottom) {
     feed.scrollTop = feed.scrollHeight;
   }
+  void hydrateMessageAttachments(feed);
 }
 
 async function syncOutgoingReadStatus() {
@@ -852,15 +988,25 @@ async function pollNewMessages() {
 
   if (isGroupChat()) {
     const groupId = parseGroupId();
+    const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
     let query = supabaseClient
       .from("group_messages")
-      .select("id, chat_id, sender_id, sender_email, body, created_at")
+      .select(withAttachmentColumns(selectBase))
       .eq("chat_id", groupId)
       .order("created_at", { ascending: true });
     if (lastFeedMessageAt) {
       query = query.gte("created_at", lastFeedMessageAt);
     }
-    const { data, error } = await query;
+    let { data, error } = await query;
+    if (error && noteAttachmentSupport(error)) {
+      query = supabaseClient
+        .from("group_messages")
+        .select(withAttachmentColumns(selectBase))
+        .eq("chat_id", groupId)
+        .order("created_at", { ascending: true });
+      if (lastFeedMessageAt) query = query.gte("created_at", lastFeedMessageAt);
+      ({ data, error } = await query);
+    }
     if (error) {
       if (!noteGroupChatsSupport(error)) {
         console.warn("Ошибка проверки новых сообщений группы:", error);
@@ -885,10 +1031,19 @@ async function pollNewMessages() {
   }
 
   let { data, error } = await query;
+  if (error && noteAttachmentSupport(error)) {
+    let retry = supabaseClient
+      .from("user_messages")
+      .select(messageSelectColumns())
+      .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
+      .order("created_at", { ascending: true });
+    if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
+    ({ data, error } = await retry);
+  }
   if (error && noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
     let retry = supabaseClient
       .from("user_messages")
-      .select(MESSAGE_SELECT_BASIC)
+      .select(messageSelectColumns())
       .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
       .order("created_at", { ascending: true });
     if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
@@ -1365,21 +1520,137 @@ function openOrderPicker(input) {
   input.focus();
 }
 
+function clearPendingChatPhoto() {
+  if (pendingChatPhoto?.previewUrl) {
+    try {
+      URL.revokeObjectURL(pendingChatPhoto.previewUrl);
+    } catch {
+      /* ignore */
+    }
+  }
+  pendingChatPhoto = null;
+  const wrap = document.getElementById("messagesPendingAttachment");
+  const thumb = document.getElementById("messagesPendingAttachmentThumb");
+  if (thumb) {
+    thumb.removeAttribute("src");
+    thumb.alt = "";
+  }
+  if (wrap) wrap.hidden = true;
+}
+
+function setPendingChatPhoto(file) {
+  clearPendingChatPhoto();
+  if (!file) return;
+  const previewUrl = URL.createObjectURL(file);
+  pendingChatPhoto = { file, previewUrl };
+  const wrap = document.getElementById("messagesPendingAttachment");
+  const thumb = document.getElementById("messagesPendingAttachmentThumb");
+  if (thumb) {
+    thumb.src = previewUrl;
+    thumb.alt = file.name || "Фото";
+  }
+  if (wrap) wrap.hidden = false;
+}
+
+function setAttachPhotoMenuOpen(open) {
+  const menu = document.getElementById("messagesAttachPhotoMenu");
+  const btn = document.getElementById("messagesAttachPhotoBtn");
+  if (menu) menu.hidden = !open;
+  if (btn) {
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    btn.classList.toggle("messages-composer-tool-btn--active", open);
+  }
+}
+
+function closeAttachPhotoMenu() {
+  setAttachPhotoMenuOpen(false);
+}
+
+async function handleChatPhotoPicked(fileList) {
+  const file = fileList?.[0];
+  closeAttachPhotoMenu();
+  if (!file) return;
+
+  const msg = document.getElementById("messagesPageMessage");
+  if (!file.type?.startsWith("image/")) {
+    if (msg) {
+      msg.textContent = "Можно прикрепить только изображение.";
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+
+  const cropped = await cropImageAttachment(file);
+  if (cropped === null) return;
+  setPendingChatPhoto(cropped);
+  if (msg) {
+    msg.textContent = "";
+    msg.classList.remove("messages-page-message--error");
+  }
+}
+
 async function sendMessage() {
   const input = document.getElementById("messagesComposerInput");
   const msg = document.getElementById("messagesPageMessage");
   const sendBtn = document.getElementById("messagesSendBtn");
+  const attachBtn = document.getElementById("messagesAttachPhotoBtn");
   if (!input) return;
 
   const body = input.value.trim();
-  if (!body) return;
+  const photoFile = pendingChatPhoto?.file || null;
+  if (!body && !photoFile) return;
 
   const uid = getCurrentUserId();
   if (!uid) return;
 
+  if (photoFile && attachmentColumnsSupported === false) {
+    if (msg) {
+      msg.textContent =
+        "Фото в чате не настроены. Выполните supabase_message_attachments.sql в Supabase.";
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+
+  if (sendBtn) sendBtn.disabled = true;
+  if (attachBtn) attachBtn.disabled = true;
+  if (msg) {
+    msg.textContent = "";
+    msg.classList.remove("messages-page-message--error");
+  }
+
+  let uploaded = null;
+  try {
+    if (photoFile) {
+      uploaded = await uploadChatPhoto(photoFile);
+      attachmentColumnsSupported = true;
+    }
+  } catch (e) {
+    console.error("Ошибка загрузки фото сообщения:", e);
+    if (sendBtn) sendBtn.disabled = false;
+    if (attachBtn) attachBtn.disabled = false;
+    if (msg) {
+      msg.textContent = e?.message || "Не удалось загрузить фото.";
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+
+  const attachmentPayload = attachmentFieldsFromUpload(uploaded);
+
+  const cleanupUploadedPhoto = async () => {
+    if (!uploaded?.storagePath) return;
+    const paths = [uploaded.storagePath];
+    if (uploaded.thumbnailPath) paths.push(uploaded.thumbnailPath);
+    await supabaseClient.storage.from("order-files").remove(paths).catch(() => {});
+  };
+
   if (isGroupChat()) {
     const groupId = parseGroupId();
     if (!groupId) {
+      await cleanupUploadedPhoto();
+      if (sendBtn) sendBtn.disabled = false;
+      if (attachBtn) attachBtn.disabled = false;
       if (msg) {
         msg.textContent = "Не удалось определить групповой чат.";
         msg.classList.add("messages-page-message--error");
@@ -1387,23 +1658,28 @@ async function sendMessage() {
       return;
     }
 
-    if (sendBtn) sendBtn.disabled = true;
-    if (msg) {
-      msg.textContent = "";
-      msg.classList.remove("messages-page-message--error");
-    }
-
     const { error } = await supabaseClient.from("group_messages").insert({
       chat_id: groupId,
       sender_id: uid,
       sender_email: getCurrentUserEmail(),
       body,
+      ...attachmentPayload,
     });
 
     if (sendBtn) sendBtn.disabled = false;
+    if (attachBtn) attachBtn.disabled = false;
 
     if (error) {
       console.error("Ошибка отправки сообщения в группу:", error);
+      await cleanupUploadedPhoto();
+      if (noteAttachmentSupport(error)) {
+        if (msg) {
+          msg.textContent =
+            "Фото в чате не настроены. Выполните supabase_message_attachments.sql в Supabase.";
+          msg.classList.add("messages-page-message--error");
+        }
+        return;
+      }
       if (msg) {
         msg.textContent = noteGroupChatsSupport(error)
           ? "Групповые чаты не настроены. Выполните supabase_group_chats.sql в Supabase."
@@ -1414,6 +1690,7 @@ async function sendMessage() {
     }
 
     input.value = "";
+    clearPendingChatPhoto();
     hideSuggestions();
     await loadMessages();
     return;
@@ -1424,6 +1701,9 @@ async function sendMessage() {
   if (isPeerChat()) {
     const peer = users.find((u) => String(u.id) === String(activePeerId));
     if (!peer) {
+      await cleanupUploadedPhoto();
+      if (sendBtn) sendBtn.disabled = false;
+      if (attachBtn) attachBtn.disabled = false;
       if (msg) {
         msg.textContent = "Не удалось определить получателя.";
         msg.classList.add("messages-page-message--error");
@@ -1438,6 +1718,9 @@ async function sendMessage() {
 
   const recipientList = [...composerRecipients.values()].filter((recipient) => recipient.id !== uid);
   if (!recipientList.length) {
+    await cleanupUploadedPhoto();
+    if (sendBtn) sendBtn.disabled = false;
+    if (attachBtn) attachBtn.disabled = false;
     if (msg) {
       msg.textContent = isPeerChat()
         ? "Не удалось определить получателя."
@@ -1447,12 +1730,6 @@ async function sendMessage() {
     return;
   }
 
-  if (sendBtn) sendBtn.disabled = true;
-  if (msg) {
-    msg.textContent = "";
-    msg.classList.remove("messages-page-message--error");
-  }
-
   const senderEmail = getCurrentUserEmail();
   const inserts = recipientList.map((recipient) => ({
     sender_id: uid,
@@ -1460,14 +1737,25 @@ async function sendMessage() {
     sender_email: senderEmail,
     recipient_email: recipient.email,
     body,
+    ...attachmentPayload,
   }));
 
   const { error } = await supabaseClient.from("user_messages").insert(inserts);
 
   if (sendBtn) sendBtn.disabled = false;
+  if (attachBtn) attachBtn.disabled = false;
 
   if (error) {
     console.error("Ошибка отправки сообщения:", error);
+    await cleanupUploadedPhoto();
+    if (noteAttachmentSupport(error)) {
+      if (msg) {
+        msg.textContent =
+          "Фото в чате не настроены. Выполните supabase_message_attachments.sql в Supabase.";
+        msg.classList.add("messages-page-message--error");
+      }
+      return;
+    }
     if (msg) {
       msg.textContent = "Не удалось отправить сообщение.";
       msg.classList.add("messages-page-message--error");
@@ -1476,6 +1764,7 @@ async function sendMessage() {
   }
 
   input.value = "";
+  clearPendingChatPhoto();
   if (!isPeerChat()) {
     composerRecipients.clear();
   }
@@ -1688,6 +1977,13 @@ export function initMessagesSection() {
 
   const userPickBtn = document.getElementById("messagesPickUserBtn");
   const orderPickBtn = document.getElementById("messagesPickOrderBtn");
+  const attachPhotoBtn = document.getElementById("messagesAttachPhotoBtn");
+  const attachPhotoMenu = document.getElementById("messagesAttachPhotoMenu");
+  const attachGalleryBtn = document.getElementById("messagesAttachPhotoGalleryBtn");
+  const attachCameraBtn = document.getElementById("messagesAttachPhotoCameraBtn");
+  const galleryInput = document.getElementById("messagesPhotoGalleryInput");
+  const cameraInput = document.getElementById("messagesPhotoCameraInput");
+  const pendingRemoveBtn = document.getElementById("messagesPendingAttachmentRemove");
 
   if (userPickBtn && input) {
     userPickBtn.addEventListener("mousedown", (e) => e.preventDefault());
@@ -1701,6 +1997,59 @@ export function initMessagesSection() {
     orderPickBtn.addEventListener("mousedown", (e) => e.preventDefault());
     orderPickBtn.addEventListener("click", () => openOrderPicker(input));
   }
+
+  if (attachPhotoBtn) {
+    attachPhotoBtn.addEventListener("mousedown", (e) => e.preventDefault());
+    attachPhotoBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const menu = document.getElementById("messagesAttachPhotoMenu");
+      const open = Boolean(menu && menu.hidden);
+      setAttachPhotoMenuOpen(open);
+      if (open) hideSuggestions();
+    });
+  }
+
+  if (attachGalleryBtn && galleryInput) {
+    attachGalleryBtn.addEventListener("click", () => {
+      closeAttachPhotoMenu();
+      galleryInput.value = "";
+      galleryInput.click();
+    });
+  }
+
+  if (attachCameraBtn && cameraInput) {
+    attachCameraBtn.addEventListener("click", () => {
+      closeAttachPhotoMenu();
+      cameraInput.value = "";
+      cameraInput.click();
+    });
+  }
+
+  if (galleryInput) {
+    galleryInput.addEventListener("change", () => {
+      void handleChatPhotoPicked(galleryInput.files);
+      galleryInput.value = "";
+    });
+  }
+
+  if (cameraInput) {
+    cameraInput.addEventListener("change", () => {
+      void handleChatPhotoPicked(cameraInput.files);
+      cameraInput.value = "";
+    });
+  }
+
+  if (pendingRemoveBtn) {
+    pendingRemoveBtn.addEventListener("click", () => {
+      clearPendingChatPhoto();
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".messages-attach-photo-wrap");
+    if (!wrap || wrap.contains(e.target)) return;
+    if (attachPhotoMenu && !attachPhotoMenu.hidden) closeAttachPhotoMenu();
+  });
 
   if (input) {
     let debounceTimer = null;

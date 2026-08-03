@@ -947,6 +947,22 @@
           </header>
           <div id="messagesFeed" class="messages-feed" role="log" aria-live="polite" aria-label="Сообщения"></div>
           <p id="messagesPageMessage" class="messages-page-message"></p>
+          <div id="messagesPendingAttachment" class="messages-pending-attachment" hidden>
+            <img id="messagesPendingAttachmentThumb" class="messages-pending-attachment-thumb" alt="" />
+            <span class="messages-pending-attachment-label">Фото готово к отправке</span>
+            <button
+              type="button"
+              id="messagesPendingAttachmentRemove"
+              class="messages-pending-attachment-remove"
+              title="Убрать фото"
+              aria-label="Убрать фото"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
           <div class="messages-composer">
             <div class="messages-composer-tools" aria-label="Вставка в сообщение">
               <button
@@ -963,6 +979,37 @@
                   <path d="M5 20c0-4 3.5-6 7-6s7 2 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
                 </svg>
               </button>
+              <div class="messages-attach-photo-wrap">
+                <button
+                  type="button"
+                  id="messagesAttachPhotoBtn"
+                  class="messages-composer-tool-btn"
+                  title="Прикрепить фото"
+                  aria-label="Прикрепить фото"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                >
+                  <svg class="messages-composer-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
+                    <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
+                    <path d="M21 16l-5.5-5.5L9 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                  </svg>
+                </button>
+                <div
+                  id="messagesAttachPhotoMenu"
+                  class="messages-attach-photo-menu"
+                  hidden
+                  role="menu"
+                  aria-label="Источник фото"
+                >
+                  <button type="button" id="messagesAttachPhotoGalleryBtn" class="messages-attach-photo-menu-item" role="menuitem">
+                    Выбрать фото
+                  </button>
+                  <button type="button" id="messagesAttachPhotoCameraBtn" class="messages-attach-photo-menu-item" role="menuitem">
+                    Сделать фото
+                  </button>
+                </div>
+              </div>
               <button
                 type="button"
                 id="messagesPickOrderBtn"
@@ -998,6 +1045,8 @@
               </svg>
             </button>
           </div>
+          <input type="file" id="messagesPhotoGalleryInput" accept="image/*" hidden />
+          <input type="file" id="messagesPhotoCameraInput" accept="image/*" capture="environment" hidden />
         </div>
       </div>
     </section>
@@ -1521,6 +1570,6 @@
 
   <!-- Тяжёлые CDN (Excel ~1MB, leaflet, cropper…) — лениво при экспорте/карте/обрезке фото. -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=32"></script>
+  <script type="module" src="./js/main.js?v=33"></script>
 </body>
 </html>
