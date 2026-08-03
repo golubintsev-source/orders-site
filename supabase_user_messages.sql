@@ -17,7 +17,10 @@ CREATE TABLE IF NOT EXISTS public.user_messages (
   body text NOT NULL DEFAULT '',
   created_at timestamptz NOT NULL DEFAULT now(),
   delivered_at timestamptz,
-  read_at timestamptz
+  read_at timestamptz,
+  reply_to_id bigint REFERENCES public.user_messages (id) ON DELETE SET NULL,
+  edited_at timestamptz,
+  deleted_at timestamptz
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_messages_created_at ON public.user_messages (created_at DESC);
@@ -38,11 +41,13 @@ CREATE POLICY "user_messages_insert_own" ON public.user_messages
   FOR INSERT TO authenticated
   WITH CHECK (sender_id = auth.uid());
 
+-- Получатель: read_at / delivered_at; отправитель: правка и мягкое удаление.
 DROP POLICY IF EXISTS "user_messages_update_read" ON public.user_messages;
-CREATE POLICY "user_messages_update_read" ON public.user_messages
+DROP POLICY IF EXISTS "user_messages_update_participants" ON public.user_messages;
+CREATE POLICY "user_messages_update_participants" ON public.user_messages
   FOR UPDATE TO authenticated
-  USING (recipient_id = auth.uid())
-  WITH CHECK (recipient_id = auth.uid());
+  USING (sender_id = auth.uid() OR recipient_id = auth.uid())
+  WITH CHECK (sender_id = auth.uid() OR recipient_id = auth.uid());
 
 -- Чтение email других пользователей для @-списка (если политики profiles ещё нет).
 DROP POLICY IF EXISTS "profiles_select_authenticated" ON public.profiles;

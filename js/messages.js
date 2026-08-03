@@ -43,12 +43,30 @@ let deliveredAtSupported = null;
 let groupChatsSupported = null;
 /** null = unknown, true/false after first probe */
 let attachmentColumnsSupported = null;
+/** null = unknown, true/false after first probe — reply_to_id / edited_at / deleted_at */
+let messageActionsSupported = null;
 /** @type {{ file: File, previewUrl: string } | null} */
 let pendingChatPhoto = null;
 /** Фото из чата, которое пользователь хочет прикрепить к заказу через список заказов. */
 /** @type {{ storagePath: string, thumbnailPath: string, fileName: string, mimeType: string, fileSize: number|null } | null} */
 let pendingAttachPhotoToOrder = null;
+/** @type {Map<string, object>} кэш сообщений текущего диалога (включая удалённые для цитат) */
+let feedMessagesById = new Map();
+/** @type {object | null} сообщение, на которое отвечаем */
+let composerReplyTo = null;
+/** @type {object | null} сообщение, которое редактируем */
+let composerEditing = null;
+/** @type {string | null} id сообщения под меню действий */
+let actionMenuMessageId = null;
+let longPressTimer = null;
+let longPressMessageEl = null;
+let longPressStartX = 0;
+let longPressStartY = 0;
+let longPressTriggered = false;
+const LONG_PRESS_MS = 480;
+const LONG_PRESS_MOVE_PX = 12;
 
+const MESSAGE_ACTION_COLS = "reply_to_id, edited_at, deleted_at";
 const MESSAGE_SELECT_WITH_DELIVERED =
   "id, sender_id, recipient_id, sender_email, recipient_email, body, created_at, read_at, delivered_at";
 const MESSAGE_SELECT_BASIC =
@@ -59,9 +77,14 @@ function withAttachmentColumns(base) {
   return `${base}, ${ATTACHMENT_SELECT_COLS}`;
 }
 
+function withMessageActionColumns(base) {
+  if (messageActionsSupported === false) return base;
+  return `${base}, ${MESSAGE_ACTION_COLS}`;
+}
+
 function messageSelectColumns() {
   const base = deliveredAtSupported === false ? MESSAGE_SELECT_BASIC : MESSAGE_SELECT_WITH_DELIVERED;
-  return withAttachmentColumns(base);
+  return withMessageActionColumns(withAttachmentColumns(base));
 }
 
 function noteDeliveredAtSupport(error) {
@@ -94,6 +117,51 @@ function noteAttachmentSupport(error) {
     return true;
   }
   return false;
+}
+
+function noteMessageActionsSupport(error) {
+  if (!error) {
+    messageActionsSupported = true;
+    return false;
+  }
+  const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""} ${error.code || ""}`.toLowerCase();
+  if (
+    msg.includes("reply_to_id") ||
+    msg.includes("edited_at") ||
+    msg.includes("deleted_at") ||
+    error.code === "PGRST204" ||
+    error.code === "42703"
+  ) {
+    // PGRST204 / 42703 могут относиться и к другим колонкам — проверяем текст.
+    if (
+      msg.includes("reply_to_id") ||
+      msg.includes("edited_at") ||
+      msg.includes("deleted_at")
+    ) {
+      messageActionsSupported = false;
+      return true;
+    }
+  }
+  return false;
+}
+
+function isMessageDeleted(row) {
+  return Boolean(row?.deleted_at);
+}
+
+function rememberFeedMessages(rows) {
+  for (const row of rows || []) {
+    if (row?.id == null) continue;
+    feedMessagesById.set(String(row.id), row);
+  }
+}
+
+function clearFeedMessageCache() {
+  feedMessagesById = new Map();
+}
+
+function getMessageActionsSetupHint() {
+  return "Действия с сообщениями не настроены. Выполните supabase_message_actions.sql в Supabase.";
 }
 
 function messageHasAttachment(row) {
@@ -219,6 +287,7 @@ function formatChatListTime(iso) {
 }
 
 function previewMessageBody(body, recipientEmail, row = null) {
+  if (isMessageDeleted(row)) return "Сообщение удалено";
   if (messageHasAttachment(row) && !String(body || "").trim()) {
     return "Фото";
   }
@@ -390,7 +459,31 @@ function renderMessageAttachmentHtml(row) {
     </div>`;
 }
 
+function renderReplyQuoteHtml(row) {
+  if (!row?.reply_to_id || messageActionsSupported === false) return "";
+  const replyId = String(row.reply_to_id);
+  const target = feedMessagesById.get(replyId);
+  const uid = getCurrentUserId();
+  let authorLabel = "Сообщение";
+  let preview = "Сообщение удалено";
+  if (target && !isMessageDeleted(target)) {
+    const isOwn = String(target.sender_id) === String(uid);
+    const name =
+      displayNameByEmail(target.sender_email) || target.sender_email || "Участник";
+    authorLabel = isOwn ? "Вы" : name;
+    preview =
+      previewMessageBody(target.body, target.recipient_email, target) || "Сообщение";
+  } else if (!target) {
+    preview = "Сообщение недоступно";
+  }
+  return `<button type="button" class="message-item-reply" data-reply-to-id="${escapeHtml(replyId)}" aria-label="Перейти к сообщению">
+      <span class="message-item-reply-author">${escapeHtml(authorLabel)}</span>
+      <span class="message-item-reply-text">${escapeHtml(preview)}</span>
+    </button>`;
+}
+
 function renderMessageItem(row) {
+  if (isMessageDeleted(row)) return "";
   const uid = getCurrentUserId();
   const isOut = String(row.sender_id) === String(uid);
   const peerEmail = isOut ? row.recipient_email : row.sender_email;
@@ -401,10 +494,14 @@ function renderMessageItem(row) {
   const bodyForDisplay = stripRecipientMentionFromBody(row.body, row.recipient_email);
   const bodyHtml = renderMessageBodyHtml(bodyForDisplay);
   const attachmentHtml = renderMessageAttachmentHtml(row);
+  const replyHtml = renderReplyQuoteHtml(row);
   const showTicks = isOut && !isGroupChat();
   const statusAttr = showTicks ? ` data-delivery-status="${state.status}"` : "";
+  const editedLabel = row.edited_at ? `<span class="message-item-edited" title="Изменено">изм.</span>` : "";
   const timeHtml = `<time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>`;
-  const metaTrailing = showTicks ? `${renderOutgoingTicksHtml(state)}${timeHtml}` : timeHtml;
+  const metaTrailing = showTicks
+    ? `${editedLabel}${renderOutgoingTicksHtml(state)}${timeHtml}`
+    : `${editedLabel}${timeHtml}`;
   const headerHtml = showPeer
     ? `<header class="message-item-header">
         <span class="message-item-peer">${escapeHtml(peerLabel)}</span>
@@ -416,9 +513,11 @@ function renderMessageItem(row) {
   const textBlock = bodyHtml
     ? `<div class="message-item-body message-item-body-text">${bodyHtml}</div>`
     : "";
+  const ownAttr = isOut ? ' data-own="1"' : ' data-own="0"';
   return `
-    <article class="${messageItemClass(row)}" data-message-id="${row.id}"${statusAttr}>
+    <article class="${messageItemClass(row)}" data-message-id="${row.id}"${statusAttr}${ownAttr}>
       ${headerHtml}
+      ${replyHtml}
       ${attachmentHtml}
       ${textBlock}
     </article>
@@ -479,6 +578,14 @@ async function fetchAllUserMessages() {
     .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
     .order("created_at", { ascending: true });
 
+  if (error && noteMessageActionsSupport(error)) {
+    ({ data, error } = await supabaseClient
+      .from("user_messages")
+      .select(messageSelectColumns())
+      .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
+      .order("created_at", { ascending: true }));
+  }
+
   if (error && noteAttachmentSupport(error)) {
     ({ data, error } = await supabaseClient
       .from("user_messages")
@@ -496,6 +603,7 @@ async function fetchAllUserMessages() {
   } else if (!error) {
     deliveredAtSupported = deliveredAtSupported !== false;
     if (attachmentColumnsSupported !== false) attachmentColumnsSupported = true;
+    if (messageActionsSupported !== false) messageActionsSupported = true;
   }
 
   return { rows: data || [], error };
@@ -535,15 +643,24 @@ async function fetchGroupMessages(chatId) {
   if (!chatId || groupChatsSupported === false) return { rows: [], error: null };
 
   const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
-  let select = withAttachmentColumns(selectBase);
+  let select = withMessageActionColumns(withAttachmentColumns(selectBase));
   let { data, error } = await supabaseClient
     .from("group_messages")
     .select(select)
     .eq("chat_id", chatId)
     .order("created_at", { ascending: true });
 
+  if (error && noteMessageActionsSupport(error)) {
+    select = withMessageActionColumns(withAttachmentColumns(selectBase));
+    ({ data, error } = await supabaseClient
+      .from("group_messages")
+      .select(select)
+      .eq("chat_id", chatId)
+      .order("created_at", { ascending: true }));
+  }
+
   if (error && noteAttachmentSupport(error)) {
-    select = withAttachmentColumns(selectBase);
+    select = withMessageActionColumns(withAttachmentColumns(selectBase));
     ({ data, error } = await supabaseClient
       .from("group_messages")
       .select(select)
@@ -558,6 +675,7 @@ async function fetchGroupMessages(chatId) {
 
   groupChatsSupported = true;
   if (attachmentColumnsSupported !== false) attachmentColumnsSupported = true;
+  if (messageActionsSupported !== false) messageActionsSupported = true;
   return { rows: data || [], error: null };
 }
 
@@ -565,15 +683,24 @@ async function fetchLastGroupMessagesByChat(chatIds) {
   if (!chatIds?.length || groupChatsSupported === false) return new Map();
 
   const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
-  let select = withAttachmentColumns(selectBase);
+  let select = withMessageActionColumns(withAttachmentColumns(selectBase));
   let { data, error } = await supabaseClient
     .from("group_messages")
     .select(select)
     .in("chat_id", chatIds)
     .order("created_at", { ascending: false });
 
+  if (error && noteMessageActionsSupport(error)) {
+    select = withMessageActionColumns(withAttachmentColumns(selectBase));
+    ({ data, error } = await supabaseClient
+      .from("group_messages")
+      .select(select)
+      .in("chat_id", chatIds)
+      .order("created_at", { ascending: false }));
+  }
+
   if (error && noteAttachmentSupport(error)) {
-    select = withAttachmentColumns(selectBase);
+    select = withMessageActionColumns(withAttachmentColumns(selectBase));
     ({ data, error } = await supabaseClient
       .from("group_messages")
       .select(select)
@@ -589,6 +716,7 @@ async function fetchLastGroupMessagesByChat(chatIds) {
 
   const lastByChat = new Map();
   for (const row of data || []) {
+    if (isMessageDeleted(row)) continue;
     const chatId = String(row.chat_id);
     if (!lastByChat.has(chatId)) {
       lastByChat.set(chatId, row);
@@ -602,6 +730,7 @@ function buildChatListEntries(users, rows, groupChats, lastGroupMessages) {
   const byPeer = new Map();
 
   for (const row of rows) {
+    if (isMessageDeleted(row)) continue;
     const peerId = peerIdFromMessage(row, uid);
     if (!peerId) continue;
     let bucket = byPeer.get(peerId);
@@ -822,6 +951,9 @@ function updateDialogHeader() {
 export function showMessagesChatList() {
   activePeerId = null;
   lastFeedMessageAt = null;
+  clearComposerContext();
+  hideMessageActionMenu();
+  clearFeedMessageCache();
   setMessagesView("list");
   stopMessagesFeedPolling();
   startChatListPolling();
@@ -832,6 +964,9 @@ export async function openMessagesDialog(peerId) {
   if (!peerId) return;
   activePeerId = peerId;
   lastFeedMessageAt = null;
+  clearComposerContext();
+  hideMessageActionMenu();
+  clearFeedMessageCache();
   setMessagesView("dialog");
   stopChatListPolling();
   await loadUsersDirectory();
@@ -888,14 +1023,18 @@ export async function loadMessages() {
   }
 
   lastFeedMessageAt = rows.length ? rows[rows.length - 1].created_at : null;
-  updateLastMessagePeerId(isGroupChat() ? [] : rows);
+  updateLastMessagePeerId(isGroupChat() ? [] : rows.filter((r) => !isMessageDeleted(r)));
 
+  clearFeedMessageCache();
+  rememberFeedMessages(rows);
+
+  const visibleRows = rows.filter((row) => !isMessageDeleted(row));
   const emptyText = isGroupChat()
     ? "Пока нет сообщений в этом групповом чате. Напишите первое."
     : "Пока нет сообщений в этой переписке. Напишите первое.";
 
-  feed.innerHTML = rows.length
-    ? rows.map(renderMessageItem).join("")
+  feed.innerHTML = visibleRows.length
+    ? visibleRows.map(renderMessageItem).join("")
     : `<p class="messages-empty">${emptyText}</p>`;
 
   scrollMessagesFeedToBottom(feed);
@@ -911,7 +1050,7 @@ export async function loadMessages() {
   scrollMessagesFeedToBottom(feed);
 
   if (!isGroupChat()) {
-    await markIncomingMessagesRead(rows);
+    await markIncomingMessagesRead(visibleRows);
   }
   void refreshMessagesUnreadBadge();
 }
@@ -957,8 +1096,12 @@ function appendMessagesToFeed(rows) {
     : rows.filter((row) => messageBelongsToPeer(row, activePeerId, uid));
   if (!scoped.length) return;
 
+  rememberFeedMessages(scoped);
+
   const existingIds = getFeedMessageIds();
-  const newRows = scoped.filter((row) => !existingIds.has(String(row.id)));
+  const newRows = scoped.filter(
+    (row) => !isMessageDeleted(row) && !existingIds.has(String(row.id)),
+  );
   if (!newRows.length) return;
 
   const atBottom = isFeedAtBottom(feed);
@@ -1264,11 +1407,24 @@ export async function refreshMessagesUnreadBadge() {
   // While the app is open, acknowledge delivery without marking as read.
   await acknowledgeIncomingDelivered();
 
-  const { count, error } = await supabaseClient
+  let query = supabaseClient
     .from("user_messages")
     .select("id", { count: "exact", head: true })
     .eq("recipient_id", uid)
     .is("read_at", null);
+  if (messageActionsSupported !== false) {
+    query = query.is("deleted_at", null);
+  }
+
+  let { count, error } = await query;
+
+  if (error && noteMessageActionsSupport(error)) {
+    ({ count, error } = await supabaseClient
+      .from("user_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("recipient_id", uid)
+      .is("read_at", null));
+  }
 
   if (error) {
     console.warn("Не удалось получить число непрочитанных:", error);
@@ -1744,7 +1900,388 @@ async function handleChatPhotoPicked(fileList) {
   }
 }
 
+function hideMessageActionMenu() {
+  const menu = document.getElementById("messagesActionMenu");
+  if (menu) {
+    menu.hidden = true;
+    menu.style.top = "";
+    menu.style.left = "";
+  }
+  actionMenuMessageId = null;
+  document.querySelector(".message-item--menu-open")?.classList.remove("message-item--menu-open");
+}
+
+function showMessageActionMenu(messageEl, clientX, clientY) {
+  const menu = document.getElementById("messagesActionMenu");
+  if (!menu || !messageEl) return;
+
+  const messageId = messageEl.getAttribute("data-message-id");
+  if (!messageId) return;
+
+  const row = feedMessagesById.get(String(messageId));
+  if (!row || isMessageDeleted(row)) return;
+
+  const isOwn = messageEl.getAttribute("data-own") === "1";
+  actionMenuMessageId = String(messageId);
+
+  document.querySelector(".message-item--menu-open")?.classList.remove("message-item--menu-open");
+  messageEl.classList.add("message-item--menu-open");
+
+  const replyBtn = menu.querySelector('[data-action="reply"]');
+  const editBtn = menu.querySelector('[data-action="edit"]');
+  const deleteBtn = menu.querySelector('[data-action="delete"]');
+  if (replyBtn) replyBtn.hidden = false;
+  if (editBtn) editBtn.hidden = !isOwn;
+  if (deleteBtn) deleteBtn.hidden = !isOwn;
+
+  menu.hidden = false;
+
+  const pad = 8;
+  const rect = menu.getBoundingClientRect();
+  let left = clientX - rect.width / 2;
+  let top = clientY - rect.height - 12;
+  left = Math.max(pad, Math.min(left, window.innerWidth - rect.width - pad));
+  if (top < pad) top = clientY + 12;
+  top = Math.max(pad, Math.min(top, window.innerHeight - rect.height - pad));
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
+function syncComposerContextBar() {
+  const bar = document.getElementById("messagesComposerContext");
+  const titleEl = document.getElementById("messagesComposerContextTitle");
+  const previewEl = document.getElementById("messagesComposerContextPreview");
+  const input = document.getElementById("messagesComposerInput");
+  if (!bar || !titleEl || !previewEl) return;
+
+  if (composerEditing) {
+    bar.hidden = false;
+    bar.dataset.mode = "edit";
+    titleEl.textContent = "Изменение";
+    const preview =
+      previewMessageBody(composerEditing.body, composerEditing.recipient_email, composerEditing) ||
+      "Сообщение";
+    previewEl.textContent = preview;
+    if (input) input.placeholder = "Изменить сообщение…";
+    return;
+  }
+
+  if (composerReplyTo) {
+    bar.hidden = false;
+    bar.dataset.mode = "reply";
+    const uid = getCurrentUserId();
+    const isOwn = String(composerReplyTo.sender_id) === String(uid);
+    const name =
+      displayNameByEmail(composerReplyTo.sender_email) ||
+      composerReplyTo.sender_email ||
+      "Участник";
+    titleEl.textContent = isOwn ? "Ответ себе" : `Ответ: ${name}`;
+    const preview =
+      previewMessageBody(composerReplyTo.body, composerReplyTo.recipient_email, composerReplyTo) ||
+      "Сообщение";
+    previewEl.textContent = preview;
+    if (input) input.placeholder = "Написать ответ…";
+    return;
+  }
+
+  bar.hidden = true;
+  delete bar.dataset.mode;
+  if (input) input.placeholder = "Новое сообщение…";
+}
+
+function clearComposerContext() {
+  composerReplyTo = null;
+  composerEditing = null;
+  syncComposerContextBar();
+}
+
+function startReplyToMessage(row) {
+  if (!row || isMessageDeleted(row)) return;
+  if (messageActionsSupported === false) {
+    const msg = document.getElementById("messagesPageMessage");
+    if (msg) {
+      msg.textContent = getMessageActionsSetupHint();
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+  composerEditing = null;
+  composerReplyTo = row;
+  syncComposerContextBar();
+  hideMessageActionMenu();
+  const input = document.getElementById("messagesComposerInput");
+  input?.focus();
+}
+
+function startEditMessage(row) {
+  if (!row || isMessageDeleted(row)) return;
+  const uid = getCurrentUserId();
+  if (String(row.sender_id) !== String(uid)) return;
+  if (messageActionsSupported === false) {
+    const msg = document.getElementById("messagesPageMessage");
+    if (msg) {
+      msg.textContent = getMessageActionsSetupHint();
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+  composerReplyTo = null;
+  composerEditing = row;
+  clearPendingChatPhoto();
+  const input = document.getElementById("messagesComposerInput");
+  if (input) {
+    input.value = String(row.body || "");
+    input.focus();
+    const len = input.value.length;
+    input.setSelectionRange(len, len);
+  }
+  syncComposerContextBar();
+  hideMessageActionMenu();
+}
+
+function replaceMessageElement(row) {
+  const feed = document.getElementById("messagesFeed");
+  if (!feed || !row?.id) return;
+  rememberFeedMessages([row]);
+  const existing = feed.querySelector(`[data-message-id="${row.id}"]`);
+  const html = renderMessageItem(row);
+  if (!html) {
+    existing?.remove();
+    if (!feed.querySelector(".message-item")) {
+      const emptyText = isGroupChat()
+        ? "Пока нет сообщений в этом групповом чате. Напишите первое."
+        : "Пока нет сообщений в этой переписке. Напишите первое.";
+      feed.innerHTML = `<p class="messages-empty">${emptyText}</p>`;
+    }
+    return;
+  }
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html.trim();
+  const next = wrapper.firstElementChild;
+  if (!next) return;
+  if (existing) {
+    existing.replaceWith(next);
+  } else {
+    feed.querySelector(".messages-empty")?.remove();
+    feed.appendChild(next);
+  }
+  void hydrateMessageAttachments(next);
+}
+
+async function deleteOwnMessage(row) {
+  if (!row?.id) return;
+  const uid = getCurrentUserId();
+  if (String(row.sender_id) !== String(uid)) return;
+
+  if (messageActionsSupported === false) {
+    const msg = document.getElementById("messagesPageMessage");
+    if (msg) {
+      msg.textContent = getMessageActionsSetupHint();
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+
+  const table = isGroupChat() ? "group_messages" : "user_messages";
+  const deletedAt = new Date().toISOString();
+  const { error } = await supabaseClient
+    .from(table)
+    .update({ deleted_at: deletedAt })
+    .eq("id", row.id)
+    .eq("sender_id", uid);
+
+  const msg = document.getElementById("messagesPageMessage");
+  if (error) {
+    console.error("Ошибка удаления сообщения:", error);
+    if (noteMessageActionsSupport(error)) {
+      if (msg) {
+        msg.textContent = getMessageActionsSetupHint();
+        msg.classList.add("messages-page-message--error");
+      }
+      return;
+    }
+    if (msg) {
+      msg.textContent = "Не удалось удалить сообщение.";
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+
+  messageActionsSupported = true;
+  const updated = { ...row, deleted_at: deletedAt };
+  rememberFeedMessages([updated]);
+  replaceMessageElement(updated);
+
+  if (composerEditing && String(composerEditing.id) === String(row.id)) {
+    composerEditing = null;
+    const input = document.getElementById("messagesComposerInput");
+    if (input) input.value = "";
+    syncComposerContextBar();
+  }
+  if (composerReplyTo && String(composerReplyTo.id) === String(row.id)) {
+    composerReplyTo = null;
+    syncComposerContextBar();
+  }
+  hideMessageActionMenu();
+}
+
+async function saveEditedMessage() {
+  const input = document.getElementById("messagesComposerInput");
+  const msg = document.getElementById("messagesPageMessage");
+  const sendBtn = document.getElementById("messagesSendBtn");
+  if (!input || !composerEditing) return;
+
+  const body = input.value.trim();
+  if (!body && !messageHasAttachment(composerEditing)) {
+    if (msg) {
+      msg.textContent = "Введите текст сообщения.";
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+
+  const uid = getCurrentUserId();
+  if (!uid) return;
+
+  if (messageActionsSupported === false) {
+    if (msg) {
+      msg.textContent = getMessageActionsSetupHint();
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+
+  if (sendBtn) sendBtn.disabled = true;
+  if (msg) {
+    msg.textContent = "";
+    msg.classList.remove("messages-page-message--error");
+  }
+
+  const editedAt = new Date().toISOString();
+  const table = isGroupChat() ? "group_messages" : "user_messages";
+  const { data, error } = await supabaseClient
+    .from(table)
+    .update({ body, edited_at: editedAt })
+    .eq("id", composerEditing.id)
+    .eq("sender_id", uid)
+    .select(isGroupChat()
+      ? withMessageActionColumns(withAttachmentColumns("id, chat_id, sender_id, sender_email, body, created_at"))
+      : messageSelectColumns())
+    .maybeSingle();
+
+  if (sendBtn) sendBtn.disabled = false;
+
+  if (error) {
+    console.error("Ошибка изменения сообщения:", error);
+    if (noteMessageActionsSupport(error)) {
+      if (msg) {
+        msg.textContent = getMessageActionsSetupHint();
+        msg.classList.add("messages-page-message--error");
+      }
+      return;
+    }
+    if (msg) {
+      msg.textContent = "Не удалось изменить сообщение.";
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+
+  messageActionsSupported = true;
+  const updated = data || { ...composerEditing, body, edited_at: editedAt };
+  replaceMessageElement(updated);
+  composerEditing = null;
+  input.value = "";
+  syncComposerContextBar();
+}
+
+function cancelLongPress() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+  longPressMessageEl = null;
+}
+
+function onFeedPointerDown(e) {
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  if (e.target.closest("a, button, input, textarea, .message-item-photo-link")) return;
+  const item = e.target.closest(".message-item[data-message-id]");
+  if (!item) return;
+
+  cancelLongPress();
+  longPressTriggered = false;
+  longPressMessageEl = item;
+  longPressStartX = e.clientX;
+  longPressStartY = e.clientY;
+
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null;
+    if (!longPressMessageEl) return;
+    longPressTriggered = true;
+    try {
+      longPressMessageEl.releasePointerCapture?.(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    showMessageActionMenu(longPressMessageEl, longPressStartX, longPressStartY);
+    longPressMessageEl = null;
+  }, LONG_PRESS_MS);
+}
+
+function onFeedPointerMove(e) {
+  if (!longPressTimer || !longPressMessageEl) return;
+  const dx = e.clientX - longPressStartX;
+  const dy = e.clientY - longPressStartY;
+  if (dx * dx + dy * dy > LONG_PRESS_MOVE_PX * LONG_PRESS_MOVE_PX) {
+    cancelLongPress();
+  }
+}
+
+function onFeedPointerUp() {
+  cancelLongPress();
+}
+
+function onFeedContextMenu(e) {
+  const item = e.target.closest(".message-item[data-message-id]");
+  if (!item) return;
+  if (e.target.closest("a, button, input, textarea")) return;
+  e.preventDefault();
+  showMessageActionMenu(item, e.clientX, e.clientY);
+}
+
+function highlightMessageInFeed(messageId) {
+  const feed = document.getElementById("messagesFeed");
+  const el = feed?.querySelector(`[data-message-id="${messageId}"]`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("message-item--flash");
+  setTimeout(() => el.classList.remove("message-item--flash"), 1200);
+}
+
+function onMessageActionMenuClick(e) {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  const action = btn.getAttribute("data-action");
+  const row = actionMenuMessageId ? feedMessagesById.get(String(actionMenuMessageId)) : null;
+  hideMessageActionMenu();
+  if (!row) return;
+
+  if (action === "reply") {
+    startReplyToMessage(row);
+  } else if (action === "edit") {
+    startEditMessage(row);
+  } else if (action === "delete") {
+    void deleteOwnMessage(row);
+  }
+}
+
 async function sendMessage() {
+  if (composerEditing) {
+    await saveEditedMessage();
+    return;
+  }
+
   const input = document.getElementById("messagesComposerInput");
   const msg = document.getElementById("messagesPageMessage");
   const sendBtn = document.getElementById("messagesSendBtn");
@@ -1800,6 +2337,22 @@ async function sendMessage() {
     await supabaseClient.storage.from("order-files").remove(paths).catch(() => {});
   };
 
+  const replyPayload =
+    composerReplyTo?.id != null && messageActionsSupported !== false
+      ? { reply_to_id: composerReplyTo.id }
+      : {};
+
+  if (composerReplyTo && messageActionsSupported === false) {
+    await cleanupUploadedPhoto();
+    if (sendBtn) sendBtn.disabled = false;
+    if (attachBtn) attachBtn.disabled = false;
+    if (msg) {
+      msg.textContent = getMessageActionsSetupHint();
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+
   if (isGroupChat()) {
     const groupId = parseGroupId();
     if (!groupId) {
@@ -1819,6 +2372,7 @@ async function sendMessage() {
       sender_email: getCurrentUserEmail(),
       body,
       ...attachmentPayload,
+      ...replyPayload,
     });
 
     if (sendBtn) sendBtn.disabled = false;
@@ -1827,6 +2381,13 @@ async function sendMessage() {
     if (error) {
       console.error("Ошибка отправки сообщения в группу:", error);
       await cleanupUploadedPhoto();
+      if (noteMessageActionsSupport(error) && replyPayload.reply_to_id != null) {
+        if (msg) {
+          msg.textContent = getMessageActionsSetupHint();
+          msg.classList.add("messages-page-message--error");
+        }
+        return;
+      }
       if (noteAttachmentSupport(error)) {
         if (msg) {
           msg.textContent =
@@ -1846,6 +2407,8 @@ async function sendMessage() {
 
     input.value = "";
     clearPendingChatPhoto();
+    composerReplyTo = null;
+    syncComposerContextBar();
     hideSuggestions();
     await loadMessages();
     return;
@@ -1893,6 +2456,7 @@ async function sendMessage() {
     recipient_email: recipient.email,
     body,
     ...attachmentPayload,
+    ...replyPayload,
   }));
 
   const { error } = await supabaseClient.from("user_messages").insert(inserts);
@@ -1903,6 +2467,13 @@ async function sendMessage() {
   if (error) {
     console.error("Ошибка отправки сообщения:", error);
     await cleanupUploadedPhoto();
+    if (noteMessageActionsSupport(error) && replyPayload.reply_to_id != null) {
+      if (msg) {
+        msg.textContent = getMessageActionsSetupHint();
+        msg.classList.add("messages-page-message--error");
+      }
+      return;
+    }
     if (noteAttachmentSupport(error)) {
       if (msg) {
         msg.textContent =
@@ -1920,6 +2491,8 @@ async function sendMessage() {
 
   input.value = "";
   clearPendingChatPhoto();
+  composerReplyTo = null;
+  syncComposerContextBar();
   if (!isPeerChat()) {
     composerRecipients.clear();
   }
@@ -1928,6 +2501,21 @@ async function sendMessage() {
 }
 
 function onFeedClick(e) {
+  if (longPressTriggered) {
+    longPressTriggered = false;
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  const replyQuote = e.target.closest(".message-item-reply[data-reply-to-id]");
+  if (replyQuote) {
+    e.preventDefault();
+    const replyId = replyQuote.getAttribute("data-reply-to-id");
+    if (replyId) highlightMessageInFeed(replyId);
+    return;
+  }
+
   const attachBtn = e.target.closest(".message-item-attach-to-order-btn");
   if (attachBtn) {
     e.preventDefault();
@@ -2139,6 +2727,29 @@ export function initMessagesSection() {
   const msgEl = document.getElementById("messagesPageMessage");
   if (feed) {
     feed.addEventListener("click", onFeedClick);
+    feed.addEventListener("pointerdown", onFeedPointerDown);
+    feed.addEventListener("pointermove", onFeedPointerMove);
+    feed.addEventListener("pointerup", onFeedPointerUp);
+    feed.addEventListener("pointercancel", onFeedPointerUp);
+    feed.addEventListener("contextmenu", onFeedContextMenu);
+  }
+
+  const actionMenu = document.getElementById("messagesActionMenu");
+  if (actionMenu) {
+    actionMenu.addEventListener("click", onMessageActionMenuClick);
+  }
+
+  const contextCloseBtn = document.getElementById("messagesComposerContextClose");
+  if (contextCloseBtn) {
+    contextCloseBtn.addEventListener("click", () => {
+      if (composerEditing) {
+        const inputEl = document.getElementById("messagesComposerInput");
+        if (inputEl) inputEl.value = "";
+      }
+      composerReplyTo = null;
+      composerEditing = null;
+      syncComposerContextBar();
+    });
   }
 
   const userPickBtn = document.getElementById("messagesPickUserBtn");
@@ -2168,6 +2779,7 @@ export function initMessagesSection() {
     attachPhotoBtn.addEventListener("mousedown", (e) => e.preventDefault());
     attachPhotoBtn.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (composerEditing) return;
       const menu = document.getElementById("messagesAttachPhotoMenu");
       const open = Boolean(menu && menu.hidden);
       setAttachPhotoMenuOpen(open);
@@ -2212,6 +2824,11 @@ export function initMessagesSection() {
   }
 
   document.addEventListener("click", (e) => {
+    const menu = document.getElementById("messagesActionMenu");
+    if (menu && !menu.hidden && !menu.contains(e.target) && !e.target.closest(".message-item--menu-open")) {
+      hideMessageActionMenu();
+    }
+
     const wrap = document.querySelector(".messages-attach-photo-wrap");
     if (!wrap || wrap.contains(e.target)) {
       /* keep menu if click is inside wrap; still may close order attach picker below */
@@ -2228,6 +2845,12 @@ export function initMessagesSection() {
       }
     }
   });
+
+  document.addEventListener("scroll", () => {
+    if (document.getElementById("messagesActionMenu") && !document.getElementById("messagesActionMenu").hidden) {
+      hideMessageActionMenu();
+    }
+  }, true);
 
   if (input) {
     let debounceTimer = null;

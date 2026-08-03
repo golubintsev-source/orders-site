@@ -947,6 +947,25 @@
           </header>
           <div id="messagesFeed" class="messages-feed" role="log" aria-live="polite" aria-label="Сообщения"></div>
           <p id="messagesPageMessage" class="messages-page-message"></p>
+          <div id="messagesComposerContext" class="messages-composer-context" hidden>
+            <div class="messages-composer-context-accent" aria-hidden="true"></div>
+            <div class="messages-composer-context-main">
+              <span id="messagesComposerContextTitle" class="messages-composer-context-title"></span>
+              <span id="messagesComposerContextPreview" class="messages-composer-context-preview"></span>
+            </div>
+            <button
+              type="button"
+              id="messagesComposerContextClose"
+              class="messages-composer-context-close"
+              title="Отменить"
+              aria-label="Отменить"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
           <div id="messagesPendingAttachment" class="messages-pending-attachment" hidden>
             <img id="messagesPendingAttachmentThumb" class="messages-pending-attachment-thumb" alt="" />
             <span class="messages-pending-attachment-label">Фото готово к отправке</span>
@@ -962,6 +981,17 @@
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
+          </div>
+          <div
+            id="messagesActionMenu"
+            class="messages-action-menu"
+            hidden
+            role="menu"
+            aria-label="Действия с сообщением"
+          >
+            <button type="button" class="messages-action-menu-item" data-action="reply" role="menuitem">Ответить</button>
+            <button type="button" class="messages-action-menu-item" data-action="edit" role="menuitem">Изменить</button>
+            <button type="button" class="messages-action-menu-item messages-action-menu-item--danger" data-action="delete" role="menuitem">Удалить</button>
           </div>
           <div class="messages-composer">
             <div class="messages-composer-tools" aria-label="Вставка в сообщение">

@@ -31,6 +31,10 @@ orders-site/
 
 Чтобы прикреплять фото в чате, выполни SQL из файла **`supabase_message_attachments.sql`** в **Supabase → SQL Editor**. Фото сохраняются в bucket `order-files` по пути `{userId}/messages/…` с теми же правилами сжатия и миниатюр, что и файлы заявок.
 
+## Supabase: ответ / изменение / удаление сообщений
+
+Чтобы в чате работали долгое нажатие и меню «Ответить / Изменить / Удалить», выполни SQL из файла **`supabase_message_actions.sql`** в **Supabase → SQL Editor**. Добавляются колонки `reply_to_id`, `edited_at`, `deleted_at` и политики обновления для отправителя.
+
 ## Как залить на GitHub
 
 ### 1. Установи Git (если ещё нет)
