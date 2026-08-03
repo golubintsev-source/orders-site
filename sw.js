@@ -98,7 +98,7 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("push", (event) => {
   let data = {
-    title: "Оконная фабрика",
+    title: "ФАБРИКА ОКОН",
     body: "Новое уведомление",
     url: "/",
     tag: "orders-site",
@@ -126,7 +126,7 @@ self.addEventListener("push", (event) => {
       const count = (await getBadgeCount()) + 1;
       await Promise.all([
         setBadgeCount(count),
-        self.registration.showNotification(data.title || "Оконная фабрика", options),
+        self.registration.showNotification(data.title || "ФАБРИКА ОКОН", options),
       ]);
     })(),
   );
