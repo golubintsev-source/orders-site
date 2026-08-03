@@ -4,7 +4,12 @@ import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
 import { displayNameByEmail } from "./user-names.js";
 import { buildOrderPickerRowHtml, viewOrder } from "./orders.js";
 import { isOrderHiddenForCurrentRole } from "./roles.js";
-import { cropImageAttachment, getSignedFileUrl, uploadChatPhoto } from "./files.js";
+import {
+  attachStorageFileToOrder,
+  cropImageAttachment,
+  getSignedFileUrl,
+  uploadChatPhoto,
+} from "./files.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 const SUGGEST_DEBOUNCE_MS = 120;
@@ -40,6 +45,9 @@ let groupChatsSupported = null;
 let attachmentColumnsSupported = null;
 /** @type {{ file: File, previewUrl: string } | null} */
 let pendingChatPhoto = null;
+/** Фото из чата, которое пользователь хочет прикрепить к заказу через список заказов. */
+/** @type {{ storagePath: string, thumbnailPath: string, fileName: string, mimeType: string, fileSize: number|null } | null} */
+let pendingAttachPhotoToOrder = null;
 
 const MESSAGE_SELECT_WITH_DELIVERED =
   "id, sender_id, recipient_id, sender_email, recipient_email, body, created_at, read_at, delivered_at";
@@ -356,12 +364,29 @@ function applyOutgoingStatusToElement(el, { delivered, read }) {
 
 function renderMessageAttachmentHtml(row) {
   if (!messageHasAttachment(row)) return "";
-  const alt = escapeHtml(row.attachment_file_name || "Фото");
-  return `<div class="message-item-attachment" data-storage-path="${escapeHtml(row.attachment_storage_path || "")}" data-thumb-path="${escapeHtml(row.attachment_thumbnail_path || "")}">
+  const fileName = row.attachment_file_name || "Фото";
+  const alt = escapeHtml(fileName);
+  const mime = escapeHtml(row.attachment_mime_type || "");
+  const size =
+    row.attachment_file_size != null && Number.isFinite(Number(row.attachment_file_size))
+      ? String(row.attachment_file_size)
+      : "";
+  return `<div class="message-item-attachment" data-storage-path="${escapeHtml(row.attachment_storage_path || "")}" data-thumb-path="${escapeHtml(row.attachment_thumbnail_path || "")}" data-mime-type="${mime}" data-file-name="${escapeHtml(fileName)}" data-file-size="${escapeHtml(size)}">
       <div class="message-item-photo-loading" aria-hidden="true">Загрузка…</div>
       <a class="message-item-photo-link" href="#" target="_blank" rel="noopener noreferrer" title="Открыть полное изображение" hidden>
         <img class="message-item-photo" alt="${alt}" loading="lazy" decoding="async" />
       </a>
+      <button
+        type="button"
+        class="message-item-attach-to-order-btn"
+        title="Прикрепить к заказу"
+        aria-label="Прикрепить к заказу"
+        aria-haspopup="listbox"
+      >
+        <svg class="message-item-attach-to-order-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
     </div>`;
 }
 
@@ -1317,7 +1342,20 @@ function hideSuggestions() {
     list.classList.remove("messages-suggestions--orders", "messages-suggestions--recipients");
   }
   activePicker = null;
+  pendingAttachPhotoToOrder = null;
   syncPickerButtonStates();
+  syncAttachToOrderButtonStates();
+}
+
+function syncAttachToOrderButtonStates() {
+  const activePath = pendingAttachPhotoToOrder?.storagePath || "";
+  document.querySelectorAll(".message-item-attach-to-order-btn").forEach((btn) => {
+    const wrap = btn.closest(".message-item-attachment");
+    const path = wrap?.getAttribute("data-storage-path") || "";
+    const on = Boolean(activePath && path === activePath && activePicker === "attach-to-order");
+    btn.classList.toggle("message-item-attach-to-order-btn--active", on);
+    btn.setAttribute("aria-expanded", on ? "true" : "false");
+  });
 }
 
 function syncPickerButtonStates() {
@@ -1501,8 +1539,10 @@ function openUserPicker(input) {
     hideSuggestions();
     return;
   }
+  pendingAttachPhotoToOrder = null;
   activePicker = "user";
   syncPickerButtonStates();
+  syncAttachToOrderButtonStates();
   const users = filterUsers("", { limit: 0 });
   showUserRecipientPicker(users);
   input.focus();
@@ -1513,11 +1553,86 @@ function openOrderPicker(input) {
     hideSuggestions();
     return;
   }
+  pendingAttachPhotoToOrder = null;
   activePicker = "order";
   syncPickerButtonStates();
+  syncAttachToOrderButtonStates();
   const orders = filterOrders("", { onlyOpen: true, limit: 0 });
   showOrderSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order));
   input.focus();
+}
+
+function readAttachPhotoMetaFromElement(el) {
+  if (!el) return null;
+  const storagePath = (el.getAttribute("data-storage-path") || "").trim();
+  if (!storagePath) return null;
+  const sizeRaw = el.getAttribute("data-file-size");
+  const fileSize =
+    sizeRaw != null && sizeRaw !== "" && Number.isFinite(Number(sizeRaw)) ? Number(sizeRaw) : null;
+  return {
+    storagePath,
+    thumbnailPath: (el.getAttribute("data-thumb-path") || "").trim(),
+    fileName: (el.getAttribute("data-file-name") || "").trim() || "photo.jpg",
+    mimeType: (el.getAttribute("data-mime-type") || "").trim() || "image/jpeg",
+    fileSize,
+  };
+}
+
+function openAttachPhotoToOrderPicker(meta) {
+  if (
+    activePicker === "attach-to-order" &&
+    pendingAttachPhotoToOrder?.storagePath === meta?.storagePath
+  ) {
+    hideSuggestions();
+    return;
+  }
+  if (!meta?.storagePath) return;
+
+  const orders = filterOrders("", { onlyOpen: true, limit: 0 });
+  if (!orders.length) {
+    hideSuggestions();
+    const msg = document.getElementById("messagesPageMessage");
+    if (msg) {
+      msg.textContent = "Нет открытых заказов для прикрепления";
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+
+  pendingAttachPhotoToOrder = meta;
+  activePicker = "attach-to-order";
+  syncPickerButtonStates();
+  syncAttachToOrderButtonStates();
+  showOrderSuggestions(mapOrderPickerItems(orders), (item) => {
+    void attachChatPhotoToSelectedOrder(item.order, meta);
+  });
+}
+
+async function attachChatPhotoToSelectedOrder(order, meta) {
+  const msg = document.getElementById("messagesPageMessage");
+  const orderId = order?.id;
+  if (!orderId || !meta?.storagePath) return;
+
+  hideSuggestions();
+  if (msg) {
+    msg.textContent = "Прикрепление фото к заказу…";
+    msg.classList.remove("messages-page-message--error");
+  }
+
+  try {
+    await attachStorageFileToOrder(orderId, meta);
+    const chip = formatOrderIdTypeChip(order.id, order.order_type);
+    if (msg) {
+      msg.textContent = `Фото прикреплено к заказу ${chip}`;
+      msg.classList.remove("messages-page-message--error");
+    }
+  } catch (err) {
+    console.error("Ошибка прикрепления фото к заказу:", err);
+    if (msg) {
+      msg.textContent = err?.message || "Не удалось прикрепить фото к заказу";
+      msg.classList.add("messages-page-message--error");
+    }
+  }
 }
 
 function clearPendingChatPhoto() {
@@ -1773,6 +1888,17 @@ async function sendMessage() {
 }
 
 function onFeedClick(e) {
+  const attachBtn = e.target.closest(".message-item-attach-to-order-btn");
+  if (attachBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const wrap = attachBtn.closest(".message-item-attachment");
+    const meta = readAttachPhotoMetaFromElement(wrap);
+    if (!meta) return;
+    openAttachPhotoToOrderPicker(meta);
+    return;
+  }
+
   const link = e.target.closest(".message-order-link");
   if (!link) return;
   e.preventDefault();
@@ -2047,8 +2173,20 @@ export function initMessagesSection() {
 
   document.addEventListener("click", (e) => {
     const wrap = document.querySelector(".messages-attach-photo-wrap");
-    if (!wrap || wrap.contains(e.target)) return;
-    if (attachPhotoMenu && !attachPhotoMenu.hidden) closeAttachPhotoMenu();
+    if (!wrap || wrap.contains(e.target)) {
+      /* keep menu if click is inside wrap; still may close order attach picker below */
+    } else if (attachPhotoMenu && !attachPhotoMenu.hidden) {
+      closeAttachPhotoMenu();
+    }
+
+    if (activePicker === "attach-to-order") {
+      const suggestions = document.getElementById("messagesComposerSuggestions");
+      const onSuggestions = suggestions && !suggestions.hidden && suggestions.contains(e.target);
+      const onAttachBtn = Boolean(e.target.closest(".message-item-attach-to-order-btn"));
+      if (!onSuggestions && !onAttachBtn) {
+        hideSuggestions();
+      }
+    }
   });
 
   if (input) {
