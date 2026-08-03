@@ -5,7 +5,7 @@ import {
   isUserShop,
   canMutateOrders,
 } from "./roles.js";
-import { formatOrderIdTypeChip, formatDateShortRU, formatAmount, tryParseRublesInteger } from "./format.js";
+import { formatOrderIdTypeChip, formatAmount, tryParseRublesInteger } from "./format.js";
 import { isOrderPaid, loadOrders } from "./orders.js";
 import { closeOrderIdActionsMenu, openOrderIdActionsMenu } from "./ui.js";
 import { setMessage } from "./dom.js";
@@ -1934,7 +1934,9 @@ function syncRouteSheetDeliveryAddressTitles() {
 /**
  * @param {object} order
  * @param {string} [kmDisplay] если передано — колонка «км» (таблица «Доставка»); иначе без колонки («Самовывоз»).
- * @param {{ includeShipDate?: boolean, includeRemainder?: boolean, includeAddressGeoBtn?: boolean, routePointNum?: number | null }} [opts] «Дата», «Остаток», адрес как в «Заказах» — только «Доставка».
+ * @param {{ includeShipDate?: boolean, includeRemainder?: boolean, includeAddressGeoBtn?: boolean, routePointNum?: number | null }} [opts]
+ *   Режим «Доставка» (includeShipDate): выбор точки, «Остаток», гео-адрес, пустая «Подпись получателя».
+ *   Колонка «Дата» в таблице и Excel больше не показывается — дата МЛ вынесена над выгрузкой.
  */
 function rowMainHtml(order, kmDisplay, opts = {}) {
   const {
@@ -1953,9 +1955,6 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
     kmDisplay === undefined
       ? ""
       : `<td class="route-sheet-col-km" data-order-id="${order.id ?? ""}"><span class="status-value">${escapeHtml(String(kmDisplay))}</span></td>`;
-  const dateTd = includeShipDate
-    ? `<td class="route-sheet-col-date">${escapeHtml(formatDateShortRU(order.delivery_date))}</td>`
-    : "";
   const remainderShowAmount =
     boolDaNet(order.installation) !== "да" &&
     !isOrderPaid(order) &&
@@ -1982,10 +1981,12 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
   }
   const hiddenExtra = includeShipDate ? ' class="route-sheet-col-delivery-hidden"' : "";
   const selectTd = includeShipDate ? routeSelectCellHtml(order, { routePointNum }) : "";
+  const signatureTd = includeShipDate
+    ? `<td class="route-sheet-col-signature" aria-label="Подпись получателя"></td>`
+    : "";
   return `<tr>
     ${selectTd}
     ${orderIdCellHtml(order)}
-    ${dateTd}
     ${clientTd}
     ${addressTd}
     ${kmTd}
@@ -1996,6 +1997,7 @@ function rowMainHtml(order, kmDisplay, opts = {}) {
     <td${hiddenExtra}>${escapeHtml(boolDaNet(order.installation))}</td>
     <td${hiddenExtra}>${escapeHtml(boolDaNet(order.reveals))}</td>
     <td class="route-sheet-col-phone">${escapeHtml(order.phone ?? "")}</td>
+    ${signatureTd}
   </tr>`;
 }
 

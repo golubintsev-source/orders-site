@@ -3881,9 +3881,10 @@ table {
   white-space: nowrap;
 }
 
-.route-sheet-table th.route-sheet-col-date,
-.route-sheet-table td.route-sheet-col-date {
-  min-width: 4.25rem;
+.route-sheet-table th.route-sheet-col-signature,
+.route-sheet-table td.route-sheet-col-signature {
+  min-width: 8.5rem;
+  width: 8.5rem;
   white-space: nowrap;
 }
 
