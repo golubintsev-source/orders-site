@@ -6425,6 +6425,9 @@ th {
   overflow: hidden;
   line-height: 0;
   background: rgba(15, 23, 42, 0.06);
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .message-item-photo {
@@ -6433,6 +6436,9 @@ th {
   max-height: 280px;
   object-fit: cover;
   vertical-align: middle;
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
 }
 
 .message-item-photo-loading {
@@ -6445,50 +6451,6 @@ th {
   background: rgba(15, 23, 42, 0.06);
   color: #94a3b8;
   font-size: 12px;
-}
-
-.message-item-attach-to-order-btn {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #334155;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-.message-item-attach-to-order-btn:hover,
-.message-item-attach-to-order-btn--active {
-  background: #fff;
-  color: #0f172a;
-  border-color: rgba(15, 23, 42, 0.22);
-}
-
-.message-item-attach-to-order-btn:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 1px;
-}
-
-.message-item-attach-to-order-icon {
-  width: 15px;
-  height: 15px;
-  display: block;
-  pointer-events: none;
-}
-
-.message-item-attachment:has(.message-item-photo-loading) .message-item-attach-to-order-btn {
-  display: none;
 }
 
 .messages-composer-context {

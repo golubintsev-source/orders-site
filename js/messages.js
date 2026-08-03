@@ -58,11 +58,14 @@ let composerReplyTo = null;
 let composerEditing = null;
 /** @type {string | null} id сообщения под меню действий */
 let actionMenuMessageId = null;
+/** true, если меню открыли долгим нажатием / ПКМ по фото */
+let actionMenuFromPhoto = false;
 let longPressTimer = null;
 let longPressMessageEl = null;
 let longPressStartX = 0;
 let longPressStartY = 0;
 let longPressTriggered = false;
+let longPressFromPhoto = false;
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
 
@@ -445,17 +448,6 @@ function renderMessageAttachmentHtml(row) {
       <a class="message-item-photo-link" href="#" target="_blank" rel="noopener noreferrer" title="Открыть полное изображение" hidden>
         <img class="message-item-photo" alt="${alt}" decoding="async" />
       </a>
-      <button
-        type="button"
-        class="message-item-attach-to-order-btn"
-        title="Прикрепить к заказу"
-        aria-label="Прикрепить к заказу"
-        aria-haspopup="listbox"
-      >
-        <svg class="message-item-attach-to-order-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
     </div>`;
 }
 
@@ -1545,18 +1537,6 @@ function hideSuggestions() {
   activePicker = null;
   pendingAttachPhotoToOrder = null;
   syncPickerButtonStates();
-  syncAttachToOrderButtonStates();
-}
-
-function syncAttachToOrderButtonStates() {
-  const activePath = pendingAttachPhotoToOrder?.storagePath || "";
-  document.querySelectorAll(".message-item-attach-to-order-btn").forEach((btn) => {
-    const wrap = btn.closest(".message-item-attachment");
-    const path = wrap?.getAttribute("data-storage-path") || "";
-    const on = Boolean(activePath && path === activePath && activePicker === "attach-to-order");
-    btn.classList.toggle("message-item-attach-to-order-btn--active", on);
-    btn.setAttribute("aria-expanded", on ? "true" : "false");
-  });
 }
 
 function syncPickerButtonStates() {
@@ -1743,7 +1723,6 @@ function openUserPicker(input) {
   pendingAttachPhotoToOrder = null;
   activePicker = "user";
   syncPickerButtonStates();
-  syncAttachToOrderButtonStates();
   const users = filterUsers("", { limit: 0 });
   showUserRecipientPicker(users);
   input.focus();
@@ -1757,24 +1736,21 @@ function openOrderPicker(input) {
   pendingAttachPhotoToOrder = null;
   activePicker = "order";
   syncPickerButtonStates();
-  syncAttachToOrderButtonStates();
   const orders = filterOrders("", { onlyOpen: true, limit: 0 });
   showOrderSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order));
   input.focus();
 }
 
-function readAttachPhotoMetaFromElement(el) {
-  if (!el) return null;
-  const storagePath = (el.getAttribute("data-storage-path") || "").trim();
-  if (!storagePath) return null;
-  const sizeRaw = el.getAttribute("data-file-size");
+function readAttachPhotoMetaFromRow(row) {
+  if (!messageHasAttachment(row)) return null;
+  const sizeRaw = row.attachment_file_size;
   const fileSize =
     sizeRaw != null && sizeRaw !== "" && Number.isFinite(Number(sizeRaw)) ? Number(sizeRaw) : null;
   return {
-    storagePath,
-    thumbnailPath: (el.getAttribute("data-thumb-path") || "").trim(),
-    fileName: (el.getAttribute("data-file-name") || "").trim() || "photo.jpg",
-    mimeType: (el.getAttribute("data-mime-type") || "").trim() || "image/jpeg",
+    storagePath: String(row.attachment_storage_path || "").trim(),
+    thumbnailPath: String(row.attachment_thumbnail_path || "").trim(),
+    fileName: String(row.attachment_file_name || "").trim() || "photo.jpg",
+    mimeType: String(row.attachment_mime_type || "").trim() || "image/jpeg",
     fileSize,
   };
 }
@@ -1803,7 +1779,6 @@ function openAttachPhotoToOrderPicker(meta) {
   pendingAttachPhotoToOrder = meta;
   activePicker = "attach-to-order";
   syncPickerButtonStates();
-  syncAttachToOrderButtonStates();
   showOrderSuggestions(mapOrderPickerItems(orders), (item) => {
     void attachChatPhotoToSelectedOrder(item.order, meta);
   });
@@ -1913,6 +1888,7 @@ function hideMessageActionMenu() {
     menu.style.left = "";
   }
   actionMenuMessageId = null;
+  actionMenuFromPhoto = false;
   document.querySelector(".message-item--menu-open")?.classList.remove("message-item--menu-open");
 }
 
@@ -1923,7 +1899,7 @@ function clearMessageTextSelection() {
   }
 }
 
-function showMessageActionMenu(messageEl, clientX, clientY) {
+function showMessageActionMenu(messageEl, clientX, clientY, { fromPhoto = false } = {}) {
   const menu = document.getElementById("messagesActionMenu");
   if (!menu || !messageEl) return;
 
@@ -1935,6 +1911,7 @@ function showMessageActionMenu(messageEl, clientX, clientY) {
 
   const isOwn = messageEl.getAttribute("data-own") === "1";
   actionMenuMessageId = String(messageId);
+  actionMenuFromPhoto = Boolean(fromPhoto);
 
   clearMessageTextSelection();
   requestAnimationFrame(() => {
@@ -1947,9 +1924,11 @@ function showMessageActionMenu(messageEl, clientX, clientY) {
 
   const replyBtn = menu.querySelector('[data-action="reply"]');
   const editBtn = menu.querySelector('[data-action="edit"]');
+  const attachBtn = menu.querySelector('[data-action="attach-to-order"]');
   const deleteBtn = menu.querySelector('[data-action="delete"]');
   if (replyBtn) replyBtn.hidden = false;
   if (editBtn) editBtn.hidden = !isOwn;
+  if (attachBtn) attachBtn.hidden = !(actionMenuFromPhoto && messageHasAttachment(row));
   if (deleteBtn) deleteBtn.hidden = !isOwn;
 
   menu.hidden = false;
@@ -2223,13 +2202,17 @@ function cancelLongPress() {
 
 function onFeedPointerDown(e) {
   if (e.pointerType === "mouse" && e.button !== 0) return;
-  if (e.target.closest("a, button, input, textarea, .message-item-photo-link")) return;
+  if (e.target.closest("button, input, textarea")) return;
+  if (e.target.closest("a") && !e.target.closest(".message-item-photo-link, .message-item-attachment")) {
+    return;
+  }
   const item = e.target.closest(".message-item[data-message-id]");
   if (!item) return;
 
   cancelLongPress();
   longPressTriggered = false;
   longPressMessageEl = item;
+  longPressFromPhoto = Boolean(e.target.closest(".message-item-attachment"));
   longPressStartX = e.clientX;
   longPressStartY = e.clientY;
 
@@ -2242,7 +2225,9 @@ function onFeedPointerDown(e) {
     } catch {
       /* ignore */
     }
-    showMessageActionMenu(longPressMessageEl, longPressStartX, longPressStartY);
+    showMessageActionMenu(longPressMessageEl, longPressStartX, longPressStartY, {
+      fromPhoto: longPressFromPhoto,
+    });
     longPressMessageEl = null;
   }, LONG_PRESS_MS);
 }
@@ -2263,10 +2248,15 @@ function onFeedPointerUp() {
 function onFeedContextMenu(e) {
   const item = e.target.closest(".message-item[data-message-id]");
   if (!item) return;
-  if (e.target.closest("a, button, input, textarea")) return;
+  if (e.target.closest("button, input, textarea")) return;
+  if (e.target.closest("a") && !e.target.closest(".message-item-photo-link, .message-item-attachment")) {
+    return;
+  }
   e.preventDefault();
   clearMessageTextSelection();
-  showMessageActionMenu(item, e.clientX, e.clientY);
+  showMessageActionMenu(item, e.clientX, e.clientY, {
+    fromPhoto: Boolean(e.target.closest(".message-item-attachment")),
+  });
 }
 
 function onFeedSelectStart(e) {
@@ -2296,6 +2286,9 @@ function onMessageActionMenuClick(e) {
     startReplyToMessage(row);
   } else if (action === "edit") {
     startEditMessage(row);
+  } else if (action === "attach-to-order") {
+    const meta = readAttachPhotoMetaFromRow(row);
+    if (meta) openAttachPhotoToOrderPicker(meta);
   } else if (action === "delete") {
     void deleteOwnMessage(row);
   }
@@ -2538,17 +2531,6 @@ function onFeedClick(e) {
     e.preventDefault();
     const replyId = replyQuote.getAttribute("data-reply-to-id");
     if (replyId) highlightMessageInFeed(replyId);
-    return;
-  }
-
-  const attachBtn = e.target.closest(".message-item-attach-to-order-btn");
-  if (attachBtn) {
-    e.preventDefault();
-    e.stopPropagation();
-    const wrap = attachBtn.closest(".message-item-attachment");
-    const meta = readAttachPhotoMetaFromElement(wrap);
-    if (!meta) return;
-    openAttachPhotoToOrderPicker(meta);
     return;
   }
 
@@ -2865,8 +2847,7 @@ export function initMessagesSection() {
     if (activePicker === "attach-to-order") {
       const suggestions = document.getElementById("messagesComposerSuggestions");
       const onSuggestions = suggestions && !suggestions.hidden && suggestions.contains(e.target);
-      const onAttachBtn = Boolean(e.target.closest(".message-item-attach-to-order-btn"));
-      if (!onSuggestions && !onAttachBtn) {
+      if (!onSuggestions) {
         hideSuggestions();
       }
     }
