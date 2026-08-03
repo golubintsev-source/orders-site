@@ -8,6 +8,25 @@ const EMAIL_DISPLAY_NAMES = {
   "golubintsev26@gmail.com": "Дима",
 };
 
+/** Логотипы по ролям: бухгалтер, производство, продажи, разработчик, менеджер, металл. */
+const EMAIL_AVATAR_LOGOS = {
+  "alenushka191179@gmail.com": "img/avatars/avatar-lena.png",
+  "aver1978aver@gmail.com": "img/avatars/avatar-vova.png",
+  "fabrikaokon2019@mail.ru": "img/avatars/avatar-andrey.png",
+  "lary_7812@mail.ru": "img/avatars/avatar-kristina.png",
+  "golubintsev@gmail.com": "img/avatars/avatar-alexey.png",
+  "golubintsev26@gmail.com": "img/avatars/avatar-dima.png",
+};
+
+const NAME_AVATAR_LOGOS = {
+  Лена: "img/avatars/avatar-lena.png",
+  Вова: "img/avatars/avatar-vova.png",
+  Андрей: "img/avatars/avatar-andrey.png",
+  Кристина: "img/avatars/avatar-kristina.png",
+  Алексей: "img/avatars/avatar-alexey.png",
+  Дима: "img/avatars/avatar-dima.png",
+};
+
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
@@ -18,6 +37,14 @@ export function displayNameByEmail(email) {
   if (!key) return "";
   if (EMAIL_DISPLAY_NAMES[key]) return EMAIL_DISPLAY_NAMES[key];
   return key.split("@")[0] || key;
+}
+
+/** URL логотипа участника по email или отображаемому имени; иначе null. */
+export function avatarLogoUrl({ email, name } = {}) {
+  const byEmail = EMAIL_AVATAR_LOGOS[normalizeEmail(email)];
+  if (byEmail) return byEmail;
+  const byName = NAME_AVATAR_LOGOS[String(name || "").trim()];
+  return byName || null;
 }
 
 /** Короткая подпись автора в комментариях и расчётах. */
