@@ -10,8 +10,8 @@ const SUGGEST_DEBOUNCE_MS = 120;
 const UNREAD_POLL_MS = 60_000;
 const FEED_POLL_MS = 15_000;
 const CHAT_LIST_POLL_MS = 20_000;
-/** Специальный peer id для общего чата (все переписки). */
-const CHAT_PEER_ALL = "all";
+/** Префикс peer id для группового чата. */
+const GROUP_PEER_PREFIX = "group:";
 
 let usersCache = null;
 let usersCachePromise = null;
@@ -22,13 +22,17 @@ let lastFeedMessageAt = null;
 let lastMessagePeerId = null;
 /** @type {"list" | "dialog"} */
 let messagesView = "list";
-/** @type {string | null} null на списке; CHAT_PEER_ALL или uuid в диалоге */
+/** @type {string | null} null на списке; uuid пользователя или group:<uuid> в диалоге */
 let activePeerId = null;
+/** @type {Map<string, { id: string, name: string, memberIds: string[], created_at?: string }>} */
+let groupChatsById = new Map();
 /** @type {Map<string, { id: string, email: string }>} */
 let composerRecipients = new Map();
 let activePicker = null;
 /** null = unknown, true/false after first probe */
 let deliveredAtSupported = null;
+/** null = unknown, true/false after first probe */
+let groupChatsSupported = null;
 
 const MESSAGE_SELECT_WITH_DELIVERED =
   "id, sender_id, recipient_id, sender_email, recipient_email, body, created_at, read_at, delivered_at";
@@ -79,16 +83,25 @@ function updateLastMessagePeerId(rows) {
   lastMessagePeerId = String(last.sender_id) === String(uid) ? last.recipient_id : last.sender_id;
 }
 
-function isGeneralChat() {
-  return activePeerId === CHAT_PEER_ALL;
+function toGroupPeerId(groupId) {
+  return `${GROUP_PEER_PREFIX}${groupId}`;
 }
 
-function isPeerChat() {
-  return Boolean(activePeerId) && activePeerId !== CHAT_PEER_ALL;
+function isGroupChat(peerId = activePeerId) {
+  return Boolean(peerId) && String(peerId).startsWith(GROUP_PEER_PREFIX);
+}
+
+function parseGroupId(peerId = activePeerId) {
+  if (!isGroupChat(peerId)) return null;
+  return String(peerId).slice(GROUP_PEER_PREFIX.length);
+}
+
+function isPeerChat(peerId = activePeerId) {
+  return Boolean(peerId) && !isGroupChat(peerId);
 }
 
 function messageBelongsToPeer(row, peerId, uid) {
-  if (!peerId || peerId === CHAT_PEER_ALL) return true;
+  if (!peerId || isGroupChat(peerId)) return false;
   const me = String(uid);
   const peer = String(peerId);
   const sid = String(row.sender_id);
@@ -98,6 +111,25 @@ function messageBelongsToPeer(row, peerId, uid) {
 
 function peerIdFromMessage(row, uid) {
   return String(row.sender_id) === String(uid) ? String(row.recipient_id) : String(row.sender_id);
+}
+
+function noteGroupChatsSupport(error) {
+  if (!error) {
+    groupChatsSupported = true;
+    return false;
+  }
+  const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""} ${error.code || ""}`.toLowerCase();
+  if (
+    msg.includes("group_chats") ||
+    msg.includes("group_messages") ||
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    error.code === "PGRST204"
+  ) {
+    groupChatsSupported = false;
+    return true;
+  }
+  return false;
 }
 
 /** Время в списке чатов: HH:MM сегодня, иначе число дня месяца. */
@@ -257,14 +289,15 @@ function renderMessageItem(row) {
   const uid = getCurrentUserId();
   const isOut = String(row.sender_id) === String(uid);
   const peerEmail = isOut ? row.recipient_email : row.sender_email;
-  const peerName = displayNameByEmail(peerEmail) || peerEmail || "—";
-  const showPeer = isGeneralChat();
-  const peerLabel = isOut ? peerName : `от ${peerName}`;
+  const peerName = displayNameByEmail(peerEmail || row.sender_email) || peerEmail || row.sender_email || "—";
+  const showPeer = isGroupChat();
+  const peerLabel = isOut ? "Вы" : peerName;
   const state = messageDeliveryState(row, isOut);
   const bodyForDisplay = stripRecipientMentionFromBody(row.body, row.recipient_email);
-  const statusAttr = isOut ? ` data-delivery-status="${state.status}"` : "";
+  const showTicks = isOut && !isGroupChat();
+  const statusAttr = showTicks ? ` data-delivery-status="${state.status}"` : "";
   const timeHtml = `<time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>`;
-  const metaTrailing = isOut ? `${renderOutgoingTicksHtml(state)}${timeHtml}` : timeHtml;
+  const metaTrailing = showTicks ? `${renderOutgoingTicksHtml(state)}${timeHtml}` : timeHtml;
   const headerHtml = showPeer
     ? `<header class="message-item-header">
         <span class="message-item-peer">${escapeHtml(peerLabel)}</span>
@@ -304,7 +337,80 @@ async function fetchAllUserMessages() {
   return { rows: data || [], error };
 }
 
-function buildChatListEntries(users, rows) {
+async function fetchMyGroupChats() {
+  if (groupChatsSupported === false) return { chats: [], error: null };
+
+  const uid = getCurrentUserId();
+  if (!uid) return { chats: [], error: null };
+
+  const { data, error } = await supabaseClient
+    .from("group_chats")
+    .select("id, name, created_by, member_ids, created_at")
+    .contains("member_ids", [uid])
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (noteGroupChatsSupport(error)) return { chats: [], error: null };
+    return { chats: [], error };
+  }
+
+  groupChatsSupported = true;
+  const chats = (data || []).map((row) => ({
+    id: String(row.id),
+    name: String(row.name || "").trim() || "Групповой чат",
+    created_by: row.created_by,
+    memberIds: (row.member_ids || []).map(String),
+    created_at: row.created_at,
+  }));
+
+  groupChatsById = new Map(chats.map((chat) => [chat.id, chat]));
+  return { chats, error: null };
+}
+
+async function fetchGroupMessages(chatId) {
+  if (!chatId || groupChatsSupported === false) return { rows: [], error: null };
+
+  const { data, error } = await supabaseClient
+    .from("group_messages")
+    .select("id, chat_id, sender_id, sender_email, body, created_at")
+    .eq("chat_id", chatId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    if (noteGroupChatsSupport(error)) return { rows: [], error: null };
+    return { rows: [], error };
+  }
+
+  groupChatsSupported = true;
+  return { rows: data || [], error: null };
+}
+
+async function fetchLastGroupMessagesByChat(chatIds) {
+  if (!chatIds?.length || groupChatsSupported === false) return new Map();
+
+  const { data, error } = await supabaseClient
+    .from("group_messages")
+    .select("id, chat_id, sender_id, sender_email, body, created_at")
+    .in("chat_id", chatIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (noteGroupChatsSupport(error)) return new Map();
+    console.warn("Ошибка загрузки сообщений групповых чатов:", error);
+    return new Map();
+  }
+
+  const lastByChat = new Map();
+  for (const row of data || []) {
+    const chatId = String(row.chat_id);
+    if (!lastByChat.has(chatId)) {
+      lastByChat.set(chatId, row);
+    }
+  }
+  return lastByChat;
+}
+
+function buildChatListEntries(users, rows, groupChats, lastGroupMessages) {
   const uid = getCurrentUserId();
   const byPeer = new Map();
 
@@ -339,31 +445,44 @@ function buildChatListEntries(users, rows) {
     };
   });
 
-  userEntries.sort((a, b) => {
+  const groupEntries = (groupChats || []).map((chat) => {
+    const last = lastGroupMessages?.get(chat.id) || null;
+    return {
+      peerId: toGroupPeerId(chat.id),
+      kind: "group",
+      name: chat.name,
+      email: "",
+      count: 0,
+      last: last
+        ? {
+            ...last,
+            recipient_id: null,
+            recipient_email: "",
+            read_at: null,
+            delivered_at: null,
+          }
+        : null,
+      sortAt: last?.created_at || chat.created_at || "",
+    };
+  });
+
+  const entries = [...groupEntries, ...userEntries];
+  entries.sort((a, b) => {
     if (a.sortAt && b.sortAt) return a.sortAt < b.sortAt ? 1 : a.sortAt > b.sortAt ? -1 : 0;
     if (a.sortAt) return -1;
     if (b.sortAt) return 1;
+    if (a.kind !== b.kind) return a.kind === "group" ? -1 : 1;
     return a.name.localeCompare(b.name, "ru");
   });
 
-  const generalLast = rows.length ? rows[rows.length - 1] : null;
-  const general = {
-    peerId: CHAT_PEER_ALL,
-    kind: "general",
-    name: "Общий чат",
-    email: "",
-    count: rows.length,
-    last: generalLast,
-    sortAt: generalLast?.created_at || "",
-  };
-
-  return [general, ...userEntries];
+  return entries;
 }
 
 function renderChatListTicks(last, uid) {
   if (!last) return "";
   const isOut = String(last.sender_id) === String(uid);
   if (!isOut) return "";
+  if (last.recipient_id == null && last.chat_id) return "";
   const state = messageDeliveryState(last, true);
   // В списке чатов: прочитано — две синие, доставлено/отправлено — одна.
   if (state.read) {
@@ -379,11 +498,12 @@ function renderChatListItem(entry) {
     ? previewMessageBody(last.body, last.recipient_email)
     : "Нет сообщений";
   const time = last ? formatChatListTime(last.created_at) : "";
-  const ticks = renderChatListTicks(last, uid);
+  const ticks = entry.kind === "group" ? "" : renderChatListTicks(last, uid);
   const countLabel = entry.count > 0 ? String(entry.count) : "";
-  const hue = avatarHue(entry.peerId === CHAT_PEER_ALL ? "general" : entry.email || entry.peerId);
-  const initial = entry.kind === "general" ? "#" : avatarInitial(entry.name);
+  const hue = avatarHue(entry.kind === "group" ? entry.peerId : entry.email || entry.peerId);
+  const initial = avatarInitial(entry.name);
   const unread =
+    entry.kind !== "group" &&
     last &&
     String(last.recipient_id) === String(uid) &&
     !last.read_at;
@@ -391,7 +511,7 @@ function renderChatListItem(entry) {
   return `
     <button
       type="button"
-      class="messages-chat-item${unread ? " messages-chat-item--unread" : ""}${entry.kind === "general" ? " messages-chat-item--general" : ""}"
+      class="messages-chat-item${unread ? " messages-chat-item--unread" : ""}${entry.kind === "group" ? " messages-chat-item--group" : ""}"
       role="listitem"
       data-peer-id="${escapeHtml(entry.peerId)}"
     >
@@ -426,7 +546,11 @@ export async function loadChatList() {
     msg.classList.remove("messages-page-message--error");
   }
 
-  const [users, { rows, error }] = await Promise.all([loadUsersDirectory(), fetchAllUserMessages()]);
+  const [users, { rows, error }, { chats: groupChats, error: groupError }] = await Promise.all([
+    loadUsersDirectory(),
+    fetchAllUserMessages(),
+    fetchMyGroupChats(),
+  ]);
 
   if (error) {
     console.error("Ошибка загрузки сообщений:", error);
@@ -438,7 +562,12 @@ export async function loadChatList() {
     return;
   }
 
-  const entries = buildChatListEntries(users, rows);
+  if (groupError) {
+    console.warn("Ошибка загрузки групповых чатов:", groupError);
+  }
+
+  const lastGroupMessages = await fetchLastGroupMessagesByChat(groupChats.map((chat) => chat.id));
+  const entries = buildChatListEntries(users, rows, groupChats, lastGroupMessages);
   list.innerHTML = entries.map(renderChatListItem).join("");
   void refreshMessagesUnreadBadge();
 }
@@ -465,6 +594,9 @@ function syncComposerForActivePeer() {
     }
     if (userPickBtn) userPickBtn.hidden = true;
     if (input) input.placeholder = "Сообщение…";
+  } else if (isGroupChat()) {
+    if (userPickBtn) userPickBtn.hidden = true;
+    if (input) input.placeholder = "Сообщение в группу…";
   } else {
     if (userPickBtn) userPickBtn.hidden = false;
     if (input) input.placeholder = "Новое сообщение…";
@@ -477,11 +609,14 @@ function updateDialogHeader() {
   const subtitle = document.getElementById("messagesDialogSubtitle");
   if (!title) return;
 
-  if (isGeneralChat()) {
-    title.textContent = "Общий чат";
+  if (isGroupChat()) {
+    const groupId = parseGroupId();
+    const chat = groupId ? groupChatsById.get(groupId) : null;
+    title.textContent = chat?.name || "Групповой чат";
     if (subtitle) {
-      subtitle.textContent = "Все переписки";
-      subtitle.hidden = false;
+      const memberCount = chat?.memberIds?.length || 0;
+      subtitle.textContent = memberCount ? `${memberCount} участн.` : "";
+      subtitle.hidden = !memberCount;
     }
     return;
   }
@@ -506,11 +641,15 @@ export function showMessagesChatList() {
 }
 
 export async function openMessagesDialog(peerId) {
-  activePeerId = peerId || CHAT_PEER_ALL;
+  if (!peerId) return;
+  activePeerId = peerId;
   lastFeedMessageAt = null;
   setMessagesView("dialog");
   stopChatListPolling();
   await loadUsersDirectory();
+  if (isGroupChat() && groupChatsById.size === 0) {
+    await fetchMyGroupChats();
+  }
   updateDialogHeader();
   syncComposerForActivePeer();
   await loadMessages();
@@ -532,24 +671,39 @@ export async function loadMessages() {
     msg.classList.remove("messages-page-message--error");
   }
 
-  const { rows: allRows, error } = await fetchAllUserMessages();
-
-  if (error) {
-    console.error("Ошибка загрузки сообщений:", error);
-    if (msg) {
-      msg.textContent = "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
-      msg.classList.add("messages-page-message--error");
+  let rows = [];
+  if (isGroupChat()) {
+    const groupId = parseGroupId();
+    const { rows: groupRows, error } = await fetchGroupMessages(groupId);
+    if (error) {
+      console.error("Ошибка загрузки сообщений группы:", error);
+      if (msg) {
+        msg.textContent = "Ошибка загрузки сообщений группового чата.";
+        msg.classList.add("messages-page-message--error");
+      }
+      feed.innerHTML = "";
+      return;
     }
-    feed.innerHTML = "";
-    return;
+    rows = groupRows;
+  } else {
+    const { rows: allRows, error } = await fetchAllUserMessages();
+    if (error) {
+      console.error("Ошибка загрузки сообщений:", error);
+      if (msg) {
+        msg.textContent = "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
+        msg.classList.add("messages-page-message--error");
+      }
+      feed.innerHTML = "";
+      return;
+    }
+    rows = allRows.filter((row) => messageBelongsToPeer(row, activePeerId, uid));
   }
 
-  const rows = allRows.filter((row) => messageBelongsToPeer(row, activePeerId, uid));
   lastFeedMessageAt = rows.length ? rows[rows.length - 1].created_at : null;
-  updateLastMessagePeerId(rows);
+  updateLastMessagePeerId(isGroupChat() ? [] : rows);
 
-  const emptyText = isGeneralChat()
-    ? "Пока нет сообщений. Напишите первое: выберите получателя кнопкой с человечком."
+  const emptyText = isGroupChat()
+    ? "Пока нет сообщений в этом групповом чате. Напишите первое."
     : "Пока нет сообщений в этой переписке. Напишите первое.";
 
   feed.innerHTML = rows.length
@@ -558,7 +712,9 @@ export async function loadMessages() {
 
   feed.scrollTop = feed.scrollHeight;
 
-  await markIncomingMessagesRead(rows);
+  if (!isGroupChat()) {
+    await markIncomingMessagesRead(rows);
+  }
   void refreshMessagesUnreadBadge();
 }
 
@@ -585,7 +741,9 @@ function appendMessagesToFeed(rows) {
   if (!feed || !rows.length) return;
 
   const uid = getCurrentUserId();
-  const scoped = rows.filter((row) => messageBelongsToPeer(row, activePeerId, uid));
+  const scoped = isGroupChat()
+    ? rows
+    : rows.filter((row) => messageBelongsToPeer(row, activePeerId, uid));
   if (!scoped.length) return;
 
   const existingIds = getFeedMessageIds();
@@ -606,7 +764,7 @@ function appendMessagesToFeed(rows) {
       lastFeedMessageAt = row.created_at;
     }
   }
-  if (newRows.length) {
+  if (newRows.length && !isGroupChat()) {
     updateLastMessagePeerId(newRows);
   }
 
@@ -676,6 +834,30 @@ async function pollNewMessages() {
   const feed = document.getElementById("messagesFeed");
   const uid = getCurrentUserId();
   if (!feed || !uid || messagesView !== "dialog" || !activePeerId) return;
+
+  if (isGroupChat()) {
+    const groupId = parseGroupId();
+    let query = supabaseClient
+      .from("group_messages")
+      .select("id, chat_id, sender_id, sender_email, body, created_at")
+      .eq("chat_id", groupId)
+      .order("created_at", { ascending: true });
+    if (lastFeedMessageAt) {
+      query = query.gte("created_at", lastFeedMessageAt);
+    }
+    const { data, error } = await query;
+    if (error) {
+      if (!noteGroupChatsSupport(error)) {
+        console.warn("Ошибка проверки новых сообщений группы:", error);
+      }
+      return;
+    }
+    const rows = data || [];
+    if (rows.length) {
+      appendMessagesToFeed(rows);
+    }
+    return;
+  }
 
   let query = supabaseClient
     .from("user_messages")
@@ -1180,6 +1362,48 @@ async function sendMessage() {
   const uid = getCurrentUserId();
   if (!uid) return;
 
+  if (isGroupChat()) {
+    const groupId = parseGroupId();
+    if (!groupId) {
+      if (msg) {
+        msg.textContent = "Не удалось определить групповой чат.";
+        msg.classList.add("messages-page-message--error");
+      }
+      return;
+    }
+
+    if (sendBtn) sendBtn.disabled = true;
+    if (msg) {
+      msg.textContent = "";
+      msg.classList.remove("messages-page-message--error");
+    }
+
+    const { error } = await supabaseClient.from("group_messages").insert({
+      chat_id: groupId,
+      sender_id: uid,
+      sender_email: getCurrentUserEmail(),
+      body,
+    });
+
+    if (sendBtn) sendBtn.disabled = false;
+
+    if (error) {
+      console.error("Ошибка отправки сообщения в группу:", error);
+      if (msg) {
+        msg.textContent = noteGroupChatsSupport(error)
+          ? "Групповые чаты не настроены. Выполните supabase_group_chats.sql в Supabase."
+          : "Не удалось отправить сообщение.";
+        msg.classList.add("messages-page-message--error");
+      }
+      return;
+    }
+
+    input.value = "";
+    hideSuggestions();
+    await loadMessages();
+    return;
+  }
+
   const users = await loadUsersDirectory();
 
   if (isPeerChat()) {
@@ -1262,6 +1486,122 @@ function onChatListClick(e) {
   void openMessagesDialog(peerId);
 }
 
+function setCreateGroupError(text) {
+  const el = document.getElementById("messagesCreateGroupError");
+  if (!el) return;
+  if (text) {
+    el.textContent = text;
+    el.hidden = false;
+  } else {
+    el.textContent = "";
+    el.hidden = true;
+  }
+}
+
+function closeCreateGroupDialog() {
+  const dialog = document.getElementById("messagesCreateGroupDialog");
+  if (dialog?.open) dialog.close();
+  setCreateGroupError("");
+}
+
+async function openCreateGroupDialog() {
+  const dialog = document.getElementById("messagesCreateGroupDialog");
+  const nameInput = document.getElementById("messagesCreateGroupName");
+  const usersEl = document.getElementById("messagesCreateGroupUsers");
+  if (!dialog || !usersEl) return;
+
+  setCreateGroupError("");
+  if (nameInput) nameInput.value = "";
+
+  const users = await loadUsersDirectory();
+  const uid = getCurrentUserId();
+  const others = (users || []).filter((u) => String(u.id) !== String(uid));
+
+  usersEl.innerHTML = others.length
+    ? others
+        .map((user) => {
+          const name = displayNameByEmail(user.email) || user.email || "—";
+          return `
+            <label class="messages-create-group-user">
+              <input type="checkbox" value="${escapeHtml(user.id)}" data-email="${escapeHtml(user.email)}" />
+              <span class="messages-create-group-user-name">${escapeHtml(name)}</span>
+            </label>
+          `;
+        })
+        .join("")
+    : `<p class="messages-page-message">Нет доступных пользователей.</p>`;
+
+  if (typeof dialog.showModal === "function") {
+    dialog.showModal();
+  } else {
+    dialog.setAttribute("open", "");
+  }
+  nameInput?.focus();
+}
+
+async function saveCreateGroupChat() {
+  const nameInput = document.getElementById("messagesCreateGroupName");
+  const usersEl = document.getElementById("messagesCreateGroupUsers");
+  const saveBtn = document.getElementById("messagesCreateGroupSaveBtn");
+  const uid = getCurrentUserId();
+  if (!uid || !nameInput || !usersEl) return;
+
+  const name = nameInput.value.trim();
+  if (!name) {
+    setCreateGroupError("Укажите название группового чата.");
+    nameInput.focus();
+    return;
+  }
+
+  const selectedIds = [...usersEl.querySelectorAll('input[type="checkbox"]:checked')].map((input) =>
+    String(input.value),
+  );
+  if (!selectedIds.length) {
+    setCreateGroupError("Выберите хотя бы одного участника.");
+    return;
+  }
+
+  const memberIds = [...new Set([uid, ...selectedIds])];
+
+  if (saveBtn) saveBtn.disabled = true;
+  setCreateGroupError("");
+
+  const { data, error } = await supabaseClient
+    .from("group_chats")
+    .insert({
+      name,
+      created_by: uid,
+      member_ids: memberIds,
+    })
+    .select("id, name, created_by, member_ids, created_at")
+    .single();
+
+  if (saveBtn) saveBtn.disabled = false;
+
+  if (error) {
+    console.error("Ошибка создания группового чата:", error);
+    setCreateGroupError(
+      noteGroupChatsSupport(error)
+        ? "Таблицы групповых чатов не созданы. Выполните supabase_group_chats.sql в Supabase."
+        : "Не удалось создать групповой чат.",
+    );
+    return;
+  }
+
+  const chat = {
+    id: String(data.id),
+    name: String(data.name || name).trim() || name,
+    created_by: data.created_by,
+    memberIds: (data.member_ids || memberIds).map(String),
+    created_at: data.created_at,
+  };
+  groupChatsById.set(chat.id, chat);
+  groupChatsSupported = true;
+
+  closeCreateGroupDialog();
+  await openMessagesDialog(toGroupPeerId(chat.id));
+}
+
 export function initMessagesSection() {
   const navBtn = document.getElementById("messagesNavBtn");
   const sendBtn = document.getElementById("messagesSendBtn");
@@ -1269,6 +1609,11 @@ export function initMessagesSection() {
   const feed = document.getElementById("messagesFeed");
   const chatList = document.getElementById("messagesChatList");
   const backBtn = document.getElementById("messagesBackBtn");
+  const createGroupBtn = document.getElementById("messagesCreateGroupBtn");
+  const createGroupDialog = document.getElementById("messagesCreateGroupDialog");
+  const createGroupSaveBtn = document.getElementById("messagesCreateGroupSaveBtn");
+  const createGroupCancelBtn = document.getElementById("messagesCreateGroupCancelBtn");
+  const createGroupCloseBtn = document.getElementById("messagesCreateGroupCloseBtn");
 
   if (navBtn) {
     navBtn.addEventListener("click", () => {
@@ -1286,6 +1631,37 @@ export function initMessagesSection() {
     chatList.addEventListener("click", onChatListClick);
   }
 
+  if (createGroupBtn) {
+    createGroupBtn.addEventListener("click", () => {
+      void openCreateGroupDialog();
+    });
+  }
+
+  if (createGroupSaveBtn) {
+    createGroupSaveBtn.addEventListener("click", () => {
+      void saveCreateGroupChat();
+    });
+  }
+
+  if (createGroupCancelBtn) {
+    createGroupCancelBtn.addEventListener("click", () => {
+      closeCreateGroupDialog();
+    });
+  }
+
+  if (createGroupCloseBtn) {
+    createGroupCloseBtn.addEventListener("click", () => {
+      closeCreateGroupDialog();
+    });
+  }
+
+  if (createGroupDialog) {
+    createGroupDialog.addEventListener("cancel", (e) => {
+      e.preventDefault();
+      closeCreateGroupDialog();
+    });
+  }
+
   if (sendBtn) {
     sendBtn.addEventListener("click", () => void sendMessage());
   }
@@ -1301,7 +1677,7 @@ export function initMessagesSection() {
   if (userPickBtn && input) {
     userPickBtn.addEventListener("mousedown", (e) => e.preventDefault());
     userPickBtn.addEventListener("click", () => {
-      if (isPeerChat()) return;
+      if (isPeerChat() || isGroupChat()) return;
       void loadUsersDirectory().then(() => openUserPicker(input));
     });
   }
@@ -1368,4 +1744,4 @@ export function initMessagesSection() {
   startUnreadPolling();
 }
 
-export { ORDER_TOKEN_RE, CHAT_PEER_ALL };
+export { ORDER_TOKEN_RE, GROUP_PEER_PREFIX };

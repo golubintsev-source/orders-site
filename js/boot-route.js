@@ -15,7 +15,7 @@ const BOOT_LABELS = {
   settings: "Настройки",
   statistics: "Статистика",
   "order-tasks": "Задачи",
-  messages: "Сообщения",
+  messages: "Чаты",
   voice: "Голосовое управление",
 };
 
