@@ -50,7 +50,7 @@ import {
   buildOrderRowFullTooltipHtml,
 } from "./orders.js";
 import { mergeNewAttachmentsOnChange, pasteImageFromClipboardIntoAttachments } from "./files.js";
-import { initClientAutocomplete } from "./clientAutocomplete.js";
+import { initClientAutocomplete, initAddressAutocomplete } from "./clientAutocomplete.js";
 import {
   saveInstallerRate,
   saveDriverName,
@@ -274,6 +274,7 @@ export function bindUIEvents() {
     clientInput.addEventListener("input", () => clientInput.classList.remove("client-invalid"));
   }
   initClientAutocomplete();
+  initAddressAutocomplete();
 
   const paymentStatusEl = document.getElementById("payment_status");
   if (paymentStatusEl) {

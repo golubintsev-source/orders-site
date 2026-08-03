@@ -12,21 +12,30 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
-/** Частота имён клиента по всем загруженным заказам (из базы через loadOrders). */
-function buildClientCountMap() {
+function sortOrdersLatestFirst(a, b) {
+  const idA = Number(a.id) || 0;
+  const idB = Number(b.id) || 0;
+  if (idB !== idA) return idB - idA;
+  const da = a.order_date || "";
+  const db = b.order_date || "";
+  return String(db).localeCompare(String(da));
+}
+
+/** Частота значений поля по всем загруженным заказам (из базы через loadOrders). */
+function buildFieldCountMap(field) {
   const map = new Map();
   for (const o of state.allOrders || []) {
-    const c = (o.client || "").trim();
-    if (!c) continue;
-    map.set(c, (map.get(c) || 0) + 1);
+    const v = (o[field] || "").trim();
+    if (!v) continue;
+    map.set(v, (map.get(v) || 0) + 1);
   }
   return map;
 }
 
-function getSuggestions(query) {
+function getFieldSuggestions(field, query) {
   const q = query.trim().toLowerCase();
   if (q.length < MIN_CHARS) return [];
-  const map = buildClientCountMap();
+  const map = buildFieldCountMap(field);
   const out = [];
   for (const [name, count] of map) {
     if (name.toLowerCase().includes(q)) {
@@ -38,39 +47,88 @@ function getSuggestions(query) {
 }
 
 /**
+ * Значение поля из самого свежего заказа с данным клиентом
+ * (сначала по id, при равенстве — по order_date).
+ */
+function getLatestFieldForClient(clientName, field) {
+  const name = (clientName || "").trim();
+  if (!name) return null;
+  const withValue = (state.allOrders || [])
+    .filter((o) => (o.client || "").trim() === name)
+    .map((o) => ({ o, value: (o[field] || "").trim() }))
+    .filter((x) => x.value);
+  if (withValue.length === 0) return null;
+  withValue.sort((a, b) => sortOrdersLatestFirst(a.o, b.o));
+  return withValue[0].value;
+}
+
+/**
  * Телефон из самого свежего заказа этого клиента (сначала по id, при равенстве — по order_date).
  */
 export function getLatestPhoneForClient(clientName) {
-  const name = (clientName || "").trim();
-  if (!name) return null;
-  const rows = (state.allOrders || []).filter((o) => (o.client || "").trim() === name);
-  const withPhone = rows
-    .map((o) => ({ o, phone: (o.phone || "").trim() }))
-    .filter((x) => x.phone);
-  if (withPhone.length === 0) return null;
-  withPhone.sort((a, b) => {
-    const idA = Number(a.o.id) || 0;
-    const idB = Number(b.o.id) || 0;
-    if (idB !== idA) return idB - idA;
-    const da = a.o.order_date || "";
-    const db = b.o.order_date || "";
-    return String(db).localeCompare(String(da));
-  });
-  return withPhone[0].phone;
+  return getLatestFieldForClient(clientName, "phone");
 }
 
-function applyPhoneFromLatestOrderOnClientPick(clientName) {
-  if (!phoneInput) return;
-  const phone = getLatestPhoneForClient(clientName);
-  if (!phone) return;
+/**
+ * Адрес из самого свежего заказа этого клиента (сначала по id, при равенстве — по order_date).
+ */
+export function getLatestAddressForClient(clientName) {
+  return getLatestFieldForClient(clientName, "address");
+}
+
+/** Самый свежий заказ с точным совпадением адреса. */
+function getLatestOrderForAddress(address) {
+  const addr = (address || "").trim();
+  if (!addr) return null;
+  const rows = (state.allOrders || []).filter((o) => (o.address || "").trim() === addr);
+  if (rows.length === 0) return null;
+  rows.sort(sortOrdersLatestFirst);
+  return rows[0];
+}
+
+function setPhoneValue(phone) {
+  if (!phoneInput || !phone) return;
   phoneInput.value = phone;
   phoneInput.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-export function initClientAutocomplete() {
-  const input = document.getElementById("client");
-  const list = document.getElementById("clientSuggestions");
-  const wrap = document.querySelector(".client-input-wrap");
+function applyPhoneAndAddressFromClientPick(clientName) {
+  const phone = getLatestPhoneForClient(clientName);
+  if (phone) setPhoneValue(phone);
+
+  const addressInput = document.getElementById("address");
+  if (!addressInput) return;
+  const address = getLatestAddressForClient(clientName);
+  if (!address) return;
+  addressInput.value = address;
+}
+
+function applyClientAndPhoneFromAddressPick(address) {
+  const order = getLatestOrderForAddress(address);
+  if (!order) return;
+
+  const clientInput = document.getElementById("client");
+  const clientName = (order.client || "").trim();
+  if (clientInput && clientName) {
+    clientInput.value = clientName;
+    clientInput.classList.remove("client-invalid");
+  }
+
+  let phone = (order.phone || "").trim();
+  if (!phone && clientName) {
+    phone = getLatestPhoneForClient(clientName) || "";
+  }
+  if (phone) setPhoneValue(phone);
+}
+
+/**
+ * Общий выпадающий список подсказок для поля формы заказа.
+ * @param {{ inputId: string, listId: string, wrapSelector: string, field: string, onPick: (value: string) => void }} opts
+ */
+function initFieldAutocomplete({ inputId, listId, wrapSelector, field, onPick }) {
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  const wrap = document.querySelector(wrapSelector);
   if (!input || !list || !wrap) return;
 
   let debounceTimer = null;
@@ -98,11 +156,11 @@ export function initClientAutocomplete() {
       li.addEventListener("mousedown", (e) => {
         e.preventDefault();
         input.value = item.name;
-        input.classList.remove("client-invalid");
+        if (inputId === "client") input.classList.remove("client-invalid");
         hide();
         input.focus();
         input.dispatchEvent(new Event("input", { bubbles: true }));
-        applyPhoneFromLatestOrderOnClientPick(item.name);
+        onPick(item.name);
       });
       list.appendChild(li);
     });
@@ -115,11 +173,11 @@ export function initClientAutocomplete() {
       hide();
       return;
     }
-    renderAndShow(getSuggestions(q));
+    renderAndShow(getFieldSuggestions(field, q));
   };
 
   input.addEventListener("input", () => {
-    input.classList.remove("client-invalid");
+    if (inputId === "client") input.classList.remove("client-invalid");
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(refresh, DEBOUNCE_MS);
   });
@@ -168,5 +226,25 @@ export function initClientAutocomplete() {
 
   document.addEventListener("click", (e) => {
     if (!wrap.contains(e.target)) hide();
+  });
+}
+
+export function initClientAutocomplete() {
+  initFieldAutocomplete({
+    inputId: "client",
+    listId: "clientSuggestions",
+    wrapSelector: ".client-input-wrap",
+    field: "client",
+    onPick: applyPhoneAndAddressFromClientPick,
+  });
+}
+
+export function initAddressAutocomplete() {
+  initFieldAutocomplete({
+    inputId: "address",
+    listId: "addressSuggestions",
+    wrapSelector: ".address-input-wrap",
+    field: "address",
+    onPick: applyClientAndPhoneFromAddressPick,
   });
 }

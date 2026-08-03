@@ -663,9 +663,15 @@ h2 {
   box-sizing: border-box;
 }
 
-#section-new .client-input-wrap {
+#section-new .client-input-wrap,
+#section-new .address-input-wrap {
   position: relative;
   width: 100%;
+}
+
+#section-new .address-input-wrap input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 #section-new .client-suggestions {
