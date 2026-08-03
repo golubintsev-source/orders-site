@@ -58,11 +58,14 @@ let composerReplyTo = null;
 let composerEditing = null;
 /** @type {string | null} id сообщения под меню действий */
 let actionMenuMessageId = null;
+/** true, если меню открыли долгим нажатием / ПКМ по фото */
+let actionMenuFromPhoto = false;
 let longPressTimer = null;
 let longPressMessageEl = null;
 let longPressStartX = 0;
 let longPressStartY = 0;
 let longPressTriggered = false;
+let longPressFromPhoto = false;
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
 
@@ -1885,6 +1888,7 @@ function hideMessageActionMenu() {
     menu.style.left = "";
   }
   actionMenuMessageId = null;
+  actionMenuFromPhoto = false;
   document.querySelector(".message-item--menu-open")?.classList.remove("message-item--menu-open");
 }
 
@@ -1895,7 +1899,7 @@ function clearMessageTextSelection() {
   }
 }
 
-function showMessageActionMenu(messageEl, clientX, clientY) {
+function showMessageActionMenu(messageEl, clientX, clientY, { fromPhoto = false } = {}) {
   const menu = document.getElementById("messagesActionMenu");
   if (!menu || !messageEl) return;
 
@@ -1907,6 +1911,7 @@ function showMessageActionMenu(messageEl, clientX, clientY) {
 
   const isOwn = messageEl.getAttribute("data-own") === "1";
   actionMenuMessageId = String(messageId);
+  actionMenuFromPhoto = Boolean(fromPhoto);
 
   clearMessageTextSelection();
   requestAnimationFrame(() => {
@@ -1923,7 +1928,7 @@ function showMessageActionMenu(messageEl, clientX, clientY) {
   const deleteBtn = menu.querySelector('[data-action="delete"]');
   if (replyBtn) replyBtn.hidden = false;
   if (editBtn) editBtn.hidden = !isOwn;
-  if (attachBtn) attachBtn.hidden = !messageHasAttachment(row);
+  if (attachBtn) attachBtn.hidden = !(actionMenuFromPhoto && messageHasAttachment(row));
   if (deleteBtn) deleteBtn.hidden = !isOwn;
 
   menu.hidden = false;
@@ -2207,6 +2212,7 @@ function onFeedPointerDown(e) {
   cancelLongPress();
   longPressTriggered = false;
   longPressMessageEl = item;
+  longPressFromPhoto = Boolean(e.target.closest(".message-item-attachment"));
   longPressStartX = e.clientX;
   longPressStartY = e.clientY;
 
@@ -2219,7 +2225,9 @@ function onFeedPointerDown(e) {
     } catch {
       /* ignore */
     }
-    showMessageActionMenu(longPressMessageEl, longPressStartX, longPressStartY);
+    showMessageActionMenu(longPressMessageEl, longPressStartX, longPressStartY, {
+      fromPhoto: longPressFromPhoto,
+    });
     longPressMessageEl = null;
   }, LONG_PRESS_MS);
 }
@@ -2246,7 +2254,9 @@ function onFeedContextMenu(e) {
   }
   e.preventDefault();
   clearMessageTextSelection();
-  showMessageActionMenu(item, e.clientX, e.clientY);
+  showMessageActionMenu(item, e.clientX, e.clientY, {
+    fromPhoto: Boolean(e.target.closest(".message-item-attachment")),
+  });
 }
 
 function onFeedSelectStart(e) {
