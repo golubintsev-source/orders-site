@@ -128,7 +128,8 @@ function renderMessageItem(row) {
   const peerEmail = isOut ? row.recipient_email : row.sender_email;
   const peerName = displayNameByEmail(peerEmail) || peerEmail || "—";
   const peerLabel = isOut ? peerName : `от ${peerName}`;
-  const unread = !isOut && !row.read_at;
+  // Incoming: not yet read by me. Outgoing: not yet read by the recipient.
+  const unread = !row.read_at;
   const bodyForDisplay = stripRecipientMentionFromBody(row.body, row.recipient_email);
   return `
     <article class="${messageItemClass(row)}${unread ? " message-item--unread" : ""}" data-message-id="${row.id}">
@@ -228,6 +229,38 @@ function appendMessagesToFeed(rows) {
   }
 }
 
+async function syncOutgoingReadStatus() {
+  const feed = document.getElementById("messagesFeed");
+  const uid = getCurrentUserId();
+  if (!feed || !uid) return;
+
+  const unreadOutEls = [...feed.querySelectorAll(".message-item--out.message-item--unread[data-message-id]")];
+  if (!unreadOutEls.length) return;
+
+  const ids = unreadOutEls.map((el) => el.getAttribute("data-message-id")).filter(Boolean);
+  if (!ids.length) return;
+
+  const { data, error } = await supabaseClient
+    .from("user_messages")
+    .select("id, read_at")
+    .eq("sender_id", uid)
+    .in("id", ids)
+    .not("read_at", "is", null);
+
+  if (error) {
+    console.warn("Ошибка синхронизации прочтения исходящих:", error);
+    return;
+  }
+
+  const readIds = new Set((data || []).map((row) => String(row.id)));
+  for (const el of unreadOutEls) {
+    const id = el.getAttribute("data-message-id");
+    if (id && readIds.has(String(id))) {
+      el.classList.remove("message-item--unread");
+    }
+  }
+}
+
 async function pollNewMessages() {
   const feed = document.getElementById("messagesFeed");
   const uid = getCurrentUserId();
@@ -246,15 +279,18 @@ async function pollNewMessages() {
   const { data, error } = await query;
   if (error) {
     console.warn("Ошибка проверки новых сообщений:", error);
+    await syncOutgoingReadStatus();
     return;
   }
 
   const rows = data || [];
-  if (!rows.length) return;
+  if (rows.length) {
+    appendMessagesToFeed(rows);
+    await markIncomingMessagesRead(rows);
+    void refreshMessagesUnreadBadge();
+  }
 
-  appendMessagesToFeed(rows);
-  await markIncomingMessagesRead(rows);
-  void refreshMessagesUnreadBadge();
+  await syncOutgoingReadStatus();
 }
 
 export function startMessagesFeedPolling() {
