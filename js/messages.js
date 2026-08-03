@@ -157,48 +157,34 @@ function messageDeliveryState(row, isOut) {
   return { read: false, delivered: false, unread: true, status: "sent" };
 }
 
-function messageStatusClass(row, isOut) {
-  const state = messageDeliveryState(row, isOut);
-  const classes = [];
-  if (state.unread) classes.push("message-item--unread");
-  if (isOut) {
-    if (state.status === "sent") classes.push("message-item--undelivered");
-    else if (state.status === "delivered") classes.push("message-item--delivered");
-    else classes.push("message-item--read");
-  }
-  return classes.length ? ` ${classes.join(" ")}` : "";
+const TICK_SVG_SINGLE = `<svg class="message-ticks-icon" viewBox="0 0 12 11" aria-hidden="true" focusable="false"><path d="M1.2 5.8 4.4 9.1 10.8 1.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+const TICK_SVG_DOUBLE = `<svg class="message-ticks-icon message-ticks-icon--double" viewBox="0 0 18 11" aria-hidden="true" focusable="false"><path d="M1.2 5.8 4.4 9.1 10.8 1.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.6 5.8 9.8 9.1 16.2 1.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function ticksLabel(state) {
+  if (state.read) return "Прочитано";
+  if (state.delivered) return "Доставлено";
+  return "Отправлено";
 }
 
 function renderOutgoingTicksHtml(state) {
-  const checked = state.read;
-  const label = checked
-    ? "Прочитано"
-    : state.delivered
-      ? "Доставлено, не прочитано"
-      : "Отправлено, не доставлено";
-  const checkedClass = checked ? " message-tick-box--checked" : "";
-  return `
-    <div class="message-item-ticks" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
-      <span class="message-tick-box${checkedClass}" aria-hidden="true"></span>
-      <span class="message-tick-box${checkedClass}" aria-hidden="true"></span>
-    </div>
-  `;
+  const status = state.status || (state.read ? "read" : state.delivered ? "delivered" : "sent");
+  const icon = status === "sent" ? TICK_SVG_SINGLE : TICK_SVG_DOUBLE;
+  return `<span class="message-item-ticks message-item-ticks--${status}" title="${escapeHtml(ticksLabel(state))}" aria-label="${escapeHtml(ticksLabel(state))}">${icon}</span>`;
 }
 
 function applyOutgoingStatusToElement(el, { delivered, read }) {
   if (!el) return;
-  el.classList.toggle("message-item--unread", !read);
-  el.classList.toggle("message-item--undelivered", !delivered && !read);
-  el.classList.toggle("message-item--delivered", delivered && !read);
-  el.classList.toggle("message-item--read", read);
+  const status = read ? "read" : delivered ? "delivered" : "sent";
+  el.dataset.deliveryStatus = status;
   const ticks = el.querySelector(".message-item-ticks");
   if (!ticks) return;
-  const label = read ? "Прочитано" : delivered ? "Доставлено, не прочитано" : "Отправлено, не доставлено";
+  ticks.classList.remove("message-item-ticks--sent", "message-item-ticks--delivered", "message-item-ticks--read");
+  ticks.classList.add(`message-item-ticks--${status}`);
+  const label = ticksLabel({ read, delivered });
   ticks.setAttribute("title", label);
   ticks.setAttribute("aria-label", label);
-  ticks.querySelectorAll(".message-tick-box").forEach((box) => {
-    box.classList.toggle("message-tick-box--checked", read);
-  });
+  ticks.innerHTML = status === "sent" ? TICK_SVG_SINGLE : TICK_SVG_DOUBLE;
 }
 
 function renderMessageItem(row) {
@@ -209,13 +195,15 @@ function renderMessageItem(row) {
   const peerLabel = isOut ? peerName : `от ${peerName}`;
   const state = messageDeliveryState(row, isOut);
   const bodyForDisplay = stripRecipientMentionFromBody(row.body, row.recipient_email);
-  const ticksHtml = isOut ? renderOutgoingTicksHtml(state) : "";
+  const statusAttr = isOut ? ` data-delivery-status="${state.status}"` : "";
+  const metaTrailing = isOut
+    ? `${renderOutgoingTicksHtml(state)}<time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>`
+    : `<time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>`;
   return `
-    <article class="${messageItemClass(row)}${messageStatusClass(row, isOut)}" data-message-id="${row.id}">
-      ${ticksHtml}
+    <article class="${messageItemClass(row)}" data-message-id="${row.id}"${statusAttr}>
       <header class="message-item-header">
         <span class="message-item-peer">${escapeHtml(peerLabel)}</span>
-        <time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>
+        <span class="message-item-meta">${metaTrailing}</span>
       </header>
       <div class="message-item-body">${renderMessageBodyHtml(bodyForDisplay)}</div>
     </article>
@@ -271,9 +259,6 @@ export async function loadMessages() {
   feed.scrollTop = feed.scrollHeight;
 
   await markIncomingMessagesRead(rows);
-  for (const el of feed.querySelectorAll(".message-item--in.message-item--unread")) {
-    el.classList.remove("message-item--unread");
-  }
   void refreshMessagesUnreadBadge();
 }
 
@@ -328,9 +313,7 @@ async function syncOutgoingReadStatus() {
   if (!feed || !uid) return;
 
   const pendingOutEls = [
-    ...feed.querySelectorAll(
-      ".message-item--out.message-item--unread[data-message-id], .message-item--out.message-item--undelivered[data-message-id], .message-item--out.message-item--delivered[data-message-id]",
-    ),
+    ...feed.querySelectorAll('.message-item--out[data-message-id]:not([data-delivery-status="read"])'),
   ];
   if (!pendingOutEls.length) return;
 
@@ -419,9 +402,6 @@ async function pollNewMessages() {
   if (rows.length) {
     appendMessagesToFeed(rows);
     await markIncomingMessagesRead(rows);
-    for (const el of feed.querySelectorAll(".message-item--in.message-item--unread")) {
-      el.classList.remove("message-item--unread");
-    }
     void refreshMessagesUnreadBadge();
   }
 
