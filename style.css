@@ -5812,10 +5812,14 @@ th {
   background: #e8eef5;
 }
 
-.messages-chat-item--unread .messages-chat-item-name,
-.messages-chat-item--unread .messages-chat-item-preview {
+.messages-chat-item--unread .messages-chat-item-name {
   font-weight: 700;
   color: #0f172a;
+}
+
+.messages-chat-item--unread .messages-chat-item-preview {
+  font-weight: 600;
+  color: #334155;
 }
 
 .messages-chat-item--general .messages-chat-avatar {
@@ -5900,15 +5904,6 @@ th {
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
-}
-
-.messages-chat-item--unread .messages-chat-item-name {
-  font-weight: 700;
-}
-
-.messages-chat-item--unread .messages-chat-item-preview {
-  font-weight: 600;
-  color: #334155;
 }
 
 .messages-chat-item .message-item-ticks {
