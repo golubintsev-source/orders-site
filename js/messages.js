@@ -19,6 +19,30 @@ let lastMessagePeerId = null;
 /** @type {Map<string, { id: string, email: string }>} */
 let composerRecipients = new Map();
 let activePicker = null;
+/** null = unknown, true/false after first probe */
+let deliveredAtSupported = null;
+
+const MESSAGE_SELECT_WITH_DELIVERED =
+  "id, sender_id, recipient_id, sender_email, recipient_email, body, created_at, read_at, delivered_at";
+const MESSAGE_SELECT_BASIC =
+  "id, sender_id, recipient_id, sender_email, recipient_email, body, created_at, read_at";
+
+function messageSelectColumns() {
+  return deliveredAtSupported === false ? MESSAGE_SELECT_BASIC : MESSAGE_SELECT_WITH_DELIVERED;
+}
+
+function noteDeliveredAtSupport(error) {
+  if (!error) {
+    deliveredAtSupported = true;
+    return false;
+  }
+  const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""}`.toLowerCase();
+  if (msg.includes("delivered_at") || error.code === "PGRST204" || error.code === "42703") {
+    deliveredAtSupported = false;
+    return true;
+  }
+  return false;
+}
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -122,17 +146,73 @@ function messageItemClass(row) {
   return "message-item message-item--in";
 }
 
+function messageDeliveryState(row, isOut) {
+  const read = Boolean(row.read_at);
+  const delivered = Boolean(row.delivered_at) || read;
+  if (!isOut) {
+    return { read, delivered, unread: !read };
+  }
+  if (read) return { read: true, delivered: true, unread: false, status: "read" };
+  if (delivered) return { read: false, delivered: true, unread: true, status: "delivered" };
+  return { read: false, delivered: false, unread: true, status: "sent" };
+}
+
+function messageStatusClass(row, isOut) {
+  const state = messageDeliveryState(row, isOut);
+  const classes = [];
+  if (state.unread) classes.push("message-item--unread");
+  if (isOut) {
+    if (state.status === "sent") classes.push("message-item--undelivered");
+    else if (state.status === "delivered") classes.push("message-item--delivered");
+    else classes.push("message-item--read");
+  }
+  return classes.length ? ` ${classes.join(" ")}` : "";
+}
+
+function renderOutgoingTicksHtml(state) {
+  const checked = state.read;
+  const label = checked
+    ? "Прочитано"
+    : state.delivered
+      ? "Доставлено, не прочитано"
+      : "Отправлено, не доставлено";
+  const checkedClass = checked ? " message-tick-box--checked" : "";
+  return `
+    <div class="message-item-ticks" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
+      <span class="message-tick-box${checkedClass}" aria-hidden="true"></span>
+      <span class="message-tick-box${checkedClass}" aria-hidden="true"></span>
+    </div>
+  `;
+}
+
+function applyOutgoingStatusToElement(el, { delivered, read }) {
+  if (!el) return;
+  el.classList.toggle("message-item--unread", !read);
+  el.classList.toggle("message-item--undelivered", !delivered && !read);
+  el.classList.toggle("message-item--delivered", delivered && !read);
+  el.classList.toggle("message-item--read", read);
+  const ticks = el.querySelector(".message-item-ticks");
+  if (!ticks) return;
+  const label = read ? "Прочитано" : delivered ? "Доставлено, не прочитано" : "Отправлено, не доставлено";
+  ticks.setAttribute("title", label);
+  ticks.setAttribute("aria-label", label);
+  ticks.querySelectorAll(".message-tick-box").forEach((box) => {
+    box.classList.toggle("message-tick-box--checked", read);
+  });
+}
+
 function renderMessageItem(row) {
   const uid = getCurrentUserId();
   const isOut = String(row.sender_id) === String(uid);
   const peerEmail = isOut ? row.recipient_email : row.sender_email;
   const peerName = displayNameByEmail(peerEmail) || peerEmail || "—";
   const peerLabel = isOut ? peerName : `от ${peerName}`;
-  // Incoming: not yet read by me. Outgoing: not yet read by the recipient.
-  const unread = !row.read_at;
+  const state = messageDeliveryState(row, isOut);
   const bodyForDisplay = stripRecipientMentionFromBody(row.body, row.recipient_email);
+  const ticksHtml = isOut ? renderOutgoingTicksHtml(state) : "";
   return `
-    <article class="${messageItemClass(row)}${unread ? " message-item--unread" : ""}" data-message-id="${row.id}">
+    <article class="${messageItemClass(row)}${messageStatusClass(row, isOut)}" data-message-id="${row.id}">
+      ${ticksHtml}
       <header class="message-item-header">
         <span class="message-item-peer">${escapeHtml(peerLabel)}</span>
         <time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>
@@ -155,11 +235,21 @@ export async function loadMessages() {
     msg.classList.remove("messages-page-message--error");
   }
 
-  const { data, error } = await supabaseClient
+  let { data, error } = await supabaseClient
     .from("user_messages")
-    .select("id, sender_id, recipient_id, sender_email, recipient_email, body, created_at, read_at")
+    .select(messageSelectColumns())
     .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
     .order("created_at", { ascending: true });
+
+  if (error && noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
+    ({ data, error } = await supabaseClient
+      .from("user_messages")
+      .select(MESSAGE_SELECT_BASIC)
+      .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
+      .order("created_at", { ascending: true }));
+  } else if (!error) {
+    deliveredAtSupported = deliveredAtSupported !== false;
+  }
 
   if (error) {
     console.error("Ошибка загрузки сообщений:", error);
@@ -181,6 +271,9 @@ export async function loadMessages() {
   feed.scrollTop = feed.scrollHeight;
 
   await markIncomingMessagesRead(rows);
+  for (const el of feed.querySelectorAll(".message-item--in.message-item--unread")) {
+    el.classList.remove("message-item--unread");
+  }
   void refreshMessagesUnreadBadge();
 }
 
@@ -234,30 +327,57 @@ async function syncOutgoingReadStatus() {
   const uid = getCurrentUserId();
   if (!feed || !uid) return;
 
-  const unreadOutEls = [...feed.querySelectorAll(".message-item--out.message-item--unread[data-message-id]")];
-  if (!unreadOutEls.length) return;
+  const pendingOutEls = [
+    ...feed.querySelectorAll(
+      ".message-item--out.message-item--unread[data-message-id], .message-item--out.message-item--undelivered[data-message-id], .message-item--out.message-item--delivered[data-message-id]",
+    ),
+  ];
+  if (!pendingOutEls.length) return;
 
-  const ids = unreadOutEls.map((el) => el.getAttribute("data-message-id")).filter(Boolean);
+  const ids = [...new Set(pendingOutEls.map((el) => el.getAttribute("data-message-id")).filter(Boolean))];
   if (!ids.length) return;
 
   const { data, error } = await supabaseClient
     .from("user_messages")
-    .select("id, read_at")
+    .select(deliveredAtSupported === false ? "id, read_at" : "id, read_at, delivered_at")
     .eq("sender_id", uid)
-    .in("id", ids)
-    .not("read_at", "is", null);
+    .in("id", ids);
 
   if (error) {
-    console.warn("Ошибка синхронизации прочтения исходящих:", error);
+    if (noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
+      const retry = await supabaseClient
+        .from("user_messages")
+        .select("id, read_at")
+        .eq("sender_id", uid)
+        .in("id", ids);
+      if (retry.error) {
+        console.warn("Ошибка синхронизации статуса исходящих:", retry.error);
+        return;
+      }
+      const byId = new Map((retry.data || []).map((row) => [String(row.id), row]));
+      for (const el of pendingOutEls) {
+        const id = el.getAttribute("data-message-id");
+        const row = id ? byId.get(String(id)) : null;
+        if (!row) continue;
+        const read = Boolean(row.read_at);
+        applyOutgoingStatusToElement(el, { delivered: read, read });
+      }
+      return;
+    }
+    console.warn("Ошибка синхронизации статуса исходящих:", error);
     return;
   }
 
-  const readIds = new Set((data || []).map((row) => String(row.id)));
-  for (const el of unreadOutEls) {
+  if (!error) deliveredAtSupported = deliveredAtSupported !== false;
+
+  const byId = new Map((data || []).map((row) => [String(row.id), row]));
+  for (const el of pendingOutEls) {
     const id = el.getAttribute("data-message-id");
-    if (id && readIds.has(String(id))) {
-      el.classList.remove("message-item--unread");
-    }
+    const row = id ? byId.get(String(id)) : null;
+    if (!row) continue;
+    const read = Boolean(row.read_at);
+    const delivered = Boolean(row.delivered_at) || read;
+    applyOutgoingStatusToElement(el, { delivered, read });
   }
 }
 
@@ -268,7 +388,7 @@ async function pollNewMessages() {
 
   let query = supabaseClient
     .from("user_messages")
-    .select("id, sender_id, recipient_id, sender_email, recipient_email, body, created_at, read_at")
+    .select(messageSelectColumns())
     .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
     .order("created_at", { ascending: true });
 
@@ -276,7 +396,19 @@ async function pollNewMessages() {
     query = query.gte("created_at", lastFeedMessageAt);
   }
 
-  const { data, error } = await query;
+  let { data, error } = await query;
+  if (error && noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
+    let retry = supabaseClient
+      .from("user_messages")
+      .select(MESSAGE_SELECT_BASIC)
+      .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
+      .order("created_at", { ascending: true });
+    if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
+    ({ data, error } = await retry);
+  } else if (!error) {
+    deliveredAtSupported = deliveredAtSupported !== false;
+  }
+
   if (error) {
     console.warn("Ошибка проверки новых сообщений:", error);
     await syncOutgoingReadStatus();
@@ -287,6 +419,9 @@ async function pollNewMessages() {
   if (rows.length) {
     appendMessagesToFeed(rows);
     await markIncomingMessagesRead(rows);
+    for (const el of feed.querySelectorAll(".message-item--in.message-item--unread")) {
+      el.classList.remove("message-item--unread");
+    }
     void refreshMessagesUnreadBadge();
   }
 
@@ -307,24 +442,85 @@ export function stopMessagesFeedPolling() {
   }
 }
 
-async function markIncomingMessagesRead(rows) {
+async function markIncomingMessagesDelivered(ids) {
   const uid = getCurrentUserId();
-  if (!uid) return;
-
-  const unreadIds = (rows || [])
-    .filter((r) => r.recipient_id === uid && !r.read_at)
-    .map((r) => r.id);
-  if (unreadIds.length === 0) return;
+  if (!uid || !ids?.length || deliveredAtSupported === false) return;
 
   const now = new Date().toISOString();
   const { error } = await supabaseClient
     .from("user_messages")
-    .update({ read_at: now })
+    .update({ delivered_at: now })
+    .in("id", ids)
+    .eq("recipient_id", uid)
+    .is("delivered_at", null);
+
+  if (error) {
+    if (noteDeliveredAtSupport(error)) return;
+    console.warn("Ошибка отметки доставленных:", error);
+  } else {
+    deliveredAtSupported = true;
+  }
+}
+
+async function markIncomingMessagesRead(rows) {
+  const uid = getCurrentUserId();
+  if (!uid) return;
+
+  const incoming = (rows || []).filter((r) => String(r.recipient_id) === String(uid));
+  const undeliveredIds = incoming.filter((r) => !r.delivered_at && !r.read_at).map((r) => r.id);
+  const unreadIds = incoming.filter((r) => !r.read_at).map((r) => r.id);
+
+  if (undeliveredIds.length) {
+    await markIncomingMessagesDelivered(undeliveredIds);
+  }
+
+  if (unreadIds.length === 0) return;
+
+  const now = new Date().toISOString();
+  const payload =
+    deliveredAtSupported === false ? { read_at: now } : { read_at: now, delivered_at: now };
+  const { error } = await supabaseClient
+    .from("user_messages")
+    .update(payload)
     .in("id", unreadIds)
     .eq("recipient_id", uid);
 
   if (error) {
+    if (noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
+      const retry = await supabaseClient
+        .from("user_messages")
+        .update({ read_at: now })
+        .in("id", unreadIds)
+        .eq("recipient_id", uid);
+      if (retry.error) console.error("Ошибка отметки прочитанных:", retry.error);
+      return;
+    }
     console.error("Ошибка отметки прочитанных:", error);
+  }
+}
+
+/** Mark undelivered incoming as delivered without reading (badge / background poll). */
+async function acknowledgeIncomingDelivered() {
+  const uid = getCurrentUserId();
+  if (!uid || deliveredAtSupported === false) return;
+
+  const { data, error } = await supabaseClient
+    .from("user_messages")
+    .select("id")
+    .eq("recipient_id", uid)
+    .is("delivered_at", null)
+    .is("read_at", null);
+
+  if (error) {
+    if (noteDeliveredAtSupport(error)) return;
+    console.warn("Не удалось проверить недоставленные входящие:", error);
+    return;
+  }
+
+  deliveredAtSupported = true;
+  const ids = (data || []).map((row) => row.id);
+  if (ids.length) {
+    await markIncomingMessagesDelivered(ids);
   }
 }
 
@@ -338,6 +534,9 @@ export async function refreshMessagesUnreadBadge() {
     badge.hidden = true;
     return;
   }
+
+  // While the app is open, acknowledge delivery without marking as read.
+  await acknowledgeIncomingDelivered();
 
   const { count, error } = await supabaseClient
     .from("user_messages")
