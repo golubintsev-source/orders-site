@@ -22,6 +22,7 @@ import {
   closeSectionNavDropdown,
   closeOrdersSearchPanel,
   syncOrdersSearchIconAccent,
+  syncIosFormControlLocks,
 } from "./section-nav.js";
 
 import { logout } from "./auth.js";
@@ -425,6 +426,7 @@ export function bindUIEvents() {
     ordersSearchPanel.hidden = false;
     ordersSearchOpenBtn.setAttribute("aria-expanded", "true");
     ordersSearchOpenBtn.classList.add("section-nav-search-btn--open");
+    syncIosFormControlLocks();
     queueMicrotask(() => ordersSearchPopupInput?.focus());
   }
 

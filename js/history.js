@@ -9,6 +9,7 @@ import {
   closeOrdersSearchPanel,
   closeSectionNavDropdown,
   refreshSectionNavAfterProfile,
+  syncIosFormControlLocks,
 } from "./section-nav.js";
 import { hrefToAppSection } from "./app-routes.js";
 import { flushPendingAccessLogs, logSiteAccess, measureNavigationResponseMs } from "./access-log.js";
@@ -56,6 +57,7 @@ function wireHistorySearchAndLogout() {
     ordersSearchPanel.hidden = false;
     ordersSearchOpenBtn.setAttribute("aria-expanded", "true");
     ordersSearchOpenBtn.classList.add("section-nav-search-btn--open");
+    syncIosFormControlLocks();
     queueMicrotask(() => ordersSearchPopupInput?.focus());
   }
 

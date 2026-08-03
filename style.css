@@ -5812,6 +5812,10 @@ th {
   background: #fafafa;
 }
 
+html.keyboard-open .messages-composer {
+  padding-bottom: 12px;
+}
+
 .messages-composer-tools {
   display: flex;
   flex-direction: column;
@@ -5978,9 +5982,13 @@ th {
   gap: 10px;
   width: 100%;
   padding: 8px 12px;
+  border: none;
+  background: transparent;
   cursor: pointer;
+  font: inherit;
   font-size: 14px;
   color: #111827;
+  text-align: left;
 }
 
 .messages-recipient-option:hover {
@@ -5989,10 +5997,31 @@ th {
 
 .messages-recipient-checkbox {
   flex-shrink: 0;
+  box-sizing: border-box;
   width: 16px;
   height: 16px;
   margin: 0;
-  cursor: pointer;
+  border: 1.5px solid #9ca3af;
+  border-radius: 4px;
+  background: #fff;
+  position: relative;
+}
+
+.messages-recipient-checkbox--checked {
+  border-color: #1f6feb;
+  background: #1f6feb;
+}
+
+.messages-recipient-checkbox--checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .messages-suggestions--orders {
@@ -6400,6 +6429,10 @@ th {
   padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
+}
+
+html.keyboard-open .voice-composer {
+  padding-bottom: 12px;
 }
 
 .voice-mic-btn {

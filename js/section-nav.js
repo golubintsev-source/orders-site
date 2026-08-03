@@ -136,6 +136,68 @@ function getContentSections() {
   return document.querySelectorAll(".content-section");
 }
 
+/** Помечает поля, которые мы временно отключили для iOS (не трогаем изначально disabled). */
+const IOS_FORM_LOCK_ATTR = "data-ios-form-lock";
+
+function lockFormControl(el) {
+  if (!(el instanceof HTMLElement)) return;
+  if (el.disabled || el.getAttribute(IOS_FORM_LOCK_ATTR) === "1") return;
+  el.setAttribute(IOS_FORM_LOCK_ATTR, "1");
+  el.disabled = true;
+}
+
+function unlockFormControl(el) {
+  if (!(el instanceof HTMLElement)) return;
+  if (el.getAttribute(IOS_FORM_LOCK_ATTR) !== "1") return;
+  el.removeAttribute(IOS_FORM_LOCK_ATTR);
+  el.disabled = false;
+}
+
+/**
+ * iOS Safari/PWA показывает над клавиатурой панель ↑↓/✓ (form assistant), если на странице
+ * несколько input/textarea/select — даже в секциях с display:none. Отключаем поля
+ * неактивных разделов, чтобы на экране сообщений оставалось одно поле ввода.
+ */
+export function syncIosFormControlLocks(activeSectionId = currentSectionId) {
+  const activeSection = document.getElementById(`section-${activeSectionId}`);
+  getContentSections().forEach((section) => {
+    const active = section === activeSection;
+    section.toggleAttribute("inert", !active);
+    section.querySelectorAll("input, textarea, select").forEach((el) => {
+      if (active) unlockFormControl(el);
+      else lockFormControl(el);
+    });
+  });
+
+  const searchInput = document.getElementById("ordersSearchPopupInput");
+  const searchPanel = document.getElementById("ordersSearchDropdownPanel");
+  if (searchInput) {
+    if (searchPanel && !searchPanel.hidden) unlockFormControl(searchInput);
+    else lockFormControl(searchInput);
+  }
+}
+
+/** Класс на <html>, когда открыта экранная клавиатура — убираем safe-area у композеров. */
+export function initKeyboardOpenClass() {
+  const root = document.documentElement;
+  const sync = () => {
+    const vv = window.visualViewport;
+    if (!vv) {
+      root.classList.remove("keyboard-open");
+      return;
+    }
+    const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    root.classList.toggle("keyboard-open", overlap > 120);
+  };
+  sync();
+  window.visualViewport?.addEventListener("resize", sync);
+  window.visualViewport?.addEventListener("scroll", sync);
+  window.addEventListener("focusin", sync);
+  window.addEventListener("focusout", () => {
+    queueMicrotask(sync);
+  });
+}
+
 function syncSectionNavDropdownRoleClasses() {
   const panel = document.getElementById("sectionNavDropdownPanel");
   if (!panel) return;
@@ -174,6 +236,7 @@ export function closeOrdersSearchPanel() {
     btn.setAttribute("aria-expanded", "false");
     btn.classList.remove("section-nav-search-btn--open");
   }
+  syncIosFormControlLocks();
 }
 
 /** Лупа поиска по заказам — на «Заказы» и на отдельных страницах с шапкой (history.html). */
@@ -278,6 +341,7 @@ export function switchSection(sectionId, opts = {}) {
   closeSectionNavDropdown();
   closeOrdersSearchPanel();
   updateOrdersSearchBtnVisibility(sectionId);
+  syncIosFormControlLocks(sectionId);
 
   if (sectionId === "balance") {
     loadBalance();
@@ -374,6 +438,7 @@ export function setStandaloneSectionNavLabel(text) {
   updateDropdownItemsVisibility(currentSectionId);
   updateOrdersSearchBtnVisibility(currentSectionId);
   updateBackToOrdersBtnVisibility(currentSectionId);
+  syncIosFormControlLocks(currentSectionId);
 }
 
 /** После loadProfile(): скрыть пункты меню по роли и выйти из запрещённого раздела. */
@@ -461,6 +526,8 @@ export function initSectionNavDropdown(options = {}) {
   updateDropdownItemsVisibility(currentSectionId);
   updateOrdersSearchBtnVisibility(currentSectionId);
   updateBackToOrdersBtnVisibility(currentSectionId);
+  syncIosFormControlLocks(currentSectionId);
+  initKeyboardOpenClass();
 
   const motivationEl = document.getElementById("sectionNavMotivationText");
   if (motivationEl) {
