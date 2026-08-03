@@ -98,7 +98,7 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("push", (event) => {
   let data = {
-    title: "Заявки",
+    title: "ФАБРИКА ОКОН",
     body: "Новое уведомление",
     url: "/",
     tag: "orders-site",
@@ -114,8 +114,8 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: data.body || "Новое уведомление",
-    icon: "/img/icon-192.png",
-    badge: "/img/icon-192.png",
+    icon: "/img/icon-192.png?v=20260803",
+    badge: "/img/icon-192.png?v=20260803",
     tag: data.tag || "orders-site",
     data: { url: data.url || "/" },
     renotify: true,
@@ -126,7 +126,7 @@ self.addEventListener("push", (event) => {
       const count = (await getBadgeCount()) + 1;
       await Promise.all([
         setBadgeCount(count),
-        self.registration.showNotification(data.title || "Заявки", options),
+        self.registration.showNotification(data.title || "ФАБРИКА ОКОН", options),
       ]);
     })(),
   );
