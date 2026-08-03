@@ -874,11 +874,64 @@
 
         <div id="messagesChatListView" class="messages-chat-list-view">
           <header class="messages-chat-list-header">
-            <h2 class="messages-chat-list-title">Сообщения</h2>
+            <h2 class="messages-chat-list-title">Чаты</h2>
+            <button
+              type="button"
+              id="messagesCreateGroupBtn"
+              class="messages-create-group-btn"
+              title="Создать групповой чат"
+              aria-label="Создать групповой чат"
+              aria-haspopup="dialog"
+            >
+              + групповой чат
+            </button>
           </header>
           <div id="messagesChatList" class="messages-chat-list" role="list" aria-label="Список чатов"></div>
           <p id="messagesChatListMessage" class="messages-page-message"></p>
         </div>
+
+        <dialog
+          id="messagesCreateGroupDialog"
+          class="messages-create-group-dialog"
+          aria-labelledby="messagesCreateGroupDialogTitle"
+        >
+          <div class="messages-create-group-dialog-panel">
+            <div class="messages-create-group-dialog-header">
+              <h3 id="messagesCreateGroupDialogTitle" class="messages-create-group-dialog-title">Новый групповой чат</h3>
+              <button
+                type="button"
+                id="messagesCreateGroupCloseBtn"
+                class="messages-create-group-dialog-close"
+                aria-label="Закрыть"
+                title="Закрыть"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <label class="messages-create-group-field">
+              <span class="messages-create-group-label">Название</span>
+              <input
+                type="text"
+                id="messagesCreateGroupName"
+                class="messages-create-group-input"
+                autocomplete="off"
+                maxlength="120"
+              />
+            </label>
+            <div class="messages-create-group-users-wrap">
+              <span class="messages-create-group-label">Участники</span>
+              <div id="messagesCreateGroupUsers" class="messages-create-group-users" role="group" aria-label="Участники группового чата"></div>
+            </div>
+            <p id="messagesCreateGroupError" class="messages-create-group-error" hidden></p>
+            <div class="messages-create-group-actions">
+              <button type="button" id="messagesCreateGroupSaveBtn" class="btn-primary messages-create-group-save-btn">Сохранить</button>
+              <button type="button" id="messagesCreateGroupCancelBtn" class="messages-create-group-cancel-btn">Отменить</button>
+            </div>
+          </div>
+        </dialog>
 
         <div id="messagesDialogView" class="messages-dialog-view" hidden>
           <header class="messages-dialog-header">

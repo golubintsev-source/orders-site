@@ -72,7 +72,7 @@ const SECTION_LABELS = {
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
   statistics: "Статистика",
-  messages: "Сообщения",
+  messages: "Чаты",
   voice: "Голосовое управление",
 };
 
