@@ -316,17 +316,15 @@ h2 {
   background: #eff6ff;
 }
 
-/* user_lite: пункты Баланс, Заказы в Excel, Настройки, Расчёты не показываются (дублирует логику hidden в JS) */
+/* user_lite: пункты Баланс, Заказы в Excel, Расчёты не показываются (дублирует логику hidden в JS) */
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="balance"],
-#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="settings"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="calculations"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="orders-excel"] {
   display: none !important;
 }
 
-/* user_shop: пункты Баланс, Настройки, Расчеты не показываются (дублирует логику hidden в JS) */
+/* user_shop: пункты Баланс, Расчеты не показываются (дублирует логику hidden в JS) */
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="balance"],
-#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="settings"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="calculations"] {
   display: none !important;
 }
@@ -5686,67 +5684,6 @@ th {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow: hidden;
-}
-
-.messages-push-bar {
-  flex-shrink: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f8fafc;
-}
-
-.messages-push-hint {
-  flex: 1 1 200px;
-  margin: 0;
-  font-size: 13px;
-  color: #4b5563;
-  line-height: 1.35;
-}
-
-.messages-push-toggle-btn {
-  flex-shrink: 0;
-  padding: 6px 12px;
-  border: 1px solid #1f6feb;
-  border-radius: 8px;
-  background: #fff;
-  color: #1f6feb;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.messages-push-toggle-btn:hover {
-  background: #eff6ff;
-}
-
-.messages-push-toggle-btn--active {
-  background: #1f6feb;
-  color: #fff;
-}
-
-.messages-push-toggle-btn--active:hover {
-  background: #1a5fd4;
-}
-
-.messages-push-toggle-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.messages-push-message {
-  flex: 1 1 100%;
-  margin: 0;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.messages-push-message--error {
-  color: #dc2626;
 }
 
 /* ——— Уровень 1: список чатов ——— */

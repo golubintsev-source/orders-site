@@ -1,6 +1,5 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
-import { isAdmin } from "./roles.js";
 
 let cachedVapidPublicKey = null;
 let deferredInstallPrompt = null;
@@ -258,10 +257,6 @@ async function refreshPushSettingsUi() {
   const hint = document.getElementById("pushNotificationsHint");
   if (!card || !btn) return;
 
-  if (!isAdmin()) {
-    card.hidden = true;
-    return;
-  }
   card.hidden = false;
 
   const status = await getPushStatus();
@@ -281,7 +276,7 @@ async function refreshPushSettingsUi() {
     hint.textContent = getDesktopInstallHint();
   } else if (hint) {
     hint.textContent =
-      "Уведомления о новых сообщениях (всем) и о задачах (админам). Включите также на странице «Сообщения».";
+      "Включите уведомления — при новом сообщении придёт push, как в мессенджере.";
   }
 
   const installBtn = document.getElementById("pushNotificationsInstallBtn");
@@ -290,7 +285,7 @@ async function refreshPushSettingsUi() {
   }
 
   if (status.subscribed && status.permission === "granted") {
-    btn.textContent = "Отключить уведомления";
+    btn.textContent = "Уведомления включены";
     btn.dataset.pushAction = "unsubscribe";
     btn.disabled = false;
   } else {
@@ -405,102 +400,21 @@ export function initPushNotificationsSection() {
     }
 
     await refreshPushSettingsUi();
-    await refreshMessagesPushUi();
   });
 
   void refreshPushSettingsUi();
 }
 
-function setMessagesPushUiMessage(text, isError = false) {
-  const el = document.getElementById("messagesPushMessage");
-  if (!el) return;
-  el.textContent = text || "";
-  el.classList.toggle("messages-push-message--error", Boolean(isError && text));
-}
-
-export async function refreshMessagesPushUi() {
-  const bar = document.getElementById("messagesPushBar");
-  const btn = document.getElementById("messagesPushToggleBtn");
-  const hint = document.getElementById("messagesPushHint");
-  if (!bar || !btn) return;
-
-  const status = await getPushStatus();
-  if (!status.supported) {
-    bar.hidden = true;
-    return;
-  }
-
-  bar.hidden = false;
-
-  if (status.ios && !status.standalone && hint) {
-    hint.textContent =
-      "Чтобы получать сообщения на iPhone, добавьте сайт на экран «Домой» и откройте с иконки.";
-  } else if (!status.standalone && isDesktopBrowser() && hint) {
-    hint.textContent = "Установите приложение с иконки в меню Пуск — тогда придут уведомления о сообщениях.";
-  } else if (hint) {
-    hint.textContent = "Включите уведомления — при новом сообщении придёт push, как в мессенджере.";
-  }
-
-  if (status.subscribed && status.permission === "granted") {
-    btn.textContent = "Уведомления включены";
-    btn.dataset.pushAction = "unsubscribe";
-    btn.disabled = false;
-    btn.classList.add("messages-push-toggle-btn--active");
-  } else {
-    btn.textContent = "Включить уведомления";
-    btn.dataset.pushAction = "subscribe";
-    btn.disabled = status.permission === "denied";
-    btn.classList.remove("messages-push-toggle-btn--active");
-    if (status.permission === "denied") {
-      setMessagesPushUiMessage(
-        "Уведомления заблокированы в настройках браузера или iOS.",
-        true,
-      );
-    }
-  }
-}
-
-export function initMessagesPushSection() {
-  const btn = document.getElementById("messagesPushToggleBtn");
-  if (!btn || btn.dataset.pushBound === "1") return;
-  btn.dataset.pushBound = "1";
-
-  btn.addEventListener("click", async () => {
-    btn.disabled = true;
-    setMessagesPushUiMessage("");
-
-    const action = btn.dataset.pushAction || "subscribe";
-    const result =
-      action === "unsubscribe" ? await unsubscribeFromPush() : await subscribeToPush();
-
-    if (!result.ok) {
-      setMessagesPushUiMessage(result.message || "Не удалось изменить подписку", true);
-    } else if (action === "subscribe") {
-      setMessagesPushUiMessage("Уведомления о сообщениях включены.");
-    } else {
-      setMessagesPushUiMessage("Уведомления отключены.");
-    }
-
-    await refreshMessagesPushUi();
-    if (isAdmin()) await refreshPushSettingsUi();
-  });
-
-  void refreshMessagesPushUi();
-}
-
 export async function initPushNotifications() {
   initPwaInstallPrompt();
-  if (isAdmin()) initPushNotificationsSection();
-  initMessagesPushSection();
+  initPushNotificationsSection();
   await syncPushSubscriptionIfGranted();
   await syncPushBadgeFromServiceWorker();
-  if (isAdmin()) await refreshPushSettingsUi();
-  await refreshMessagesPushUi();
+  await refreshPushSettingsUi();
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       void syncPushBadgeFromServiceWorker();
-      void refreshMessagesPushUi();
     }
   });
 }

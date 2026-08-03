@@ -147,6 +147,8 @@ async function init() {
     const ordersPromise = loadOrders();
 
     await Promise.all([loadProfile(), loadSettings()]);
+    const { applySettingsAdminBlocksVisibility } = await import("./settings.js");
+    applySettingsAdminBlocksVisibility();
     refreshSectionNavAfterProfile();
     applyRouteOnLoad();
     ensurePopstateRouting();

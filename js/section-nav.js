@@ -367,6 +367,7 @@ export function switchSection(sectionId, opts = {}) {
     void import("./statistics.js").then((m) => m.loadStatistics({ refreshDefaultRange: true }));
   }
   if (sectionId === "settings") {
+    void import("./settings.js").then((m) => m.applySettingsAdminBlocksVisibility());
     void import("./push-notifications.js").then((m) => m.refreshPushNotificationsUi());
   }
   if (sectionId === "order-tasks") {
@@ -382,7 +383,6 @@ export function switchSection(sectionId, opts = {}) {
     });
     void import("./push-notifications.js").then((m) => {
       m.clearPushBadge();
-      m.refreshMessagesPushUi();
     });
   }
   if (prevSectionId === "voice" && sectionId !== "voice") {
