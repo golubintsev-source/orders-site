@@ -448,14 +448,16 @@ function buildChatListEntries(users, rows, groupChats, lastGroupMessages) {
   const userEntries = others.map((user) => {
     const bucket = byPeer.get(String(user.id));
     const last = bucket?.last || null;
-    const count = bucket?.messages?.length || 0;
+    const unreadCount = (bucket?.messages || []).filter(
+      (m) => String(m.recipient_id) === String(uid) && !m.read_at
+    ).length;
     const name = displayNameByEmail(user.email) || user.email || "—";
     return {
       peerId: String(user.id),
       kind: "user",
       name,
       email: user.email,
-      count,
+      unreadCount,
       last,
       sortAt: last?.created_at || "",
     };
@@ -468,7 +470,7 @@ function buildChatListEntries(users, rows, groupChats, lastGroupMessages) {
       kind: "group",
       name: chat.name,
       email: "",
-      count: 0,
+      unreadCount: 0,
       last: last
         ? {
             ...last,
@@ -515,14 +517,11 @@ function renderChatListItem(entry) {
     : "Нет сообщений";
   const time = last ? formatChatListTime(last.created_at) : "";
   const ticks = entry.kind === "group" ? "" : renderChatListTicks(last, uid);
-  const countLabel = entry.count > 0 ? String(entry.count) : "";
+  const unreadCount = entry.unreadCount || 0;
+  const countLabel = unreadCount > 0 ? (unreadCount > 99 ? "99+" : String(unreadCount)) : "";
   const hue = avatarHue(entry.kind === "group" ? entry.peerId : entry.email || entry.peerId);
   const initial = avatarInitial(entry.name);
-  const unread =
-    entry.kind !== "group" &&
-    last &&
-    String(last.recipient_id) === String(uid) &&
-    !last.read_at;
+  const unread = entry.kind !== "group" && unreadCount > 0;
 
   return `
     <button
@@ -542,7 +541,7 @@ function renderChatListItem(entry) {
         </span>
         <span class="messages-chat-item-bottom">
           <span class="messages-chat-item-preview">${escapeHtml(preview || " ")}</span>
-          ${countLabel ? `<span class="messages-chat-item-count" title="Сообщений в переписке">${escapeHtml(countLabel)}</span>` : ""}
+          ${countLabel ? `<span class="messages-chat-item-count" title="Непрочитанных сообщений">${escapeHtml(countLabel)}</span>` : ""}
         </span>
       </span>
     </button>
