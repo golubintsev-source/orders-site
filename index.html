@@ -871,58 +871,86 @@
           <button type="button" id="messagesPushToggleBtn" class="messages-push-toggle-btn">Включить уведомления</button>
           <p id="messagesPushMessage" class="messages-push-message"></p>
         </div>
-        <div id="messagesFeed" class="messages-feed" role="log" aria-live="polite" aria-label="Сообщения"></div>
-        <p id="messagesPageMessage" class="messages-page-message"></p>
-        <div class="messages-composer">
-          <div class="messages-composer-tools" aria-label="Вставка в сообщение">
+
+        <div id="messagesChatListView" class="messages-chat-list-view">
+          <header class="messages-chat-list-header">
+            <h2 class="messages-chat-list-title">Сообщения</h2>
+          </header>
+          <div id="messagesChatList" class="messages-chat-list" role="list" aria-label="Список чатов"></div>
+          <p id="messagesChatListMessage" class="messages-page-message"></p>
+        </div>
+
+        <div id="messagesDialogView" class="messages-dialog-view" hidden>
+          <header class="messages-dialog-header">
             <button
               type="button"
-              id="messagesPickUserBtn"
-              class="messages-composer-tool-btn"
-              title="Выбрать получателя"
-              aria-label="Выбрать получателя"
-              aria-haspopup="listbox"
-              aria-expanded="false"
+              id="messagesBackBtn"
+              class="messages-back-btn"
+              title="Назад к списку"
+              aria-label="Назад к списку чатов"
             >
-              <svg class="messages-composer-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
-                <path d="M5 20c0-4 3.5-6 7-6s7 2 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+              <svg class="messages-back-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <button
-              type="button"
-              id="messagesPickOrderBtn"
-              class="messages-composer-tool-btn"
-              title="Вставить заказ"
-              aria-label="Вставить заказ"
-              aria-haspopup="listbox"
-              aria-expanded="false"
-            >
-              <svg class="messages-composer-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 2h9l3 3v17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
-                <path d="M15 2v5h5" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
-                <path d="M7 13h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M7 17h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <div class="messages-dialog-heading">
+              <p id="messagesDialogTitle" class="messages-dialog-title">Чат</p>
+              <p id="messagesDialogSubtitle" class="messages-dialog-subtitle" hidden></p>
+            </div>
+          </header>
+          <div id="messagesFeed" class="messages-feed" role="log" aria-live="polite" aria-label="Сообщения"></div>
+          <p id="messagesPageMessage" class="messages-page-message"></p>
+          <div class="messages-composer">
+            <div class="messages-composer-tools" aria-label="Вставка в сообщение">
+              <button
+                type="button"
+                id="messagesPickUserBtn"
+                class="messages-composer-tool-btn"
+                title="Выбрать получателя"
+                aria-label="Выбрать получателя"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+              >
+                <svg class="messages-composer-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
+                  <path d="M5 20c0-4 3.5-6 7-6s7 2 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+                </svg>
+              </button>
+              <button
+                type="button"
+                id="messagesPickOrderBtn"
+                class="messages-composer-tool-btn"
+                title="Вставить заказ"
+                aria-label="Вставить заказ"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+              >
+                <svg class="messages-composer-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 2h9l3 3v17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
+                  <path d="M15 2v5h5" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
+                  <path d="M7 13h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M7 17h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="messages-composer-input-wrap">
+              <textarea
+                id="messagesComposerInput"
+                class="messages-composer-input"
+                rows="2"
+                placeholder="Новое сообщение…"
+                autocomplete="off"
+                enterkeyhint="send"
+              ></textarea>
+            </div>
+            <ul id="messagesComposerSuggestions" class="messages-suggestions" hidden role="listbox" aria-label="Подсказки"></ul>
+            <button type="button" id="messagesSendBtn" class="btn-primary messages-send-btn" title="Отправить" aria-label="Отправить">
+              <svg class="messages-send-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
               </svg>
             </button>
           </div>
-          <div class="messages-composer-input-wrap">
-            <textarea
-              id="messagesComposerInput"
-              class="messages-composer-input"
-              rows="2"
-              placeholder="Новое сообщение…"
-              autocomplete="off"
-              enterkeyhint="send"
-            ></textarea>
-          </div>
-          <ul id="messagesComposerSuggestions" class="messages-suggestions" hidden role="listbox" aria-label="Подсказки"></ul>
-          <button type="button" id="messagesSendBtn" class="btn-primary messages-send-btn" title="Отправить" aria-label="Отправить">
-            <svg class="messages-send-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-              <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            </svg>
-          </button>
         </div>
       </div>
     </section>
