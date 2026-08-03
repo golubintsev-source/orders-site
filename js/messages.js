@@ -374,7 +374,7 @@ function renderMessageAttachmentHtml(row) {
   return `<div class="message-item-attachment" data-storage-path="${escapeHtml(row.attachment_storage_path || "")}" data-thumb-path="${escapeHtml(row.attachment_thumbnail_path || "")}" data-mime-type="${mime}" data-file-name="${escapeHtml(fileName)}" data-file-size="${escapeHtml(size)}">
       <div class="message-item-photo-loading" aria-hidden="true">Загрузка…</div>
       <a class="message-item-photo-link" href="#" target="_blank" rel="noopener noreferrer" title="Открыть полное изображение" hidden>
-        <img class="message-item-photo" alt="${alt}" loading="lazy" decoding="async" />
+        <img class="message-item-photo" alt="${alt}" decoding="async" />
       </a>
       <button
         type="button"
@@ -425,6 +425,19 @@ function renderMessageItem(row) {
   `;
 }
 
+function waitForImageSettle(img, timeoutMs = 4000) {
+  if (!img || img.complete) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    img.addEventListener("load", finish, { once: true });
+    img.addEventListener("error", finish, { once: true });
+  });
+}
+
 async function hydrateMessageAttachments(root = document.getElementById("messagesFeed")) {
   if (!root) return;
   const nodes = [...root.querySelectorAll(".message-item-attachment[data-storage-path]")];
@@ -451,6 +464,7 @@ async function hydrateMessageAttachments(root = document.getElementById("message
       link.hidden = false;
       if (loading) loading.remove();
       el.dataset.hydrated = "1";
+      await waitForImageSettle(img);
     })
   );
 }
@@ -884,8 +898,17 @@ export async function loadMessages() {
     ? rows.map(renderMessageItem).join("")
     : `<p class="messages-empty">${emptyText}</p>`;
 
-  feed.scrollTop = feed.scrollHeight;
-  void hydrateMessageAttachments(feed);
+  scrollMessagesFeedToBottom(feed);
+  const keepAtBottom = (event) => {
+    if (event.target?.tagName === "IMG") scrollMessagesFeedToBottom(feed);
+  };
+  feed.addEventListener("load", keepAtBottom, true);
+  try {
+    await hydrateMessageAttachments(feed);
+  } finally {
+    feed.removeEventListener("load", keepAtBottom, true);
+  }
+  scrollMessagesFeedToBottom(feed);
 
   if (!isGroupChat()) {
     await markIncomingMessagesRead(rows);
@@ -909,6 +932,19 @@ function getFeedMessageIds() {
 
 function isFeedAtBottom(feed, threshold = 48) {
   return feed.scrollHeight - feed.scrollTop - feed.clientHeight <= threshold;
+}
+
+/** Прокрутка к последнему сообщению с учётом отложенной раскладки flex/картинок. */
+function scrollMessagesFeedToBottom(feed) {
+  if (!feed) return;
+  const pin = () => {
+    feed.scrollTop = feed.scrollHeight;
+  };
+  pin();
+  requestAnimationFrame(() => {
+    pin();
+    requestAnimationFrame(pin);
+  });
 }
 
 function appendMessagesToFeed(rows) {
@@ -944,9 +980,13 @@ function appendMessagesToFeed(rows) {
   }
 
   if (atBottom) {
-    feed.scrollTop = feed.scrollHeight;
+    scrollMessagesFeedToBottom(feed);
   }
-  void hydrateMessageAttachments(feed);
+  void hydrateMessageAttachments(feed).then(() => {
+    if (atBottom || isFeedAtBottom(feed)) {
+      scrollMessagesFeedToBottom(feed);
+    }
+  });
 }
 
 async function syncOutgoingReadStatus() {
