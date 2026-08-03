@@ -132,7 +132,23 @@ function noteGroupChatsSupport(error) {
   return false;
 }
 
-/** Время в списке чатов: HH:MM сегодня, иначе число дня месяца. */
+/** Родительный падеж месяца для даты в списке чатов («25 июля»). */
+const CHAT_LIST_MONTHS_GENITIVE = [
+  "января",
+  "февраля",
+  "марта",
+  "апреля",
+  "мая",
+  "июня",
+  "июля",
+  "августа",
+  "сентября",
+  "октября",
+  "ноября",
+  "декабря",
+];
+
+/** Время в списке чатов: HH:MM сегодня, иначе «25 июля». */
 function formatChatListTime(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -144,7 +160,7 @@ function formatChatListTime(iso) {
     const min = String(d.getMinutes()).padStart(2, "0");
     return `${h}:${min}`;
   }
-  return String(d.getDate());
+  return `${d.getDate()} ${CHAT_LIST_MONTHS_GENITIVE[d.getMonth()]}`;
 }
 
 function previewMessageBody(body, recipientEmail) {
