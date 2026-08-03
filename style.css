@@ -5681,6 +5681,14 @@ th {
   box-shadow: 0 2px 6px rgba(220, 38, 38, 0.45);
 }
 
+/*
+ * Убираем нижний padding контейнера на экране чатов —
+ * иначе под полем ввода остаётся пустая полоса (~12–16px).
+ */
+.container:has(#section-messages.content-section.active) {
+  padding-bottom: 0;
+}
+
 .messages-page {
   display: flex;
   flex-direction: column;
@@ -6721,13 +6729,14 @@ th {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  /* Без лишнего «пустого ряда» под полем: только safe-area (или минимальный зазор). */
+  padding: 10px 12px max(4px, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid #dbe3ec;
   background: rgba(255, 255, 255, 0.96);
 }
 
 html.keyboard-open .messages-composer {
-  padding-bottom: 10px;
+  padding-bottom: 4px;
 }
 
 .messages-composer-tools {
@@ -7016,9 +7025,34 @@ html.keyboard-open .messages-composer {
 }
 
 @media (max-width: 768px) {
+  /*
+   * Чат на всю оставшуюся высоту экрана: поле ввода у нижнего края,
+   * без зазора от padding контейнера и «магических» 100vh − 100px.
+   */
+  .container:has(#section-messages.content-section.active) {
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+    min-height: 100dvh;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+  }
+
+  #section-messages.content-section.active {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .messages-page {
-    min-height: calc(100vh - 100px);
-    max-height: calc(100vh - 100px);
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    height: 100%;
     border-radius: 0;
     border-left: none;
     border-right: none;
