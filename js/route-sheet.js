@@ -106,11 +106,11 @@ const HEADERS_MAIN = [
 const HEADERS_DELIVERY = [
   "№",
   "Номер",
-  "Дата",
   "Клиент",
   "Адрес",
   "Описание",
   "Остаток",
+  "Подпись получателя",
 ];
 
 /**
@@ -118,7 +118,23 @@ const HEADERS_DELIVERY = [
  * плюс перенос текста. Без «вписать в ширину 1 стр.» — иначе узкие колонки не растягиваются на лист.
  * Индекс совпадает с HEADERS_DELIVERY.
  */
-const ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS = [5, 11, 10, 22, 27, 19, 10];
+const ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS = [5, 11, 22, 27, 19, 10, 18];
+
+/** Родительный падеж месяца для заголовка «Маршрутный лист на …». */
+const ROUTE_SHEET_ML_MONTHS_GENITIVE = [
+  "января",
+  "февраля",
+  "марта",
+  "апреля",
+  "мая",
+  "июня",
+  "июля",
+  "августа",
+  "сентября",
+  "октября",
+  "ноября",
+  "декабря",
+];
 
 const ROUTE_SHEET_DELIVERY_EXCEL_BORDER_THIN = {
   top: { style: "thin" },
@@ -2067,6 +2083,46 @@ function excelFileNameTimestamp() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
 }
 
+/**
+ * Дата МЛ и ФИО водителя с формы маршрутного листа (над кнопкой выгрузки).
+ * @returns {{ mlDateKey: string, driverName: string }}
+ */
+function getRouteSheetMlMetaFromDom() {
+  const mlDateEl = document.getElementById("routeSheetMlDate");
+  const driverEl = document.getElementById("routeSheetDriver");
+  const mlDateKey = String(mlDateEl?.value ?? "").trim();
+  const driverName = String(driverEl?.value ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+  return { mlDateKey, driverName };
+}
+
+/**
+ * «Маршрутный лист на 3 августа 2026» по YYYY-MM-DD (локальная дата, без сдвига UTC).
+ * @param {string} isoYmd
+ */
+function formatRouteSheetMlTitleDate(isoYmd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(isoYmd || "").trim());
+  if (!m) return "";
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (!year || month < 1 || month > 12 || day < 1 || day > 31) return "";
+  const monthName = ROUTE_SHEET_ML_MONTHS_GENITIVE[month - 1];
+  return `${day} ${monthName} ${year}`;
+}
+
+/**
+ * Две строки над таблицей Excel «Доставка»: заголовок с датой МЛ и ФИО водителя.
+ * @returns {string[][]}
+ */
+function buildRouteSheetDeliveryExcelPreamble() {
+  const { mlDateKey, driverName } = getRouteSheetMlMetaFromDom();
+  const datePart = formatRouteSheetMlTitleDate(mlDateKey);
+  const title = datePart ? `Маршрутный лист на ${datePart}` : "Маршрутный лист";
+  return [[title], [driverName]];
+}
+
 function applyAutoColumnWidths(ws, aoa) {
   if (!aoa.length) return;
   const numCols = Math.max(0, ...aoa.map((row) => row.length));
@@ -2224,8 +2280,9 @@ async function captureRouteDeliveryMapCanvasForExcel() {
  * @param {string[]} headers
  * @param {unknown[][]} rows
  * @param {HTMLCanvasElement | null} mapCanvas
+ * @param {string[][]} [preambleRows] строки над таблицей (дата МЛ, водитель)
  */
-async function exportRouteSheetDeliveryWorkbookExcelJs(headers, rows, mapCanvas) {
+async function exportRouteSheetDeliveryWorkbookExcelJs(headers, rows, mapCanvas, preambleRows = []) {
   const ExcelJS = getExcelJsConstructor();
   if (!ExcelJS) throw new Error("ExcelJS missing");
 
@@ -2245,21 +2302,36 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(headers, rows, mapCanvas)
     },
   });
 
+  const preamble = Array.isArray(preambleRows) ? preambleRows : [];
+  for (const pr of preamble) worksheet.addRow(pr);
+  const headerRowIndex = preamble.length + 1;
   worksheet.addRow(headers);
   for (const r of rows) worksheet.addRow(r);
 
+  const numCols = headers.length;
+  for (let i = 0; i < preamble.length; i++) {
+    const rn = i + 1;
+    if (numCols > 1) {
+      worksheet.mergeCells(rn, 1, rn, numCols);
+    }
+    const cell = worksheet.getRow(rn).getCell(1);
+    cell.font = { ...cell.font, bold: true, size: i === 0 ? 14 : 12 };
+    cell.alignment = { vertical: "middle", wrapText: true };
+  }
+
   const wrapTop = { vertical: "top", wrapText: true };
-  const tableRowEnd = 1 + rows.length;
-  for (let rn = 1; rn <= tableRowEnd; rn++) {
+  const tableRowEnd = headerRowIndex + rows.length;
+  for (let rn = headerRowIndex; rn <= tableRowEnd; rn++) {
     const row = worksheet.getRow(rn);
-    row.eachCell((cell) => {
+    for (let c = 1; c <= numCols; c++) {
+      const cell = row.getCell(c);
       cell.alignment = wrapTop;
       cell.border = ROUTE_SHEET_DELIVERY_EXCEL_BORDER_THIN;
-      if (rn === 1) {
+      if (rn === headerRowIndex) {
         cell.font = { ...cell.font, bold: true };
         cell.fill = ROUTE_SHEET_DELIVERY_EXCEL_HEADER_FILL;
       }
-    });
+    }
   }
 
   const colW = ROUTE_SHEET_DELIVERY_EXCEL_COL_WIDTHS;
@@ -2293,7 +2365,7 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(headers, rows, mapCanvas)
  * @param {unknown[][]} rows
  * @param {string} sheetName
  * @param {string} filePrefix
- * @param {{ deliveryPrintLayout?: boolean }} [opts]
+ * @param {{ deliveryPrintLayout?: boolean, preambleRows?: string[][] }} [opts]
  */
 async function exportSheet(headers, rows, sheetName, filePrefix, opts = {}) {
   let XLSX;
@@ -2305,13 +2377,20 @@ async function exportSheet(headers, rows, sheetName, filePrefix, opts = {}) {
     if (msgEl) msgEl.textContent = "Не удалось загрузить модуль Excel. Обновите страницу.";
     return;
   }
-  const aoa = [headers, ...rows];
+  const preamble = Array.isArray(opts.preambleRows) ? opts.preambleRows : [];
+  const aoa = [...preamble, headers, ...rows];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  const numCols = Math.max(0, ...aoa.map((row) => row.length));
+  const numCols = Math.max(headers.length, ...aoa.map((row) => row.length));
   if (opts.deliveryPrintLayout) {
     applyDeliveryPrintColumnWidthsXlsx(ws, numCols);
   } else {
     applyAutoColumnWidths(ws, aoa);
+  }
+  if (preamble.length && numCols > 1) {
+    if (!ws["!merges"]) ws["!merges"] = [];
+    for (let r = 0; r < preamble.length; r++) {
+      ws["!merges"].push({ s: { r, c: 0 }, e: { r, c: numCols - 1 } });
+    }
   }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
@@ -2354,7 +2433,6 @@ function rowDeliveryMainValues(order, pointNum) {
   return [
     pointNum,
     routeSheetOrderChipPlain(order) || "",
-    formatDateShortRU(order.delivery_date),
     clientWithPhone,
     addressWithKm,
     routeSheetDeliveryDescriptionFullPlain(order),
@@ -2363,6 +2441,7 @@ function rowDeliveryMainValues(order, pointNum) {
       : !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
         ? formatAmount(order.remaining_amount)
         : "-",
+    "", // Подпись получателя — пустое поле для подписи на бумаге
   ];
 }
 
@@ -2402,6 +2481,7 @@ export async function exportRouteSheetDeliveryExcel() {
   const rows = numberedEntries.map(({ order, pointNum }) =>
     rowDeliveryMainValues(order, pointNum),
   );
+  const preambleRows = buildRouteSheetDeliveryExcelPreamble();
 
   if (exportBtn) exportBtn.disabled = true;
   if (msgEl) msgEl.textContent = "Готовим Excel с картой…";
@@ -2417,6 +2497,7 @@ export async function exportRouteSheetDeliveryExcel() {
   if (!ExcelJS || !html2canvas) {
     await exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka", {
       deliveryPrintLayout: true,
+      preambleRows,
     });
     if (msgEl) {
       msgEl.textContent =
@@ -2429,7 +2510,7 @@ export async function exportRouteSheetDeliveryExcel() {
   try {
     ensureRouteDeliveryMap();
     const mapCanvas = await captureRouteDeliveryMapCanvasForExcel();
-    await exportRouteSheetDeliveryWorkbookExcelJs(HEADERS_DELIVERY, rows, mapCanvas);
+    await exportRouteSheetDeliveryWorkbookExcelJs(HEADERS_DELIVERY, rows, mapCanvas, preambleRows);
     if (msgEl) {
       if (!mapCanvas) {
         msgEl.textContent =
@@ -2445,6 +2526,7 @@ export async function exportRouteSheetDeliveryExcel() {
     console.error(e);
     await exportSheet(HEADERS_DELIVERY, rows, "Доставка", "marshrutnyy_list_dostavka", {
       deliveryPrintLayout: true,
+      preambleRows,
     });
     if (msgEl) {
       msgEl.textContent =
