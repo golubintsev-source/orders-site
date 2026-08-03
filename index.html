@@ -1206,6 +1206,22 @@
           <p id="routeSheetDeliveryMapStatus" class="route-sheet-map-status" hidden></p>
           <div id="routeSheetDeliveryMap" class="route-sheet-map" role="region"></div>
         </div>
+        <div class="route-sheet-ml-meta" aria-label="Данные маршрутного листа">
+          <label class="route-sheet-ml-meta-row">
+            <span class="route-sheet-ml-meta-label">Дата МЛ</span>
+            <input type="date" id="routeSheetMlDate" class="route-sheet-date-input route-sheet-ml-date-input" min="2000-01-01" max="2099-12-31" />
+          </label>
+          <label class="route-sheet-ml-meta-row">
+            <span class="route-sheet-ml-meta-label">Водитель</span>
+            <input
+              type="text"
+              id="routeSheetDriver"
+              class="route-sheet-ml-driver-input"
+              autocomplete="name"
+              placeholder="Фамилия Имя Отчество"
+            />
+          </label>
+        </div>
         <button type="button" id="routeSheetExportDeliveryBtn" class="btn-primary route-sheet-export-btn">Выгрузить в Excel</button>
         <h3 class="route-sheet-table-title">Самовывоз</h3>
         <div class="table-wrap route-sheet-table-wrap">
@@ -1315,6 +1331,20 @@
           <label for="settings_installer_rate_per_m2">Стоимость монтажа 1м², руб</label>
           <input type="text" inputmode="numeric" id="settings_installer_rate_per_m2" title="Только целые рубли за 1 м²" />
           <button type="button" id="settingsSaveInstallerRateBtn" class="btn-primary">Сохранить</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="settings-rate-row settings-driver-row">
+          <label for="settings_driver_name">Водитель</label>
+          <input
+            type="text"
+            id="settings_driver_name"
+            class="settings-driver-input"
+            autocomplete="name"
+            placeholder="Фамилия Имя Отчество"
+            title="Фамилия Имя Отчество водителя для доставки"
+          />
+          <button type="button" id="settingsSaveDriverBtn" class="btn-primary">Сохранить</button>
         </div>
       </div>
       <div class="card settings-adjustments-card">

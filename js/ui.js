@@ -53,8 +53,10 @@ import { mergeNewAttachmentsOnChange, pasteImageFromClipboardIntoAttachments } f
 import { initClientAutocomplete } from "./clientAutocomplete.js";
 import {
   saveInstallerRate,
+  saveDriverName,
   saveBalanceAdjustments,
   updateSettingsSaveButtonState,
+  updateDriverSaveButtonState,
   updateAdjustmentsSaveButtonState,
   BALANCE_ADJ_FIELDS,
 } from "./settings.js";
@@ -388,6 +390,19 @@ export function bindUIEvents() {
     settingsInstallerRateInput.addEventListener("input", onSettingsRateInput);
     settingsInstallerRateInput.addEventListener("change", onSettingsRateInput);
     settingsInstallerRateInput.addEventListener("blur", onSettingsRateInput);
+  }
+
+  const settingsSaveDriverBtn = document.getElementById("settingsSaveDriverBtn");
+  const settingsDriverInput = document.getElementById("settings_driver_name");
+  if (settingsSaveDriverBtn && settingsDriverInput) {
+    settingsSaveDriverBtn.addEventListener("click", async () => {
+      const ok = await saveDriverName(settingsDriverInput.value);
+      setMessage(ok ? "Водитель сохранён" : "Ошибка сохранения водителя", ok ? "" : "#d32f2f");
+    });
+    const onDriverInput = () => updateDriverSaveButtonState();
+    settingsDriverInput.addEventListener("input", onDriverInput);
+    settingsDriverInput.addEventListener("change", onDriverInput);
+    settingsDriverInput.addEventListener("blur", onDriverInput);
   }
 
   const settingsSaveAdjustmentsBtn = document.getElementById("settingsSaveAdjustmentsBtn");
