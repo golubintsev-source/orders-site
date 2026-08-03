@@ -5902,9 +5902,13 @@ th {
   text-align: center;
 }
 
-.messages-chat-item--unread .messages-chat-item-count {
-  background: #3b82f6;
-  color: #fff;
+.messages-chat-item--unread .messages-chat-item-name {
+  font-weight: 700;
+}
+
+.messages-chat-item--unread .messages-chat-item-preview {
+  font-weight: 600;
+  color: #334155;
 }
 
 .messages-chat-item .message-item-ticks {

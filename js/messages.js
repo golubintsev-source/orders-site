@@ -365,7 +365,11 @@ function renderChatListTicks(last, uid) {
   const isOut = String(last.sender_id) === String(uid);
   if (!isOut) return "";
   const state = messageDeliveryState(last, true);
-  return renderOutgoingTicksHtml(state);
+  // В списке чатов: прочитано — две синие, доставлено/отправлено — одна.
+  if (state.read) {
+    return renderOutgoingTicksHtml({ ...state, status: "read" });
+  }
+  return renderOutgoingTicksHtml({ ...state, status: "sent" });
 }
 
 function renderChatListItem(entry) {
