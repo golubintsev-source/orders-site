@@ -1916,6 +1916,13 @@ function hideMessageActionMenu() {
   document.querySelector(".message-item--menu-open")?.classList.remove("message-item--menu-open");
 }
 
+function clearMessageTextSelection() {
+  const selection = window.getSelection?.();
+  if (selection && selection.rangeCount > 0) {
+    selection.removeAllRanges();
+  }
+}
+
 function showMessageActionMenu(messageEl, clientX, clientY) {
   const menu = document.getElementById("messagesActionMenu");
   if (!menu || !messageEl) return;
@@ -1928,6 +1935,12 @@ function showMessageActionMenu(messageEl, clientX, clientY) {
 
   const isOwn = messageEl.getAttribute("data-own") === "1";
   actionMenuMessageId = String(messageId);
+
+  clearMessageTextSelection();
+  requestAnimationFrame(() => {
+    clearMessageTextSelection();
+    setTimeout(clearMessageTextSelection, 50);
+  });
 
   document.querySelector(".message-item--menu-open")?.classList.remove("message-item--menu-open");
   messageEl.classList.add("message-item--menu-open");
@@ -2252,7 +2265,14 @@ function onFeedContextMenu(e) {
   if (!item) return;
   if (e.target.closest("a, button, input, textarea")) return;
   e.preventDefault();
+  clearMessageTextSelection();
   showMessageActionMenu(item, e.clientX, e.clientY);
+}
+
+function onFeedSelectStart(e) {
+  if (e.target.closest(".message-item[data-message-id]")) {
+    e.preventDefault();
+  }
 }
 
 function highlightMessageInFeed(messageId) {
@@ -2737,6 +2757,7 @@ export function initMessagesSection() {
     feed.addEventListener("pointerup", onFeedPointerUp);
     feed.addEventListener("pointercancel", onFeedPointerUp);
     feed.addEventListener("contextmenu", onFeedContextMenu);
+    feed.addEventListener("selectstart", onFeedSelectStart);
   }
 
   const actionMenu = document.getElementById("messagesActionMenu");
