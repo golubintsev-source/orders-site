@@ -7235,6 +7235,7 @@ html.keyboard-open .messages-composer {
 
 .voice-feed {
   flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px;
   display: flex;
@@ -7522,7 +7523,7 @@ html.keyboard-open .voice-composer {
   font: inherit;
   /* ≥16px — иначе iOS зумит страницу при фокусе */
   font-size: 16px;
-  line-height: 44px;
+  line-height: normal;
   background: #fff;
   box-sizing: border-box;
 }
@@ -7556,24 +7557,57 @@ html.keyboard-open .voice-composer {
 
 @media (max-width: 768px) {
   /*
-   * Голос на всю оставшуюся высоту под фикс. topbar:
-   * композер у нижнего края экрана (iPhone PWA), без зазора
-   * от «магических» 100vh − 100px и padding контейнера.
+   * Голос на всю высоту под фикс. topbar; композер — position:fixed
+   * к низу viewport (iPhone PWA), без серой полосы body под полем.
    */
   .container:has(#section-voice.content-section.active) {
     padding-left: 0;
     padding-right: 0;
     padding-bottom: 0;
+    height: 100dvh;
+    height: 100svh;
+    min-height: 100dvh;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  #section-voice.content-section.active {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .voice-page {
-    min-height: calc(100vh - env(safe-area-inset-top, 0px) - 56px);
-    max-height: calc(100vh - env(safe-area-inset-top, 0px) - 56px);
-    min-height: calc(100dvh - env(safe-area-inset-top, 0px) - 56px);
-    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 56px);
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    height: 100%;
     border-radius: 0;
     border-left: none;
     border-right: none;
+    /* Место под фикс. композер: 8+44+8 + safe-area */
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .voice-composer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  html.keyboard-open .voice-composer {
+    /* При открытой клавиатуре visualViewport-логика секции уже жмёт layout;
+       оставляем fixed у низа видимой области без двойного safe-area. */
+    padding-bottom: 8px;
   }
 
   .voice-bubble {
