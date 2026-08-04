@@ -6624,6 +6624,7 @@ th {
   color: #475569;
 }
 
+.messages-pending-attachment-crop,
 .messages-pending-attachment-remove {
   display: flex;
   align-items: center;
@@ -6639,6 +6640,11 @@ th {
   flex-shrink: 0;
 }
 
+.messages-pending-attachment-crop[hidden] {
+  display: none !important;
+}
+
+.messages-pending-attachment-crop:hover,
 .messages-pending-attachment-remove:hover {
   background: #e2e8f0;
   color: #0f172a;

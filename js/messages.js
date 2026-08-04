@@ -8,6 +8,7 @@ import {
   attachStorageFileToOrder,
   cropImageAttachment,
   getSignedFileUrl,
+  isCroppableImageFile,
   uploadChatPhoto,
 } from "./files.js";
 
@@ -1832,10 +1833,12 @@ function clearPendingChatPhoto() {
   pendingChatPhoto = null;
   const wrap = document.getElementById("messagesPendingAttachment");
   const thumb = document.getElementById("messagesPendingAttachmentThumb");
+  const cropBtn = document.getElementById("messagesPendingAttachmentCrop");
   if (thumb) {
     thumb.removeAttribute("src");
     thumb.alt = "";
   }
+  if (cropBtn) cropBtn.hidden = true;
   if (wrap) wrap.hidden = true;
 }
 
@@ -1846,10 +1849,12 @@ function setPendingChatPhoto(file) {
   pendingChatPhoto = { file, previewUrl };
   const wrap = document.getElementById("messagesPendingAttachment");
   const thumb = document.getElementById("messagesPendingAttachmentThumb");
+  const cropBtn = document.getElementById("messagesPendingAttachmentCrop");
   if (thumb) {
     thumb.src = previewUrl;
     thumb.alt = file.name || "Фото";
   }
+  if (cropBtn) cropBtn.hidden = !isCroppableImageFile(file);
   if (wrap) wrap.hidden = false;
 }
 
@@ -1883,13 +1888,21 @@ async function handleChatPhotoPicked(fileList) {
     return;
   }
 
-  const cropped = await cropImageAttachment(file);
-  if (cropped === null) return;
-  setPendingChatPhoto(cropped);
+  /* Сразу в превью — обрезка опциональна через кнопку у вложения. */
+  setPendingChatPhoto(file);
   if (msg) {
     msg.textContent = "";
     msg.classList.remove("messages-page-message--error");
   }
+}
+
+async function handlePendingChatPhotoCrop() {
+  const file = pendingChatPhoto?.file;
+  if (!file || !isCroppableImageFile(file)) return;
+
+  const cropped = await cropImageAttachment(file);
+  if (cropped === null) return;
+  setPendingChatPhoto(cropped);
 }
 
 function hideMessageActionMenu() {
@@ -2796,6 +2809,7 @@ export function initMessagesSection() {
   const galleryInput = document.getElementById("messagesPhotoGalleryInput");
   const cameraInput = document.getElementById("messagesPhotoCameraInput");
   const pendingRemoveBtn = document.getElementById("messagesPendingAttachmentRemove");
+  const pendingCropBtn = document.getElementById("messagesPendingAttachmentCrop");
 
   if (userPickBtn && input) {
     userPickBtn.addEventListener("mousedown", (e) => e.preventDefault());
@@ -2853,6 +2867,12 @@ export function initMessagesSection() {
     cameraInput.addEventListener("change", () => {
       void handleChatPhotoPicked(cameraInput.files);
       cameraInput.value = "";
+    });
+  }
+
+  if (pendingCropBtn) {
+    pendingCropBtn.addEventListener("click", () => {
+      void handlePendingChatPhotoCrop();
     });
   }
 
