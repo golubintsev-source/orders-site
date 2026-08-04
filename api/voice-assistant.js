@@ -24,6 +24,16 @@ const PAYMENT_STATUSES = [
 ];
 const MONEY_TO = ["Дима", "Вова", "Безнал", "Касса"];
 const DELIVERY = ["Доставка", "Самовывоз"];
+const CALC_FROM_PLACES = ["Вова", "Дима", "Касса", "Безнал", "Другое"];
+const CALC_TO_PLACES = ["Вова", "Дима", "Касса", "Зарплата", "Покупка", "Списание", "Безнал", "Другое"];
+const DEFAULT_EXPENSE_TO_PLACE = "Покупка";
+const VOICE_ACTIONS = [
+  "answer",
+  "clarify",
+  "propose_create_order",
+  "propose_update_order",
+  "propose_create_calculation",
+];
 
 const RU_COUNT_WORDS = {
   один: 1,
@@ -647,6 +657,145 @@ function missingCreateRequired(draft) {
   return missing;
 }
 
+function sanitizeCalculationDraft(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  if ("amount" in raw) {
+    const n = Number(raw.amount);
+    out.amount = Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+  }
+  const desc = raw.description ?? raw.comment ?? null;
+  if (desc != null && desc !== "") {
+    out.description = String(desc).trim() || null;
+  } else if ("description" in raw || "comment" in raw) {
+    out.description = null;
+  }
+  if ("to_place" in raw) {
+    const to = raw.to_place == null || raw.to_place === "" ? null : String(raw.to_place).trim();
+    out.to_place = to && CALC_TO_PLACES.includes(to) ? to : to ? null : null;
+  }
+  if ("from_place" in raw) {
+    const from = raw.from_place == null || raw.from_place === "" ? null : String(raw.from_place).trim();
+    out.from_place = from && CALC_FROM_PLACES.includes(from) ? from : null;
+  }
+  return out;
+}
+
+function missingCalculationRequired(draft) {
+  const missing = [];
+  if (draft?.amount == null || !(Number(draft.amount) > 0)) missing.push("сумму");
+  if (!String(draft?.description || "").trim()) missing.push("на что потрачены средства");
+  return missing;
+}
+
+function listCalculationParamsForSpeak(draft) {
+  if (!draft) return "";
+  const parts = [];
+  if (draft.amount != null) parts.push(`сумма: ${formatRubSpeak(draft.amount)} рублей`);
+  if (draft.description) parts.push(`на что: ${draft.description}`);
+  if (draft.to_place) parts.push(`куда: ${draft.to_place}`);
+  if (draft.from_place) parts.push(`откуда: ${draft.from_place}`);
+  return parts.join("; ");
+}
+
+/**
+ * Детерминированный разбор фраз вида «внеси расход 5000 на бензин», «потратил 1500 за материалы».
+ * @returns {null | { speak: string, action: string, order: null, order_id: null, calculation: object }}
+ */
+function tryDeterministicExpenseProposal(message) {
+  const t = normalizeRu(message);
+  if (!t) return null;
+
+  const expenseIntent =
+    /(?:внеси|добавь|запиши|создай|внести|добавить|записать)\s+(?:расход|трату|в расход|в расходы|в расчеты|в расчёты)/.test(
+      t
+    ) ||
+    /(?:расход|трату)\s+\d/.test(t) ||
+    /(?:потратил|потратила|потратили|израсходовал|израсходовала)\s/.test(t) ||
+    /(?:новый\s+)?расход\s*[:\-]?\s*\d/.test(t);
+
+  if (!expenseIntent) return null;
+
+  // Не перехватывать явное создание/правку заказа.
+  if (
+    /(?:создай|создать|новый|оформи|измени|изменить|отредактируй)\s+заказ/.test(t) ||
+    /(?:заказ\s+(?:для|клиент)|статус\s+заказа)/.test(t)
+  ) {
+    return null;
+  }
+
+  let amount = null;
+  const amountMatch = t.match(
+    /(?:на\s+сумму\s+|сумм(?:а|у|ой)\s+|стоимость\s+)?(\d[\d\s]{0,12})\s*(?:руб(?:лей|ля|ль)?|р\.?)?(?:\s|$)/
+  );
+  if (amountMatch) {
+    const n = Number(String(amountMatch[1]).replace(/\s+/g, ""));
+    if (Number.isFinite(n) && n > 0) amount = Math.round(n);
+  }
+  if (amount == null) {
+    const loose = t.match(/\b(\d{2,})\b/);
+    if (loose) {
+      const n = Number(loose[1]);
+      if (Number.isFinite(n) && n > 0) amount = Math.round(n);
+    }
+  }
+
+  let description = null;
+  const descPatterns = [
+    /(?:^|\s)(?:на что|описание|комментарий)\s+(.+)$/u,
+    /(?:^|\s)на\s+(.+)$/u,
+    /(?:^|\s)за\s+(.+)$/u,
+  ];
+  for (const re of descPatterns) {
+    const m = t.match(re);
+    if (!m) continue;
+    let raw = String(m[1] || "")
+      .replace(/(?:^|\s)\d[\d\s]*(?:\s*(?:руб(?:лей|ля|ль)?|р\.?))?(?=\s|$)/g, " ")
+      .replace(
+        /(?:^|\s)(?:рублей|рубля|рубль|пожалуйста|верно|подтверди|добавь|внеси|запиши)(?=\s|$)/g,
+        " "
+      )
+      .replace(/\s+/g, " ")
+      .trim();
+    // Убрать ведущие «сумму N» и служебные хвосты
+    raw = raw
+      .replace(/^(?:сумм(?:а|у|ой)\s*)?/u, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    // Не принимать «на сумму …» без реального описания
+    if (/^сумм/.test(raw)) continue;
+    if (raw.length >= 2 && !/^\d+$/.test(raw)) {
+      description = raw;
+      break;
+    }
+  }
+
+  const calculation = {
+    amount: amount > 0 ? amount : null,
+    description: description || null,
+    to_place: DEFAULT_EXPENSE_TO_PLACE,
+    from_place: null,
+  };
+  const missing = missingCalculationRequired(calculation);
+  if (missing.length) {
+    return {
+      speak: `Чтобы записать расход, укажите ${missing.join(" и ")}.`,
+      action: "clarify",
+      order: null,
+      order_id: null,
+      calculation,
+    };
+  }
+  const listed = listCalculationParamsForSpeak(calculation);
+  return {
+    speak: `Записать расход: ${listed}. Верно?`,
+    action: "propose_create_calculation",
+    order: null,
+    order_id: null,
+    calculation,
+  };
+}
+
 function listDraftParamsForSpeak(draft) {
   if (!draft) return "";
   const parts = [];
@@ -695,7 +844,7 @@ function normalizeUpdatePatch(patch) {
   return out;
 }
 
-function buildSystemPrompt({ canCreateOrders, nowIso, facts }) {
+function buildSystemPrompt({ canCreateOrders, canCreateCalculations, nowIso, facts }) {
   const recentLine =
     facts.recent_ids_newest_first.length > 0
       ? facts.recent_ids_newest_first.join(", ")
@@ -703,21 +852,25 @@ function buildSystemPrompt({ canCreateOrders, nowIso, facts }) {
 
   const mutateLine = canCreateOrders
     ? "Создание и редактирование заказов РАЗРЕШЕНЫ."
-    : "Создание и редактирование заказов ЗАПРЕЩЕНЫ для этой роли — только ответы по данным (сценарий 1).";
+    : "Создание и редактирование заказов ЗАПРЕЩЕНЫ для этой роли — только ответы по данным (сценарий 1) и при доступе — расходы (сценарий 4).";
+  const calcLine = canCreateCalculations
+    ? "Запись расходов в расчёты РАЗРЕШЕНА."
+    : "Запись расходов в расчёты ЗАПРЕЩЕНА для этой роли.";
 
-  return `Ты голосовой ассистент сайта учёта заказов. Отвечай кратко, по-русски, фразами удобными для озвучки (1–3 предложения).
+  return `Ты голосовой ассистент сайта учёта заказов и расчётов. Отвечай кратко, по-русски, фразами удобными для озвучки (1–3 предложения).
 
 Сейчас: ${nowIso}
 ${mutateLine}
+${calcLine}
 
-ТРИ ОСНОВНЫХ СЦЕНАРИЯ (выбери один):
+ЧЕТЫРЕ ОСНОВНЫХ СЦЕНАРИЯ (выбери один):
 
 === СЦЕНАРИЙ 1. ЗАПРОС ИНФОРМАЦИИ ===
 Пользователь спрашивает данные по одному или нескольким заказам: сумма/стоимость, адрес, клиент, описание, статус, телефон, тип, даты, предоплата и т.п.
 - action: "answer" (или "clarify", если непонятно какой заказ).
 - Ищи заказ по id, order_number, client, description, address (частичное совпадение ок).
 - Можно отвечать сразу по нескольким заказам.
-- order = null, order_id = null.
+- order = null, order_id = null, calculation = null.
 
 === СЦЕНАРИЙ 2. СОЗДАНИЕ НОВОГО ЗАКАЗА ===
 Пользователь хочет создать заказ (создай / новый заказ / оформи / добавь заявку…).
@@ -726,6 +879,7 @@ ${mutateLine}
 - Когда обязательные поля есть → action "propose_create_order", заполни order всеми извлечёнными полями.
 - В speak ПЕРЕД подтверждением ПЕРЕЧИСЛИ все параметры заказа (клиент, статус и всё остальное, что указано). Спроси подтверждение («создать?» / «верно?»).
 - Создание на сайте подтвердит пользователь кнопкой или голосом «да»/«нет». Не утверждай, что заказ уже создан.
+- calculation = null.
 
 === СЦЕНАРИЙ 3. РЕДАКТИРОВАНИЕ ЗАКАЗА ===
 Пользователь хочет изменить / отредактировать / дополнить / обновить существующий заказ (поля: адрес, сумма, статус, клиент, описание…).
@@ -736,9 +890,21 @@ ${mutateLine}
   order_id = id заказа, order = ТОЛЬКО изменяемые поля (патч).
 - В speak перечисли номер заказа и что именно изменится (старое→новое, если известно). Спроси подтверждение.
 - После слияния клиент и статус не должны стать пустыми. Если патч обнуляет обязательное — clarify.
+- calculation = null.
+
+=== СЦЕНАРИЙ 4. ВНЕСЕНИЕ РАСХОДА В РАСЧЁТЫ ===
+Пользователь хочет записать расход / трату / покупку в раздел «Расчеты» (внеси расход, добавь расход, потратил, запиши трату…).
+Обязательные поля calculation: amount (сумма в целых рублях) и description (на что потрачены средства).
+- Откуда (from_place) на сайте подставится автоматически от вошедшего пользователя — НЕ спрашивай «от кого» и не заполняй from_place (оставь null).
+- Куда (to_place): по умолчанию «Покупка». Если явно сказано зарплата / списание / касса / безнал / другое — поставь одно из: ${CALC_TO_PLACES.join(" | ")}.
+- Если не хватает суммы и/или описания → action "clarify", спроси недостающее. Можно вернуть частичный calculation.
+- Когда сумма и описание есть → action "propose_create_calculation", заполни calculation.
+- В speak перечисли сумму и на что потрачено (и куда, если не Покупка). Спроси подтверждение («записать?» / «верно?»).
+- Не утверждай, что расход уже записан. order = null, order_id = null.
+- Это НЕ создание заказа: фразы про «потратил / расход / на бензин» без «заказ» → сценарий 4, не 2.
 
 ЖЁСТКИЕ ПРАВИЛА ПО ДАННЫМ:
-1) Единственный источник правды — SITE_ORDERS_FACTS и SITE_ORDERS_JSON. Не выдумывай номера и суммы.
+1) Единственный источник правды по заказам — SITE_ORDERS_FACTS и SITE_ORDERS_JSON. Не выдумывай номера и суммы заказов.
 2) id копируй ТОЛЬКО из этих блоков / MATCHED_ORDERS_BY_MENTION.
 3) Если в истории был неверный номер — исправь по фактам, не по истории.
 4) Номера в speak — ЦИФРАМИ (973), не прописью.
@@ -746,6 +912,7 @@ ${mutateLine}
 6) Пустые данные — скажи честно.
 7) Поиск упоминания: id, order_number, client, description, address; частичное совпадение достаточно.
 8) MATCHED_ORDERS_BY_MENTION — приоритетные кандидаты. 1 шт. → это тот заказ; несколько → clarify; пусто при явном упоминании → «не найден».
+9) Для сценария 4 сумму расхода бери из речи пользователя (не из заказов), если он её назвал.
 
 SITE_ORDERS_FACTS:
 - заказов в срезе: ${facts.count}
@@ -762,11 +929,13 @@ SITE_ORDERS_FACTS:
 - amount, prepayment, remaining_amount — целые рубли или null
 - installation — boolean
 - даты — ISO YYYY-MM-DD или null
+- calculation.to_place: ${CALC_TO_PLACES.join(" | ")} или null
+- calculation.amount — целые рубли > 0
 
 Верни ТОЛЬКО JSON-объект без markdown:
 {
   "speak": "текст для озвучки",
-  "action": "answer" | "clarify" | "propose_create_order" | "propose_update_order",
+  "action": "answer" | "clarify" | "propose_create_order" | "propose_update_order" | "propose_create_calculation",
   "order_id": number|null,
   "order": null | {
     "client": string|null,
@@ -788,6 +957,12 @@ SITE_ORDERS_FACTS:
     "area_m2": number|null,
     "mosquito_nets": number|null,
     "construction_count": number|null
+  },
+  "calculation": null | {
+    "amount": number|null,
+    "description": string|null,
+    "to_place": string|null,
+    "from_place": null
   }
 }`;
 }
@@ -795,18 +970,56 @@ SITE_ORDERS_FACTS:
 /**
  * Постобработка ответа модели: обязательные поля, права, order_id.
  */
-function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatches }) {
-  let action = ["answer", "clarify", "propose_create_order", "propose_update_order"].includes(
-    parsed?.action
-  )
-    ? parsed.action
-    : "answer";
+function finalizeAssistantPayload(parsed, { canCreateOrders, canCreateCalculations, orders, mentionMatches }) {
+  let action = VOICE_ACTIONS.includes(parsed?.action) ? parsed.action : "answer";
   let speak = String(parsed?.speak || "Не удалось сформировать ответ.").slice(0, 1500);
   let order = sanitizeOrderDraft(parsed?.order);
+  let calculation = sanitizeCalculationDraft(parsed?.calculation);
   let orderId =
     parsed?.order_id != null && parsed.order_id !== ""
       ? Number(parsed.order_id) || parsed.order_id
       : null;
+
+  if (action === "propose_create_calculation") {
+    if (!canCreateCalculations) {
+      return {
+        speak: "Запись расходов в расчёты недоступна для вашей роли.",
+        action: "answer",
+        order: null,
+        order_id: null,
+        calculation: null,
+      };
+    }
+    if (!calculation) calculation = {};
+    if (!calculation.to_place) calculation.to_place = DEFAULT_EXPENSE_TO_PLACE;
+    calculation.from_place = null;
+    const missing = missingCalculationRequired(calculation);
+    if (missing.length) {
+      return {
+        speak:
+          speak && /сумм|на что|потрат|укаж|нужн/i.test(speak)
+            ? speak
+            : `Чтобы записать расход, укажите ${missing.join(" и ")}.`,
+        action: "clarify",
+        order: null,
+        order_id: null,
+        calculation,
+      };
+    }
+    const listed = listCalculationParamsForSpeak(calculation);
+    if (listed && !/подтверд|записать\?|верно\?|добавить\?/i.test(speak)) {
+      speak = `Записать расход: ${listed}. Верно?`;
+    } else if (listed && calculation.amount != null && !speak.includes(String(calculation.amount))) {
+      speak = `${speak} Параметры: ${listed}.`;
+    }
+    return {
+      speak,
+      action: "propose_create_calculation",
+      order: null,
+      order_id: null,
+      calculation,
+    };
+  }
 
   if (action === "propose_create_order") {
     if (!canCreateOrders) {
@@ -815,6 +1028,7 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
         action: "answer",
         order: null,
         order_id: null,
+        calculation: null,
       };
     }
     if (!order) order = {};
@@ -828,6 +1042,7 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
         action: "clarify",
         order,
         order_id: null,
+        calculation: null,
       };
     }
     if (order.payment_status && !PAYMENT_STATUSES.includes(order.payment_status)) {
@@ -836,6 +1051,7 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
         action: "clarify",
         order,
         order_id: null,
+        calculation: null,
       };
     }
     const listed = listDraftParamsForSpeak(order);
@@ -844,7 +1060,7 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
     } else if (listed && !speak.includes(String(order.client || ""))) {
       speak = `${speak} Параметры: ${listed}.`;
     }
-    return { speak, action: "propose_create_order", order, order_id: null };
+    return { speak, action: "propose_create_order", order, order_id: null, calculation: null };
   }
 
   if (action === "propose_update_order") {
@@ -854,6 +1070,7 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
         action: "answer",
         order: null,
         order_id: null,
+        calculation: null,
       };
     }
     if (orderId == null && mentionMatches.length === 1) {
@@ -869,6 +1086,7 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
         action: "clarify",
         order: null,
         order_id: null,
+        calculation: null,
       };
     }
     if (orderId == null) {
@@ -877,6 +1095,7 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
         action: "clarify",
         order: null,
         order_id: null,
+        calculation: null,
       };
     }
     const exists = orders.some((o) => Number(o.id) === Number(orderId) || o.id === orderId);
@@ -886,6 +1105,7 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
         action: "answer",
         order: null,
         order_id: null,
+        calculation: null,
       };
     }
     order = normalizeUpdatePatch(order);
@@ -895,6 +1115,7 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
         action: "clarify",
         order: null,
         order_id: orderId,
+        calculation: null,
       };
     }
     if (
@@ -907,13 +1128,25 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
         action: "clarify",
         order,
         order_id: orderId,
+        calculation: null,
       };
     }
     if (!/подтверд|изменить\?|сохранить\?|верно\?/i.test(speak)) {
       const listed = listDraftParamsForSpeak(order);
       speak = `Изменить заказ ${orderId}: ${listed}. Сохранить изменения?`;
     }
-    return { speak, action: "propose_update_order", order, order_id: orderId };
+    return { speak, action: "propose_update_order", order, order_id: orderId, calculation: null };
+  }
+
+  // clarify с частичным черновиком расхода
+  if (action === "clarify" && calculation && missingCalculationRequired(calculation).length) {
+    return {
+      speak,
+      action: "clarify",
+      order: null,
+      order_id: null,
+      calculation,
+    };
   }
 
   // clarify с частичным черновиком создания — оставляем order для карточки
@@ -922,7 +1155,13 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, orders, mentionMatc
     order = null;
   }
 
-  return { speak, action, order: action === "clarify" ? order : null, order_id: orderId };
+  return {
+    speak,
+    action,
+    order: action === "clarify" ? order : null,
+    order_id: orderId,
+    calculation: action === "clarify" ? calculation : null,
+  };
 }
 
 function compactOrders(orders) {
@@ -1011,10 +1250,22 @@ module.exports = async (req, res) => {
   }
 
   const canCreateOrders = Boolean(body?.canCreateOrders);
+  const canCreateCalculations = Boolean(body?.canCreateCalculations);
   const orders = compactOrders(body?.orders);
   const history = historyWithoutCurrentMessage(normalizeHistory(body?.history), message);
   const nowIso = new Date().toISOString();
   const facts = buildOrdersFacts(orders);
+
+  const deterministicExpense = canCreateCalculations ? tryDeterministicExpenseProposal(message) : null;
+  if (deterministicExpense) {
+    const finalizedExpense = finalizeAssistantPayload(deterministicExpense, {
+      canCreateOrders,
+      canCreateCalculations,
+      orders,
+      mentionMatches: [],
+    });
+    return res.status(200).json(finalizedExpense);
+  }
 
   const deterministic = tryDeterministicLastOrdersAnswer(message, orders);
   if (deterministic) {
@@ -1044,7 +1295,10 @@ module.exports = async (req, res) => {
   }));
 
   const messages = [
-    { role: "system", content: buildSystemPrompt({ canCreateOrders, nowIso, facts }) },
+    {
+      role: "system",
+      content: buildSystemPrompt({ canCreateOrders, canCreateCalculations, nowIso, facts }),
+    },
     {
       role: "system",
       content: `SITE_ORDERS_JSON (${orders.length} шт., новые сверху по id):\n${JSON.stringify(orders)}`,
@@ -1089,6 +1343,7 @@ module.exports = async (req, res) => {
     const parsed = extractJsonObject(content);
     const finalized = finalizeAssistantPayload(parsed, {
       canCreateOrders,
+      canCreateCalculations,
       orders,
       mentionMatches,
     });
@@ -1105,7 +1360,10 @@ module.exports.extractMentionNeedles = extractMentionNeedles;
 module.exports.messageLooksLikeOrderMention = messageLooksLikeOrderMention;
 module.exports.normalizeRu = normalizeRu;
 module.exports.tryDeterministicLastOrdersAnswer = tryDeterministicLastOrdersAnswer;
+module.exports.tryDeterministicExpenseProposal = tryDeterministicExpenseProposal;
 module.exports.finalizeAssistantPayload = finalizeAssistantPayload;
 module.exports.missingCreateRequired = missingCreateRequired;
+module.exports.missingCalculationRequired = missingCalculationRequired;
 module.exports.sanitizeOrderDraft = sanitizeOrderDraft;
+module.exports.sanitizeCalculationDraft = sanitizeCalculationDraft;
 module.exports.normalizeUpdatePatch = normalizeUpdatePatch;

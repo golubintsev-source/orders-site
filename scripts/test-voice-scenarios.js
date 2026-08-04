@@ -1,11 +1,13 @@
 /**
- * Проверка сценариев голосового ассистента: info / create / update.
+ * Проверка сценариев голосового ассистента: info / create / update / expense.
  * Запуск: node scripts/test-voice-scenarios.js
  */
 const {
   tryDeterministicLastOrdersAnswer,
+  tryDeterministicExpenseProposal,
   finalizeAssistantPayload,
   missingCreateRequired,
+  missingCalculationRequired,
 } = require("../api/voice-assistant.js");
 
 const orders = [
@@ -61,7 +63,7 @@ function assert(cond, msg) {
       speak: "Создаю",
       order: { client: "Иванов", amount: 1000 },
     },
-    { canCreateOrders: true, orders, mentionMatches: [] }
+    { canCreateOrders: true, canCreateCalculations: true, orders, mentionMatches: [] }
   );
   assert(r.action === "clarify", `create without status -> clarify, got ${r.action}`);
   assert(/статус/i.test(r.speak), `ask status: ${r.speak}`);
@@ -75,7 +77,7 @@ function assert(cond, msg) {
       speak: "Ок",
       order: { client: "Иванов", payment_status: "Контакт с клиентом", address: "Ленина 1", amount: 50000 },
     },
-    { canCreateOrders: true, orders, mentionMatches: [] }
+    { canCreateOrders: true, canCreateCalculations: true, orders, mentionMatches: [] }
   );
   assert(r.action === "propose_create_order", `full create: ${r.action}`);
   assert(/Иванов/.test(r.speak) && /статус/i.test(r.speak), `list params: ${r.speak}`);
@@ -92,6 +94,7 @@ function assert(cond, msg) {
     },
     {
       canCreateOrders: true,
+      canCreateCalculations: true,
       orders,
       mentionMatches: [
         { order: orders[0], score: 10 },
@@ -113,6 +116,7 @@ function assert(cond, msg) {
     },
     {
       canCreateOrders: true,
+      canCreateCalculations: true,
       orders,
       mentionMatches: [{ order: orders[0], score: 10 }],
     }
@@ -130,7 +134,7 @@ function assert(cond, msg) {
       order_id: 1015,
       order: {},
     },
-    { canCreateOrders: true, orders, mentionMatches: [] }
+    { canCreateOrders: true, canCreateCalculations: true, orders, mentionMatches: [] }
   );
   assert(r.action === "clarify", `update without patch: ${r.action}`);
   assert(/что/i.test(r.speak), `ask what to change: ${r.speak}`);
@@ -139,7 +143,7 @@ function assert(cond, msg) {
 {
   const r = finalizeAssistantPayload(
     { action: "propose_create_order", speak: "x", order: { client: "A", payment_status: "Контакт с клиентом" } },
-    { canCreateOrders: false, orders, mentionMatches: [] }
+    { canCreateOrders: false, canCreateCalculations: true, orders, mentionMatches: [] }
   );
   assert(r.action === "answer", "no rights create");
 }
@@ -159,7 +163,7 @@ function assert(cond, msg) {
         address: null,
       },
     },
-    { canCreateOrders: true, orders, mentionMatches: [] }
+    { canCreateOrders: true, canCreateCalculations: true, orders, mentionMatches: [] }
   );
   assert(r.action === "propose_update_order", `null client/status stripped: ${r.action}`);
   assert(r.order && r.order.description === "Обязательно провести повторный замер", "description kept");
@@ -207,4 +211,77 @@ function assert(cond, msg) {
   assert(d2.payment_status === "Производство", "status still from existing");
 }
 
-console.log("ok: voice scenarios (info / create / update)");
+{
+  assert(missingCalculationRequired({}).includes("сумму"), "calc missing amount");
+  assert(missingCalculationRequired({ amount: 100 }).some((x) => /на что/i.test(x)), "calc missing desc");
+  assert(missingCalculationRequired({ amount: 100, description: "бензин" }).length === 0, "calc ok");
+}
+
+{
+  const r = tryDeterministicExpenseProposal("Внеси расход 5000 на бензин");
+  assert(r && r.action === "propose_create_calculation", `expense action: ${r && r.action}`);
+  assert(r.calculation && r.calculation.amount === 5000, `expense amount: ${r && r.calculation && r.calculation.amount}`);
+  assert(/бензин/i.test(r.calculation.description), `expense desc: ${r.calculation.description}`);
+  assert(r.calculation.to_place === "Покупка", "default to_place Покупка");
+  assert(/\?/.test(r.speak), `expense ask confirm: ${r.speak}`);
+}
+
+{
+  const r = tryDeterministicExpenseProposal("Потратил 1500 за материалы");
+  assert(r && r.action === "propose_create_calculation", `spent action: ${r && r.action}`);
+  assert(r.calculation.amount === 1500, "spent amount");
+  assert(/материал/i.test(r.calculation.description), `spent desc: ${r.calculation.description}`);
+}
+
+{
+  const r = tryDeterministicExpenseProposal("Внеси расход 2000");
+  assert(r && r.action === "clarify", `expense without desc -> clarify: ${r && r.action}`);
+  assert(r.calculation && r.calculation.amount === 2000, "partial amount kept");
+}
+
+{
+  const r = tryDeterministicExpenseProposal("Создай заказ для Иванова");
+  assert(r == null, "order create must not be expense");
+}
+
+{
+  const r = finalizeAssistantPayload(
+    {
+      action: "propose_create_calculation",
+      speak: "Записать?",
+      calculation: { amount: 3000, description: "краска" },
+    },
+    { canCreateOrders: true, canCreateCalculations: true, orders, mentionMatches: [] }
+  );
+  assert(r.action === "propose_create_calculation", `finalize expense: ${r.action}`);
+  assert(r.calculation.amount === 3000 && r.calculation.description === "краска", "calc draft");
+  assert(r.calculation.to_place === "Покупка", "default to_place in finalize");
+  assert(r.order == null, "no order on expense");
+}
+
+{
+  const r = finalizeAssistantPayload(
+    {
+      action: "propose_create_calculation",
+      speak: "x",
+      calculation: { amount: 100, description: "тест" },
+    },
+    { canCreateOrders: true, canCreateCalculations: false, orders, mentionMatches: [] }
+  );
+  assert(r.action === "answer", "no rights calculation");
+}
+
+{
+  const r = finalizeAssistantPayload(
+    {
+      action: "propose_create_calculation",
+      speak: "Ок",
+      calculation: { description: "бензин" },
+    },
+    { canCreateOrders: true, canCreateCalculations: true, orders, mentionMatches: [] }
+  );
+  assert(r.action === "clarify", `expense without amount: ${r.action}`);
+  assert(/сумм/i.test(r.speak), `ask amount: ${r.speak}`);
+}
+
+console.log("ok: voice scenarios (info / create / update / expense)");
