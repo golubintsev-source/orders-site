@@ -1860,6 +1860,8 @@ function setAttachPhotoMenuOpen(open) {
   if (btn) {
     btn.setAttribute("aria-expanded", open ? "true" : "false");
     btn.classList.toggle("messages-composer-tool-btn--active", open);
+    btn.title = open ? "Закрыть вложения" : "Вложение";
+    btn.setAttribute("aria-label", open ? "Закрыть вложения" : "Вложение");
   }
 }
 
@@ -2805,7 +2807,11 @@ export function initMessagesSection() {
 
   if (orderPickBtn && input) {
     orderPickBtn.addEventListener("mousedown", (e) => e.preventDefault());
-    orderPickBtn.addEventListener("click", () => openOrderPicker(input));
+    orderPickBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeAttachPhotoMenu();
+      openOrderPicker(input);
+    });
   }
 
   if (attachPhotoBtn) {
