@@ -1,13 +1,17 @@
 import { state } from "./state.js";
-import { canMutateOrders, isOrderHiddenForCurrentRole } from "./roles.js";
+import { canAccessSection, canMutateOrders, isOrderHiddenForCurrentRole } from "./roles.js";
 import { createOrderFromVoicePayload, updateOrderFromVoicePayload } from "./orders.js";
+import {
+  createCalculationFromVoicePayload,
+  resolveCalcFromPlaceForCurrentUser,
+} from "./calculations.js";
 import { formatAmountWholeRubles } from "./format.js";
 
 const VOICE_CHAT_STORAGE_PREFIX = "orders_site_voice_chat_v1:";
 /** Сколько реплик хранить на странице и в localStorage (в LLM уходит только хвост). */
 const MAX_STORED_CHAT_MESSAGES = 80;
 const VOICE_EMPTY_HTML =
-  '<p class="voice-empty">Три сценария: спросить про заказы (сумма, адрес, клиент…); создать заказ (нужны клиент и статус); изменить заказ (по номеру, клиенту, адресу или описанию).</p>';
+  '<p class="voice-empty">Четыре сценария: спросить про заказы; создать заказ (клиент и статус); изменить заказ; записать расход в расчёты (сумма и на что потрачено).</p>';
 
 /** @type {SpeechRecognition | null} */
 let recognition = null;
@@ -16,7 +20,7 @@ let chatHistory = [];
 /**
  * Ожидание подтверждения создания/правки.
  * @type {null | {
- *   kind: "create" | "update" | "incomplete_create",
+ *   kind: "create" | "update" | "incomplete_create" | "create_calculation" | "incomplete_calculation",
  *   draft: Record<string, unknown>,
  *   orderId?: number|string|null,
  * }}
@@ -725,6 +729,60 @@ function renderCreateConfirmCard(draft) {
   </div>`;
 }
 
+function buildCalculationConfirmListHtml(draft, { highlightMissing = false } = {}) {
+  const fromPlace = draft?.from_place || resolveCalcFromPlaceForCurrentUser();
+  const toPlace = draft?.to_place || "Покупка";
+  const rows = [
+    ["from_place", "Откуда", false, fromPlace],
+    ["to_place", "Куда", false, toPlace],
+    ["amount", "Сумма", true, draft?.amount],
+    ["description", "На что", true, draft?.description],
+  ];
+  return rows
+    .map(([key, label, required, value]) => {
+      const empty = value == null || value === "";
+      const missing = highlightMissing && required && empty;
+      let display;
+      if (missing) display = "не указано";
+      else if (key === "amount") display = formatDraftFieldValue("amount", value);
+      else display = empty ? "—" : String(value);
+      const cls = missing ? ' class="voice-confirm-missing"' : "";
+      return `<li${cls}><span>${label}${required ? " *" : ""}</span> ${escapeHtml(display)}</li>`;
+    })
+    .join("");
+}
+
+function renderCalculationConfirmCard(draft) {
+  return `<div class="voice-confirm-card" role="group" aria-label="Подтверждение записи расхода">
+    <p class="voice-confirm-title">Записать расход?</p>
+    <ul class="voice-confirm-list">
+      ${buildCalculationConfirmListHtml(draft)}
+    </ul>
+    <div class="voice-confirm-actions">
+      <button type="button" class="btn-primary voice-confirm-yes" data-voice-confirm="yes">Записать</button>
+      <button type="button" class="voice-confirm-no" data-voice-confirm="no">Отмена</button>
+    </div>
+    <p class="voice-confirm-hint">Или скажите «да» / «нет»</p>
+  </div>`;
+}
+
+function renderIncompleteCalculationCard(draft) {
+  const missing = [];
+  if (draft?.amount == null || !(Number(draft.amount) > 0)) missing.push("сумму");
+  if (!String(draft?.description || "").trim()) missing.push("на что потрачены средства");
+  const missingText = missing.length ? missing.join(" и ") : "обязательные поля";
+  return `<div class="voice-confirm-card voice-confirm-card--incomplete" role="group" aria-label="Не хватает данных для расхода">
+    <p class="voice-confirm-title">Нужны данные расхода</p>
+    <p class="voice-confirm-missing-lead">Укажите: ${escapeHtml(missingText)} — голосом или текстом.</p>
+    <ul class="voice-confirm-list">
+      ${buildCalculationConfirmListHtml(draft, { highlightMissing: true })}
+    </ul>
+    <div class="voice-confirm-actions">
+      <button type="button" class="voice-confirm-no" data-voice-confirm="no">Отмена</button>
+    </div>
+  </div>`;
+}
+
 function renderIncompleteCreateCard(draft) {
   const missing = [];
   if (!String(draft?.client || "").trim()) missing.push("клиент");
@@ -821,7 +879,7 @@ function isAffirmative(text) {
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return /^(да|ага|угу|ок|окей|подтверждаю|создай|создать|измени|изменить|сохрани|сохранить|согласен|хорошо|верно)(\s|$)/.test(
+  return /^(да|ага|угу|ок|окей|подтверждаю|создай|создать|измени|изменить|сохрани|сохранить|согласен|хорошо|верно|запиши|записать|внеси|внести|добавь|добавить)(\s|$)/.test(
     t
   );
 }
@@ -839,22 +897,33 @@ async function confirmPendingAction() {
   const pending = pendingVoiceAction;
   pendingVoiceAction = null;
   clearConfirmCards();
-  if (!pending || pending.kind === "incomplete_create") return;
+  if (!pending || pending.kind === "incomplete_create" || pending.kind === "incomplete_calculation") {
+    return;
+  }
 
   setBusyUi(true);
   const isUpdate = pending.kind === "update";
-  setStatus(isUpdate ? "Сохраняю изменения…" : "Создаю заказ…");
+  const isCalc = pending.kind === "create_calculation";
+  setStatus(isUpdate ? "Сохраняю изменения…" : isCalc ? "Записываю расход…" : "Создаю заказ…");
   try {
     const result = isUpdate
       ? await updateOrderFromVoicePayload(pending.orderId, pending.draft)
-      : await createOrderFromVoicePayload(pending.draft);
+      : isCalc
+        ? await createCalculationFromVoicePayload(pending.draft)
+        : await createOrderFromVoicePayload(pending.draft);
     appendBubble("assistant", result.message);
     pushChat("assistant", result.message);
     setStatus(result.ok ? "" : result.message, !result.ok, result.ok ? undefined : { holdMs: STATUS_HOLD_MS });
     setBusyUi(false);
     await speakThenMaybeListen(result.message);
   } catch (e) {
-    const msg = e?.message || (isUpdate ? "Не удалось изменить заказ" : "Не удалось создать заказ");
+    const msg =
+      e?.message ||
+      (isUpdate
+        ? "Не удалось изменить заказ"
+        : isCalc
+          ? "Не удалось записать расход"
+          : "Не удалось создать заказ");
     appendBubble("assistant", msg);
     pushChat("assistant", msg);
     setStatus(msg, true, { holdMs: STATUS_HOLD_MS });
@@ -875,7 +944,9 @@ function cancelPendingAction(announce = true) {
       ? "Изменение заказа отменено."
       : kind === "incomplete_create"
         ? "Создание заказа отменено."
-        : "Создание заказа отменено.";
+        : kind === "create_calculation" || kind === "incomplete_calculation"
+          ? "Запись расхода отменена."
+          : "Создание заказа отменено.";
   appendBubble("assistant", msg);
   pushChat("assistant", msg);
   setStatus("");
@@ -891,6 +962,7 @@ async function callVoiceAssistant(message) {
       history: chatHistory.slice(0, -1).slice(-10),
       orders: buildOrdersContext(),
       canCreateOrders: canMutateOrders(),
+      canCreateCalculations: canAccessSection("calculations"),
     }),
   });
   // history: без текущего user-сообщения (оно уходит в message), иначе дубль путает модель.
@@ -909,7 +981,11 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
   appendBubble("user", text);
   pushChat("user", text);
 
-  if (pendingVoiceAction && pendingVoiceAction.kind !== "incomplete_create") {
+  if (
+    pendingVoiceAction &&
+    pendingVoiceAction.kind !== "incomplete_create" &&
+    pendingVoiceAction.kind !== "incomplete_calculation"
+  ) {
     if (isAffirmative(text)) {
       await confirmPendingAction();
       return;
@@ -918,7 +994,11 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
       cancelPendingAction(true);
       return;
     }
-  } else if (pendingVoiceAction?.kind === "incomplete_create" && isNegative(text)) {
+  } else if (
+    (pendingVoiceAction?.kind === "incomplete_create" ||
+      pendingVoiceAction?.kind === "incomplete_calculation") &&
+    isNegative(text)
+  ) {
     cancelPendingAction(true);
     return;
   }
@@ -942,7 +1022,18 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
     const action = data?.action || "answer";
     clearConfirmCards();
 
-    if (action === "propose_create_order" && data?.order && canMutateOrders()) {
+    if (action === "propose_create_calculation" && data?.calculation && canAccessSection("calculations")) {
+      pendingVoiceAction = { kind: "create_calculation", draft: data.calculation };
+      const confirmAsk =
+        speakText.includes("?") || /подтверд|записать|верно|добавить/i.test(speakText)
+          ? speakText
+          : `${speakText} Подтвердите запись: скажите «да» или нажмите «Записать».`;
+      appendBubble("assistant", confirmAsk, renderCalculationConfirmCard(data.calculation));
+      pushChat("assistant", confirmAsk);
+      setStatus("");
+      setBusyUi(false);
+      await speakThenMaybeListen(confirmAsk);
+    } else if (action === "propose_create_order" && data?.order && canMutateOrders()) {
       pendingVoiceAction = { kind: "create", draft: data.order };
       const confirmAsk =
         speakText.includes("?") || /подтверд|создать|верно/i.test(speakText)
@@ -969,6 +1060,20 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
       setStatus("");
       setBusyUi(false);
       await speakThenMaybeListen(confirmAsk);
+    } else if (action === "clarify" && data?.calculation && canAccessSection("calculations")) {
+      const missingAmount = data.calculation.amount == null || !(Number(data.calculation.amount) > 0);
+      const missingDesc = !String(data.calculation.description || "").trim();
+      if (missingAmount || missingDesc) {
+        pendingVoiceAction = { kind: "incomplete_calculation", draft: data.calculation };
+        appendBubble("assistant", speakText, renderIncompleteCalculationCard(data.calculation));
+      } else {
+        pendingVoiceAction = null;
+        appendBubble("assistant", speakText);
+      }
+      pushChat("assistant", speakText);
+      setStatus("");
+      setBusyUi(false);
+      await speakThenMaybeListen(speakText);
     } else if (action === "clarify" && data?.order && canMutateOrders()) {
       const missingClient = !String(data.order.client || "").trim();
       const missingStatus = !String(data.order.payment_status || "").trim();

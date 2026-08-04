@@ -1,7 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile } from "./auth.js";
 import { formatAmount, formatAmountWholeRubles, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY, refreshRublesIntegerInputState } from "./format.js";
-import { isAdmin } from "./roles.js";
+import { canAccessSection, isAdmin } from "./roles.js";
 import { hrefToHome } from "./app-routes.js";
 import {
   applySavedScroll,
@@ -13,7 +13,8 @@ import {
   logSiteAccess,
   measureNavigationResponseMs,
 } from "./access-log.js";
-import { shortLoginByEmail } from "./user-names.js";
+import { displayNameByEmail, shortLoginByEmail } from "./user-names.js";
+import { state } from "./state.js";
 import {
   readSnapshot,
   persistCalculationsSnapshot,
@@ -32,6 +33,19 @@ const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 /** Пустое значение в комментарии расчёта (вместо «—»). */
 const CALC_COMMENT_EMPTY = "[__]";
 let currentUserEmail = "";
+
+const CALC_FROM_OPTIONS = new Set(["Вова", "Дима", "Касса", "Безнал", "Другое"]);
+const CALC_TO_OPTIONS = new Set([
+  "Вова",
+  "Дима",
+  "Касса",
+  "Зарплата",
+  "Покупка",
+  "Списание",
+  "Безнал",
+  "Другое",
+]);
+const DEFAULT_VOICE_EXPENSE_TO = "Покупка";
 
 /** Полные строки с сервера; фильтр поиска применяется при отрисовке. */
 let calculationsRowsCache = [];
@@ -294,9 +308,105 @@ function parseCalcAmountInput(raw) {
 }
 
 function appendActorToComment(comment) {
+  ensureCurrentUserEmail();
   const actor = shortLoginByEmail(currentUserEmail);
   const base = (comment || "").trim();
   return base ? `${base}; ${actor}` : actor;
+}
+
+function ensureCurrentUserEmail() {
+  if (!currentUserEmail && state.currentUser?.email) {
+    currentUserEmail = state.currentUser.email;
+  }
+}
+
+/** «Откуда» для голосового расхода — вошедший пользователь (если есть в списке). */
+export function resolveCalcFromPlaceForCurrentUser() {
+  ensureCurrentUserEmail();
+  const name = displayNameByEmail(currentUserEmail || state.currentUser?.email);
+  if (CALC_FROM_OPTIONS.has(name)) return name;
+  return "Другое";
+}
+
+/**
+ * Создать запись расхода в расчётах из голосового черновика.
+ * Откуда = текущий пользователь; сумма и описание — из речи; куда — Покупка по умолчанию.
+ * @returns {Promise<{ ok: boolean, message: string }>}
+ */
+export async function createCalculationFromVoicePayload(draft) {
+  if (!canAccessSection("calculations")) {
+    return { ok: false, message: "Раздел расчётов недоступен для вашей роли" };
+  }
+
+  ensureCurrentUserEmail();
+
+  const amountRaw = draft?.amount;
+  const amountNum = Number(amountRaw);
+  if (!Number.isFinite(amountNum) || amountNum <= 0) {
+    return { ok: false, message: "Не указана сумма расхода" };
+  }
+  const amount = Math.round(amountNum);
+
+  const description = String(draft?.description || draft?.comment || "").trim();
+  if (!description) {
+    return { ok: false, message: "Не указано, на что потрачены средства" };
+  }
+
+  let from_place = String(draft?.from_place || "").trim();
+  if (!CALC_FROM_OPTIONS.has(from_place)) {
+    from_place = resolveCalcFromPlaceForCurrentUser();
+  }
+
+  let to_place = String(draft?.to_place || "").trim();
+  if (!CALC_TO_OPTIONS.has(to_place)) {
+    to_place = DEFAULT_VOICE_EXPENSE_TO;
+  }
+
+  const insertPayload = {
+    from_place,
+    to_place,
+    amount,
+    comment: appendActorToComment(description),
+    created_at: new Date().toISOString(),
+  };
+
+  if (isOfflineDataMode()) {
+    const localId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `calc-${Date.now()}`;
+    addPendingOfflineCalculation({
+      localId,
+      tempCalcId: nextOfflineTempCalcId(),
+      insertPayload,
+    });
+    try {
+      await loadCalculations();
+    } catch {
+      /* таблица обновится при открытии раздела */
+    }
+    return {
+      ok: true,
+      message: `Расход ${formatAmountWholeRubles(amount)} ₽ сохранён на устройстве (${description}). Отправка в базу при появлении связи.`,
+    };
+  }
+
+  const { error } = await supabaseClient.from("calculations").insert([insertPayload]);
+  if (error) {
+    console.error("voice calc insert:", error);
+    return { ok: false, message: "Не удалось записать расход в расчёты" };
+  }
+
+  try {
+    await loadCalculations();
+  } catch {
+    /* не критично для ответа голосу */
+  }
+
+  return {
+    ok: true,
+    message: `Расход ${formatAmountWholeRubles(amount)} ₽ записан: ${description}. Откуда — ${from_place}, куда — ${to_place}.`,
+  };
 }
 
 function parseOrderIdFromChip(chip) {
@@ -986,6 +1096,7 @@ function setupCalculationsForm() {
 
 /** Привязка формы и фильтров без загрузки данных (данные — при открытии раздела). */
 export function bindCalculationsSection() {
+  ensureCurrentUserEmail();
   initCalculationsDateRangeDefaults();
   setupCalculationsForm();
 }
