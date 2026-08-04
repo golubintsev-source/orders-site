@@ -6833,11 +6833,11 @@ html.keyboard-open .messages-composer {
   padding: 0;
   border: none;
   border-radius: 12px;
-  background: linear-gradient(145deg, #60a5fa 0%, #2563eb 55%, #1d4ed8 100%);
+  background: linear-gradient(145deg, #34d399 0%, #059669 55%, #047857 100%);
   color: #fff;
   cursor: pointer;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.35);
 }
 
 .messages-composer-tool-btn[hidden] {
@@ -6847,14 +6847,14 @@ html.keyboard-open .messages-composer {
 .messages-composer-tool-btn:hover {
   filter: brightness(1.05);
   color: #fff;
-  background: linear-gradient(145deg, #60a5fa 0%, #2563eb 55%, #1d4ed8 100%);
+  background: linear-gradient(145deg, #34d399 0%, #059669 55%, #047857 100%);
 }
 
 .messages-composer-tool-btn.messages-composer-tool-btn--active {
-  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.35);
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.35);
   filter: brightness(1.06);
   color: #fff;
-  background: linear-gradient(145deg, #60a5fa 0%, #2563eb 55%, #1d4ed8 100%);
+  background: linear-gradient(145deg, #34d399 0%, #059669 55%, #047857 100%);
 }
 
 .messages-composer-tool-icon {
@@ -6891,8 +6891,8 @@ html.keyboard-open .messages-composer {
 
 .messages-composer-input:focus {
   outline: none;
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.25);
+  border-color: #34d399;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.25);
 }
 
 .messages-send-btn {
@@ -6906,14 +6906,16 @@ html.keyboard-open .messages-composer {
   padding: 0;
   border: none;
   border-radius: 12px;
-  background: #1f6feb;
+  background: linear-gradient(145deg, #34d399 0%, #059669 55%, #047857 100%);
   color: #fff;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.35);
 }
 
 .messages-send-btn:hover:not(:disabled) {
-  opacity: 0.95;
-  background: #1f6feb;
+  filter: brightness(1.05);
+  opacity: 1;
+  background: linear-gradient(145deg, #34d399 0%, #059669 55%, #047857 100%);
 }
 
 .messages-send-btn:disabled {
