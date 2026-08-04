@@ -100,7 +100,9 @@ export async function uploadChatPhoto(file) {
     fileToUpload.type !== "image/gif";
 
   if (isRasterImage) {
-    const thumbBlob = await buildThumbnailBlob(fileToUpload);
+    // Миниатюру строим из исходника (до сильного сжатия) — меньше артефактов «квадратов».
+    const thumbBlob =
+      (await buildThumbnailBlob(file)) || (await buildThumbnailBlob(fileToUpload));
     if (thumbBlob && thumbBlob.size > 0) {
       const thumbExt = thumbBlob.type === "image/jpeg" ? "jpg" : "webp";
       thumbnailStoragePath = `${state.currentUser.id}/messages/${stamp}_thumb.${thumbExt}`;
@@ -599,10 +601,14 @@ function canvasToBlob(canvas, mime, quality) {
   });
 }
 
-const THUMB_MAX_LONG_EDGE = 280;
+/** Длинная сторона превью: ~3× CSS-размера в чате (240px), чтобы на Retina не было «квадратов». */
+const THUMB_MAX_LONG_EDGE = 720;
+/** Мягкий потолок размера миниатюры — полный файл в storage не трогаем. */
+const THUMB_TARGET_MAX_BYTES = 96 * 1024;
 
 /**
- * Миниатюра для списков (редактирование, модалка). Только растр; SVG/GIF — null.
+ * Компактная миниатюра высокого качества (списки, чат). Только растр; SVG/GIF — null.
+ * Разрешение рассчитано на Retina; файл обычно остаётся небольшим (WebP/JPEG).
  */
 export async function buildThumbnailBlob(imageFile) {
   if (!imageFile?.type?.startsWith("image/")) return null;
@@ -624,12 +630,19 @@ export async function buildThumbnailBlob(imageFile) {
     bitmap.close();
     return null;
   }
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(bitmap, 0, 0, w, h);
   bitmap.close();
 
   const mime = canvasSupportsWebp() ? "image/webp" : "image/jpeg";
-  const q = mime === "image/webp" ? 0.72 : 0.78;
-  return canvasToBlob(canvas, mime, q);
+  const startQ = mime === "image/webp" ? 0.84 : 0.88;
+  let blob = await canvasToBlob(canvas, mime, startQ);
+  if (blob && blob.size > THUMB_TARGET_MAX_BYTES) {
+    // Снижаем только качество, не разрешение — иначе снова мыло на экране.
+    blob = await blobAtOrBelowTarget(canvas, mime, THUMB_TARGET_MAX_BYTES, 0.55);
+  }
+  return blob;
 }
 
 /** Подписанные URL: полный файл и превью (если есть в БД). */
@@ -646,10 +659,14 @@ async function getSignedUrlsForOrderFileRow(fileRow) {
   };
 }
 
-/** Подбор качества: максимальное q при размере ≤ targetBytes (или ближайшее ниже). */
-async function blobAtOrBelowTarget(canvas, mime, targetBytes) {
-  let lo = 0.26;
+/**
+ * Подбор качества: максимальное q при размере ≤ targetBytes (или ближайшее ниже).
+ * @param {number} [minQuality=0.26] нижняя граница — для миниатюр выше, чтобы не получить «квадраты».
+ */
+async function blobAtOrBelowTarget(canvas, mime, targetBytes, minQuality = 0.26) {
+  let lo = Math.max(0.05, Math.min(0.95, minQuality));
   let hi = 0.88;
+  if (lo > hi) lo = hi;
   let best = null;
   for (let i = 0; i < 16; i++) {
     const q = (lo + hi) / 2;
@@ -666,7 +683,7 @@ async function blobAtOrBelowTarget(canvas, mime, targetBytes) {
     }
   }
   if (best) return best;
-  const fallback = await canvasToBlob(canvas, mime, 0.4);
+  const fallback = await canvasToBlob(canvas, mime, lo);
   return fallback;
 }
 
@@ -804,7 +821,8 @@ export async function uploadFiles(orderId) {
       fileToUpload.type !== "image/gif";
 
     if (isRasterImage) {
-      const thumbBlob = await buildThumbnailBlob(fileToUpload);
+      const thumbBlob =
+        (await buildThumbnailBlob(file)) || (await buildThumbnailBlob(fileToUpload));
       if (thumbBlob && thumbBlob.size > 0) {
         const thumbExt = thumbBlob.type === "image/jpeg" ? "jpg" : "webp";
         thumbnailStoragePath = `${state.currentUser.id}/${orderId}/${stamp}_thumb.${thumbExt}`;

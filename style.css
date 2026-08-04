@@ -6434,11 +6434,12 @@ th {
   display: block;
   width: 100%;
   max-height: 280px;
-  object-fit: cover;
+  object-fit: contain;
   vertical-align: middle;
   -webkit-user-drag: none;
   user-drag: none;
   pointer-events: none;
+  background: rgba(15, 23, 42, 0.04);
 }
 
 .message-item-photo-loading {

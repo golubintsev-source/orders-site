@@ -541,11 +541,13 @@ async function hydrateMessageAttachments(root = document.getElementById("message
       const storagePath = el.getAttribute("data-storage-path") || "";
       const thumbPath = el.getAttribute("data-thumb-path") || "";
       if (!storagePath) return;
-      const [fullUrl, thumbUrl] = await Promise.all([
-        getSignedFileUrl(storagePath),
-        thumbPath ? getSignedFileUrl(thumbPath) : Promise.resolve(null),
-      ]);
-      const previewUrl = thumbUrl || fullUrl;
+      // В пузыре (~240 CSS-px, на Retina до ~720 физ. px) старые thumb ~280px мылят «квадратами».
+      // Показываем уже сжатый полный файл — объём в storage/БД не растёт; thumb остаётся для списков.
+      let previewUrl = await getSignedFileUrl(storagePath);
+      if (!previewUrl && thumbPath) {
+        previewUrl = await getSignedFileUrl(thumbPath);
+      }
+      const fullUrl = previewUrl;
       const loading = el.querySelector(".message-item-photo-loading");
       const link = el.querySelector(".message-item-photo-link");
       const img = el.querySelector(".message-item-photo");
