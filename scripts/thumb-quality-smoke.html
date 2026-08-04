@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>Thumb quality smoke</title>
+</head>
+<body>
+  <pre id="out">running…</pre>
+  <script type="module">
+    /** Локальная копия логики buildThumbnailBlob из js/files.js для smoke без supabase. */
+    const THUMB_MAX_LONG_EDGE = 720;
+    const THUMB_TARGET_MAX_BYTES = 96 * 1024;
+
+    function canvasSupportsWebp() {
+      const c = document.createElement("canvas");
+      c.width = 2;
+      c.height = 2;
+      return /^data:image\/webp/i.test(c.toDataURL("image/webp"));
+    }
+
+    function scaleToMaxLongEdge(width, height, maxEdge) {
+      const m = Math.max(width, height);
+      if (m <= maxEdge) return { w: width, h: height };
+      const k = maxEdge / m;
+      return { w: Math.max(1, Math.round(width * k)), h: Math.max(1, Math.round(height * k)) };
+    }
+
+    function canvasToBlob(canvas, mime, quality) {
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), mime, quality);
+      });
+    }
+
+    async function blobAtOrBelowTarget(canvas, mime, targetBytes, minQuality = 0.26) {
+      let lo = Math.max(0.05, Math.min(0.95, minQuality));
+      let hi = 0.88;
+      if (lo > hi) lo = hi;
+      let best = null;
+      for (let i = 0; i < 16; i++) {
+        const q = (lo + hi) / 2;
+        const blob = await canvasToBlob(canvas, mime, q);
+        if (!blob) {
+          hi = q;
+          continue;
+        }
+        if (blob.size <= targetBytes) {
+          best = blob;
+          lo = q;
+        } else {
+          hi = q;
+        }
+      }
+      if (best) return best;
+      return canvasToBlob(canvas, mime, lo);
+    }
+
+    async function buildThumbnailBlob(imageFile) {
+      if (!imageFile?.type?.startsWith("image/")) return null;
+      let bitmap = await createImageBitmap(imageFile);
+      const { w, h } = scaleToMaxLongEdge(bitmap.width, bitmap.height, THUMB_MAX_LONG_EDGE);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      bitmap.close();
+      const mime = canvasSupportsWebp() ? "image/webp" : "image/jpeg";
+      const startQ = mime === "image/webp" ? 0.84 : 0.88;
+      let blob = await canvasToBlob(canvas, mime, startQ);
+      if (blob && blob.size > THUMB_TARGET_MAX_BYTES) {
+        blob = await blobAtOrBelowTarget(canvas, mime, THUMB_TARGET_MAX_BYTES, 0.55);
+      }
+      return blob;
+    }
+
+    const out = document.getElementById("out");
+    const log = (s) => {
+      out.textContent += `${s}\n`;
+    };
+    out.textContent = "";
+
+    function makeTestPng(w, h) {
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#1e3a5f";
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "#fff";
+      ctx.font = "48px sans-serif";
+      ctx.fillText("Test screenshot UI 12345", 40, 120);
+      for (let i = 0; i < 40; i++) {
+        ctx.fillStyle = `hsl(${i * 9} 70% 50%)`;
+        ctx.fillRect(20 + i * 30, 200, 24, 24);
+      }
+      return new Promise((resolve) => c.toBlob((b) => resolve(b), "image/png"));
+    }
+
+    try {
+      const srcBlob = await makeTestPng(1600, 900);
+      const file = new File([srcBlob], "shot.png", { type: "image/png" });
+      const thumb = await buildThumbnailBlob(file);
+      if (!thumb) throw new Error("buildThumbnailBlob returned null");
+      const bmp = await createImageBitmap(thumb);
+      const long = Math.max(bmp.width, bmp.height);
+      bmp.close();
+
+      // Старое поведение: 280px — на Retina ×3 даёт сильное увеличение.
+      const oldLong = 280;
+      const displayCss = 240;
+      const retinaScale = 3;
+      const needed = displayCss * retinaScale;
+      log(`src_bytes=${srcBlob.size}`);
+      log(`thumb_bytes=${thumb.size} type=${thumb.type}`);
+      log(`thumb_long_edge=${long}`);
+      log(`needed_for_3x=${needed} old_thumb=${oldLong}`);
+      if (long < 700 || long > 720) throw new Error(`expected ~720 long edge, got ${long}`);
+      if (long < needed) throw new Error("thumb still below Retina needs");
+      if (thumb.size <= 0) throw new Error("empty thumb");
+      if (thumb.size > 200 * 1024) throw new Error(`thumb too large: ${thumb.size}`);
+      log("PASS");
+      document.title = "PASS";
+    } catch (e) {
+      log(`FAIL: ${e?.message || e}`);
+      document.title = "FAIL";
+      console.error(e);
+    }
+  </script>
+</body>
+</html>
