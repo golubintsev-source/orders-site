@@ -6850,7 +6850,7 @@ html.keyboard-open .messages-composer {
   background: linear-gradient(145deg, #60a5fa 0%, #2563eb 55%, #1d4ed8 100%);
 }
 
-.messages-composer-tool-btn--active {
+.messages-composer-tool-btn.messages-composer-tool-btn--active {
   box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.35);
   filter: brightness(1.06);
   color: #fff;
