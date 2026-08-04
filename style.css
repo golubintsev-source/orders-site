@@ -6786,16 +6786,19 @@ html.keyboard-open .messages-composer {
 .messages-composer-input {
   display: block;
   width: 100%;
-  min-height: 44px;
+  min-height: 40px;
   max-height: 120px;
-  padding: 10px 14px;
+  padding: 8px 14px;
   border: 1px solid #d1d5db;
   border-radius: 18px;
   font: inherit;
   font-size: 16px;
   line-height: 1.4;
-  resize: vertical;
+  resize: none;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: #fff;
+  box-sizing: border-box;
 }
 
 .messages-composer-input:focus {
