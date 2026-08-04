@@ -12,6 +12,8 @@ import {
 } from "./files.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
+/** Максимальная высота поля ввода сообщения (как в CSS max-height). */
+const COMPOSER_INPUT_MAX_HEIGHT_PX = 120;
 const SUGGEST_DEBOUNCE_MS = 120;
 const UNREAD_POLL_MS = 60_000;
 const FEED_POLL_MS = 15_000;
@@ -1457,6 +1459,14 @@ function setTextareaCaret(el, pos) {
   el.setSelectionRange(pos, pos);
 }
 
+/** Однострочное поле по умолчанию; растёт по содержимому до max-height. */
+function resizeMessagesComposerInput(input = document.getElementById("messagesComposerInput")) {
+  if (!input) return;
+  input.style.height = "auto";
+  const next = Math.min(Math.max(input.scrollHeight, 0), COMPOSER_INPUT_MAX_HEIGHT_PX);
+  input.style.height = `${next}px`;
+}
+
 function getTriggerContext(text, caretPos) {
   const before = text.slice(0, caretPos);
   const ampMatch = before.match(/&(\d*)$/);
@@ -2028,6 +2038,7 @@ function startEditMessage(row) {
   const input = document.getElementById("messagesComposerInput");
   if (input) {
     input.value = String(row.body || "");
+    resizeMessagesComposerInput(input);
     input.focus();
     const len = input.value.length;
     input.setSelectionRange(len, len);
@@ -2112,7 +2123,10 @@ async function deleteOwnMessage(row) {
   if (composerEditing && String(composerEditing.id) === String(row.id)) {
     composerEditing = null;
     const input = document.getElementById("messagesComposerInput");
-    if (input) input.value = "";
+    if (input) {
+      input.value = "";
+      resizeMessagesComposerInput(input);
+    }
     syncComposerContextBar();
   }
   if (composerReplyTo && String(composerReplyTo.id) === String(row.id)) {
@@ -2189,6 +2203,7 @@ async function saveEditedMessage() {
   replaceMessageElement(updated);
   composerEditing = null;
   input.value = "";
+  resizeMessagesComposerInput(input);
   syncComposerContextBar();
 }
 
@@ -2429,6 +2444,7 @@ async function sendMessage() {
     }
 
     input.value = "";
+    resizeMessagesComposerInput(input);
     clearPendingChatPhoto();
     composerReplyTo = null;
     syncComposerContextBar();
@@ -2513,6 +2529,7 @@ async function sendMessage() {
   }
 
   input.value = "";
+  resizeMessagesComposerInput(input);
   clearPendingChatPhoto();
   composerReplyTo = null;
   syncComposerContextBar();
@@ -2757,7 +2774,10 @@ export function initMessagesSection() {
     contextCloseBtn.addEventListener("click", () => {
       if (composerEditing) {
         const inputEl = document.getElementById("messagesComposerInput");
-        if (inputEl) inputEl.value = "";
+        if (inputEl) {
+          inputEl.value = "";
+          resizeMessagesComposerInput(inputEl);
+        }
       }
       composerReplyTo = null;
       composerEditing = null;
@@ -2867,7 +2887,9 @@ export function initMessagesSection() {
 
   if (input) {
     let debounceTimer = null;
+    resizeMessagesComposerInput(input);
     input.addEventListener("input", () => {
+      resizeMessagesComposerInput(input);
       if (msgEl) msgEl.classList.remove("messages-page-message--error");
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
