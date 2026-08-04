@@ -6653,8 +6653,8 @@ th {
 
 .messages-attach-photo-wrap {
   position: relative;
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
 }
 
@@ -6804,10 +6804,10 @@ th {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  /* Только safe-area снизу — без лишних +10px пустой полосы под полем. */
-  padding: 10px 12px env(safe-area-inset-bottom, 0px);
-  border-top: 1px solid #dbe3ec;
-  background: rgba(255, 255, 255, 0.96);
+  /* Как у .voice-composer: только safe-area снизу, без лишней полосы. */
+  padding: 8px 12px env(safe-area-inset-bottom, 0px);
+  border-top: 1px solid #e5e7eb;
+  background: #fafafa;
 }
 
 html.keyboard-open .messages-composer {
@@ -6820,23 +6820,24 @@ html.keyboard-open .messages-composer {
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  width: 30px;
+  width: 44px;
   flex-shrink: 0;
 }
 
 .messages-composer-tool-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: #fff;
-  color: #4b5563;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #34d399 0%, #059669 55%, #047857 100%);
+  color: #fff;
   cursor: pointer;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.35);
 }
 
 .messages-composer-tool-btn[hidden] {
@@ -6844,20 +6845,22 @@ html.keyboard-open .messages-composer {
 }
 
 .messages-composer-tool-btn:hover {
-  background: #f3f4f6;
-  color: #111827;
+  filter: brightness(1.05);
+  color: #fff;
+  background: linear-gradient(145deg, #34d399 0%, #059669 55%, #047857 100%);
 }
 
-.messages-composer-tool-btn--active {
-  border-color: #1f6feb;
-  color: #1f6feb;
-  background: #eff6ff;
+.messages-composer-tool-btn.messages-composer-tool-btn--active {
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.35);
+  filter: brightness(1.06);
+  color: #fff;
+  background: linear-gradient(145deg, #34d399 0%, #059669 55%, #047857 100%);
 }
 
 .messages-composer-tool-icon {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
 }
 
 .messages-composer-input-wrap {
@@ -6869,12 +6872,14 @@ html.keyboard-open .messages-composer {
 .messages-composer-input {
   display: block;
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
   max-height: 120px;
-  padding: 8px 14px;
+  margin: 0;
+  padding: 10px 12px;
   border: 1px solid #d1d5db;
-  border-radius: 18px;
+  border-radius: 10px;
   font: inherit;
+  /* ≥16px — иначе iOS зумит страницу при фокусе */
   font-size: 16px;
   line-height: 1.4;
   resize: none;
@@ -6886,8 +6891,8 @@ html.keyboard-open .messages-composer {
 
 .messages-composer-input:focus {
   outline: none;
-  border-color: #1f6feb;
-  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.15);
+  border-color: #34d399;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.25);
 }
 
 .messages-send-btn {
@@ -6895,19 +6900,22 @@ html.keyboard-open .messages-composer {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  min-height: 40px;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
   padding: 0;
   border: none;
-  border-radius: 50%;
-  background: #1f6feb;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #34d399 0%, #059669 55%, #047857 100%);
   color: #fff;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.35);
 }
 
 .messages-send-btn:hover:not(:disabled) {
-  background: #1a5fd4;
+  filter: brightness(1.05);
+  opacity: 1;
+  background: linear-gradient(145deg, #34d399 0%, #059669 55%, #047857 100%);
 }
 
 .messages-send-btn:disabled {
@@ -6917,8 +6925,8 @@ html.keyboard-open .messages-composer {
 
 .messages-send-icon {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   margin-left: 1px;
 }
 
