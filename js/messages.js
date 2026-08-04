@@ -2877,20 +2877,11 @@ export function initMessagesSection() {
 
     input.addEventListener("keydown", (e) => {
       const list = document.getElementById("messagesComposerSuggestions");
-      if (!list || list.hidden) {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          void sendMessage();
-        }
-        return;
-      }
+      // Enter вставляет новую строку (как в мессенджерах); отправка — кнопкой.
+      if (!list || list.hidden) return;
 
       if (list.classList.contains("messages-suggestions--recipients")) {
         if (e.key === "Escape") hideSuggestions();
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          void sendMessage();
-        }
         return;
       }
 
