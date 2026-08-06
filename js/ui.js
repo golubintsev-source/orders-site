@@ -27,6 +27,7 @@ import {
 
 import { logout } from "./auth.js";
 import { state } from "./state.js";
+import { logPhoneCall } from "./access-log.js";
 import {
   applyClientFilter,
   initStatusFilter,
@@ -894,6 +895,20 @@ export function bindUIEvents() {
       e.stopPropagation();
       if (e.target.closest("label.order-id-actions-menu-lock")) {
         e.stopPropagation();
+      }
+      const callLink = e.target.closest("a.order-id-actions-menu-item--call");
+      if (callLink) {
+        const id = Number(orderIdActionsMenu.dataset.currentOrderId);
+        const phone =
+          callLink.getAttribute("href")?.replace(/^tel:/i, "") ||
+          document.querySelector(`td[data-order-id="${id}"]`)?.getAttribute("data-phone") ||
+          "";
+        logPhoneCall({
+          orderId: Number.isNaN(id) ? null : id,
+          phone,
+        });
+        closeOrderIdActionsMenu();
+        return;
       }
       if (e.target.closest("a.order-id-actions-menu-item")) {
         closeOrderIdActionsMenu();

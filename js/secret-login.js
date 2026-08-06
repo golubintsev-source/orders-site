@@ -1,7 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { hrefToHome } from "./app-routes.js";
 import { getResumeHref, resolvePlaceHref } from "./user-place.js";
-import { flushPendingAccessLogs } from "./access-log.js";
+import { flushPendingAccessLogs, logSuccessfulLogin } from "./access-log.js";
 
 export function getLoginKeyFromUrl() {
   return new URLSearchParams(window.location.search).get("key")?.trim() || null;
@@ -90,6 +90,7 @@ export async function trySecretLoginFromUrl() {
     const { data: sessionData } = await supabaseClient.auth.getSession();
     const user = sessionData?.session?.user;
     if (user) {
+      await logSuccessfulLogin(user);
       await flushPendingAccessLogs(user);
     }
 

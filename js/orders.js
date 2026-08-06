@@ -20,6 +20,7 @@ import {
 } from "./section-nav.js";
 import { scheduleSaveUserPlace } from "./user-place.js";
 import { syncOrderIdInUrl } from "./app-routes.js";
+import { logOrderPageAccess } from "./access-log.js";
 import { hideOrderViewQr, showOrderViewQr } from "./order-qr.js";
 import {
   loadFilesCountMap,
@@ -2786,8 +2787,9 @@ export async function viewOrder(orderId) {
   }
 
   captureOrderFormReturnSection();
-  switchSection("new");
+  switchSection("new", { skipAccessLog: true });
   syncOrderIdInUrl(orderId);
+  logOrderPageAccess({ orderId, mode: "view" });
   await showOrderViewQr(orderId);
   refreshSectionNavLabel();
 
@@ -2852,7 +2854,8 @@ export async function editOrder(orderId) {
   if (cancelEditBtnTop) cancelEditBtnTop.style.display = "inline-block";
 
   captureOrderFormReturnSection();
-  switchSection("new");
+  switchSection("new", { skipAccessLog: true });
+  logOrderPageAccess({ orderId, mode: "edit" });
 
   window.scrollTo({ top: 0, behavior: "smooth" });
   scheduleSaveUserPlace();
