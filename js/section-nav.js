@@ -314,7 +314,7 @@ function toggleSectionNavDropdown() {
 /**
  * Переключить раздел и обновить заголовок в шапке (без открытого дропдауна).
  * @param {string} sectionId
- * @param {{ skipUrlSync?: boolean }} [opts]
+ * @param {{ skipUrlSync?: boolean, logInitialAccess?: boolean, skipAccessLog?: boolean }} [opts]
  */
 export function switchSection(sectionId, opts = {}) {
   if (!sectionId) return;
@@ -325,7 +325,7 @@ export function switchSection(sectionId, opts = {}) {
   if (!contentSections.length) return;
 
   const prevSectionId = currentSectionId;
-  const { skipUrlSync = false } = opts;
+  const { skipUrlSync = false, skipAccessLog = false } = opts;
 
   if (prevSectionId !== sectionId) {
     markSectionSwitchStart();
@@ -406,14 +406,16 @@ export function switchSection(sectionId, opts = {}) {
     syncBrowserUrlToSection(sectionId);
   }
 
-  if (prevSectionId !== sectionId) {
-    measureAfterPaint(() => {
-      logSpaSectionAccess(sectionId, consumeSectionSwitchMs());
-    });
-  } else if (opts.logInitialAccess) {
-    measureAfterPaint(() => {
-      logSpaSectionAccess(sectionId, measureNavigationResponseMs());
-    });
+  if (!skipAccessLog) {
+    if (prevSectionId !== sectionId) {
+      measureAfterPaint(() => {
+        logSpaSectionAccess(sectionId, consumeSectionSwitchMs());
+      });
+    } else if (opts.logInitialAccess) {
+      measureAfterPaint(() => {
+        logSpaSectionAccess(sectionId, measureNavigationResponseMs());
+      });
+    }
   }
 
   scheduleSaveUserPlace();

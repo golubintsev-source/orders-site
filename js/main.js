@@ -195,7 +195,12 @@ function applyRouteOnLoad() {
 
   let sectionId = getRouteSectionFromUrl();
   if (!canAccessSection(sectionId)) sectionId = "all";
-  switchSection(sectionId, { skipUrlSync: true, logInitialAccess: true });
+  // Если в URL уже есть заказ — лог напишет viewOrder (с order_id), без дубля.
+  const hasOrderInUrl = getOrderIdFromUrl() != null;
+  switchSection(sectionId, {
+    skipUrlSync: true,
+    logInitialAccess: !hasOrderInUrl,
+  });
   migrateLegacyHashToPathIfNeeded();
 }
 

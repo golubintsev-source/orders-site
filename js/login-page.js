@@ -1,7 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { hrefToHome } from "./app-routes.js";
 import { getResumeHref, resolvePlaceHref } from "./user-place.js";
-import { flushPendingAccessLogs, logSiteAccess } from "./access-log.js";
+import { flushPendingAccessLogs, logSiteAccess, logSuccessfulLogin } from "./access-log.js";
 import { trySecretLoginFromUrl } from "./secret-login.js";
 
 function getSafeNextHref() {
@@ -36,6 +36,7 @@ window.login = async function login() {
   const { data: sessionData } = await supabaseClient.auth.getSession();
   const user = sessionData?.session?.user;
   if (user) {
+    await logSuccessfulLogin(user);
     await flushPendingAccessLogs(user);
   }
 

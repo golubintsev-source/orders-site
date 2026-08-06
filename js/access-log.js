@@ -6,35 +6,15 @@ import { isDbPingIndicatingOffline } from "./db-ping.js";
 
 const GEO_CACHE_KEY = "orders_site_access_geo_v1";
 const PENDING_LOGS_KEY = "orders_site_pending_access_logs_v1";
-const RECENT_LOG_KEY = "orders_site_access_recent_log_v1";
-/** Не писать повторно тот же раздел чаще чем раз в 10 с (вкладка). */
-const DEDUPE_MS = 10000;
+/** Максимум отложенных обращений в localStorage (раньше 50 — терялись при офлайне). */
+const PENDING_LOGS_MAX = 200;
 
-let lastLogKey = "";
-let lastLogAt = 0;
 let geoCachePromise = null;
 let sectionSwitchStartedAt = null;
-/** Нормализованные пути, по которым запись ещё выполняется (async). */
-const inFlightLogPaths = new Set();
 let flushPendingPromise = null;
-
-function readSessionJson(key, fallback) {
-  try {
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-
-function writeSessionJson(key, value) {
-  try {
-    sessionStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* ignore */
-  }
-}
+/** Уникальные id текущих записей (не блокируем повторный путь). */
+const inFlightLogIds = new Set();
+let nextLogFlightId = 1;
 
 function readJsonStorage(key, fallback) {
   try {
@@ -251,47 +231,33 @@ function getWorkMode() {
   return "online";
 }
 
-function wasRecentlyLogged(pagePath) {
-  const key = normalizeAccessLogPath(pagePath);
-  const recent = readSessionJson(RECENT_LOG_KEY, {});
-  const at = recent[key];
-  return typeof at === "number" && Date.now() - at < DEDUPE_MS;
-}
-
-function markRecentlyLogged(pagePath) {
-  const key = normalizeAccessLogPath(pagePath);
-  const recent = readSessionJson(RECENT_LOG_KEY, {});
-  recent[key] = Date.now();
-  const cutoff = Date.now() - DEDUPE_MS * 2;
-  for (const [k, t] of Object.entries(recent)) {
-    if (typeof t !== "number" || t < cutoff) delete recent[k];
-  }
-  writeSessionJson(RECENT_LOG_KEY, recent);
-}
-
-function shouldSkipDuplicate(pagePath) {
-  const key = normalizeAccessLogPath(pagePath);
-  if (inFlightLogPaths.has(key)) return true;
-  if (wasRecentlyLogged(key)) return true;
-  const now = Date.now();
-  if (key === lastLogKey && now - lastLogAt < DEDUPE_MS) return true;
-  lastLogKey = key;
-  lastLogAt = now;
-  return false;
-}
-
-function removePendingLogsForPath(pagePath) {
-  const key = normalizeAccessLogPath(pagePath);
-  const list = readJsonStorage(PENDING_LOGS_KEY, []);
-  if (!list.length) return;
-  const next = list.filter((item) => normalizeAccessLogPath(item.page_path) !== key);
-  if (next.length !== list.length) writeJsonStorage(PENDING_LOGS_KEY, next);
-}
-
 function queuePendingLog(row) {
   const list = readJsonStorage(PENDING_LOGS_KEY, []);
   list.push({ ...row, queuedAt: new Date().toISOString() });
-  writeJsonStorage(PENDING_LOGS_KEY, list.slice(-50));
+  writeJsonStorage(PENDING_LOGS_KEY, list.slice(-PENDING_LOGS_MAX));
+}
+
+/** Только колонки таблицы site_access_logs (без служебных visited_at / queuedAt). */
+function toDbInsertPayload(row, user) {
+  const pagePath = normalizeAccessLogPath(row.page_path);
+  const payload = {
+    user_id: user?.id ?? row.user_id ?? null,
+    user_email: user?.email || row.user_email || null,
+    page_path: pagePath,
+    page_title: row.page_title ?? null,
+    device_type: row.device_type ?? null,
+    device_name: row.device_name ?? null,
+    os_name: row.os_name ?? null,
+    os_version: row.os_version ?? null,
+    city: row.city ?? null,
+    country: row.country ?? null,
+    vpn_detected: row.vpn_detected ?? null,
+    response_time_ms: row.response_time_ms ?? null,
+    work_mode: row.work_mode === "offline" ? "offline" : "online",
+  };
+  const visitedAt = row.visited_at || row.queuedAt || row.created_at;
+  if (visitedAt) payload.created_at = visitedAt;
+  return payload;
 }
 
 async function insertAccessLog(row) {
@@ -313,28 +279,8 @@ export async function flushPendingAccessLogs(user = state.currentUser) {
 
     const remaining = [];
     for (const item of list) {
-      const pagePath = normalizeAccessLogPath(item.page_path);
-
       try {
-        const payload = {
-          user_id: user.id,
-          user_email: user.email || item.user_email || null,
-          page_path: pagePath,
-          page_title: item.page_title ?? null,
-          device_type: item.device_type ?? null,
-          device_name: item.device_name ?? null,
-          os_name: item.os_name ?? null,
-          os_version: item.os_version ?? null,
-          city: item.city ?? null,
-          country: item.country ?? null,
-          vpn_detected: item.vpn_detected ?? null,
-          response_time_ms: item.response_time_ms ?? null,
-          work_mode: item.work_mode === "offline" ? "offline" : "online",
-        };
-        const visitedAt = item.visited_at || item.queuedAt;
-        if (visitedAt) payload.created_at = visitedAt;
-        await insertAccessLog(payload);
-        markRecentlyLogged(pagePath);
+        await insertAccessLog(toDbInsertPayload(item, user));
       } catch (e) {
         console.warn("Не удалось отправить отложенный лог обращения:", e);
         remaining.push(item);
@@ -343,7 +289,7 @@ export async function flushPendingAccessLogs(user = state.currentUser) {
 
     if (remaining.length) {
       const existing = readJsonStorage(PENDING_LOGS_KEY, []);
-      writeJsonStorage(PENDING_LOGS_KEY, [...remaining, ...existing].slice(-50));
+      writeJsonStorage(PENDING_LOGS_KEY, [...remaining, ...existing].slice(-PENDING_LOGS_MAX));
     }
   })().finally(() => {
     flushPendingPromise = null;
@@ -354,13 +300,13 @@ export async function flushPendingAccessLogs(user = state.currentUser) {
 
 /**
  * Записать обращение к странице/разделу в site_access_logs.
- * @param {{ pagePath?: string, pageTitle?: string, responseTimeMs?: number|null, user?: object|null, force?: boolean }} opts
+ * Каждое обращение — отдельная строка (без дедупликации по пути за 10 с).
+ * @param {{ pagePath?: string, pageTitle?: string, responseTimeMs?: number|null, user?: object|null, force?: boolean, workMode?: string }} opts
  */
 export async function logSiteAccess(opts = {}) {
   const pagePath = normalizeAccessLogPath(opts.pagePath || getCurrentPagePath());
-  if (!opts.force && shouldSkipDuplicate(pagePath)) return;
-
-  inFlightLogPaths.add(pagePath);
+  const flightId = nextLogFlightId++;
+  inFlightLogIds.add(flightId);
 
   // Режим фиксируем сразу; после await перепроверяем (пинг БД мог стать красным).
   const workModeAtStart = opts.workMode ?? getWorkMode();
@@ -392,7 +338,6 @@ export async function logSiteAccess(opts = {}) {
 
     if (!user?.id) {
       queuePendingLog(row);
-      markRecentlyLogged(pagePath);
       return;
     }
 
@@ -402,21 +347,18 @@ export async function logSiteAccess(opts = {}) {
       (typeof navigator !== "undefined" && navigator.onLine === false)
     ) {
       queuePendingLog(row);
-      markRecentlyLogged(pagePath);
       return;
     }
 
     try {
-      await insertAccessLog({ ...row, user_id: user.id, created_at: visitedAt });
-      removePendingLogsForPath(pagePath);
-      markRecentlyLogged(pagePath);
+      await insertAccessLog(toDbInsertPayload(row, user));
     } catch (e) {
       console.error("Не удалось записать лог обращения:", e?.message || e, e);
       row.work_mode = getWorkMode() === "offline" ? "offline" : row.work_mode;
       queuePendingLog(row);
     }
   } finally {
-    inFlightLogPaths.delete(pagePath);
+    inFlightLogIds.delete(flightId);
   }
 }
 
@@ -429,11 +371,69 @@ export function logSpaSectionAccess(sectionId, responseTimeMs = null) {
   });
 }
 
+/** Успешный вход (пароль или ссылка). */
+export async function logSuccessfulLogin(user = state.currentUser) {
+  await logSiteAccess({
+    pagePath: "/login",
+    pageTitle: "Успешный вход",
+    user: user || null,
+    force: true,
+    responseTimeMs: null,
+  });
+}
+
+/**
+ * Звонок клиенту из меню заказа.
+ * @param {{ orderId?: number|string|null, phone?: string|null }} opts
+ */
+export function logPhoneCall(opts = {}) {
+  const orderId = opts.orderId != null && opts.orderId !== "" ? String(opts.orderId) : "";
+  const phone = String(opts.phone || "").trim();
+  const q = new URLSearchParams();
+  if (orderId) q.set("order_id", orderId);
+  if (phone) q.set("phone", phone.replace(/[^\d+]/g, ""));
+  const qs = q.toString();
+  void logSiteAccess({
+    pagePath: qs ? `/call?${qs}` : "/call",
+    pageTitle: phone ? `Звонок ${phone}` : "Звонок",
+    force: true,
+  });
+}
+
+/**
+ * Открытие карточки заказа (просмотр / редактирование) — даже если раздел уже «new».
+ * @param {{ orderId: number|string, mode?: 'view'|'edit' }} opts
+ */
+export function logOrderPageAccess(opts) {
+  const orderId = opts?.orderId;
+  if (orderId == null || orderId === "") return;
+  const mode = opts.mode === "edit" ? "edit" : "view";
+  const id = encodeURIComponent(String(orderId));
+  void logSiteAccess({
+    pagePath: `/new?order_id=${id}`,
+    pageTitle: mode === "edit" ? `Редактирование заказа ${orderId}` : `Просмотр заказа ${orderId}`,
+    force: true,
+  });
+}
+
 export function initAccessLogging() {
   window.addEventListener("online", () => {
     void flushPendingAccessLogs();
   });
   window.addEventListener("db-ping-ok", () => {
     void flushPendingAccessLogs();
+  });
+  // Восстановление вкладки из bfcache — отдельное обращение.
+  window.addEventListener("pageshow", (ev) => {
+    if (!ev.persisted) return;
+    if (!state.currentUser?.id) return;
+    measureAfterPaint(() => {
+      void logSiteAccess({
+        pagePath: getCurrentPagePath(),
+        pageTitle: `${document.title} — восстановление вкладки`,
+        responseTimeMs: null,
+        force: true,
+      });
+    });
   });
 }

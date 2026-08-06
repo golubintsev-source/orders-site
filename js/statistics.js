@@ -11,8 +11,11 @@ function toDatetimeLocalValue(d) {
 }
 
 function defaultStatisticsDatetimeFrom() {
+  // Как у «Все изменения»: последние 3 календарных дня, чтобы визиты не «пропадали»
+  // относительно правок, видимых на странице изменений.
   const d = new Date();
-  d.setTime(d.getTime() - 24 * 60 * 60 * 1000);
+  d.setDate(d.getDate() - 2);
+  d.setHours(0, 0, 0, 0);
   return toDatetimeLocalValue(d);
 }
 
@@ -20,7 +23,7 @@ function defaultStatisticsDatetimeTo() {
   return toDatetimeLocalValue(new Date());
 }
 
-/** Обновить период «последние сутки» перед загрузкой (поле «по» = сейчас). */
+/** Обновить период «последние 3 дня» перед загрузкой (поле «по» = сейчас). */
 export function refreshStatisticsDefaultRange() {
   const fromEl = document.getElementById("statisticsDatetimeFrom");
   const toEl = document.getElementById("statisticsDatetimeTo");
@@ -172,7 +175,7 @@ export async function loadStatistics(opts = {}) {
     .gte("created_at", fromIso)
     .lte("created_at", toIso)
     .order("created_at", { ascending: false })
-    .limit(5000);
+    .limit(10000);
 
   if (error) {
     console.error("Ошибка загрузки статистики:", error);
@@ -187,7 +190,7 @@ export async function loadStatistics(opts = {}) {
   paintStatisticsTable(data || []);
   if (!data?.length && msg) {
     msg.textContent =
-      "За выбранный период записей нет. Откройте другие разделы сайта и обновите статистику — каждое посещение пишется в журнал.";
+      "За выбранный период записей нет. Каждое открытие вкладки, переход по разделам, просмотр заказа, вход и звонок пишутся в журнал — обновите период или откройте разделы и нажмите «Показать».";
   }
 }
 
