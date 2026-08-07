@@ -5,7 +5,7 @@ import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
 import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite, isUserShop } from "./roles.js";
 import { getRouteSectionFromUrl, hrefToOrdersExcelExport, syncBrowserUrlToSection } from "./app-routes.js";
-import { scheduleSaveUserPlace } from "./user-place.js";
+import { navigateWithUserPlace, scheduleSaveUserPlace } from "./user-place.js";
 import {
   consumeSectionSwitchMs,
   logSpaSectionAccess,
@@ -477,7 +477,7 @@ export function initSectionNavDropdown(options = {}) {
           if (!canAccessSection("orders-excel")) return;
           const hasOrdersTable = Boolean(document.getElementById("ordersTable"));
           if (!hasOrdersTable) {
-            window.location.href = hrefToOrdersExcelExport();
+            navigateWithUserPlace(hrefToOrdersExcelExport());
             closeSectionNavDropdown();
             return;
           }

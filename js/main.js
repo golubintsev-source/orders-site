@@ -36,6 +36,7 @@ import {
 import {
   applySavedScroll,
   captureHref,
+  consumeSkipUserPlaceResume,
   getResumeHref,
   initUserPlaceTracking,
   readSavedPlaceForCurrentPage,
@@ -142,7 +143,13 @@ async function init() {
     });
 
     const savedPlace = readSavedPlaceForCurrentPage(user.id);
-    if (!savedPlace && shouldRedirectToSavedPlace(captureHref(), readUserPlace(user.id)?.href)) {
+    const skipResume = consumeSkipUserPlaceResume();
+    // Не возвращать на history.html / форму заказа, если пользователь явно ушёл через меню.
+    if (
+      !skipResume &&
+      !savedPlace &&
+      shouldRedirectToSavedPlace(captureHref(), readUserPlace(user.id)?.href)
+    ) {
       window.location.replace(getResumeHref(user.id, captureHref()));
       return;
     }

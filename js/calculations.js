@@ -6,6 +6,7 @@ import { hrefToHome } from "./app-routes.js";
 import {
   applySavedScroll,
   initUserPlaceTracking,
+  navigateWithUserPlace,
   readSavedPlaceForCurrentPage,
 } from "./user-place.js";
 import {
@@ -1120,7 +1121,7 @@ async function init() {
   });
 
   document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
-    window.location.href = hrefToHome();
+    navigateWithUserPlace(hrefToHome());
   });
 
   initCalculationsDateRangeDefaults();

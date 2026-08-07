@@ -20,14 +20,47 @@ const SCROLL_CONTAINER_IDS = ["ordersTableScrollBottom", "ordersTableScrollInner
  *   },
  * }} UserPlaceState */
 
+const SKIP_RESUME_KEY = "orders_site_skip_user_place_resume_v1";
+
 let activeUserId = null;
 /** @type {(() => import("./state.js").state extends infer S ? () => Partial<UserPlaceState["app"]> : never) | null} */
 let getAppContext = null;
 let saveTimer = null;
 let trackingBound = false;
+/** При намеренном уходе со страницы — не перезаписывать place текущим URL в pagehide. */
+let intentionalNavigateHref = null;
 
 function storageKey(userId) {
   return `${STORAGE_PREFIX}${userId}`;
+}
+
+/** Привести целевой href к формату, который пишет captureHref(). */
+export function hrefForUserPlaceStorage(href) {
+  const raw = String(href || "").trim();
+  if (!raw) return usesHashOnlyRouting() ? "index.html" : "/";
+  try {
+    if (/^https?:\/\//i.test(raw)) {
+      const u = new URL(raw);
+      if (usesHashOnlyRouting()) {
+        const file = u.pathname.split(/[/\\]/).pop() || "index.html";
+        return `${file}${u.search || ""}${u.hash || ""}`;
+      }
+      let path = u.pathname || "/";
+      if (path.endsWith("/index.html")) path = path.slice(0, -"/index.html".length) || "/";
+      if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+      return `${path}${u.search || ""}${u.hash || ""}`;
+    }
+  } catch {
+    /* fall through */
+  }
+  if (usesHashOnlyRouting()) {
+    if (raw === "/" || raw === "/all") return "index.html";
+    if (raw.startsWith("/")) return raw.slice(1);
+    return raw;
+  }
+  if (raw === "index.html") return "/";
+  if (!raw.startsWith("/")) return `/${raw}`;
+  return raw;
 }
 
 /** Относительный адрес страницы (без origin). */
@@ -149,6 +182,17 @@ function flushSaveUserPlace() {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
+  // Намеренный уход: не затирать уже записанный целевой href текущей (старой) страницей.
+  if (intentionalNavigateHref) {
+    saveUserPlace(activeUserId, {
+      at: new Date().toISOString(),
+      href: hrefForUserPlaceStorage(intentionalNavigateHref),
+      scrollY: 0,
+      scrollX: 0,
+      scrollContainers: {},
+    });
+    return;
+  }
   saveUserPlace(activeUserId, captureUserPlace());
 }
 
@@ -166,6 +210,56 @@ export function shouldRedirectToSavedPlace(currentHref, savedHref) {
   if (!savedHref || isLoginHref(savedHref)) return false;
   if (normalizeHrefForCompare(currentHref) === normalizeHrefForCompare(savedHref)) return false;
   return isDefaultAppEntryHref(currentHref);
+}
+
+/** Сбросить одноразовый флаг «не делать resume» (намеренный переход с другой страницы). */
+export function consumeSkipUserPlaceResume() {
+  try {
+    if (sessionStorage.getItem(SKIP_RESUME_KEY) !== "1") return false;
+    sessionStorage.removeItem(SKIP_RESUME_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function markSkipUserPlaceResume() {
+  try {
+    sessionStorage.setItem(SKIP_RESUME_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Сразу записать место (без debounce) — для намеренного ухода до pagehide/reload. */
+export function rememberUserPlaceNow(href, app) {
+  if (!activeUserId) return;
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  /** @type {UserPlaceState} */
+  const place = {
+    at: new Date().toISOString(),
+    href: hrefForUserPlaceStorage(href ?? captureHref()),
+    scrollY: 0,
+    scrollX: 0,
+    scrollContainers: {},
+  };
+  if (app && Object.keys(app).length) place.app = app;
+  saveUserPlace(activeUserId, place);
+}
+
+/**
+ * Намеренный переход (меню / «Заказы»): обновить place на цель и не дать pagehide
+ * снова записать старую страницу (иначе с history.html снова вернёт на «Изменения»).
+ */
+export function navigateWithUserPlace(href) {
+  const target = String(href || "").trim() || (usesHashOnlyRouting() ? "index.html" : "/");
+  intentionalNavigateHref = target;
+  markSkipUserPlaceResume();
+  rememberUserPlaceNow(target);
+  window.location.href = target;
 }
 
 /** Ссылка для перехода после входа или с «домашней» страницы. */
