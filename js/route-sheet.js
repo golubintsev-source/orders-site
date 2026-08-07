@@ -2176,27 +2176,21 @@ const ROUTE_SHEET_EXCEL_MAP_ROW_HEIGHT_PT = 15;
 
 /**
  * Кегль текста таблицы «Доставка» в Excel.
- * Меньше 11 — плотнее межстрочный интервал при wrapText и меньше высота блока на A4.
  */
 const ROUTE_SHEET_EXCEL_DATA_FONT_SIZE = 9;
 
 /**
- * Высота одной визуальной строки текста таблицы (под DATA_FONT_SIZE), pt.
- * Как у AutoFit Calibri 9 в Excel (~15×9/11); без лишнего «пустого» ряда.
+ * Стандартная высота одной текстовой линии в строке Excel (пункты).
+ * Это Default Row Height Excel (15pt): 1 линия → 15, 2 → 30, 3 → 45, 4 → 60.
+ * Не использовать дробные «12.5 + pad» — Excel обрезает текст посередине глифа.
  */
-const ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT = 12;
+const ROUTE_SHEET_EXCEL_LINE_HEIGHT_PT = 15;
 
 /**
- * Запас высоты строки (pt) под тонкую границу и последнюю линию wrapText.
- * Без запаса Excel иногда срезает 4-ю линию в «Клиент»; большой pad даёт пустую полосу.
+ * Горизонтальные поля ячейки (px @ 96dpi) при thin-border + wrapText.
+ * Чуть больше «впритык»: лучше +1 линия высоты, чем обрезка текста.
  */
-const ROUTE_SHEET_EXCEL_ROW_HEIGHT_PAD_PT = 1.25;
-
-/**
- * Горизонтальные поля ячейки Excel (px @ 96dpi) при thin-border + wrapText.
- * Вычитаются из ширины колонки при подсчёте переносов.
- */
-const ROUTE_SHEET_EXCEL_CELL_PAD_X_PX = 5;
+const ROUTE_SHEET_EXCEL_CELL_PAD_X_PX = 10;
 
 /** Минимальная высота области карты на листе (px @ 96 dpi). */
 const ROUTE_SHEET_EXCEL_MAP_MIN_HEIGHT_PX = 200;
@@ -2268,8 +2262,7 @@ function getExcelTextMeasureCtx(fontSizePt) {
 
 /**
  * Ширина текста как у Calibri в Excel (px @ 96dpi).
- * Системный measureText без Calibri (Arial и т.п.) уже — из‑за этого обрезались
- * длинные ФИО; эта эвристика калибрована под Calibri 9.
+ * Слегка шире «идеала», чтобы не занижать число переносов и не обрезать текст.
  * @param {string} text
  * @param {number} fontSizePt
  */
@@ -2278,16 +2271,16 @@ function measureCalibriApproxWidthPx(text, fontSizePt) {
   let w = 0;
   for (const ch of String(text)) {
     const code = ch.codePointAt(0) || 0;
-    if (ch === " ") w += em * 0.25;
-    else if (ch === "." || ch === "," || ch === ";" || ch === ":") w += em * 0.25;
-    else if (ch === "/" || ch === "-" || ch === "—" || ch === "(" || ch === ")") w += em * 0.33;
-    else if (ch >= "0" && ch <= "9") w += em * 0.57;
-    else if (code >= 0x0410 && code <= 0x042f) w += em * 0.65; // Кириллица заглавная
-    else if ((code >= 0x0430 && code <= 0x044f) || code === 0x0451) w += em * 0.62;
-    else if (code >= 0x0400 && code <= 0x04ff) w += em * 0.62;
-    else if (code >= 0x41 && code <= 0x5a) w += em * 0.62;
-    else if (code >= 0x61 && code <= 0x7a) w += em * 0.5;
-    else w += em * 0.56;
+    if (ch === " ") w += em * 0.28;
+    else if (ch === "." || ch === "," || ch === ";" || ch === ":") w += em * 0.28;
+    else if (ch === "/" || ch === "-" || ch === "—" || ch === "(" || ch === ")") w += em * 0.36;
+    else if (ch >= "0" && ch <= "9") w += em * 0.6;
+    else if (code >= 0x0410 && code <= 0x042f) w += em * 0.68; // Кириллица заглавная
+    else if ((code >= 0x0430 && code <= 0x044f) || code === 0x0451) w += em * 0.65;
+    else if (code >= 0x0400 && code <= 0x04ff) w += em * 0.65;
+    else if (code >= 0x41 && code <= 0x5a) w += em * 0.65;
+    else if (code >= 0x61 && code <= 0x7a) w += em * 0.55;
+    else w += em * 0.6;
   }
   return w;
 }
@@ -2301,7 +2294,7 @@ function measureExcelTextWidthPx(text, fontSizePt) {
   const calibriW = measureCalibriApproxWidthPx(text, fontSizePt);
   const ctx = getExcelTextMeasureCtx(fontSizePt);
   if (!ctx) return calibriW;
-  // Excel всегда Calibri; если в браузере подставился более узкий шрифт — не занижаем.
+  // Берём max: узкий системный шрифт не должен занижать переносы относительно Excel.
   return Math.max(ctx.measureText(text).width, calibriW);
 }
 
@@ -2330,8 +2323,6 @@ function countExcelHardWrappedWordLines(word, maxWidthPx, fontSizePt) {
 
 /**
  * Число визуальных строк текста в ячейке Excel с переносом по ширине колонки.
- * Считаем по фактической ширине глифов (canvas measureText) — иначе на кириллице
- * либо лишняя пустая полоса, либо обрезка последней линии (длинные ФИО/адреса).
  * @param {unknown} text
  * @param {number} colWidthChars
  * @param {number} [fontSizePt]
@@ -2340,7 +2331,8 @@ function estimateExcelWrappedLineCount(text, colWidthChars, fontSizePt = ROUTE_S
   const t = normalizeExcelMultilineText(text);
   if (!t) return 1;
   const colPx = excelColWidthToPx(colWidthChars);
-  const maxWidthPx = Math.max(8, colPx - ROUTE_SHEET_EXCEL_CELL_PAD_X_PX);
+  // Небольшой запас по ширине: лучше высота на 1 шаг больше, чем обрезка.
+  const maxWidthPx = Math.max(8, (colPx - ROUTE_SHEET_EXCEL_CELL_PAD_X_PX) * 0.96);
   const spaceW = measureExcelTextWidthPx(" ", fontSizePt);
   const parts = t.split("\n");
   let lines = 0;
@@ -2365,7 +2357,6 @@ function estimateExcelWrappedLineCount(text, colWidthChars, fontSizePt = ROUTE_S
         }
         const hard = countExcelHardWrappedWordLines(word, maxWidthPx, fontSizePt);
         partLines += hard - 1;
-        // Остаток последней «жёсткой» линии — приближаем по хвосту слова.
         let tail = "";
         for (const ch of word) {
           const next = tail + ch;
@@ -2390,18 +2381,15 @@ function estimateExcelWrappedLineCount(text, colWidthChars, fontSizePt = ROUTE_S
 }
 
 /**
- * Высота строки Excel в пунктах по самому «высокому» столбцу (с учётом wrapText).
- * Высота = линии×leading + минимальный pad: без пустой линии и без обрезки.
+ * Высота строки Excel: строго кратна стандартному шагу (15pt × число линий).
+ * Число линий — по самому «высокому» столбцу с wrapText.
  * @param {unknown[]} values
  * @param {number[]} colWidths
- * @param {{ fontSize?: number, minPt?: number, maxLines?: number, padPt?: number }} [opts]
+ * @param {{ fontSize?: number, lineHeightPt?: number, maxLines?: number }} [opts]
  */
 function estimateExcelRowHeightPt(values, colWidths, opts = {}) {
   const fontSize = opts.fontSize || ROUTE_SHEET_EXCEL_DATA_FONT_SIZE;
-  const minPt =
-    opts.minPt || Math.max(ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT, fontSize + 2);
-  const padPt =
-    opts.padPt != null ? opts.padPt : ROUTE_SHEET_EXCEL_ROW_HEIGHT_PAD_PT;
+  const lineHeightPt = opts.lineHeightPt || ROUTE_SHEET_EXCEL_LINE_HEIGHT_PT;
   const maxLinesCap = opts.maxLines || 10;
   let maxLines = 1;
   const n = Math.max(values?.length || 0, colWidths.length);
@@ -2415,7 +2403,7 @@ function estimateExcelRowHeightPt(values, colWidths, opts = {}) {
       ),
     );
   }
-  return minPt * Math.min(maxLines, maxLinesCap) + padPt;
+  return lineHeightPt * Math.min(maxLines, maxLinesCap);
 }
 
 /**
@@ -2432,7 +2420,8 @@ function estimateRouteSheetTableBlockHeightPx(preambleRows, headers, rows) {
   for (let i = 0; i < preamble.length; i++) {
     heightPt += estimateExcelRowHeightPt(preamble[i], [fullWidthChars], {
       fontSize: i === 0 ? 14 : 12,
-      minPt: i === 0 ? 20 : 18,
+      // Кратность 15pt: заголовок МЛ крупнее — 2 шага, водитель — 1.
+      lineHeightPt: i === 0 ? ROUTE_SHEET_EXCEL_LINE_HEIGHT_PT * 2 : ROUTE_SHEET_EXCEL_LINE_HEIGHT_PT,
       maxLines: 2,
     });
   }
@@ -2446,8 +2435,7 @@ function estimateRouteSheetTableBlockHeightPx(preambleRows, headers, rows) {
       maxLines: 10,
     });
   }
-  heightPt += 8; // пустая строка-разделитель
-  heightPt += 16; // «Карта маршрута»
+  heightPt += ROUTE_SHEET_EXCEL_LINE_HEIGHT_PT; // «Карта маршрута»
   return Math.round(routeSheetExcelPointsToPx(heightPt));
 }
 
@@ -2670,7 +2658,7 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(
     const excelRow = worksheet.addRow(pr);
     excelRow.height = estimateExcelRowHeightPt(pr, [fullWidthChars], {
       fontSize: i === 0 ? 14 : 12,
-      minPt: i === 0 ? 20 : 18,
+      lineHeightPt: i === 0 ? ROUTE_SHEET_EXCEL_LINE_HEIGHT_PT * 2 : ROUTE_SHEET_EXCEL_LINE_HEIGHT_PT,
       maxLines: 2,
     });
   }
@@ -2732,11 +2720,10 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(
     const comma = dataUrl.indexOf(",");
     const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
     const imageId = workbook.addImage({ base64, extension: "png" });
-    worksheet.addRow([]);
     const titleRow = worksheet.addRow(["Карта маршрута"]);
     if (titleRow) {
       titleRow.font = { bold: true };
-      titleRow.height = 16;
+      titleRow.height = ROUTE_SHEET_EXCEL_LINE_HEIGHT_PT;
     }
 
     const mapTlRow = worksheet.lastRow ? worksheet.lastRow.number : 0;
