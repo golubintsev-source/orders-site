@@ -101,6 +101,7 @@ function applyPhoneAndAddressFromClientPick(clientName) {
   const address = getLatestAddressForClient(clientName);
   if (!address) return;
   addressInput.value = address;
+  addressInput.classList.remove("address-invalid");
 }
 
 function applyClientAndPhoneFromAddressPick(address) {
@@ -157,6 +158,7 @@ function initFieldAutocomplete({ inputId, listId, wrapSelector, field, onPick })
         e.preventDefault();
         input.value = item.name;
         if (inputId === "client") input.classList.remove("client-invalid");
+        if (inputId === "address") input.classList.remove("address-invalid");
         hide();
         input.focus();
         input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -178,6 +180,7 @@ function initFieldAutocomplete({ inputId, listId, wrapSelector, field, onPick })
 
   input.addEventListener("input", () => {
     if (inputId === "client") input.classList.remove("client-invalid");
+    if (inputId === "address") input.classList.remove("address-invalid");
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(refresh, DEBOUNCE_MS);
   });

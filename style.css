@@ -2599,6 +2599,16 @@ select:required:valid {
   box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
 }
 
+#address.address-invalid {
+  border: 1px solid #d7dce5;
+  background-color: #ffebee;
+}
+
+#address.address-invalid:focus {
+  outline: none;
+  border-color: #d7dce5;
+}
+
 #payment_status.payment-status-invalid {
   border-color: #d32f2f;
   background-color: #ffebee;

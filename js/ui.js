@@ -281,6 +281,10 @@ export function bindUIEvents() {
   if (clientInput) {
     clientInput.addEventListener("input", () => clientInput.classList.remove("client-invalid"));
   }
+  const addressInput = document.getElementById("address");
+  if (addressInput) {
+    addressInput.addEventListener("input", () => addressInput.classList.remove("address-invalid"));
+  }
   initClientAutocomplete();
   initAddressAutocomplete();
 

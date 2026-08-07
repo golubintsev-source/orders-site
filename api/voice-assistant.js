@@ -654,6 +654,7 @@ function missingCreateRequired(draft) {
   const missing = [];
   if (!String(draft?.client || "").trim()) missing.push("клиент");
   if (!String(draft?.payment_status || "").trim()) missing.push("статус");
+  if (!String(draft?.address || "").trim()) missing.push("адрес");
   return missing;
 }
 
@@ -833,7 +834,7 @@ function patchHasChanges(patch) {
 }
 
 /**
- * Патч правки: убрать пустые client/status (модель часто заполняет весь объект null-ами).
+ * Патч правки: убрать пустые client/status/address (модель часто заполняет весь объект null-ами).
  * Остальные null оставляем — ими можно очистить необязательное поле.
  */
 function normalizeUpdatePatch(patch) {
@@ -841,6 +842,7 @@ function normalizeUpdatePatch(patch) {
   const out = { ...patch };
   if (out.client == null || out.client === "") delete out.client;
   if (out.payment_status == null || out.payment_status === "") delete out.payment_status;
+  if (out.address == null || out.address === "") delete out.address;
   return out;
 }
 
@@ -874,10 +876,10 @@ ${calcLine}
 
 === СЦЕНАРИЙ 2. СОЗДАНИЕ НОВОГО ЗАКАЗА ===
 Пользователь хочет создать заказ (создай / новый заказ / оформи / добавь заявку…).
-Обязательные поля: client (клиент) и payment_status (статус). Остальное — по желанию.
-- Если не хватает клиента и/или статуса → action "clarify", спроси недостающее. Можно вернуть частичный order с уже известными полями.
+Обязательные поля: client (клиент), payment_status (статус) и address (адрес). Остальное — по желанию.
+- Если не хватает клиента, статуса и/или адреса → action "clarify", спроси недостающее. Можно вернуть частичный order с уже известными полями.
 - Когда обязательные поля есть → action "propose_create_order", заполни order всеми извлечёнными полями.
-- В speak ПЕРЕД подтверждением ПЕРЕЧИСЛИ все параметры заказа (клиент, статус и всё остальное, что указано). Спроси подтверждение («создать?» / «верно?»).
+- В speak ПЕРЕД подтверждением ПЕРЕЧИСЛИ все параметры заказа (клиент, статус, адрес и всё остальное, что указано). Спроси подтверждение («создать?» / «верно?»).
 - Создание на сайте подтвердит пользователь кнопкой или голосом «да»/«нет». Не утверждай, что заказ уже создан.
 - calculation = null.
 
@@ -889,7 +891,7 @@ ${calcLine}
 - Когда заказ известен и есть поля для изменения → action "propose_update_order":
   order_id = id заказа, order = ТОЛЬКО изменяемые поля (патч).
 - В speak перечисли номер заказа и что именно изменится (старое→новое, если известно). Спроси подтверждение.
-- После слияния клиент и статус не должны стать пустыми. Если патч обнуляет обязательное — clarify.
+- После слияния клиент, статус и адрес не должны стать пустыми. Если патч обнуляет обязательное — clarify.
 - calculation = null.
 
 === СЦЕНАРИЙ 4. ВНЕСЕНИЕ РАСХОДА В РАСЧЁТЫ ===
@@ -1036,7 +1038,7 @@ function finalizeAssistantPayload(parsed, { canCreateOrders, canCreateCalculatio
     if (missing.length) {
       return {
         speak:
-          speak && /клиент|статус|укаж|нужн/i.test(speak)
+          speak && /клиент|статус|адрес|укаж|нужн/i.test(speak)
             ? speak
             : `Чтобы создать заказ, укажите обязательные данные: ${missing.join(" и ")}.`,
         action: "clarify",

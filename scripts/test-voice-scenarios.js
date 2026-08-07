@@ -53,7 +53,18 @@ function assert(cond, msg) {
 {
   assert(missingCreateRequired({}).includes("клиент"), "missing client");
   assert(missingCreateRequired({ client: "А" }).includes("статус"), "missing status");
-  assert(missingCreateRequired({ client: "А", payment_status: "Контакт с клиентом" }).length === 0, "ok");
+  assert(
+    missingCreateRequired({ client: "А", payment_status: "Контакт с клиентом" }).includes("адрес"),
+    "missing address"
+  );
+  assert(
+    missingCreateRequired({
+      client: "А",
+      payment_status: "Контакт с клиентом",
+      address: "Ленина 1",
+    }).length === 0,
+    "ok"
+  );
 }
 
 {
@@ -68,6 +79,19 @@ function assert(cond, msg) {
   assert(r.action === "clarify", `create without status -> clarify, got ${r.action}`);
   assert(/статус/i.test(r.speak), `ask status: ${r.speak}`);
   assert(r.order && r.order.client === "Иванов", "keep partial draft");
+}
+
+{
+  const r = finalizeAssistantPayload(
+    {
+      action: "propose_create_order",
+      speak: "Создаю",
+      order: { client: "Иванов", payment_status: "Контакт с клиентом", amount: 1000 },
+    },
+    { canCreateOrders: true, canCreateCalculations: true, orders, mentionMatches: [] }
+  );
+  assert(r.action === "clarify", `create without address -> clarify, got ${r.action}`);
+  assert(/адрес/i.test(r.speak), `ask address: ${r.speak}`);
 }
 
 {
@@ -142,7 +166,11 @@ function assert(cond, msg) {
 
 {
   const r = finalizeAssistantPayload(
-    { action: "propose_create_order", speak: "x", order: { client: "A", payment_status: "Контакт с клиентом" } },
+    {
+      action: "propose_create_order",
+      speak: "x",
+      order: { client: "A", payment_status: "Контакт с клиентом", address: "Ленина 1" },
+    },
     { canCreateOrders: false, canCreateCalculations: true, orders, mentionMatches: [] }
   );
   assert(r.action === "answer", "no rights create");
@@ -150,7 +178,7 @@ function assert(cond, msg) {
 
 {
   // Модель часто возвращает полный объект с null по неизменённым полям —
-  // пустые client/status не должны попасть в патч правки.
+  // пустые client/status/address не должны попасть в патч правки.
   const r = finalizeAssistantPayload(
     {
       action: "propose_update_order",
@@ -165,11 +193,11 @@ function assert(cond, msg) {
     },
     { canCreateOrders: true, canCreateCalculations: true, orders, mentionMatches: [] }
   );
-  assert(r.action === "propose_update_order", `null client/status stripped: ${r.action}`);
+  assert(r.action === "propose_update_order", `null client/status/address stripped: ${r.action}`);
   assert(r.order && r.order.description === "Обязательно провести повторный замер", "description kept");
   assert(!("client" in r.order), "empty client removed from patch");
   assert(!("payment_status" in r.order), "empty status removed from patch");
-  assert("address" in r.order && r.order.address === null, "null address kept for optional clear");
+  assert(!("address" in r.order), "empty address removed from patch");
 }
 
 {
@@ -177,14 +205,18 @@ function assert(cond, msg) {
   const p = normalizeUpdatePatch({
     client: "",
     payment_status: null,
+    address: null,
     description: "x",
   });
   assert(p.description === "x", "normalize keeps description");
-  assert(!("client" in p) && !("payment_status" in p), "normalize drops empty required");
+  assert(
+    !("client" in p) && !("payment_status" in p) && !("address" in p),
+    "normalize drops empty required"
+  );
 }
 
 {
-  // Карточка подтверждения правки: Клиент/Статус показываем из текущего заказа,
+  // Карточка подтверждения правки: Клиент/Статус/Адрес показываем из текущего заказа,
   // если в патче их нет (иначе UI рисует «—»).
   function mergeUpdateConfirmDisplay(existing, patch) {
     const display = { ...(patch && typeof patch === "object" ? patch : {}) };
@@ -194,6 +226,9 @@ function assert(cond, msg) {
     if (display.payment_status == null || display.payment_status === "") {
       display.payment_status = existing?.payment_status ?? null;
     }
+    if (display.address == null || display.address === "") {
+      display.address = existing?.address ?? null;
+    }
     return display;
   }
   const d = mergeUpdateConfirmDisplay(orders[0], {
@@ -201,6 +236,7 @@ function assert(cond, msg) {
   });
   assert(d.client === "Иванов", `confirm card client: ${d.client}`);
   assert(d.payment_status === "Производство", `confirm card status: ${d.payment_status}`);
+  assert(d.address === "Ленина 10", `confirm card address: ${d.address}`);
   assert(d.description === "Обязательно провести повторный замер", "confirm card description");
 
   const d2 = mergeUpdateConfirmDisplay(orders[0], {
@@ -209,6 +245,7 @@ function assert(cond, msg) {
   });
   assert(d2.client === "Новый клиент", "patch client overrides existing");
   assert(d2.payment_status === "Производство", "status still from existing");
+  assert(d2.address === "Ленина 10", "address still from existing");
 }
 
 {

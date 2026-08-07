@@ -687,8 +687,8 @@ function buildConfirmListHtml(draft, { highlightMissing = false } = {}) {
   const rows = [
     ["client", "Клиент", true],
     ["payment_status", "Статус", true],
+    ["address", "Адрес", true],
     ["phone", "Телефон", false],
-    ["address", "Адрес", false],
     ["description", "Описание", false],
     ["order_type", "Тип", false],
     ["amount", "Сумма", false],
@@ -787,6 +787,7 @@ function renderIncompleteCreateCard(draft) {
   const missing = [];
   if (!String(draft?.client || "").trim()) missing.push("клиент");
   if (!String(draft?.payment_status || "").trim()) missing.push("статус");
+  if (!String(draft?.address || "").trim()) missing.push("адрес");
   const missingText = missing.length ? missing.join(" и ") : "обязательные поля";
   return `<div class="voice-confirm-card voice-confirm-card--incomplete" role="group" aria-label="Не хватает данных для заказа">
     <p class="voice-confirm-title">Нужны обязательные данные</p>
@@ -812,7 +813,7 @@ function findOrderForVoiceConfirm(orderId) {
 }
 
 /**
- * Для карточки правки: патч содержит только изменяемые поля, а Клиент/Статус
+ * Для карточки правки: патч содержит только изменяемые поля, а Клиент/Статус/Адрес
  * в списке обязательные — подставляем текущие значения заказа, если в патче пусто.
  */
 function buildUpdateConfirmDisplay(orderId, patch) {
@@ -823,6 +824,9 @@ function buildUpdateConfirmDisplay(orderId, patch) {
   }
   if (display.payment_status == null || display.payment_status === "") {
     display.payment_status = existing?.payment_status ?? null;
+  }
+  if (display.address == null || display.address === "") {
+    display.address = existing?.address ?? null;
   }
   return display;
 }
