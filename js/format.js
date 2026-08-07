@@ -109,3 +109,49 @@ export function formatTaskAuthorShort(raw) {
   if (s.length <= 5) return s;
   return `${s.slice(0, 5)}...`;
 }
+
+/**
+ * Цифры телефона с ведущей 7 → 8 (ввод «7…» и «+7…» дают одно и то же).
+ * Обрезка до 11 цифр.
+ */
+export function normalizePhoneDigits(raw) {
+  let digits = String(raw ?? "").replace(/\D/g, "").slice(0, 11);
+  if (digits.length > 0 && digits[0] === "7") {
+    digits = "8" + digits.slice(1);
+  }
+  return digits;
+}
+
+/**
+ * Маска телефона: только префикс 8 (7 и +7 автоматически заменяются на 8).
+ * Формат: 8-XXX-XXX-XX-XX
+ */
+export function formatPhoneValue(raw) {
+  const digits = normalizePhoneDigits(raw);
+  if (digits.length === 0) return "";
+  if (digits[0] !== "8") return digits;
+  const rest = digits.slice(1);
+  if (rest.length === 0) return "8";
+  let s = "8-" + rest.slice(0, 3);
+  if (rest.length <= 3) return s;
+  s += "-" + rest.slice(3, 6);
+  if (rest.length <= 6) return s;
+  s += "-" + rest.slice(6, 8);
+  if (rest.length <= 8) return s;
+  s += "-" + rest.slice(8, 10);
+  return s;
+}
+
+/** Нормализованный телефон для сохранения или null, если пусто. */
+export function normalizeOrderPhone(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const formatted = formatPhoneValue(s);
+  return formatted || null;
+}
+
+/** Валидный российский номер: 11 цифр, начинается с 8 (после замены 7→8). */
+export function isValidOrderPhone(raw) {
+  const digits = normalizePhoneDigits(raw);
+  return digits.length === 11 && digits[0] === "8";
+}

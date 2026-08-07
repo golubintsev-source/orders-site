@@ -35,6 +35,8 @@ import {
   formatAmountWholeRubles,
   formatOrderIdTypeChip,
   formatDateShortRU,
+  isValidOrderPhone,
+  normalizeOrderPhone,
   tryParseRublesInteger,
   MSG_SUM_INTEGER_ONLY,
 } from "./format.js";
@@ -97,6 +99,17 @@ function mergedLocalOrdersForOfflineDisplay() {
 const SESSION_ORDERS_CACHE_KEY = "orders_site_session_orders_v1";
 const SESSION_FILES_COUNT_CACHE_KEY = "orders_site_session_files_count_v1";
 
+/** 7 и +7 → 8 в phone (отображение и последующее сохранение). */
+function normalizeOrdersPhones(orders) {
+  if (!Array.isArray(orders)) return orders;
+  return orders.map((o) => {
+    if (!o || o.phone == null || o.phone === "") return o;
+    const phone = normalizeOrderPhone(o.phone);
+    if (!phone || phone === o.phone) return o;
+    return { ...o, phone };
+  });
+}
+
 function persistOrdersSessionCache(orders, filesCountMap) {
   try {
     sessionStorage.setItem(SESSION_ORDERS_CACHE_KEY, JSON.stringify(orders));
@@ -113,7 +126,7 @@ export function paintOrdersFromSessionCacheIfAny() {
     if (!raw) return;
     const orders = JSON.parse(raw);
     if (!Array.isArray(orders) || orders.length === 0) return;
-    state.allOrders = orders;
+    state.allOrders = normalizeOrdersPhones(orders);
     const fcRaw = sessionStorage.getItem(SESSION_FILES_COUNT_CACHE_KEY);
     state.filesCountMap = fcRaw ? JSON.parse(fcRaw) : {};
     applyFiltersAndRender();
@@ -139,7 +152,7 @@ export function paintOrdersFromLocalStorageIfAny() {
   if (!isOfflineWorkModeEnabled()) return;
   const rows = mergedLocalOrdersForOfflineDisplay();
   if (rows.length > 0) {
-    state.allOrders = rows;
+    state.allOrders = normalizeOrdersPhones(rows);
     state.filesCountMap = state.filesCountMap || {};
     applyFiltersAndRender();
     updateSectionNavRicherStat();
@@ -162,7 +175,7 @@ export function applyOfflineModeFromDbUnavailable() {
   const { rows: merged } = mergedLocalOrdersForOfflineDisplayMeta();
   if (merged.length > 0) {
     state.ordersFromCache = true;
-    state.allOrders = merged;
+    state.allOrders = normalizeOrdersPhones(merged);
     persistEmergencyOrdersView(state.allOrders);
     state.filesCountMap = {};
     syncDbUnavailableBanner();
@@ -259,9 +272,11 @@ export async function loadOrders() {
       persistServerOrdersForOffline(finalData);
     }
     state.ordersFromCache = false;
-    state.allOrders = isOfflineWorkModeEnabled()
-      ? mergeServerOrdersWithPendingDisplayRows(finalData)
-      : finalData;
+    state.allOrders = normalizeOrdersPhones(
+      isOfflineWorkModeEnabled()
+        ? mergeServerOrdersWithPendingDisplayRows(finalData)
+        : finalData
+    );
     if (isOfflineWorkModeEnabled()) {
       persistEmergencyOrdersView(state.allOrders);
     }
@@ -294,7 +309,7 @@ export async function loadOrders() {
 
   if (merged.length > 0) {
     state.ordersFromCache = true;
-    state.allOrders = merged;
+    state.allOrders = normalizeOrdersPhones(merged);
     persistEmergencyOrdersView(state.allOrders);
     state.filesCountMap = {};
     syncDbUnavailableBanner();
@@ -1289,7 +1304,7 @@ function rebaselineAllOrdersFromStateAndPendingQueue() {
   if (serverLike.length === 0) {
     serverLike = readEmergencyOrdersBaseForMerge();
   }
-  state.allOrders = mergeServerOrdersWithPendingDisplayRows(serverLike);
+  state.allOrders = normalizeOrdersPhones(mergeServerOrdersWithPendingDisplayRows(serverLike));
   persistEmergencyOrdersView(state.allOrders);
   applyFiltersAndRender();
   updateSectionNavRicherStat();
@@ -2241,7 +2256,7 @@ function buildOrderHistoryComment(prev, next, wasEditing) {
 export function getFormData() {
   const orderNumberEl = document.getElementById("order_number");
   return {
-    phone: document.getElementById("phone").value.trim() || null,
+    phone: normalizeOrderPhone(document.getElementById("phone").value),
     client: document.getElementById("client").value.trim() || null,
     order_type: document.getElementById("order_type")?.value.trim() || null,
     address: document.getElementById("address").value.trim() || null,
@@ -3136,14 +3151,10 @@ export async function submitOrderForm(event) {
     return;
   }
 
-  if (phoneVal) {
-    const phoneDigits = phoneVal.replace(/\D/g, "");
-    const phoneValid = phoneDigits.length === 11 && (phoneDigits[0] === "8" || phoneDigits[0] === "7");
-    if (!phoneValid) {
-      setMessage("Неверный формат телефона.", "#d32f2f");
-      document.getElementById("phone")?.classList.add("phone-invalid");
-      return;
-    }
+  if (phoneVal && !isValidOrderPhone(phoneVal)) {
+    setMessage("Неверный формат телефона.", "#d32f2f");
+    document.getElementById("phone")?.classList.add("phone-invalid");
+    return;
   }
 
   if (hasInvalidOrderFormDateInput()) {
@@ -3451,13 +3462,9 @@ export async function createOrderFromVoicePayload(draft) {
     orderType = "Магазин";
   }
 
-  let phone = String(draft?.phone || "").trim() || null;
-  if (phone) {
-    const phoneDigits = phone.replace(/\D/g, "");
-    const phoneValid = phoneDigits.length === 11 && (phoneDigits[0] === "8" || phoneDigits[0] === "7");
-    if (!phoneValid) {
-      return { ok: false, message: "Неверный формат телефона" };
-    }
+  let phone = normalizeOrderPhone(draft?.phone);
+  if (phone && !isValidOrderPhone(phone)) {
+    return { ok: false, message: "Неверный формат телефона" };
   }
 
   const amount = normalizeVoiceInteger(draft?.amount);
@@ -3697,7 +3704,7 @@ function buildOrderDataFromExistingAndPatch(existing, patch) {
     patch && "client" in patch ? patch.client ?? "" : existing.client || ""
   ).trim();
   const phoneRaw = patch && "phone" in patch ? patch.phone : existing.phone;
-  const phone = String(phoneRaw || "").trim() || null;
+  const phone = normalizeOrderPhone(phoneRaw);
 
   const prepaymentTo =
     patch && "prepayment_to" in patch
@@ -3816,9 +3823,8 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
   }
 
   if (orderData.phone) {
-    const phoneDigits = orderData.phone.replace(/\D/g, "");
-    const phoneValid = phoneDigits.length === 11 && (phoneDigits[0] === "8" || phoneDigits[0] === "7");
-    if (!phoneValid) {
+    orderData.phone = normalizeOrderPhone(orderData.phone);
+    if (!isValidOrderPhone(orderData.phone)) {
       return { ok: false, message: "Неверный формат телефона" };
     }
   }
