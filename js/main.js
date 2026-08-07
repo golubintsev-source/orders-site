@@ -126,13 +126,19 @@ async function init() {
     void flushPendingAccessLogs(user);
 
     initUserPlaceTracking(user.id, {
-      getAppContext: () => ({
-        sectionId: getCurrentSectionId(),
-        viewingOrderId: state.viewingOrderId,
-        editingOrderId: state.editingOrderId,
-        tasksOrderId: state.tasksOrderId,
-        clientSearch: (document.getElementById("clientSearch")?.value || "").trim() || undefined,
-      }),
+      getAppContext: () => {
+        const sectionId = getCurrentSectionId();
+        const onOrderForm = sectionId === "new";
+        return {
+          sectionId,
+          // Не сохранять edit/view вне раздела формы — иначе после ухода в «Заказы»
+          // restore снова откроет изменение того же заказа.
+          viewingOrderId: onOrderForm ? state.viewingOrderId : null,
+          editingOrderId: onOrderForm ? state.editingOrderId : null,
+          tasksOrderId: state.tasksOrderId,
+          clientSearch: (document.getElementById("clientSearch")?.value || "").trim() || undefined,
+        };
+      },
     });
 
     const savedPlace = readSavedPlaceForCurrentPage(user.id);
@@ -157,10 +163,11 @@ async function init() {
 
     const orderIdFromUrl = getOrderIdFromUrl();
     const savedApp = readSavedPlaceForCurrentPage(user.id)?.app;
+    const savedOnOrderForm = savedApp?.sectionId == null || savedApp?.sectionId === "new";
     const restoringOrderForm =
       orderIdFromUrl != null ||
-      savedApp?.viewingOrderId != null ||
-      savedApp?.editingOrderId != null;
+      (savedOnOrderForm &&
+        (savedApp?.viewingOrderId != null || savedApp?.editingOrderId != null));
     if (!restoringOrderForm) {
       resetFormMode();
     }
@@ -243,12 +250,14 @@ async function restoreSavedAppContext(userId) {
     }
   }
 
-  if (app.viewingOrderId != null) {
+  // Восстанавливать форму только если сохраняли именно её (раздел «new»).
+  // Иначе устаревший editingOrderId после ухода в другой раздел снова «запирает» на изменении.
+  if (app.viewingOrderId != null && (app.sectionId == null || app.sectionId === "new")) {
     await viewOrder(app.viewingOrderId);
     scheduleSaveUserPlace();
     return;
   }
-  if (app.editingOrderId != null) {
+  if (app.editingOrderId != null && (app.sectionId == null || app.sectionId === "new")) {
     await editOrder(app.editingOrderId);
     scheduleSaveUserPlace();
     return;

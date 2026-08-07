@@ -36,6 +36,8 @@ import {
   initOrderDateFilter,
   resetFormMode,
   leaveOrderFormOnCancel,
+  leaveOrderFormToSection,
+  isOrderFormSessionActive,
   submitOrderForm,
   updatePaidField,
   updateRemainingFromCostAndPrepayment,
@@ -256,6 +258,11 @@ function onPhoneInput() {
 export function bindUIEvents() {
   initSectionNavDropdown({
     onSectionItemSelect: (id) => {
+      // Уход с формы изменения/просмотра через меню — иначе restore вернёт на тот же заказ.
+      if (id !== "new" && isOrderFormSessionActive()) {
+        leaveOrderFormToSection(id);
+        return;
+      }
       if (id === "new" && state.viewingOrderId != null) {
         resetFormMode();
       }
@@ -479,7 +486,11 @@ export function bindUIEvents() {
     ordersSearchOpenBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (ordersSearchOpenBtn.dataset.navMode === "orders") {
-        switchSection("all");
+        if (isOrderFormSessionActive()) {
+          leaveOrderFormToSection("all");
+        } else {
+          switchSection("all");
+        }
         return;
       }
       toggleOrdersSearchDropdown();
@@ -563,7 +574,11 @@ export function bindUIEvents() {
   const backToOrdersBtn = document.getElementById("backToOrdersBtn");
   if (backToOrdersBtn) {
     backToOrdersBtn.addEventListener("click", () => {
-      switchSection("all");
+      if (isOrderFormSessionActive()) {
+        leaveOrderFormToSection("all");
+      } else {
+        switchSection("all");
+      }
     });
   }
 

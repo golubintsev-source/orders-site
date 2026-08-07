@@ -2612,9 +2612,21 @@ function resolveOrderFormReturnSectionId(stored) {
   return "all";
 }
 
+/** Сбросить «липкий» режим просмотра/редактирования до смены раздела (user-place / restore). */
+function clearStickyOrderFormIds() {
+  state.editingOrderId = null;
+  state.viewingOrderId = null;
+  state.orderFormReturnSectionId = null;
+  hideOrderViewQr();
+  syncOrderIdInUrl(null);
+}
+
 async function applyPostOrderFormNavigation(returnSectionId, { savedOrderId = null, reloadOrders = true } = {}) {
   const target = resolveOrderFormReturnSectionId(returnSectionId);
-  // Сначала уйти с формы заказа: иначе resetFormMode() показывает «Новая заявка»,
+  // Сначала снять editing/viewing, иначе scheduleSaveUserPlace / restoreSavedAppContext
+  // снова вернут на форму изменения того же заказа.
+  clearStickyOrderFormIds();
+  // Затем уйти с формы: иначе resetFormMode() показывает «Новая заявка»,
   // а loadOrders() на мобильном может занять несколько секунд до switchSection.
   switchSection(target);
   resetFormMode();
@@ -2635,6 +2647,16 @@ export async function leaveOrderFormAfterSave(savedOrderId) {
 export function leaveOrderFormOnCancel() {
   const returnSectionId = state.orderFormReturnSectionId;
   void applyPostOrderFormNavigation(returnSectionId, { reloadOrders: false });
+}
+
+/** Уйти с формы просмотра/редактирования в указанный раздел (меню / кнопка «Заказы»). */
+export function leaveOrderFormToSection(sectionId) {
+  void applyPostOrderFormNavigation(sectionId, { reloadOrders: false });
+}
+
+/** Есть ли активный режим формы заказа (просмотр или изменение). */
+export function isOrderFormSessionActive() {
+  return state.editingOrderId != null || state.viewingOrderId != null;
 }
 
 export function resetFormMode() {
