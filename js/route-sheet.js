@@ -2168,8 +2168,14 @@ const ROUTE_SHEET_EXCEL_PAGE = {
 /** Высота строки-заглушки под карту в пунктах Excel (1 pt = 1/72"). */
 const ROUTE_SHEET_EXCEL_MAP_ROW_HEIGHT_PT = 15;
 
-/** Базовая высота одной текстовой строки таблицы в пунктах Excel. */
-const ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT = 15;
+/**
+ * Кегль текста таблицы «Доставка» в Excel.
+ * Меньше 11 — плотнее межстрочный интервал при wrapText и меньше высота блока на A4.
+ */
+const ROUTE_SHEET_EXCEL_DATA_FONT_SIZE = 9;
+
+/** Высота одной визуальной строки текста таблицы (под DATA_FONT_SIZE), pt. */
+const ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT = 12;
 
 /** Минимальная высота области карты на листе (px @ 96 dpi). */
 const ROUTE_SHEET_EXCEL_MAP_MIN_HEIGHT_PX = 200;
@@ -2223,13 +2229,16 @@ function estimateExcelWrappedLineCount(text, colWidthChars) {
 
 /**
  * Высота строки Excel в пунктах по самому «высокому» столбцу (с учётом wrapText).
+ * Excel не сжимает leading внутри ячейки — плотность даёт меньший кегль (DATA_FONT_SIZE)
+ * и высота minPt×линии без запаса «по 15pt на строку».
  * @param {unknown[]} values
  * @param {number[]} colWidths
  * @param {{ fontSize?: number, minPt?: number, maxLines?: number }} [opts]
  */
 function estimateExcelRowHeightPt(values, colWidths, opts = {}) {
-  const fontSize = opts.fontSize || 11;
-  const minPt = opts.minPt || Math.max(ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT, fontSize + 4);
+  const fontSize = opts.fontSize || ROUTE_SHEET_EXCEL_DATA_FONT_SIZE;
+  const minPt =
+    opts.minPt || Math.max(ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT, fontSize + 2);
   const maxLinesCap = opts.maxLines || 8;
   let maxLines = 1;
   const n = Math.max(values?.length || 0, colWidths.length);
@@ -2260,9 +2269,15 @@ function estimateRouteSheetTableBlockHeightPx(preambleRows, headers, rows) {
       maxLines: 2,
     });
   }
-  heightPt += estimateExcelRowHeightPt(headers, colW, { fontSize: 11, maxLines: 2 });
+  heightPt += estimateExcelRowHeightPt(headers, colW, {
+    fontSize: ROUTE_SHEET_EXCEL_DATA_FONT_SIZE,
+    maxLines: 2,
+  });
   for (const r of rows) {
-    heightPt += estimateExcelRowHeightPt(r, colW, { fontSize: 11, maxLines: 8 });
+    heightPt += estimateExcelRowHeightPt(r, colW, {
+      fontSize: ROUTE_SHEET_EXCEL_DATA_FONT_SIZE,
+      maxLines: 8,
+    });
   }
   heightPt += 8; // пустая строка-разделитель
   heightPt += 16; // «Карта маршрута»
@@ -2494,10 +2509,16 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(
   }
   const headerRowIndex = preamble.length + 1;
   const headerExcelRow = worksheet.addRow(headers);
-  headerExcelRow.height = estimateExcelRowHeightPt(headers, colW, { fontSize: 11, maxLines: 2 });
+  headerExcelRow.height = estimateExcelRowHeightPt(headers, colW, {
+    fontSize: ROUTE_SHEET_EXCEL_DATA_FONT_SIZE,
+    maxLines: 2,
+  });
   for (const r of rows) {
     const excelRow = worksheet.addRow(r);
-    excelRow.height = estimateExcelRowHeightPt(r, colW, { fontSize: 11, maxLines: 8 });
+    excelRow.height = estimateExcelRowHeightPt(r, colW, {
+      fontSize: ROUTE_SHEET_EXCEL_DATA_FONT_SIZE,
+      maxLines: 8,
+    });
   }
 
   const numCols = headers.length;
@@ -2512,6 +2533,8 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(
   }
 
   const wrapTop = { vertical: "top", wrapText: true };
+  const dataFont = { size: ROUTE_SHEET_EXCEL_DATA_FONT_SIZE };
+  const headerFont = { size: ROUTE_SHEET_EXCEL_DATA_FONT_SIZE, bold: true };
   const tableRowEnd = headerRowIndex + rows.length;
   for (let rn = headerRowIndex; rn <= tableRowEnd; rn++) {
     const row = worksheet.getRow(rn);
@@ -2520,8 +2543,10 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(
       cell.alignment = wrapTop;
       cell.border = ROUTE_SHEET_DELIVERY_EXCEL_BORDER_THIN;
       if (rn === headerRowIndex) {
-        cell.font = { ...cell.font, bold: true };
+        cell.font = headerFont;
         cell.fill = ROUTE_SHEET_DELIVERY_EXCEL_HEADER_FILL;
+      } else {
+        cell.font = dataFont;
       }
     }
   }
