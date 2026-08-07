@@ -67,12 +67,8 @@ function localDateToYmd(d) {
 }
 
 function defaultCalcDateRangeYmd() {
-  const today = new Date();
-  const toYmd = localDateToYmd(today);
-  const fromBase = new Date(today);
-  fromBase.setDate(fromBase.getDate() - 2);
-  const fromYmd = localDateToYmd(fromBase);
-  return { fromYmd, toYmd };
+  const todayYmd = localDateToYmd(new Date());
+  return { fromYmd: todayYmd, toYmd: todayYmd };
 }
 
 function localYmdStartMs(ymd) {
@@ -104,7 +100,7 @@ function filterCalcRowsByDateRange(rows, fromYmd, toYmd) {
   return (rows || []).filter((r) => rowCreatedAtInYmdRange(r.created_at, fromYmd, toYmd));
 }
 
-/** Выставить поля дат и applied-диапазон по умолчанию (сегодня−2 … сегодня). */
+/** Выставить поля дат и applied-диапазон по умолчанию (сегодня … сегодня). */
 export function initCalculationsDateRangeDefaults() {
   const { fromYmd, toYmd } = defaultCalcDateRangeYmd();
   const fromEl = document.getElementById("calcDateFrom");
