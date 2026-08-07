@@ -2168,7 +2168,7 @@ const ROUTE_SHEET_EXCEL_PAGE = {
 /** Высота строки-заглушки под карту в пунктах Excel (1 pt = 1/72"). */
 const ROUTE_SHEET_EXCEL_MAP_ROW_HEIGHT_PT = 15;
 
-/** Высота обычной строки таблицы (компактно — больше места под карту). */
+/** Базовая высота одной текстовой строки таблицы в пунктах Excel. */
 const ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT = 15;
 
 /** Минимальная высота области карты на листе (px @ 96 dpi). */
@@ -2203,27 +2203,43 @@ function routeSheetExcelPrintablePx() {
 }
 
 /**
- * Компактная высота строки: 1 строка текста, либо 2 при явном переполнении колонки.
- * Завышенная оценка съедала высоту карты и оставляла пустое место внизу листа.
+ * Число визуальных строк текста в ячейке Excel с переносом по ширине колонки.
+ * Без завышения chars/line — иначе вторая строка обрезается при wrapText.
+ * @param {unknown} text
+ * @param {number} colWidthChars
+ */
+function estimateExcelWrappedLineCount(text, colWidthChars) {
+  const t = String(text ?? "");
+  if (!t) return 1;
+  // Небольшой запас вниз: кириллица в Calibri чуть шире «среднего» символа wch.
+  const charsPerLine = Math.max(4, Math.floor(Number(colWidthChars) * 0.92) || 4);
+  const parts = t.split(/\r?\n/);
+  let lines = 0;
+  for (const part of parts) {
+    lines += Math.max(1, Math.ceil(part.length / charsPerLine));
+  }
+  return Math.max(1, lines);
+}
+
+/**
+ * Высота строки Excel в пунктах по самому «высокому» столбцу (с учётом wrapText).
  * @param {unknown[]} values
  * @param {number[]} colWidths
- * @param {{ fontSize?: number, minPt?: number }} [opts]
+ * @param {{ fontSize?: number, minPt?: number, maxLines?: number }} [opts]
  */
 function estimateExcelRowHeightPt(values, colWidths, opts = {}) {
   const fontSize = opts.fontSize || 11;
   const minPt = opts.minPt || Math.max(ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT, fontSize + 4);
+  const maxLinesCap = opts.maxLines || 8;
   let maxLines = 1;
   const n = Math.max(values?.length || 0, colWidths.length);
   for (let i = 0; i < n; i++) {
-    const t = String(values?.[i] ?? "");
-    if (!t) continue;
-    const explicit = (t.match(/\r?\n/g) || []).length + 1;
-    const colChars = Math.max(4, Math.floor(colWidths[i] ?? colWidths[0] ?? 8));
-    // Запас ~20%: в Excel символы часто уже, чем wch.
-    const wrapped = Math.ceil(t.length / (colChars * 1.2));
-    maxLines = Math.max(maxLines, explicit, wrapped > 1 ? Math.min(wrapped, 3) : 1);
+    maxLines = Math.max(
+      maxLines,
+      estimateExcelWrappedLineCount(values?.[i], colWidths[i] ?? colWidths[0] ?? 8),
+    );
   }
-  return minPt * Math.min(maxLines, 3);
+  return minPt * Math.min(maxLines, maxLinesCap);
 }
 
 /**
@@ -2241,11 +2257,12 @@ function estimateRouteSheetTableBlockHeightPx(preambleRows, headers, rows) {
     heightPt += estimateExcelRowHeightPt(preamble[i], [fullWidthChars], {
       fontSize: i === 0 ? 14 : 12,
       minPt: i === 0 ? 20 : 18,
+      maxLines: 2,
     });
   }
-  heightPt += estimateExcelRowHeightPt(headers, colW, { fontSize: 11 });
+  heightPt += estimateExcelRowHeightPt(headers, colW, { fontSize: 11, maxLines: 2 });
   for (const r of rows) {
-    heightPt += estimateExcelRowHeightPt(r, colW, { fontSize: 11 });
+    heightPt += estimateExcelRowHeightPt(r, colW, { fontSize: 11, maxLines: 8 });
   }
   heightPt += 8; // пустая строка-разделитель
   heightPt += 16; // «Карта маршрута»
@@ -2472,14 +2489,15 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(
     excelRow.height = estimateExcelRowHeightPt(pr, [fullWidthChars], {
       fontSize: i === 0 ? 14 : 12,
       minPt: i === 0 ? 20 : 18,
+      maxLines: 2,
     });
   }
   const headerRowIndex = preamble.length + 1;
   const headerExcelRow = worksheet.addRow(headers);
-  headerExcelRow.height = estimateExcelRowHeightPt(headers, colW, { fontSize: 11 });
+  headerExcelRow.height = estimateExcelRowHeightPt(headers, colW, { fontSize: 11, maxLines: 2 });
   for (const r of rows) {
     const excelRow = worksheet.addRow(r);
-    excelRow.height = estimateExcelRowHeightPt(r, colW, { fontSize: 11 });
+    excelRow.height = estimateExcelRowHeightPt(r, colW, { fontSize: 11, maxLines: 8 });
   }
 
   const numCols = headers.length;
