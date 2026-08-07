@@ -2,6 +2,7 @@ import { hrefToHome } from "./app-routes.js";
 import {
   applySavedScroll,
   initUserPlaceTracking,
+  navigateWithUserPlace,
   readSavedPlaceForCurrentPage,
 } from "./user-place.js";
 import { calculateWindow } from "./windowCalculator.js";
@@ -828,7 +829,7 @@ function setupBackButton() {
   const btn = document.getElementById("backToOrdersBtn");
   if (!btn) return;
   btn.addEventListener("click", () => {
-    window.location.href = hrefToHome();
+    navigateWithUserPlace(hrefToHome());
   });
 }
 

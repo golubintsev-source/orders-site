@@ -16,6 +16,7 @@ import { flushPendingAccessLogs, logSiteAccess, measureNavigationResponseMs } fr
 import {
   applySavedScroll,
   initUserPlaceTracking,
+  navigateWithUserPlace,
   readSavedPlaceForCurrentPage,
 } from "./user-place.js";
 import { updateTopbarUserName } from "./user-names.js";
@@ -48,7 +49,7 @@ function wireHistorySearchAndLogout() {
 
   function goToOrdersWithSearch(query) {
     sessionStorage.setItem("pendingOrdersSearch", query.trim());
-    window.location.href = hrefToAppSection("all");
+    navigateWithUserPlace(hrefToAppSection("all"));
   }
 
   function openOrdersSearchDropdown() {
@@ -71,7 +72,7 @@ function wireHistorySearchAndLogout() {
     ordersSearchOpenBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (ordersSearchOpenBtn.dataset.navMode === "orders") {
-        window.location.href = hrefToAppSection("all");
+        navigateWithUserPlace(hrefToAppSection("all"));
         return;
       }
       toggleOrdersSearchDropdown();
@@ -108,7 +109,7 @@ function wireHistorySearchAndLogout() {
   });
 
   document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
-    window.location.href = hrefToAppSection("all");
+    navigateWithUserPlace(hrefToAppSection("all"));
   });
 }
 
@@ -171,7 +172,7 @@ async function init() {
 
   initSectionNavDropdown({
     onSectionItemSelect: (id) => {
-      window.location.href = hrefToAppSection(id);
+      navigateWithUserPlace(hrefToAppSection(id));
     },
   });
   setStandaloneSectionNavLabel("Изменения");

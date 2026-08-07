@@ -18,8 +18,8 @@ import {
   getCurrentSectionId,
   STANDALONE_SECTION_NAV_ID,
 } from "./section-nav.js";
-import { scheduleSaveUserPlace } from "./user-place.js";
-import { syncOrderIdInUrl } from "./app-routes.js";
+import { markSkipUserPlaceResume, rememberUserPlaceNow, scheduleSaveUserPlace } from "./user-place.js";
+import { pathForRouteSection, syncOrderIdInUrl } from "./app-routes.js";
 import { logOrderPageAccess } from "./access-log.js";
 import { hideOrderViewQr, showOrderViewQr } from "./order-qr.js";
 import {
@@ -2626,9 +2626,16 @@ async function applyPostOrderFormNavigation(returnSectionId, { savedOrderId = nu
   // Сначала снять editing/viewing, иначе scheduleSaveUserPlace / restoreSavedAppContext
   // снова вернут на форму изменения того же заказа.
   clearStickyOrderFormIds();
+  // Защита от resume: если до debounce случится reload на «/», не вернуть на /new.
+  markSkipUserPlaceResume();
   // Затем уйти с формы: иначе resetFormMode() показывает «Новая заявка»,
   // а loadOrders() на мобильном может занять несколько секунд до switchSection.
   switchSection(target);
+  rememberUserPlaceNow(pathForRouteSection(target), {
+    sectionId: target,
+    viewingOrderId: null,
+    editingOrderId: null,
+  });
   resetFormMode();
   if (!reloadOrders) return;
   await loadOrders();
