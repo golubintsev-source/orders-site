@@ -2180,8 +2180,14 @@ const ROUTE_SHEET_EXCEL_MAP_ROW_HEIGHT_PT = 15;
  */
 const ROUTE_SHEET_EXCEL_DATA_FONT_SIZE = 9;
 
-/** Высота одной визуальной строки текста таблицы (под DATA_FONT_SIZE), pt. */
-const ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT = 12;
+/**
+ * Высота одной визуальной строки текста таблицы (под DATA_FONT_SIZE), pt.
+ * Чуть выше теоретических ~12pt для Calibri 9: иначе Excel обрезает низ последней линии.
+ */
+const ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT = 13.5;
+
+/** Запас высоты строки (pt) под границы ячейки и внутренний leading Excel. */
+const ROUTE_SHEET_EXCEL_ROW_HEIGHT_PAD_PT = 3;
 
 /** Минимальная высота области карты на листе (px @ 96 dpi). */
 const ROUTE_SHEET_EXCEL_MAP_MIN_HEIGHT_PX = 200;
@@ -2216,35 +2222,70 @@ function routeSheetExcelPrintablePx() {
 
 /**
  * Число визуальных строк текста в ячейке Excel с переносом по ширине колонки.
- * Без завышения chars/line — иначе вторая строка обрезается при wrapText.
+ * Считаем по словам (как wrapText), с запасом по ширине: кириллица шире MDW,
+ * плюс поля ячейки с границами съедают ~1–2 символа.
  * @param {unknown} text
  * @param {number} colWidthChars
  */
 function estimateExcelWrappedLineCount(text, colWidthChars) {
   const t = String(text ?? "");
   if (!t) return 1;
-  // Небольшой запас вниз: кириллица в Calibri чуть шире «среднего» символа wch.
-  const charsPerLine = Math.max(4, Math.floor(Number(colWidthChars) * 0.92) || 4);
+  const rawChars = Math.floor(Number(colWidthChars) * 0.82) - 1;
+  const charsPerLine = Math.max(4, Number.isFinite(rawChars) ? rawChars : 4);
   const parts = t.split(/\r?\n/);
   let lines = 0;
   for (const part of parts) {
-    lines += Math.max(1, Math.ceil(part.length / charsPerLine));
+    if (!part) {
+      lines += 1;
+      continue;
+    }
+    const words = part.split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      lines += 1;
+      continue;
+    }
+    let cur = 0;
+    let partLines = 1;
+    for (const word of words) {
+      if (word.length > charsPerLine) {
+        if (cur > 0) {
+          partLines += 1;
+          cur = 0;
+        }
+        const hard = Math.ceil(word.length / charsPerLine);
+        partLines += hard - 1;
+        cur = word.length % charsPerLine;
+        if (cur === 0) cur = charsPerLine;
+        continue;
+      }
+      if (cur === 0) {
+        cur = word.length;
+      } else if (cur + 1 + word.length <= charsPerLine) {
+        cur += 1 + word.length;
+      } else {
+        partLines += 1;
+        cur = word.length;
+      }
+    }
+    lines += partLines;
   }
   return Math.max(1, lines);
 }
 
 /**
  * Высота строки Excel в пунктах по самому «высокому» столбцу (с учётом wrapText).
- * Excel не сжимает leading внутри ячейки — плотность даёт меньший кегль (DATA_FONT_SIZE)
- * и высота minPt×линии без запаса «по 15pt на строку».
+ * Плотность — за счёт кегля 9pt; к minPt×линии добавляем небольшой pad,
+ * иначе последняя перенесённая строка обрезается границей ячейки.
  * @param {unknown[]} values
  * @param {number[]} colWidths
- * @param {{ fontSize?: number, minPt?: number, maxLines?: number }} [opts]
+ * @param {{ fontSize?: number, minPt?: number, maxLines?: number, padPt?: number }} [opts]
  */
 function estimateExcelRowHeightPt(values, colWidths, opts = {}) {
   const fontSize = opts.fontSize || ROUTE_SHEET_EXCEL_DATA_FONT_SIZE;
   const minPt =
-    opts.minPt || Math.max(ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT, fontSize + 2);
+    opts.minPt || Math.max(ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT, fontSize + 3);
+  const padPt =
+    opts.padPt != null ? opts.padPt : ROUTE_SHEET_EXCEL_ROW_HEIGHT_PAD_PT;
   const maxLinesCap = opts.maxLines || 8;
   let maxLines = 1;
   const n = Math.max(values?.length || 0, colWidths.length);
@@ -2254,7 +2295,7 @@ function estimateExcelRowHeightPt(values, colWidths, opts = {}) {
       estimateExcelWrappedLineCount(values?.[i], colWidths[i] ?? colWidths[0] ?? 8),
     );
   }
-  return minPt * Math.min(maxLines, maxLinesCap);
+  return minPt * Math.min(maxLines, maxLinesCap) + padPt;
 }
 
 /**
@@ -2652,7 +2693,12 @@ function rowDeliveryMainValues(order, pointNum) {
   const kmCell = formatKmCellDisplay(kmEntry);
   const clientBase = String(order.client ?? "").trim();
   const phoneBase = String(order.phone ?? "").trim();
-  const clientWithPhone = phoneBase ? `${clientBase} ${phoneBase}`.trim() : clientBase;
+  // Имя и телефон — отдельные строки: иначе wrapText режет низ и высота строки занижается.
+  const clientWithPhone = phoneBase
+    ? clientBase
+      ? `${clientBase}\n${phoneBase}`
+      : phoneBase
+    : clientBase;
   const addressBase = String(order.address ?? "").trim();
   let addressWithKm = addressBase;
   if (kmCell && kmCell !== "—") {
