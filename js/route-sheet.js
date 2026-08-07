@@ -2168,7 +2168,10 @@ const ROUTE_SHEET_EXCEL_PAGE = {
 /** Высота строки-заглушки под карту в пунктах Excel (1 pt = 1/72"). */
 const ROUTE_SHEET_EXCEL_MAP_ROW_HEIGHT_PT = 15;
 
-/** Минимальная высота области карты на листе (px @ 96 dpi), если таблица почти на всю страницу. */
+/** Высота обычной строки таблицы (компактно — больше места под карту). */
+const ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT = 15;
+
+/** Минимальная высота области карты на листе (px @ 96 dpi). */
 const ROUTE_SHEET_EXCEL_MAP_MIN_HEIGHT_PX = 200;
 
 /**
@@ -2200,40 +2203,27 @@ function routeSheetExcelPrintablePx() {
 }
 
 /**
- * @param {unknown} text
- * @param {number} colWidthChars
- */
-function estimateExcelWrappedLineCount(text, colWidthChars) {
-  const t = String(text ?? "");
-  if (!t) return 1;
-  const charsPerLine = Math.max(4, Math.floor(colWidthChars));
-  const parts = t.split(/\r?\n/);
-  let lines = 0;
-  for (const part of parts) {
-    lines += Math.max(1, Math.ceil(part.length / charsPerLine));
-  }
-  return Math.max(1, lines);
-}
-
-/**
- * Оценка высоты строки Excel в пунктах (для расчёта оставшегося места под карту).
+ * Компактная высота строки: 1 строка текста, либо 2 при явном переполнении колонки.
+ * Завышенная оценка съедала высоту карты и оставляла пустое место внизу листа.
  * @param {unknown[]} values
  * @param {number[]} colWidths
- * @param {{ fontSize?: number, maxLines?: number }} [opts]
+ * @param {{ fontSize?: number, minPt?: number }} [opts]
  */
 function estimateExcelRowHeightPt(values, colWidths, opts = {}) {
   const fontSize = opts.fontSize || 11;
-  const basePt = Math.max(15, fontSize + 4);
-  const maxLinesCap = opts.maxLines || 6;
+  const minPt = opts.minPt || Math.max(ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT, fontSize + 4);
   let maxLines = 1;
   const n = Math.max(values?.length || 0, colWidths.length);
   for (let i = 0; i < n; i++) {
-    maxLines = Math.max(
-      maxLines,
-      estimateExcelWrappedLineCount(values?.[i], colWidths[i] ?? colWidths[0] ?? 8),
-    );
+    const t = String(values?.[i] ?? "");
+    if (!t) continue;
+    const explicit = (t.match(/\r?\n/g) || []).length + 1;
+    const colChars = Math.max(4, Math.floor(colWidths[i] ?? colWidths[0] ?? 8));
+    // Запас ~20%: в Excel символы часто уже, чем wch.
+    const wrapped = Math.ceil(t.length / (colChars * 1.2));
+    maxLines = Math.max(maxLines, explicit, wrapped > 1 ? Math.min(wrapped, 3) : 1);
   }
-  return basePt * Math.min(maxLines, maxLinesCap);
+  return minPt * Math.min(maxLines, 3);
 }
 
 /**
@@ -2250,14 +2240,14 @@ function estimateRouteSheetTableBlockHeightPx(preambleRows, headers, rows) {
   for (let i = 0; i < preamble.length; i++) {
     heightPt += estimateExcelRowHeightPt(preamble[i], [fullWidthChars], {
       fontSize: i === 0 ? 14 : 12,
-      maxLines: 2,
+      minPt: i === 0 ? 20 : 18,
     });
   }
-  heightPt += estimateExcelRowHeightPt(headers, colW, { fontSize: 11, maxLines: 2 });
+  heightPt += estimateExcelRowHeightPt(headers, colW, { fontSize: 11 });
   for (const r of rows) {
-    heightPt += estimateExcelRowHeightPt(r, colW, { fontSize: 11, maxLines: 8 });
+    heightPt += estimateExcelRowHeightPt(r, colW, { fontSize: 11 });
   }
-  heightPt += 6; // пустая строка-разделитель
+  heightPt += 8; // пустая строка-разделитель
   heightPt += 16; // «Карта маршрута»
   return Math.round(routeSheetExcelPointsToPx(heightPt));
 }
@@ -2271,14 +2261,43 @@ function estimateRouteSheetTableBlockHeightPx(preambleRows, headers, rows) {
  */
 function routeSheetMapPrintSizePx(preambleRows, headers, rows) {
   const printable = routeSheetExcelPrintablePx();
-  // Ширина листа = ширина таблицы (колонки Excel); карта той же ширины.
   const mapWidth = Math.max(200, routeSheetDeliveryTableWidthPx());
   const usedH = estimateRouteSheetTableBlockHeightPx(preambleRows, headers, rows);
   const mapHeight = Math.max(ROUTE_SHEET_EXCEL_MAP_MIN_HEIGHT_PX, printable.height - usedH);
   const rowHpx = routeSheetExcelPointsToPx(ROUTE_SHEET_EXCEL_MAP_ROW_HEIGHT_PT);
-  const mapRowCount = Math.max(1, Math.ceil(mapHeight / rowHpx));
+  const mapRowCount = Math.max(1, Math.round(mapHeight / rowHpx));
+  // Высота ровно по числу строк-заглушек — без зазора внизу страницы.
   const height = Math.round(mapRowCount * rowHpx);
   return { width: mapWidth, height, mapRowCount };
+}
+
+/**
+ * object-fit: cover — вписать source в targetW×targetH, пропорции сохранить, лишнее обрезать.
+ * Выходной canvas в пикселях слота (для Excel ext) или кратно для качества.
+ * @param {HTMLCanvasElement} source
+ * @param {number} targetW
+ * @param {number} targetH
+ * @param {number} [qualityScale] множитель разрешения PNG (2 = чётче на печати)
+ */
+function cropCanvasCover(source, targetW, targetH, qualityScale = 2) {
+  const tw = Math.max(1, Math.round(targetW));
+  const th = Math.max(1, Math.round(targetH));
+  if (!source?.width || !source?.height) return source;
+  const scale = Math.max(tw / source.width, th / source.height);
+  const srcW = Math.min(source.width, tw / scale);
+  const srcH = Math.min(source.height, th / scale);
+  const sx = Math.max(0, (source.width - srcW) / 2);
+  const sy = Math.max(0, (source.height - srcH) / 2);
+  const q = Math.max(1, Math.min(3, Math.round(qualityScale)));
+  const out = document.createElement("canvas");
+  out.width = tw * q;
+  out.height = th * q;
+  const ctx = out.getContext("2d");
+  if (!ctx) return source;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(source, sx, sy, srcW, srcH, 0, 0, out.width, out.height);
+  return out;
 }
 
 function getExcelJsConstructor() {
@@ -2309,12 +2328,12 @@ function waitForVisibleTilesLoaded(map, timeoutMs) {
   });
 }
 
-/** Мин. CSS-ширина карты при снимке (высота берётся из пропорций области на A4). */
-const ROUTE_MAP_EXCEL_CAPTURE_MIN_WIDTH_PX = 720;
+/** Мин. сторона квадратного снимка карты (cover-crop обрежет под слот A4). */
+const ROUTE_MAP_EXCEL_CAPTURE_MIN_SIDE_PX = 900;
 
 /**
- * Снимок блока карты Leaflet под пропорции оставшейся области A4 (тайлы с crossOrigin).
- * Размер контейнера = пропорции printSize; html2canvas даёт крупный PNG для печати.
+ * Снимок Leaflet: крупный квадратный кадр с маршрутом, затем cover-crop под слот A4
+ * (пропорции сохраняются, лишнее обрезается по краям).
  * @param {{ width: number, height: number }} printSize размер области карты на листе (px @ 96 dpi)
  * @returns {Promise<HTMLCanvasElement | null>}
  */
@@ -2337,12 +2356,11 @@ async function captureRouteDeliveryMapCanvasForExcel(printSize) {
     maxHeight: el.style.maxHeight,
   };
 
-  // Крупный снимок с пропорциями оставшейся области A4 (не экранные 360px).
-  const captureCssW = Math.max(ROUTE_MAP_EXCEL_CAPTURE_MIN_WIDTH_PX, targetW);
-  const captureCssH = Math.max(1, Math.round((captureCssW * targetH) / targetW));
-  el.style.width = `${captureCssW}px`;
-  el.style.height = `${captureCssH}px`;
-  el.style.minHeight = `${captureCssH}px`;
+  // Квадрат ≥ слота: после cover-crop заполняет оставшуюся область A4 без растягивания.
+  const captureSide = Math.max(ROUTE_MAP_EXCEL_CAPTURE_MIN_SIDE_PX, targetW, targetH);
+  el.style.width = `${captureSide}px`;
+  el.style.height = `${captureSide}px`;
+  el.style.minHeight = `${captureSide}px`;
   el.style.maxHeight = "none";
 
   routeDeliveryMap.invalidateSize(false);
@@ -2350,14 +2368,13 @@ async function captureRouteDeliveryMapCanvasForExcel(printSize) {
     routeDeliveryMap.whenReady(r);
   });
 
-  // После смены пропорций контейнера снова вписать маршрут/маркеры в кадр.
+  // После смены размера контейнера снова вписать маршрут/маркеры в кадр.
   // L.layerGroup не имеет getBounds — собираем границы по дочерним слоям.
   try {
     let bounds = null;
     const extendWith = (b) => {
-      if (!b) return;
-      if (typeof b.isValid === "function" && !b.isValid()) return;
-      bounds = bounds ? bounds.extend(b) : L.latLngBounds(b.getSouthWest?.() ? b : b);
+      if (!b || typeof b.isValid !== "function" || !b.isValid()) return;
+      bounds = bounds ? bounds.extend(b) : L.latLngBounds(b);
     };
     for (const group of [routeDeliveryRouteLayer, routeDeliveryMarkersLayer, routeDeliveryOfficeLayer]) {
       if (!group || typeof group.eachLayer !== "function") continue;
@@ -2371,7 +2388,7 @@ async function captureRouteDeliveryMapCanvasForExcel(printSize) {
       });
     }
     if (bounds && bounds.isValid()) {
-      routeDeliveryMap.fitBounds(bounds, { padding: [28, 28], maxZoom: 15, animate: false });
+      routeDeliveryMap.fitBounds(bounds, { padding: [36, 36], maxZoom: 15, animate: false });
     }
   } catch {
     /* оставляем текущий вид */
@@ -2406,7 +2423,9 @@ async function captureRouteDeliveryMapCanvasForExcel(printSize) {
     scheduleInvalidateRouteDeliveryMap();
   }
 
-  return shot;
+  if (!shot) return null;
+  // Сохранить пропорции: масштаб cover + обрезка под точный слот на листе.
+  return cropCanvasCover(shot, targetW, targetH, 2);
 }
 
 /**
@@ -2452,15 +2471,15 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(
     const excelRow = worksheet.addRow(pr);
     excelRow.height = estimateExcelRowHeightPt(pr, [fullWidthChars], {
       fontSize: i === 0 ? 14 : 12,
-      maxLines: 2,
+      minPt: i === 0 ? 20 : 18,
     });
   }
   const headerRowIndex = preamble.length + 1;
   const headerExcelRow = worksheet.addRow(headers);
-  headerExcelRow.height = estimateExcelRowHeightPt(headers, colW, { fontSize: 11, maxLines: 2 });
+  headerExcelRow.height = estimateExcelRowHeightPt(headers, colW, { fontSize: 11 });
   for (const r of rows) {
     const excelRow = worksheet.addRow(r);
-    excelRow.height = estimateExcelRowHeightPt(r, colW, { fontSize: 11, maxLines: 8 });
+    excelRow.height = estimateExcelRowHeightPt(r, colW, { fontSize: 11 });
   }
 
   const numCols = headers.length;
@@ -2496,6 +2515,9 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(
   if (mapCanvas) {
     const printSize =
       mapPrintSize || routeSheetMapPrintSizePx(preamble, headers, rows);
+    const mapRowCount = Math.max(1, printSize.mapRowCount || 1);
+
+    // PNG уже cover-crop под слот; ext = тот же слот — без растягивания (не twoCell).
     const dataUrl = mapCanvas.toDataURL("image/png");
     const comma = dataUrl.indexOf(",");
     const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
@@ -2507,8 +2529,6 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(
       titleRow.height = 16;
     }
 
-    // Резервируем строки на оставшуюся высоту A4 и растягиваем карту на всю ширину таблицы.
-    const mapRowCount = Math.max(1, printSize.mapRowCount || 1);
     const mapTlRow = worksheet.lastRow ? worksheet.lastRow.number : 0;
     for (let i = 0; i < mapRowCount; i++) {
       const spacer = worksheet.addRow([]);
@@ -2516,8 +2536,8 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(
     }
     worksheet.addImage(imageId, {
       tl: { col: 0, row: mapTlRow },
-      br: { col: numCols, row: mapTlRow + mapRowCount },
-      editAs: "twoCell",
+      ext: { width: printSize.width, height: printSize.height },
+      editAs: "oneCell",
     });
   }
 
