@@ -2181,22 +2181,18 @@ const ROUTE_SHEET_EXCEL_DATA_FONT_SIZE = 9;
 
 /**
  * Стандартная высота одной текстовой линии в строке Excel (пункты).
- * Это Default Row Height Excel (15pt): 1 линия → 15, 2 → 30, 3 → 45, 4 → 60.
- * Не использовать дробные «12.5 + pad» — Excel обрезает текст посередине глифа.
+ * Default Row Height Excel: 1→15, 2→30, 3→45, 4→60.
  */
 const ROUTE_SHEET_EXCEL_LINE_HEIGHT_PT = 15;
 
 /**
  * Горизонтальные поля ячейки (px @ 96dpi) при thin-border + wrapText.
- * Чуть больше «впритык»: лучше +1 линия высоты, чем обрезка текста.
+ * Без завышения: иначе Excel показывает N линий, а высота ставится под N+1.
  */
-const ROUTE_SHEET_EXCEL_CELL_PAD_X_PX = 10;
+const ROUTE_SHEET_EXCEL_CELL_PAD_X_PX = 5;
 
 /** Минимальная высота области карты на листе (px @ 96 dpi). */
 const ROUTE_SHEET_EXCEL_MAP_MIN_HEIGHT_PX = 200;
-
-/** @type {CanvasRenderingContext2D | null} */
-let excelTextMeasureCtx = null;
 
 /**
  * Ширина столбца Excel (wch) → пиксели при MDW=7 (Calibri 11).
@@ -2241,28 +2237,9 @@ function normalizeExcelMultilineText(text) {
 }
 
 /**
- * Контекст canvas для measureText (перекрёстная проверка с метриками Calibri).
- * @param {number} fontSizePt
- * @returns {CanvasRenderingContext2D | null}
- */
-function getExcelTextMeasureCtx(fontSizePt) {
-  if (typeof document === "undefined") return null;
-  try {
-    if (!excelTextMeasureCtx) {
-      const canvas = document.createElement("canvas");
-      excelTextMeasureCtx = canvas.getContext("2d");
-    }
-    if (!excelTextMeasureCtx) return null;
-    excelTextMeasureCtx.font = `${fontSizePt}pt Calibri, "Segoe UI", Arial, sans-serif`;
-    return excelTextMeasureCtx;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Ширина текста как у Calibri в Excel (px @ 96dpi).
- * Слегка шире «идеала», чтобы не занижать число переносов и не обрезать текст.
+ * Ширина текста как у Calibri 9 в Excel (px @ 96dpi).
+ * Коэффициенты сверены с measureText(Calibri): завышение давало пустую линию
+ * в «Описание»/«Адрес», занижение — обрезку в «Клиент».
  * @param {string} text
  * @param {number} fontSizePt
  */
@@ -2271,31 +2248,28 @@ function measureCalibriApproxWidthPx(text, fontSizePt) {
   let w = 0;
   for (const ch of String(text)) {
     const code = ch.codePointAt(0) || 0;
-    if (ch === " ") w += em * 0.28;
-    else if (ch === "." || ch === "," || ch === ";" || ch === ":") w += em * 0.28;
-    else if (ch === "/" || ch === "-" || ch === "—" || ch === "(" || ch === ")") w += em * 0.36;
-    else if (ch >= "0" && ch <= "9") w += em * 0.6;
-    else if (code >= 0x0410 && code <= 0x042f) w += em * 0.68; // Кириллица заглавная
-    else if ((code >= 0x0430 && code <= 0x044f) || code === 0x0451) w += em * 0.65;
-    else if (code >= 0x0400 && code <= 0x04ff) w += em * 0.65;
-    else if (code >= 0x41 && code <= 0x5a) w += em * 0.65;
-    else if (code >= 0x61 && code <= 0x7a) w += em * 0.55;
-    else w += em * 0.6;
+    if (ch === " ") w += em * 0.25;
+    else if (ch === "." || ch === "," || ch === ";" || ch === ":") w += em * 0.25;
+    else if (ch === "/" || ch === "-" || ch === "—" || ch === "(" || ch === ")") w += em * 0.33;
+    else if (ch >= "0" && ch <= "9") w += em * 0.57;
+    else if (code >= 0x0410 && code <= 0x042f) w += em * 0.64; // Кириллица заглавная
+    else if ((code >= 0x0430 && code <= 0x044f) || code === 0x0451) w += em * 0.62;
+    else if (code >= 0x0400 && code <= 0x04ff) w += em * 0.6;
+    else if (code >= 0x41 && code <= 0x5a) w += em * 0.6;
+    else if (code >= 0x61 && code <= 0x7a) w += em * 0.5;
+    else w += em * 0.55;
   }
   return w;
 }
 
 /**
- * Ширина текста в px для расчёта wrapText (ориентир — Calibri Excel).
+ * Ширина текста в px для расчёта wrapText — только метрики Calibri Excel.
+ * Системный measureText (Arial/DejaVu) шире/уже и снова ломает высоту строк.
  * @param {string} text
  * @param {number} fontSizePt
  */
 function measureExcelTextWidthPx(text, fontSizePt) {
-  const calibriW = measureCalibriApproxWidthPx(text, fontSizePt);
-  const ctx = getExcelTextMeasureCtx(fontSizePt);
-  if (!ctx) return calibriW;
-  // Берём max: узкий системный шрифт не должен занижать переносы относительно Excel.
-  return Math.max(ctx.measureText(text).width, calibriW);
+  return measureCalibriApproxWidthPx(text, fontSizePt);
 }
 
 /**
@@ -2331,8 +2305,7 @@ function estimateExcelWrappedLineCount(text, colWidthChars, fontSizePt = ROUTE_S
   const t = normalizeExcelMultilineText(text);
   if (!t) return 1;
   const colPx = excelColWidthToPx(colWidthChars);
-  // Небольшой запас по ширине: лучше высота на 1 шаг больше, чем обрезка.
-  const maxWidthPx = Math.max(8, (colPx - ROUTE_SHEET_EXCEL_CELL_PAD_X_PX) * 0.96);
+  const maxWidthPx = Math.max(8, colPx - ROUTE_SHEET_EXCEL_CELL_PAD_X_PX);
   const spaceW = measureExcelTextWidthPx(" ", fontSizePt);
   const parts = t.split("\n");
   let lines = 0;
