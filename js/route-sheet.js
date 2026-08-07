@@ -292,10 +292,16 @@ function deliveryAddressCellHtml(order) {
   return `<td class="td-order-address route-sheet-col-address" data-fulltext="${escapeAttr(addrStr)}">${inner}</td>`;
 }
 
+/**
+ * Дата доставки по умолчанию для маршрутного листа: завтра.
+ * В пятницу — понедельник (не суббота), чтобы не ставить выходной.
+ */
 function getTomorrowIsoDate() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 1);
+  // 0=вс … 5=пт … 6=сб
+  const weekday = d.getDay();
+  d.setDate(d.getDate() + (weekday === 5 ? 3 : 1));
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -3138,11 +3144,14 @@ async function confirmRouteSheetPointByNo() {
     return;
   }
 
-  const tomorrow = getTomorrowIsoDate();
+  const defaultDeliveryDate = getTomorrowIsoDate();
   const confirmBtn = document.getElementById("routeSheetPointByNoConfirmBtn");
   if (confirmBtn) confirmBtn.disabled = true;
   try {
-    const { error } = await supabaseClient.from("orders").update({ delivery_date: tomorrow }).eq("id", order.id);
+    const { error } = await supabaseClient
+      .from("orders")
+      .update({ delivery_date: defaultDeliveryDate })
+      .eq("id", order.id);
     if (error) {
       console.error("route-sheet point by no:", error);
       setRouteSheetPointByNoError(error.message || "Не удалось сохранить дату.");
@@ -3153,7 +3162,7 @@ async function confirmRouteSheetPointByNo() {
         {
           order_id: order.id,
           user_email: state.currentUser.email,
-          comment: `Маршрутный лист: дата доставки → ${tomorrow}`,
+          comment: `Маршрутный лист: дата доставки → ${defaultDeliveryDate}`,
         },
       ]);
       if (histError) console.warn("order_history:", histError.message);
