@@ -2182,18 +2182,27 @@ const ROUTE_SHEET_EXCEL_DATA_FONT_SIZE = 9;
 
 /**
  * Высота одной визуальной строки текста таблицы (под DATA_FONT_SIZE), pt.
- * 12.5 ≈ плотный leading Calibri 9 + небольшой запас под descenders без «пустых» полос.
+ * Как у AutoFit Calibri 9 в Excel (~15×9/11); без лишнего «пустого» ряда.
  */
-const ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT = 12.5;
+const ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT = 12;
 
 /**
- * Запас высоты строки (pt) под границы ячейки.
- * Держим минимальным: таблица должна заканчиваться сразу после текста (место под карту на A4).
+ * Запас высоты строки (pt) под тонкую границу и последнюю линию wrapText.
+ * Без запаса Excel иногда срезает 4-ю линию в «Клиент»; большой pad даёт пустую полосу.
  */
-const ROUTE_SHEET_EXCEL_ROW_HEIGHT_PAD_PT = 1.5;
+const ROUTE_SHEET_EXCEL_ROW_HEIGHT_PAD_PT = 1.25;
+
+/**
+ * Горизонтальные поля ячейки Excel (px @ 96dpi) при thin-border + wrapText.
+ * Вычитаются из ширины колонки при подсчёте переносов.
+ */
+const ROUTE_SHEET_EXCEL_CELL_PAD_X_PX = 5;
 
 /** Минимальная высота области карты на листе (px @ 96 dpi). */
 const ROUTE_SHEET_EXCEL_MAP_MIN_HEIGHT_PX = 200;
+
+/** @type {CanvasRenderingContext2D | null} */
+let excelTextMeasureCtx = null;
 
 /**
  * Ширина столбца Excel (wch) → пиксели при MDW=7 (Calibri 11).
@@ -2238,22 +2247,105 @@ function normalizeExcelMultilineText(text) {
 }
 
 /**
+ * Контекст canvas для measureText (перекрёстная проверка с метриками Calibri).
+ * @param {number} fontSizePt
+ * @returns {CanvasRenderingContext2D | null}
+ */
+function getExcelTextMeasureCtx(fontSizePt) {
+  if (typeof document === "undefined") return null;
+  try {
+    if (!excelTextMeasureCtx) {
+      const canvas = document.createElement("canvas");
+      excelTextMeasureCtx = canvas.getContext("2d");
+    }
+    if (!excelTextMeasureCtx) return null;
+    excelTextMeasureCtx.font = `${fontSizePt}pt Calibri, "Segoe UI", Arial, sans-serif`;
+    return excelTextMeasureCtx;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ширина текста как у Calibri в Excel (px @ 96dpi).
+ * Системный measureText без Calibri (Arial и т.п.) уже — из‑за этого обрезались
+ * длинные ФИО; эта эвристика калибрована под Calibri 9.
+ * @param {string} text
+ * @param {number} fontSizePt
+ */
+function measureCalibriApproxWidthPx(text, fontSizePt) {
+  const em = fontSizePt * (96 / 72);
+  let w = 0;
+  for (const ch of String(text)) {
+    const code = ch.codePointAt(0) || 0;
+    if (ch === " ") w += em * 0.25;
+    else if (ch === "." || ch === "," || ch === ";" || ch === ":") w += em * 0.25;
+    else if (ch === "/" || ch === "-" || ch === "—" || ch === "(" || ch === ")") w += em * 0.33;
+    else if (ch >= "0" && ch <= "9") w += em * 0.57;
+    else if (code >= 0x0410 && code <= 0x042f) w += em * 0.65; // Кириллица заглавная
+    else if ((code >= 0x0430 && code <= 0x044f) || code === 0x0451) w += em * 0.62;
+    else if (code >= 0x0400 && code <= 0x04ff) w += em * 0.62;
+    else if (code >= 0x41 && code <= 0x5a) w += em * 0.62;
+    else if (code >= 0x61 && code <= 0x7a) w += em * 0.5;
+    else w += em * 0.56;
+  }
+  return w;
+}
+
+/**
+ * Ширина текста в px для расчёта wrapText (ориентир — Calibri Excel).
+ * @param {string} text
+ * @param {number} fontSizePt
+ */
+function measureExcelTextWidthPx(text, fontSizePt) {
+  const calibriW = measureCalibriApproxWidthPx(text, fontSizePt);
+  const ctx = getExcelTextMeasureCtx(fontSizePt);
+  if (!ctx) return calibriW;
+  // Excel всегда Calibri; если в браузере подставился более узкий шрифт — не занижаем.
+  return Math.max(ctx.measureText(text).width, calibriW);
+}
+
+/**
+ * Перенос длинного слова по ширине (как Excel wrapText при overflow).
+ * @param {string} word
+ * @param {number} maxWidthPx
+ * @param {number} fontSizePt
+ */
+function countExcelHardWrappedWordLines(word, maxWidthPx, fontSizePt) {
+  if (!word) return 1;
+  if (measureExcelTextWidthPx(word, fontSizePt) <= maxWidthPx) return 1;
+  let lines = 1;
+  let cur = "";
+  for (const ch of word) {
+    const next = cur + ch;
+    if (cur && measureExcelTextWidthPx(next, fontSizePt) > maxWidthPx) {
+      lines += 1;
+      cur = ch;
+    } else {
+      cur = next;
+    }
+  }
+  return lines;
+}
+
+/**
  * Число визуальных строк текста в ячейке Excel с переносом по ширине колонки.
- * Считаем по словам (как wrapText). Небольшой запас по ширине (~12%) —
- * кириллица чуть шире MDW; без завышения, иначе под текстом остаются «пустые» линии.
+ * Считаем по фактической ширине глифов (canvas measureText) — иначе на кириллице
+ * либо лишняя пустая полоса, либо обрезка последней линии (длинные ФИО/адреса).
  * @param {unknown} text
  * @param {number} colWidthChars
+ * @param {number} [fontSizePt]
  */
-function estimateExcelWrappedLineCount(text, colWidthChars) {
+function estimateExcelWrappedLineCount(text, colWidthChars, fontSizePt = ROUTE_SHEET_EXCEL_DATA_FONT_SIZE) {
   const t = normalizeExcelMultilineText(text);
   if (!t) return 1;
-  const rawChars = Math.floor(Number(colWidthChars) * 0.88);
-  const charsPerLine = Math.max(4, Number.isFinite(rawChars) ? rawChars : 4);
+  const colPx = excelColWidthToPx(colWidthChars);
+  const maxWidthPx = Math.max(8, colPx - ROUTE_SHEET_EXCEL_CELL_PAD_X_PX);
+  const spaceW = measureExcelTextWidthPx(" ", fontSizePt);
   const parts = t.split("\n");
   let lines = 0;
   for (const part of parts) {
     if (!part) {
-      // Пустая строка между блоками текста (не хвост — хвост уже срезан).
       lines += 1;
       continue;
     }
@@ -2262,27 +2354,34 @@ function estimateExcelWrappedLineCount(text, colWidthChars) {
       lines += 1;
       continue;
     }
-    let cur = 0;
+    let curW = 0;
     let partLines = 1;
     for (const word of words) {
-      if (word.length > charsPerLine) {
-        if (cur > 0) {
+      const wordW = measureExcelTextWidthPx(word, fontSizePt);
+      if (wordW > maxWidthPx) {
+        if (curW > 0) {
           partLines += 1;
-          cur = 0;
+          curW = 0;
         }
-        const hard = Math.ceil(word.length / charsPerLine);
+        const hard = countExcelHardWrappedWordLines(word, maxWidthPx, fontSizePt);
         partLines += hard - 1;
-        cur = word.length % charsPerLine;
-        if (cur === 0) cur = charsPerLine;
+        // Остаток последней «жёсткой» линии — приближаем по хвосту слова.
+        let tail = "";
+        for (const ch of word) {
+          const next = tail + ch;
+          if (tail && measureExcelTextWidthPx(next, fontSizePt) > maxWidthPx) tail = ch;
+          else tail = next;
+        }
+        curW = measureExcelTextWidthPx(tail, fontSizePt);
         continue;
       }
-      if (cur === 0) {
-        cur = word.length;
-      } else if (cur + 1 + word.length <= charsPerLine) {
-        cur += 1 + word.length;
+      if (curW === 0) {
+        curW = wordW;
+      } else if (curW + spaceW + wordW <= maxWidthPx) {
+        curW += spaceW + wordW;
       } else {
         partLines += 1;
-        cur = word.length;
+        curW = wordW;
       }
     }
     lines += partLines;
@@ -2292,7 +2391,7 @@ function estimateExcelWrappedLineCount(text, colWidthChars) {
 
 /**
  * Высота строки Excel в пунктах по самому «высокому» столбцу (с учётом wrapText).
- * Плотность — кегль 9pt и минимальный pad: ячейка заканчивается сразу после текста.
+ * Высота = линии×leading + минимальный pad: без пустой линии и без обрезки.
  * @param {unknown[]} values
  * @param {number[]} colWidths
  * @param {{ fontSize?: number, minPt?: number, maxLines?: number, padPt?: number }} [opts]
@@ -2300,16 +2399,20 @@ function estimateExcelWrappedLineCount(text, colWidthChars) {
 function estimateExcelRowHeightPt(values, colWidths, opts = {}) {
   const fontSize = opts.fontSize || ROUTE_SHEET_EXCEL_DATA_FONT_SIZE;
   const minPt =
-    opts.minPt || Math.max(ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT, fontSize + 2.5);
+    opts.minPt || Math.max(ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT, fontSize + 2);
   const padPt =
     opts.padPt != null ? opts.padPt : ROUTE_SHEET_EXCEL_ROW_HEIGHT_PAD_PT;
-  const maxLinesCap = opts.maxLines || 8;
+  const maxLinesCap = opts.maxLines || 10;
   let maxLines = 1;
   const n = Math.max(values?.length || 0, colWidths.length);
   for (let i = 0; i < n; i++) {
     maxLines = Math.max(
       maxLines,
-      estimateExcelWrappedLineCount(values?.[i], colWidths[i] ?? colWidths[0] ?? 8),
+      estimateExcelWrappedLineCount(
+        values?.[i],
+        colWidths[i] ?? colWidths[0] ?? 8,
+        fontSize,
+      ),
     );
   }
   return minPt * Math.min(maxLines, maxLinesCap) + padPt;
@@ -2340,7 +2443,7 @@ function estimateRouteSheetTableBlockHeightPx(preambleRows, headers, rows) {
   for (const r of rows) {
     heightPt += estimateExcelRowHeightPt(r, colW, {
       fontSize: ROUTE_SHEET_EXCEL_DATA_FONT_SIZE,
-      maxLines: 8,
+      maxLines: 10,
     });
   }
   heightPt += 8; // пустая строка-разделитель
@@ -2581,7 +2684,7 @@ async function exportRouteSheetDeliveryWorkbookExcelJs(
     const excelRow = worksheet.addRow(r);
     excelRow.height = estimateExcelRowHeightPt(r, colW, {
       fontSize: ROUTE_SHEET_EXCEL_DATA_FONT_SIZE,
-      maxLines: 8,
+      maxLines: 10,
     });
   }
 
