@@ -3098,6 +3098,7 @@ export async function submitOrderForm(event) {
 
   const phoneVal = (document.getElementById("phone")?.value || "").trim();
   const clientVal = (document.getElementById("client")?.value || "").trim();
+  const addressVal = (document.getElementById("address")?.value || "").trim();
 
   if (!clientVal) {
     setMessage("Не заполнено Клиент", "#d32f2f");
@@ -3105,6 +3106,13 @@ export async function submitOrderForm(event) {
     return;
   }
   document.getElementById("client")?.classList.remove("client-invalid");
+
+  if (!addressVal) {
+    setMessage("Не заполнено Адрес", "#d32f2f");
+    document.getElementById("address")?.classList.add("address-invalid");
+    return;
+  }
+  document.getElementById("address")?.classList.remove("address-invalid");
 
   const statusVal = (document.getElementById("payment_status")?.value || "").trim();
   if (!statusVal) {
@@ -3418,6 +3426,11 @@ export async function createOrderFromVoicePayload(draft) {
     return { ok: false, message: "Не указан клиент" };
   }
 
+  const address = String(draft?.address || "").trim();
+  if (!address) {
+    return { ok: false, message: "Не указан адрес" };
+  }
+
   let paymentStatus = String(draft?.payment_status || "").trim();
   if (!paymentStatus) {
     return { ok: false, message: "Не указан статус" };
@@ -3487,7 +3500,7 @@ export async function createOrderFromVoicePayload(draft) {
     phone,
     client,
     order_type: orderType,
-    address: String(draft?.address || "").trim() || null,
+    address,
     payment_status: paymentStatus,
     order_date: orderDate,
     order_number: null,
@@ -3763,8 +3776,13 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
     for (const key of VOICE_PATCHABLE_KEYS) {
       if (!(key in patch)) continue;
       const v = patch[key];
-      // Пустые client/status в патче = «не менять» (модель часто шлёт null по неизменённым полям).
-      if ((key === "client" || key === "payment_status") && (v == null || v === "")) continue;
+      // Пустые client/status/address в патче = «не менять» (модель часто шлёт null по неизменённым полям).
+      if (
+        (key === "client" || key === "payment_status" || key === "address") &&
+        (v == null || v === "")
+      ) {
+        continue;
+      }
       cleanPatch[key] = v;
     }
   }
@@ -3776,6 +3794,9 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
 
   if (!orderData.client) {
     return { ok: false, message: "Клиент обязателен — нельзя оставить пустым" };
+  }
+  if (!orderData.address) {
+    return { ok: false, message: "Адрес обязателен — нельзя оставить пустым" };
   }
   if (!orderData.payment_status) {
     return { ok: false, message: "Статус обязателен — нельзя оставить пустым" };
