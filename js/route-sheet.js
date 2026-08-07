@@ -2182,12 +2182,15 @@ const ROUTE_SHEET_EXCEL_DATA_FONT_SIZE = 9;
 
 /**
  * Высота одной визуальной строки текста таблицы (под DATA_FONT_SIZE), pt.
- * Чуть выше теоретических ~12pt для Calibri 9: иначе Excel обрезает низ последней линии.
+ * 12.5 ≈ плотный leading Calibri 9 + небольшой запас под descenders без «пустых» полос.
  */
-const ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT = 13.5;
+const ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT = 12.5;
 
-/** Запас высоты строки (pt) под границы ячейки и внутренний leading Excel. */
-const ROUTE_SHEET_EXCEL_ROW_HEIGHT_PAD_PT = 3;
+/**
+ * Запас высоты строки (pt) под границы ячейки.
+ * Держим минимальным: таблица должна заканчиваться сразу после текста (место под карту на A4).
+ */
+const ROUTE_SHEET_EXCEL_ROW_HEIGHT_PAD_PT = 1.5;
 
 /** Минимальная высота области карты на листе (px @ 96 dpi). */
 const ROUTE_SHEET_EXCEL_MAP_MIN_HEIGHT_PX = 200;
@@ -2221,21 +2224,36 @@ function routeSheetExcelPrintablePx() {
 }
 
 /**
+ * Текст ячейки Excel без хвостовых пустых строк (и пробелов по краям).
+ * Сохраняет внутренние переносы (имя/телефон, многострочное описание).
+ * @param {unknown} text
+ */
+function normalizeExcelMultilineText(text) {
+  return String(text ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n+$/g, "")
+    .replace(/^\n+/g, "")
+    .trimEnd();
+}
+
+/**
  * Число визуальных строк текста в ячейке Excel с переносом по ширине колонки.
- * Считаем по словам (как wrapText), с запасом по ширине: кириллица шире MDW,
- * плюс поля ячейки с границами съедают ~1–2 символа.
+ * Считаем по словам (как wrapText). Небольшой запас по ширине (~12%) —
+ * кириллица чуть шире MDW; без завышения, иначе под текстом остаются «пустые» линии.
  * @param {unknown} text
  * @param {number} colWidthChars
  */
 function estimateExcelWrappedLineCount(text, colWidthChars) {
-  const t = String(text ?? "");
+  const t = normalizeExcelMultilineText(text);
   if (!t) return 1;
-  const rawChars = Math.floor(Number(colWidthChars) * 0.82) - 1;
+  const rawChars = Math.floor(Number(colWidthChars) * 0.88);
   const charsPerLine = Math.max(4, Number.isFinite(rawChars) ? rawChars : 4);
-  const parts = t.split(/\r?\n/);
+  const parts = t.split("\n");
   let lines = 0;
   for (const part of parts) {
     if (!part) {
+      // Пустая строка между блоками текста (не хвост — хвост уже срезан).
       lines += 1;
       continue;
     }
@@ -2274,8 +2292,7 @@ function estimateExcelWrappedLineCount(text, colWidthChars) {
 
 /**
  * Высота строки Excel в пунктах по самому «высокому» столбцу (с учётом wrapText).
- * Плотность — за счёт кегля 9pt; к minPt×линии добавляем небольшой pad,
- * иначе последняя перенесённая строка обрезается границей ячейки.
+ * Плотность — кегль 9pt и минимальный pad: ячейка заканчивается сразу после текста.
  * @param {unknown[]} values
  * @param {number[]} colWidths
  * @param {{ fontSize?: number, minPt?: number, maxLines?: number, padPt?: number }} [opts]
@@ -2283,7 +2300,7 @@ function estimateExcelWrappedLineCount(text, colWidthChars) {
 function estimateExcelRowHeightPt(values, colWidths, opts = {}) {
   const fontSize = opts.fontSize || ROUTE_SHEET_EXCEL_DATA_FONT_SIZE;
   const minPt =
-    opts.minPt || Math.max(ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT, fontSize + 3);
+    opts.minPt || Math.max(ROUTE_SHEET_EXCEL_DATA_ROW_HEIGHT_PT, fontSize + 2.5);
   const padPt =
     opts.padPt != null ? opts.padPt : ROUTE_SHEET_EXCEL_ROW_HEIGHT_PAD_PT;
   const maxLinesCap = opts.maxLines || 8;
@@ -2713,9 +2730,9 @@ function rowDeliveryMainValues(order, pointNum) {
   return [
     pointNum,
     routeSheetOrderChipPlain(order) || "",
-    clientWithPhone,
-    addressWithKm,
-    routeSheetDeliveryDescriptionFullPlain(order),
+    normalizeExcelMultilineText(clientWithPhone),
+    normalizeExcelMultilineText(addressWithKm),
+    normalizeExcelMultilineText(routeSheetDeliveryDescriptionFullPlain(order)),
     boolDaNet(order.installation) === "да"
       ? "-"
       : !isOrderPaid(order) && order.remaining_amount != null && order.remaining_amount !== ""
