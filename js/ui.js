@@ -65,7 +65,7 @@ import {
 } from "./settings.js";
 import { loadBalance } from "./balance.js";
 import { canMutateOrders, isOrderEditLockedForUserLite, isUserLite, isUserShop } from "./roles.js";
-import { refreshRublesIntegerInputState } from "./format.js";
+import { formatPhoneValue, isValidOrderPhone, refreshRublesIntegerInputState } from "./format.js";
 
 export function toggleOrderRowHighlightById(orderId) {
   if (!ordersTable || orderId == null) return;
@@ -206,24 +206,6 @@ export function openOrderIdActionsMenu(idTd) {
   }, 0);
 }
 
-function formatPhoneValue(digits) {
-  digits = digits.replace(/\D/g, "").slice(0, 11);
-  if (digits.length === 0) return "";
-  const first = digits[0];
-  if (first !== "8" && first !== "7") return digits;
-  const prefix = first === "7" ? "+7-" : "8-";
-  const rest = digits.slice(1);
-  if (rest.length === 0) return first === "7" ? "+7" : "8";
-  let s = prefix + rest.slice(0, 3);
-  if (rest.length <= 3) return s;
-  s += "-" + rest.slice(3, 6);
-  if (rest.length <= 6) return s;
-  s += "-" + rest.slice(6, 8);
-  if (rest.length <= 8) return s;
-  s += "-" + rest.slice(8, 10);
-  return s;
-}
-
 export function validatePhone() {
   if (!phoneInput) return;
   const raw = (phoneInput.value || "").trim();
@@ -231,17 +213,14 @@ export function validatePhone() {
     phoneInput.classList.remove("phone-invalid");
     return;
   }
-  const digits = raw.replace(/\D/g, "");
-  const valid = digits.length === 11 && (digits[0] === "8" || digits[0] === "7");
-  phoneInput.classList.toggle("phone-invalid", !valid);
+  phoneInput.classList.toggle("phone-invalid", !isValidOrderPhone(raw));
 }
 
 function onPhoneInput() {
   if (!phoneInput) return;
   const prev = phoneInput.value;
-  const digits = prev.replace(/\D/g, "");
   const digitsBeforeCaret = (prev.slice(0, phoneInput.selectionStart).match(/\d/g) || []).length;
-  const formatted = formatPhoneValue(digits);
+  const formatted = formatPhoneValue(prev);
   if (formatted !== prev) {
     phoneInput.value = formatted;
     let pos = 0;
