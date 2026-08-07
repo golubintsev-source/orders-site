@@ -2263,10 +2263,10 @@ function routeSheetMapPrintSizePx(preambleRows, headers, rows) {
   const printable = routeSheetExcelPrintablePx();
   const mapWidth = Math.max(200, routeSheetDeliveryTableWidthPx());
   const usedH = estimateRouteSheetTableBlockHeightPx(preambleRows, headers, rows);
-  const mapHeight = Math.max(ROUTE_SHEET_EXCEL_MAP_MIN_HEIGHT_PX, printable.height - usedH);
+  const mapHeightRaw = Math.max(ROUTE_SHEET_EXCEL_MAP_MIN_HEIGHT_PX, printable.height - usedH);
   const rowHpx = routeSheetExcelPointsToPx(ROUTE_SHEET_EXCEL_MAP_ROW_HEIGHT_PT);
-  const mapRowCount = Math.max(1, Math.round(mapHeight / rowHpx));
-  // Высота ровно по числу строк-заглушек — без зазора внизу страницы.
+  // floor — не вылезать на 2-ю страницу; максимум строк в остаток A4.
+  const mapRowCount = Math.max(1, Math.floor(mapHeightRaw / rowHpx));
   const height = Math.round(mapRowCount * rowHpx);
   return { width: mapWidth, height, mapRowCount };
 }
