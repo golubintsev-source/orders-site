@@ -11,8 +11,7 @@ function toDatetimeLocalValue(d) {
 }
 
 function defaultStatisticsDatetimeFrom() {
-  // Как у «Все изменения»: последние 3 календарных дня, чтобы визиты не «пропадали»
-  // относительно правок, видимых на странице изменений.
+  // Последние 3 календарных дня, чтобы визиты не «пропадали» при просмотре логов.
   const d = new Date();
   d.setDate(d.getDate() - 2);
   d.setHours(0, 0, 0, 0);
