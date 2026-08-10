@@ -6,7 +6,7 @@ const EMAIL_DISPLAY_NAMES = {
   "lary_7812@mail.ru": "Кристина",
   "golubintsev@gmail.com": "Алексей",
   "golubintsev26@gmail.com": "Дима",
-  "lixa@mail.ru": "Alexey",
+  "lexa@mail.ru": "Алексей",
 };
 
 /** Логотипы по ролям: бухгалтер, производство, продажи, разработчик, менеджер, металл. */
