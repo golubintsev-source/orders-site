@@ -97,6 +97,9 @@ export function closeOrderIdActionsMenu() {
   menu.hidden = true;
   menu.innerHTML = "";
   delete menu.dataset.currentOrderId;
+  menu.style.top = "";
+  menu.style.left = "";
+  menu.style.visibility = "";
   if (orderIdMenuDocClose) {
     document.removeEventListener("click", orderIdMenuDocClose);
     orderIdMenuDocClose = null;
@@ -185,12 +188,24 @@ export function openOrderIdActionsMenu(idTd) {
   const rect = idTd.getBoundingClientRect();
   menu.style.position = "fixed";
   menu.style.zIndex = "1100";
+  /* Сначала под номером; если не влезает в viewport — над ним (как у тултипов/попапов). */
+  menu.style.visibility = "hidden";
+  menu.style.top = "0";
+  menu.style.left = "0";
   requestAnimationFrame(() => {
+    const margin = 8;
+    const gap = 4;
     const mw = menu.offsetWidth || 240;
+    const mh = menu.offsetHeight || 0;
     let left = rect.left;
-    left = Math.max(8, Math.min(left, window.innerWidth - mw - 8));
-    menu.style.top = `${Math.round(rect.bottom + 4)}px`;
+    left = Math.max(margin, Math.min(left, window.innerWidth - mw - margin));
+    let top = rect.bottom + gap;
+    if (top + mh > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - mh - gap);
+    }
+    menu.style.top = `${Math.round(top)}px`;
     menu.style.left = `${Math.round(left)}px`;
+    menu.style.visibility = "visible";
   });
 
   orderIdMenuDocClose = () => closeOrderIdActionsMenu();
