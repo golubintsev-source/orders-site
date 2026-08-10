@@ -66,22 +66,46 @@ function deleteRouteSheetManualPointById(manualId) {
 }
 
 /**
- * Текст чипа «Номер» для таблицы, карты и Excel: для ручных точек — по введённому номеру и типу.
+ * Текст чипа «Номер» для таблицы, карты и Excel: для ручных точек — автономер (001, 002…), без типа.
  */
 function routeSheetOrderChipPlain(order) {
   if (!order) return "";
   if (order.route_sheet_manual === true) {
     const raw = String(order.route_sheet_display_no ?? "").trim();
     if (!raw) return "";
-    const letter = (order.order_type || "").trim().charAt(0);
-    if (/^\d+$/.test(raw)) {
-      const base = raw.padStart(4, "0");
-      return letter ? `${base}_${letter}` : base;
-    }
-    return letter ? `${raw}_${letter}` : raw;
+    if (/^\d+$/.test(raw)) return raw.padStart(3, "0");
+    return raw;
   }
   if (order.id == null || order.id === "") return "";
   return formatOrderIdTypeChip(order.id, order.order_type);
+}
+
+/** Числовой номер ручной точки из `route_sheet_display_no` или текста чипа («001», «001_О»). */
+function parseRouteSheetManualDisplayNo(raw) {
+  const s = String(raw ?? "").trim();
+  const m = s.match(/^(\d+)/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+}
+
+/**
+ * Следующий свободный номер ручной точки: 001, 002… с учётом уже добавленных на странице.
+ * @returns {string}
+ */
+function nextRouteSheetManualDisplayNo() {
+  const used = new Set();
+  for (const o of routeSheetManualDeliveryOrders) {
+    const n = parseRouteSheetManualDisplayNo(o.route_sheet_display_no);
+    if (n != null) used.add(n);
+  }
+  for (const chip of document.querySelectorAll(".td-order-id--route-sheet-manual .order-id-chip")) {
+    const n = parseRouteSheetManualDisplayNo(chip.textContent);
+    if (n != null) used.add(n);
+  }
+  let next = 1;
+  while (used.has(next)) next += 1;
+  return String(next).padStart(3, "0");
 }
 
 function manualDeliveryOrdersInRange(fromKey, toKey) {
@@ -3290,7 +3314,6 @@ function resetRouteSheetAddPointFormDefaults() {
   if (dateEl) dateEl.value = (fromEl?.value || "").trim() || getTomorrowIsoDate();
 
   const ids = [
-    "routeSheetAddPointNo",
     "routeSheetAddPointClient",
     "routeSheetAddPointAddress",
     "routeSheetAddPointCoordinates",
@@ -3308,8 +3331,6 @@ function resetRouteSheetAddPointFormDefaults() {
   const rev = document.getElementById("routeSheetAddPointReveals");
   if (inst) inst.checked = false;
   if (rev) rev.checked = false;
-  const typeEl = document.getElementById("routeSheetAddPointOrderType");
-  if (typeEl && typeEl.options.length) typeEl.value = "Окна";
   clearRouteSheetAddPointFormError();
 }
 
@@ -3318,7 +3339,7 @@ function openRouteSheetAddPointDialog() {
   if (!dlg || typeof dlg.showModal !== "function") return;
   resetRouteSheetAddPointFormDefaults();
   dlg.showModal();
-  const first = document.getElementById("routeSheetAddPointNo");
+  const first = document.getElementById("routeSheetAddPointDate");
   if (first) {
     try {
       first.focus({ preventScroll: true });
@@ -3466,8 +3487,6 @@ function initRouteSheetPointByNoDialog() {
 function confirmRouteSheetAddPoint() {
   clearRouteSheetAddPointFormError();
 
-  const noEl = document.getElementById("routeSheetAddPointNo");
-  const typeEl = document.getElementById("routeSheetAddPointOrderType");
   const dateEl = document.getElementById("routeSheetAddPointDate");
   const clientEl = document.getElementById("routeSheetAddPointClient");
   const addrEl = document.getElementById("routeSheetAddPointAddress");
@@ -3480,15 +3499,11 @@ function confirmRouteSheetAddPoint() {
   const revEl = document.getElementById("routeSheetAddPointReveals");
   const phoneEl = document.getElementById("routeSheetAddPointPhone");
 
-  const displayNo = (noEl?.value ?? "").trim();
+  const displayNo = nextRouteSheetManualDisplayNo();
   const deliveryDate = (dateEl?.value ?? "").trim();
   const address = (addrEl?.value ?? "").trim();
   const coordsRaw = (coordEl?.value ?? "").trim();
 
-  if (!displayNo) {
-    setRouteSheetAddPointFormError("Укажите номер.");
-    return;
-  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) {
     setRouteSheetAddPointFormError("Укажите дату доставки.");
     return;
@@ -3524,7 +3539,7 @@ function confirmRouteSheetAddPoint() {
     route_sheet_manual: true,
     id: newRouteSheetManualPointId(),
     route_sheet_display_no: displayNo,
-    order_type: (typeEl?.value ?? "Окна").trim() || "Окна",
+    order_type: "",
     delivery: DELIVERY_SHIP,
     delivery_date: deliveryDate,
     client: (clientEl?.value ?? "").trim(),
@@ -3553,22 +3568,9 @@ function initRouteSheetAddPointDialog() {
   const closeBtn = document.getElementById("routeSheetAddPointCloseBtn");
   const cancelBtn = document.getElementById("routeSheetAddPointCancelBtn");
   const confirmBtn = document.getElementById("routeSheetAddPointConfirmBtn");
-  const typeEl = document.getElementById("routeSheetAddPointOrderType");
 
   if (!dlg || !openBtn || dlg.dataset.routeSheetAddPointBound) return;
   dlg.dataset.routeSheetAddPointBound = "1";
-
-  if (typeEl && !typeEl.dataset.routeSheetTypesPopulated) {
-    typeEl.dataset.routeSheetTypesPopulated = "1";
-    typeEl.innerHTML = "";
-    for (const t of MAIN_ORDER_TYPES) {
-      const opt = document.createElement("option");
-      opt.value = t;
-      opt.textContent = t;
-      typeEl.appendChild(opt);
-    }
-    typeEl.value = "Окна";
-  }
 
   openBtn.addEventListener("click", () => openRouteSheetAddPointDialog());
   if (closeBtn) closeBtn.addEventListener("click", () => closeRouteSheetAddPointDialog());
