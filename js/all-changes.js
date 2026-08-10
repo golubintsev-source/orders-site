@@ -20,9 +20,7 @@ function ymdLocal(d = new Date()) {
 }
 
 function defaultAllChangesDateFromYmd() {
-  const t = new Date();
-  t.setDate(t.getDate() - 2);
-  return ymdLocal(t);
+  return ymdLocal(new Date());
 }
 
 function defaultAllChangesDateToYmd() {
