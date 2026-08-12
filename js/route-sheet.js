@@ -23,6 +23,9 @@ const ROUTE_SHEET_MANUAL_STORAGE_KEY = "routeSheetManualDelivery_v1";
 /** Точки доставки, добавленные вручную на маршрутном листе (не заказы в БД). */
 const routeSheetManualDeliveryOrders = [];
 
+/** id ручной точки при редактировании в диалоге «Добавить точку»; null — создание. */
+let routeSheetAddPointEditingId = null;
+
 function newRouteSheetManualPointId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `rspt-${crypto.randomUUID()}`;
@@ -278,6 +281,9 @@ function orderIdCellHtml(order) {
     return `<td class="td-order-id td-order-id--route-sheet-manual" data-order-id="${mid}" data-phone="${escapeAttr(phone)}" data-files-count="0" data-lock-edit-user-lite="0">
     <span class="route-sheet-manual-id-row">
       <span class="status-value order-id-chip">${escapeHtml(chipText)}</span>
+      <button type="button" class="route-sheet-manual-edit-btn" data-manual-id="${mid}" aria-label="Редактировать точку" title="Редактировать точку">
+        <svg class="route-sheet-manual-edit-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      </button>
       <button type="button" class="route-sheet-manual-delete-btn" data-manual-id="${mid}" aria-label="Удалить точку" title="Удалить точку">
         <svg class="route-sheet-manual-delete-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
       </button>
@@ -3308,6 +3314,13 @@ function setRouteSheetAddPointFormError(text) {
   }
 }
 
+function setRouteSheetAddPointDialogMode(isEdit) {
+  const title = document.getElementById("routeSheetAddPointDialogTitle");
+  const confirmBtn = document.getElementById("routeSheetAddPointConfirmBtn");
+  if (title) title.textContent = isEdit ? "Редактировать точку доставки" : "Добавить точку доставки";
+  if (confirmBtn) confirmBtn.textContent = isEdit ? "Сохранить изменения" : "Добавить точку";
+}
+
 function resetRouteSheetAddPointFormDefaults() {
   const fromEl = document.getElementById("routeSheetDateFrom");
   const dateEl = document.getElementById("routeSheetAddPointDate");
@@ -3334,24 +3347,76 @@ function resetRouteSheetAddPointFormDefaults() {
   clearRouteSheetAddPointFormError();
 }
 
+function fillRouteSheetAddPointFormFromOrder(order) {
+  const dateEl = document.getElementById("routeSheetAddPointDate");
+  const clientEl = document.getElementById("routeSheetAddPointClient");
+  const addrEl = document.getElementById("routeSheetAddPointAddress");
+  const coordEl = document.getElementById("routeSheetAddPointCoordinates");
+  const descEl = document.getElementById("routeSheetAddPointDescription");
+  const remEl = document.getElementById("routeSheetAddPointRemainder");
+  const areaEl = document.getElementById("routeSheetAddPointAreaM2");
+  const consEl = document.getElementById("routeSheetAddPointConstruction");
+  const instEl = document.getElementById("routeSheetAddPointInstallation");
+  const revEl = document.getElementById("routeSheetAddPointReveals");
+  const phoneEl = document.getElementById("routeSheetAddPointPhone");
+
+  if (dateEl) dateEl.value = String(order.delivery_date ?? "").trim();
+  if (clientEl) clientEl.value = String(order.client ?? "");
+  if (addrEl) addrEl.value = String(order.address ?? "");
+  if (coordEl) coordEl.value = String(order.coordinates ?? "");
+  if (descEl) descEl.value = String(order.description ?? "");
+  if (remEl) {
+    remEl.value =
+      order.remaining_amount != null && order.remaining_amount !== ""
+        ? formatAmount(order.remaining_amount)
+        : "";
+  }
+  if (areaEl) areaEl.value = String(order.area_m2 ?? "");
+  if (consEl) consEl.value = String(order.construction_count ?? "");
+  if (instEl) instEl.checked = Boolean(order.installation);
+  if (revEl) revEl.checked = Boolean(order.reveals);
+  if (phoneEl) phoneEl.value = String(order.phone ?? "");
+  clearRouteSheetAddPointFormError();
+}
+
+function focusRouteSheetAddPointDate() {
+  const first = document.getElementById("routeSheetAddPointDate");
+  if (!first) return;
+  try {
+    first.focus({ preventScroll: true });
+  } catch {
+    first.focus();
+  }
+}
+
 function openRouteSheetAddPointDialog() {
   const dlg = document.getElementById("routeSheetAddPointDialog");
   if (!dlg || typeof dlg.showModal !== "function") return;
+  routeSheetAddPointEditingId = null;
+  setRouteSheetAddPointDialogMode(false);
   resetRouteSheetAddPointFormDefaults();
   dlg.showModal();
-  const first = document.getElementById("routeSheetAddPointDate");
-  if (first) {
-    try {
-      first.focus({ preventScroll: true });
-    } catch {
-      first.focus();
-    }
-  }
+  focusRouteSheetAddPointDate();
+}
+
+function openRouteSheetEditPointDialog(manualId) {
+  const dlg = document.getElementById("routeSheetAddPointDialog");
+  if (!dlg || typeof dlg.showModal !== "function") return;
+  const idStr = String(manualId ?? "").trim();
+  const order = routeSheetManualDeliveryOrders.find((o) => String(o.id) === idStr);
+  if (!order) return;
+  routeSheetAddPointEditingId = idStr;
+  setRouteSheetAddPointDialogMode(true);
+  fillRouteSheetAddPointFormFromOrder(order);
+  dlg.showModal();
+  focusRouteSheetAddPointDate();
 }
 
 function closeRouteSheetAddPointDialog() {
   const dlg = document.getElementById("routeSheetAddPointDialog");
   if (dlg && typeof dlg.close === "function") dlg.close();
+  routeSheetAddPointEditingId = null;
+  setRouteSheetAddPointDialogMode(false);
   clearRouteSheetAddPointFormError();
 }
 
@@ -3499,7 +3564,16 @@ function confirmRouteSheetAddPoint() {
   const revEl = document.getElementById("routeSheetAddPointReveals");
   const phoneEl = document.getElementById("routeSheetAddPointPhone");
 
-  const displayNo = nextRouteSheetManualDisplayNo();
+  const editingId = routeSheetAddPointEditingId ? String(routeSheetAddPointEditingId) : "";
+  const existing =
+    editingId !== ""
+      ? routeSheetManualDeliveryOrders.find((o) => String(o.id) === editingId)
+      : null;
+  if (editingId && !existing) {
+    setRouteSheetAddPointFormError("Точка не найдена. Закройте окно и попробуйте снова.");
+    return;
+  }
+
   const deliveryDate = (dateEl?.value ?? "").trim();
   const address = (addrEl?.value ?? "").trim();
   const coordsRaw = (coordEl?.value ?? "").trim();
@@ -3535,28 +3609,35 @@ function confirmRouteSheetAddPoint() {
     remaining_amount = pr.value != null ? String(pr.value) : null;
   }
 
-  const order = {
-    route_sheet_manual: true,
-    id: newRouteSheetManualPointId(),
-    route_sheet_display_no: displayNo,
-    order_type: "",
-    delivery: DELIVERY_SHIP,
+  const fields = {
     delivery_date: deliveryDate,
     client: (clientEl?.value ?? "").trim(),
     address,
     coordinates,
     description: (descEl?.value ?? "").trim(),
     remaining_amount,
-    remaining_to: "",
     area_m2: (areaEl?.value ?? "").trim(),
     construction_count: (consEl?.value ?? "").trim(),
-    mosquito_nets: "",
     installation: Boolean(instEl?.checked),
     reveals: Boolean(revEl?.checked),
     phone: (phoneEl?.value ?? "").trim(),
   };
 
-  routeSheetManualDeliveryOrders.push(order);
+  if (existing) {
+    Object.assign(existing, fields);
+  } else {
+    routeSheetManualDeliveryOrders.push({
+      route_sheet_manual: true,
+      id: newRouteSheetManualPointId(),
+      route_sheet_display_no: nextRouteSheetManualDisplayNo(),
+      order_type: "",
+      delivery: DELIVERY_SHIP,
+      remaining_to: "",
+      mosquito_nets: "",
+      ...fields,
+    });
+  }
+
   persistRouteSheetManualToSession();
   closeRouteSheetAddPointDialog();
   loadRouteSheet();
@@ -3576,7 +3657,11 @@ function initRouteSheetAddPointDialog() {
   if (closeBtn) closeBtn.addEventListener("click", () => closeRouteSheetAddPointDialog());
   if (cancelBtn) cancelBtn.addEventListener("click", () => closeRouteSheetAddPointDialog());
   if (confirmBtn) confirmBtn.addEventListener("click", () => confirmRouteSheetAddPoint());
-  dlg.addEventListener("close", () => clearRouteSheetAddPointFormError());
+  dlg.addEventListener("close", () => {
+    routeSheetAddPointEditingId = null;
+    setRouteSheetAddPointDialogMode(false);
+    clearRouteSheetAddPointFormError();
+  });
 }
 
 export function initRouteSheetSection() {
@@ -3621,6 +3706,17 @@ export function initRouteSheetSection() {
   if (routeSheetSection && !routeSheetSection.dataset.routeSheetOrderIdMenuBound) {
     routeSheetSection.dataset.routeSheetOrderIdMenuBound = "1";
     routeSheetSection.addEventListener("click", (e) => {
+      const editBtn = e.target.closest(".route-sheet-manual-edit-btn");
+      if (editBtn && routeSheetSection.contains(editBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = editBtn.getAttribute("data-manual-id");
+        if (id) {
+          closeRouteSheetAddressGeoPopover();
+          openRouteSheetEditPointDialog(id);
+        }
+        return;
+      }
       const delBtn = e.target.closest(".route-sheet-manual-delete-btn");
       if (delBtn && routeSheetSection.contains(delBtn)) {
         e.preventDefault();

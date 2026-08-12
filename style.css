@@ -3421,6 +3421,7 @@ table {
   max-width: 100%;
 }
 
+.route-sheet-manual-edit-btn,
 .route-sheet-manual-delete-btn {
   flex-shrink: 0;
   display: inline-flex;
@@ -3440,17 +3441,25 @@ table {
   -webkit-tap-highlight-color: transparent;
 }
 
+.route-sheet-manual-edit-btn:hover {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .route-sheet-manual-delete-btn:hover {
   border-color: #fecaca;
   background: #fef2f2;
   color: #b91c1c;
 }
 
+.route-sheet-manual-edit-btn:focus-visible,
 .route-sheet-manual-delete-btn:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 1px;
 }
 
+.route-sheet-manual-edit-icon,
 .route-sheet-manual-delete-icon {
   display: block;
 }
