@@ -1,6 +1,11 @@
 import { supabaseClient } from "./config.js";
 import { formatAmount, formatDateShortRU, formatOrderIdTypeChip } from "./format.js";
-import { getFilteredCalculationRows, getCalcDisplayComment, getCalcDisplayAuthor } from "./calculations.js";
+import {
+  getFilteredCalculationRows,
+  getCalcDisplayComment,
+  getCalcDisplayAuthor,
+  getCalcIncomeExpenseDisplay,
+} from "./calculations.js";
 import { readSnapshot } from "./offline-cache.js";
 import { downloadXlsxBuffer } from "./xlsxDownload.js";
 import { ensureXlsx } from "./lazy-cdn.js";
@@ -10,7 +15,8 @@ const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 export const CALCULATIONS_EXCEL_HEADERS = [
   "Дата время",
   "Автор",
-  "Сумма",
+  "Доход",
+  "Расход",
   "Откуда",
   "Куда",
   "Комментарий",
@@ -150,10 +156,13 @@ export function getCalculationRowValuesForExcel(row, orderById) {
         ? meta.clientFromComment
         : "";
 
+  const { income, expense } = getCalcIncomeExpenseDisplay(row);
+
   return [
     formatCalcDateTimeForExcel(row.created_at),
     getCalcDisplayAuthor(row.comment),
-    row.amount != null && row.amount !== "" ? formatAmount(row.amount) : "",
+    income,
+    expense,
     row.from_place ?? "",
     row.to_place ?? "",
     displayComment,
