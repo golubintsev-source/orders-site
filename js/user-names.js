@@ -48,6 +48,13 @@ export function avatarLogoUrl({ email, name } = {}) {
   return byName || null;
 }
 
+const KNOWN_DISPLAY_NAMES = new Set(Object.values(EMAIL_DISPLAY_NAMES));
+
+/** Известное отображаемое имя пользователя (Вова, Дима, …). */
+export function isKnownUserDisplayName(name) {
+  return KNOWN_DISPLAY_NAMES.has(String(name || "").trim());
+}
+
 /** Короткая подпись автора в комментариях и расчётах. */
 export function shortLoginByEmail(email) {
   const name = displayNameByEmail(email);

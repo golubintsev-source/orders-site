@@ -14,7 +14,11 @@ import {
   logSiteAccess,
   measureNavigationResponseMs,
 } from "./access-log.js";
-import { displayNameByEmail, shortLoginByEmail } from "./user-names.js";
+import {
+  displayNameByEmail,
+  isKnownUserDisplayName,
+  shortLoginByEmail,
+} from "./user-names.js";
 import { state } from "./state.js";
 import {
   readSnapshot,
@@ -320,7 +324,7 @@ function parseCalcAmountInput(raw) {
 function appendActorToComment(comment) {
   ensureCurrentUserEmail();
   const actor = shortLoginByEmail(currentUserEmail);
-  const base = (comment || "").trim();
+  const base = stripAuthorFromManualComment((comment || "").trim());
   return base ? `${base}; ${actor}` : actor;
 }
 
@@ -370,6 +374,13 @@ export async function createCalculationFromVoicePayload(draft) {
   let to_place = String(draft?.to_place || "").trim();
   if (!CALC_TO_OPTIONS.has(to_place)) {
     to_place = DEFAULT_VOICE_EXPENSE_TO;
+  }
+
+  if (from_place && to_place && from_place === to_place) {
+    return {
+      ok: false,
+      message: "Откуда и куда не могут совпадать.",
+    };
   }
 
   const insertPayload = {
@@ -450,7 +461,11 @@ function stripOrderDeltaTrailingTime(body) {
 
 function isCalcAuthorToken(s) {
   const t = String(s ?? "").trim();
-  return t === "неизв.." || /\.\.$/.test(t);
+  if (!t) return false;
+  // Старый формат короткого логина («golub..») и неизвестный автор.
+  if (t === "неизв.." || /\.\.$/.test(t)) return true;
+  // Текущий формат: отображаемое имя вошедшего пользователя.
+  return isKnownUserDisplayName(t);
 }
 
 function extractAuthorFromOrderDeltaBody(body) {
@@ -478,17 +493,27 @@ function stripAuthorFromOrderDeltaBody(body) {
 }
 
 function extractAuthorFromManualComment(comment) {
-  const m = String(comment ?? "").match(/;\s*([^;]+)$/);
-  if (!m) return "";
-  const token = m[1].trim();
-  return isCalcAuthorToken(token) ? token : "";
+  const c = String(comment ?? "").trim();
+  if (!c) return "";
+  const m = c.match(/;\s*([^;]+)$/);
+  if (m) {
+    const token = m[1].trim();
+    return isCalcAuthorToken(token) ? token : "";
+  }
+  // Комментарий не вводили — в поле только автор.
+  return isCalcAuthorToken(c) ? c : "";
 }
 
 function stripAuthorFromManualComment(comment) {
   const c = String(comment ?? "");
+  const trimmed = c.trim();
+  if (!trimmed) return "";
   const m = c.match(/;\s*([^;]+)$/);
-  if (!m || !isCalcAuthorToken(m[1].trim())) return c;
-  return c.slice(0, m.index).trim();
+  if (m && isCalcAuthorToken(m[1].trim())) {
+    return c.slice(0, m.index).trim();
+  }
+  if (isCalcAuthorToken(trimmed)) return "";
+  return c;
 }
 
 export function getCalcDisplayAuthor(comment) {
@@ -904,7 +929,12 @@ function setFormValues(row) {
     amountEl.classList.remove("sum-input-invalid");
     amountEl.removeAttribute("title");
   }
-  if (commentEl) commentEl.value = row.comment || "";
+  if (commentEl) {
+    const raw = row.comment || "";
+    commentEl.value = raw.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX)
+      ? raw
+      : stripAuthorFromManualComment(raw);
+  }
 }
 
 function resetForm() {
@@ -970,6 +1000,15 @@ async function submitForm(e) {
   }
   if (payload.amount == null) {
     setMessage("Укажите сумму", true);
+    return;
+  }
+
+  if (
+    payload.from_place &&
+    payload.to_place &&
+    payload.from_place === payload.to_place
+  ) {
+    setMessage("Откуда и куда не могут совпадать.", true);
     return;
   }
 
