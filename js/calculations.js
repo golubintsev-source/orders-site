@@ -60,6 +60,19 @@ let appliedCalcDateFromYmd = "";
 let appliedCalcDateToYmd = "";
 
 const CALC_SALDO_PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
+/** «Куда» = доход: Вова, Дима, Касса, Безнал; иначе сумма в колонке «Расход». */
+const CALC_INCOME_TO_PLACES = new Set(["Вова", "Дима", "Касса", "Безнал"]);
+
+/** Сумма в «Доход» или «Расход» в зависимости от «Куда». */
+export function getCalcIncomeExpenseDisplay(row) {
+  const formatted =
+    row?.amount != null && row.amount !== "" ? formatAmount(row.amount) : "";
+  if (!formatted) return { income: "", expense: "" };
+  if (CALC_INCOME_TO_PLACES.has(row.to_place)) {
+    return { income: formatted, expense: "" };
+  }
+  return { income: "", expense: formatted };
+}
 
 function localDateToYmd(d) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -706,7 +719,7 @@ function renderCalculationsTableFromCache() {
 
   if (calculationsRowsCache.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td colspan=\"7\">Записей пока нет.</td>";
+    tr.innerHTML = "<td colspan=\"8\">Записей пока нет.</td>";
     tbody.appendChild(tr);
     renderCalculationsSaldoTable([]);
     return;
@@ -714,7 +727,7 @@ function renderCalculationsTableFromCache() {
 
   if (rows.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td colspan=\"7\">Ничего не найдено.</td>";
+    tr.innerHTML = "<td colspan=\"8\">Ничего не найдено.</td>";
     tbody.appendChild(tr);
     renderCalculationsSaldoTable([]);
     return;
@@ -726,6 +739,13 @@ function renderCalculationsTableFromCache() {
     const displayComment = getCalcDisplayComment(comment);
     const displayAuthor = getCalcDisplayAuthor(comment);
     const escapedComment = escapeHtml(displayComment);
+    const { income, expense } = getCalcIncomeExpenseDisplay(row);
+    const incomeCell = income
+      ? `<td class="td-money"><span class="status-value">${escapeHtml(income)}</span></td>`
+      : `<td class="td-money"></td>`;
+    const expenseCell = expense
+      ? `<td class="td-money"><span class="status-value">${escapeHtml(expense)}</span></td>`
+      : `<td class="td-money"></td>`;
     const isOfflineRow = row.__offlinePendingSync === true;
     const actionsCell = isOfflineRow
       ? isAdmin()
@@ -751,7 +771,8 @@ function renderCalculationsTableFromCache() {
       <td class="td-calc-author">${displayAuthor ? `<span class="status-value">${escapeHtml(displayAuthor)}</span>` : ""}</td>
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
-      <td class="td-money"><span class="status-value">${escapeHtml(formatAmount(row.amount))}</span></td>
+      ${incomeCell}
+      ${expenseCell}
       <td class="td-calc-comment" data-comment-full="${escapeHtmlAttr(displayComment)}" tabindex="0" role="button" aria-label="Показать полный комментарий"><span class="calc-table-cell-text">${escapedComment}</span></td>
       ${actionsCell}
     `;
