@@ -697,6 +697,19 @@ function setMessage(text, isError) {
   }
 }
 
+function setFormError(text) {
+  const el = document.getElementById("calcFormError");
+  if (!el) return;
+  const msg = String(text || "").trim();
+  el.textContent = msg;
+  if (msg) el.removeAttribute("hidden");
+  else el.setAttribute("hidden", "");
+}
+
+function clearFormError() {
+  setFormError("");
+}
+
 function computeSaldoFromCalcRows(rows) {
   const balances = Object.fromEntries(CALC_SALDO_PARTICIPANTS.map((p) => [p, 0]));
   for (const row of rows || []) {
@@ -940,6 +953,7 @@ function setFormValues(row) {
 function resetForm() {
   editingId = null;
   editingCreatedAt = null;
+  clearFormError();
   const fromEl = document.getElementById("calcFrom");
   const toEl = document.getElementById("calcTo");
   const amountEl = document.getElementById("calcAmount");
@@ -987,6 +1001,7 @@ function startEdit(id) {
 
 async function submitForm(e) {
   e.preventDefault();
+  clearFormError();
   const payload = getFormValues();
   const amountEl = document.getElementById("calcAmount");
 
@@ -1008,7 +1023,7 @@ async function submitForm(e) {
     payload.to_place &&
     payload.from_place === payload.to_place
   ) {
-    setMessage("Откуда и куда не могут совпадать.", true);
+    setFormError("Откуда и куда не могут совпадать.");
     return;
   }
 
@@ -1110,6 +1125,17 @@ function setupCalculationsForm() {
   if (amountEl) {
     amountEl.addEventListener("blur", formatCalcAmountInput);
     amountEl.addEventListener("input", () => refreshRublesIntegerInputState(amountEl, amountEl.value));
+  }
+
+  const fromEl = document.getElementById("calcFrom");
+  const toEl = document.getElementById("calcTo");
+  if (fromEl && !fromEl.dataset.fromToBound) {
+    fromEl.dataset.fromToBound = "1";
+    fromEl.addEventListener("change", clearFormError);
+  }
+  if (toEl && !toEl.dataset.fromToBound) {
+    toEl.dataset.fromToBound = "1";
+    toEl.addEventListener("change", clearFormError);
   }
 
   const searchBtn = document.getElementById("calcSearchBtn");
