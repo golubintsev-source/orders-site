@@ -68,3 +68,14 @@ CREATE POLICY "group_messages_update_sender" ON public.group_messages
   FOR UPDATE TO authenticated
   USING (sender_id = auth.uid())
   WITH CHECK (sender_id = auth.uid());
+
+-- ---------------------------------------------------------------------------
+-- После деплоя API /api/send-group-message-push настройте Database Webhook в Supabase:
+--   Table: group_messages
+--   Events: INSERT
+--   URL: https://ВАШ-ДОМЕН/api/send-group-message-push
+--   HTTP Headers: x-push-webhook-secret = значение PUSH_WEBHOOK_SECRET из Vercel
+--
+-- Участники группы (кроме отправителя) получат Web Push, если включили
+-- уведомления на странице «Сообщения» (или в Настройках).
+-- ---------------------------------------------------------------------------
