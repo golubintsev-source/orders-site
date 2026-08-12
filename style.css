@@ -1069,6 +1069,7 @@ h2 {
 .calculations-form-row--comment-submit {
   --calc-submit-row-height: 40px;
   --calc-primary-action-width: 9rem;
+  --calc-comment-width: 18rem;
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -1085,9 +1086,9 @@ h2 {
 
 #section-calculations .calculations-form .calculations-comment-input,
 .calculations-page .calculations-form .calculations-comment-input {
-  flex: 0 0 var(--calc-primary-action-width);
-  width: var(--calc-primary-action-width);
-  max-width: var(--calc-primary-action-width);
+  flex: 0 0 var(--calc-comment-width);
+  width: var(--calc-comment-width);
+  max-width: var(--calc-comment-width);
   min-width: 0;
   font-size: 16px;
   height: var(--calc-submit-row-height, 40px);
