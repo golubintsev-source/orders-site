@@ -3104,11 +3104,11 @@ button:active {
     box-shadow: none;
   }
 
-  /* Первый/последний столбец без внутреннего отступа у края экрана. */
+  /* Первый столбец: 6px от края экрана до чипа номера (синяя полоска). Справа — вплотную. */
   #ordersTable thead tr th:first-child,
   #ordersTable tbody tr td:first-child,
   #ordersTableStickyHeadTable thead tr th:first-child {
-    padding-left: 0;
+    padding-left: 6px;
   }
 
   #ordersTable thead tr th:last-child,
@@ -3119,7 +3119,7 @@ button:active {
 
   #ordersTable th.th-order-filter-heading-cell:first-child,
   #ordersTableStickyHeadTable th.th-order-filter-heading-cell:first-child {
-    padding-left: 0;
+    padding-left: 6px;
   }
 
   /*
