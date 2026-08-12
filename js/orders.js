@@ -2745,6 +2745,7 @@ export function resetFormMode() {
   refreshSectionNavLabel();
   if (submitBtn) submitBtn.textContent = "Сохранить заказ";
   if (submitBtnTop) submitBtnTop.textContent = "Сохранить заказ";
+  setOrderFormSaveButtonsBusy(false);
 
   if (formTitle) {
     formTitle.textContent = "Новая заявка";
@@ -2889,6 +2890,7 @@ export async function editOrder(orderId) {
     submitBtnTop.style.display = "";
     submitBtnTop.textContent = "Сохранить изменения";
   }
+  setOrderFormSaveButtonsBusy(false);
 
   if (formTitle) {
     formTitle.textContent = `Редактирование ${formatOrderIdTypeChip(orderId, data.order_type)}`;
@@ -2955,13 +2957,14 @@ export async function deleteOrder(orderId) {
   await loadOrders();
 }
 
-/** Сохранить правку существующего заказа с сервера в локальную очередь (офлайн). */
+/** Сохранить правку существующего заказа с сервера в локальную очередь (офлайн).
+ *  @returns {boolean} true — ушли с формы / сохранили в очередь; false — нечего сохранять. */
 function commitServerOrderEditToOfflineStorage(orderData) {
   const orderId = Number(state.editingOrderId);
   const historyComment = buildOrderHistoryComment(state.initialOrderSnapshot, orderData, true);
   if (historyComment === "Сохранено без изменений") {
     setMessage("Нет изменений для сохранения", "");
-    return;
+    return false;
   }
   const changedAt = new Date().toISOString();
   addOrAppendPendingServerOrderEdit({
@@ -2987,6 +2990,7 @@ function commitServerOrderEditToOfflineStorage(orderData) {
   syncDbUnavailableBanner();
   void leaveOrderFormAfterSave(orderId);
   setMessage("Изменения сохранены на устройстве; отправка в базу при появлении связи.", "#92400e");
+  return true;
 }
 
 /** Сохранить заказ только в localStorage (очередь офлайн). editingOffline — правка существующей офлайн-заявки. */
@@ -3059,10 +3063,36 @@ function commitOrderFormToOfflineStorage(orderData, editingOffline) {
   );
 }
 
+/** Флаг и UI-блокировка кнопок «Сохранить», чтобы не создавать дубликаты при повторных нажатиях. */
+let orderFormSaveInFlight = false;
+
+function setOrderFormSaveButtonsBusy(busy) {
+  orderFormSaveInFlight = Boolean(busy);
+  for (const btn of [submitBtn, submitBtnTop]) {
+    if (!btn) continue;
+    btn.disabled = orderFormSaveInFlight;
+    if (orderFormSaveInFlight) {
+      btn.setAttribute("aria-busy", "true");
+    } else {
+      btn.removeAttribute("aria-busy");
+    }
+  }
+}
+
 export async function submitOrderForm(event) {
   event.preventDefault();
   setOrderFormInvalidDateMessage(false);
 
+  if (orderFormSaveInFlight) {
+    return;
+  }
+
+  // Сразу блокируем обе кнопки (верх и низ), чтобы повторные клики при медленной сети
+  // не создавали дубликаты заказов.
+  setOrderFormSaveButtonsBusy(true);
+  let saveFinishedOk = false;
+
+  try {
   if (state.viewingOrderId != null) {
     return;
   }
@@ -3209,10 +3239,14 @@ export async function submitOrderForm(event) {
 
   if (saveLocalNew || saveLocalEdit) {
     commitOrderFormToOfflineStorage(orderData, saveLocalEdit);
+    saveFinishedOk = true;
     return;
   }
   if (saveLocalServerEdit) {
-    commitServerOrderEditToOfflineStorage(orderData);
+    if (!commitServerOrderEditToOfflineStorage(orderData)) {
+      return;
+    }
+    saveFinishedOk = true;
     return;
   }
 
@@ -3249,6 +3283,7 @@ export async function submitOrderForm(event) {
   if (error && !wasEditing && shouldFallbackSaveOrderToLocal(error)) {
     applyOfflineModeFromDbUnavailable();
     commitOrderFormToOfflineStorage(orderData, false);
+    saveFinishedOk = true;
     return;
   }
 
@@ -3260,7 +3295,10 @@ export async function submitOrderForm(event) {
     shouldFallbackSaveOrderToLocal(error)
   ) {
     applyOfflineModeFromDbUnavailable();
-    commitServerOrderEditToOfflineStorage(orderData);
+    if (!commitServerOrderEditToOfflineStorage(orderData)) {
+      return;
+    }
+    saveFinishedOk = true;
     return;
   }
 
@@ -3293,6 +3331,7 @@ export async function submitOrderForm(event) {
   }
 
   await leaveOrderFormAfterSave(savedOrderId);
+  saveFinishedOk = true;
 
   setMessage(
     wasEditing
@@ -3300,6 +3339,13 @@ export async function submitOrderForm(event) {
     : `Заявка #${savedOrderId} сохранена`,
     ""
   );
+  } finally {
+    // При ошибке/валидации снова разрешаем сохранить; при успехе кнопки остаются
+    // заблокированными до resetFormMode / editOrder.
+    if (!saveFinishedOk) {
+      setOrderFormSaveButtonsBusy(false);
+    }
+  }
 }
 
 function highlightAndFocusSavedOrderRow(orderId) {

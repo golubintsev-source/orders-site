@@ -944,6 +944,23 @@ h2 {
   transform: translateY(1px);
 }
 
+#section-new .btn-form-save:disabled {
+  background: #9aa4b2;
+  color: #f3f4f6;
+  border-color: transparent;
+  cursor: not-allowed;
+  opacity: 1;
+  transform: none;
+  pointer-events: none;
+}
+
+#section-new .btn-form-save:disabled:hover,
+#section-new .btn-form-save:disabled:active {
+  background: #9aa4b2;
+  color: #f3f4f6;
+  transform: none;
+}
+
 #section-new .btn-form-cancel {
   background: #fff;
   color: #0078d4;
