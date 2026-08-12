@@ -950,6 +950,25 @@ function setFormValues(row) {
   }
 }
 
+function setCalcSubmitMode(mode) {
+  const btn = document.getElementById("calcSubmitBtn");
+  if (!btn) return;
+  const isSave = mode === "save";
+  const label = isSave ? "Сохранить" : "Добавить";
+  btn.title = label;
+  btn.setAttribute("aria-label", label);
+  const addIcon = btn.querySelector(".calc-submit-icon-add");
+  const saveIcon = btn.querySelector(".calc-submit-icon-save");
+  if (addIcon) {
+    if (isSave) addIcon.setAttribute("hidden", "");
+    else addIcon.removeAttribute("hidden");
+  }
+  if (saveIcon) {
+    if (isSave) saveIcon.removeAttribute("hidden");
+    else saveIcon.setAttribute("hidden", "");
+  }
+}
+
 function resetForm() {
   editingId = null;
   editingCreatedAt = null;
@@ -966,8 +985,7 @@ function resetForm() {
     amountEl.removeAttribute("title");
   }
   if (commentEl) commentEl.value = "";
-  const submitBtn = document.getElementById("calcSubmitBtn");
-  if (submitBtn) submitBtn.textContent = "Добавить";
+  setCalcSubmitMode("add");
 }
 
 function startEdit(id) {
@@ -982,7 +1000,7 @@ function startEdit(id) {
   }
   editingId = id;
   editingCreatedAt = null;
-  document.getElementById("calcSubmitBtn").textContent = "Сохранить";
+  setCalcSubmitMode("save");
   supabaseClient
     .from("calculations")
     .select("id, created_at, from_place, to_place, amount, comment")

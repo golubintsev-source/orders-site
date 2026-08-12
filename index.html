@@ -699,7 +699,10 @@
               <div class="calculations-comment-wrap field">
                 <input type="text" id="calcComment" class="calculations-comment-input" placeholder="Комментарий" aria-label="Комментарий" />
               </div>
-              <button type="submit" id="calcSubmitBtn" class="calculations-submit-btn">Добавить</button>
+              <button type="submit" id="calcSubmitBtn" class="calculations-submit-btn" title="Добавить" aria-label="Добавить">
+                <svg class="calc-submit-icon-add" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <svg class="calc-submit-icon-save" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
             </div>
             <p id="calcFormError" class="calculations-form-error" role="alert" hidden></p>
             <div class="calculations-form-block calculations-form-block--filters">
