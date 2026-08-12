@@ -3365,7 +3365,8 @@ table {
   width: 100%;
   min-height: 32px;
   padding: 6px 8px;
-  font-size: 13px;
+  /* 16px: иначе iPhone/iPad Safari при фокусе зумит страницу (порог < 16px) */
+  font-size: 16px;
   line-height: 1.25;
   border: 1px solid #d1d5db;
   border-radius: 8px;
