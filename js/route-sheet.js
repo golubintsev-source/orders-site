@@ -3657,7 +3657,11 @@ function initRouteSheetAddPointDialog() {
   if (closeBtn) closeBtn.addEventListener("click", () => closeRouteSheetAddPointDialog());
   if (cancelBtn) cancelBtn.addEventListener("click", () => closeRouteSheetAddPointDialog());
   if (confirmBtn) confirmBtn.addEventListener("click", () => confirmRouteSheetAddPoint());
-  dlg.addEventListener("close", () => clearRouteSheetAddPointFormError());
+  dlg.addEventListener("close", () => {
+    routeSheetAddPointEditingId = null;
+    setRouteSheetAddPointDialogMode(false);
+    clearRouteSheetAddPointFormError();
+  });
 }
 
 export function initRouteSheetSection() {
