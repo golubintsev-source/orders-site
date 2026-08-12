@@ -22,6 +22,10 @@
     "api/send-message-push.js": {
       "maxDuration": 30
     },
+    "api/send-group-message-push.js": {
+      "maxDuration": 30
+    },
+
     "api/push-config.js": {
       "maxDuration": 10
     },

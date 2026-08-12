@@ -34,6 +34,9 @@ CREATE POLICY "Users manage own push subscriptions" ON push_subscriptions
 -- Аналогично для сообщений (user_messages, INSERT):
 --   URL: https://ВАШ-ДОМЕН/api/send-message-push
 --
+-- И для групповых сообщений (group_messages, INSERT):
+--   URL: https://ВАШ-ДОМЕН/api/send-group-message-push
+--
 -- VAPID-ключи (локально: npx web-push generate-vapid-keys):
 --   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT=mailto:you@example.com
 --   PUSH_WEBHOOK_SECRET — произвольная длинная строка
