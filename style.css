@@ -1103,17 +1103,32 @@ h2 {
 
 #section-calculations .calculations-form-row--comment-submit .calculations-submit-btn,
 .calculations-page .calculations-form-row--comment-submit .calculations-submit-btn {
-  flex: 0 0 var(--calc-primary-action-width);
-  width: var(--calc-primary-action-width);
+  flex: 0 0 var(--calc-submit-row-height);
+  width: var(--calc-submit-row-height);
+  min-width: var(--calc-submit-row-height);
+  height: var(--calc-submit-row-height);
+  min-height: var(--calc-submit-row-height);
+  max-width: var(--calc-submit-row-height);
+  padding: 0;
   align-self: flex-end;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: var(--calc-submit-row-height);
-  min-height: var(--calc-submit-row-height);
-  padding: 0 12px;
-  font-size: 13px;
   box-sizing: border-box;
+  font-size: 0;
+  line-height: 0;
+}
+
+#section-calculations .calculations-form-row--comment-submit .calculations-submit-btn svg,
+.calculations-page .calculations-form-row--comment-submit .calculations-submit-btn svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+#section-calculations .calculations-form-row--comment-submit .calculations-submit-btn svg[hidden],
+.calculations-page .calculations-form-row--comment-submit .calculations-submit-btn svg[hidden] {
+  display: none;
 }
 
 #section-calculations .calculations-form-error,
