@@ -46,6 +46,8 @@ let deliveredAtSupported = null;
 let groupChatsSupported = null;
 /** null = unknown, true/false after first probe — avatar_storage_path on group_chats */
 let groupAvatarSupported = null;
+/** null = unknown, true/false after first probe — group_chat_reads table */
+let groupChatReadsSupported = null;
 /** null = unknown, true/false after first probe */
 let attachmentColumnsSupported = null;
 /** null = unknown, true/false after first probe — reply_to_id / edited_at / deleted_at */
@@ -261,6 +263,8 @@ function noteGroupChatsSupport(error) {
     return false;
   }
   const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""} ${error.code || ""}`.toLowerCase();
+  // Не путать отсутствие group_chat_reads с отсутствием самих групповых чатов.
+  if (msg.includes("group_chat_reads")) return false;
   if (
     msg.includes("group_chats") ||
     msg.includes("group_messages") ||
@@ -287,6 +291,136 @@ function noteGroupAvatarSupport(error) {
     return true;
   }
   return false;
+}
+
+function noteGroupChatReadsSupport(error) {
+  if (!error) {
+    groupChatReadsSupported = true;
+    return false;
+  }
+  const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""} ${error.code || ""}`.toLowerCase();
+  if (
+    msg.includes("group_chat_reads") ||
+    error.code === "42P01" ||
+    error.code === "PGRST205"
+  ) {
+    groupChatReadsSupported = false;
+    return true;
+  }
+  return false;
+}
+
+function groupChatReadsStorageKey(uid = getCurrentUserId()) {
+  return uid ? `messages:groupChatReads:${uid}` : null;
+}
+
+function readGroupChatReadsLocal(uid = getCurrentUserId()) {
+  const key = groupChatReadsStorageKey(uid);
+  if (!key) return new Map();
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return new Map();
+    const parsed = JSON.parse(raw);
+    const map = new Map();
+    if (parsed && typeof parsed === "object") {
+      for (const [chatId, at] of Object.entries(parsed)) {
+        if (chatId && typeof at === "string" && at) map.set(String(chatId), at);
+      }
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+function writeGroupChatReadsLocal(map, uid = getCurrentUserId()) {
+  const key = groupChatReadsStorageKey(uid);
+  if (!key) return;
+  const obj = {};
+  for (const [chatId, at] of map.entries()) {
+    if (chatId && at) obj[String(chatId)] = String(at);
+  }
+  try {
+    localStorage.setItem(key, JSON.stringify(obj));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function mergeLaterReadAt(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  return a >= b ? a : b;
+}
+
+/** last_read_at по chat_id: сервер + localStorage (берём более поздний). */
+async function fetchGroupChatReads(chatIds) {
+  const uid = getCurrentUserId();
+  const local = readGroupChatReadsLocal(uid);
+  const result = new Map(local);
+  if (!uid || !chatIds?.length) return result;
+
+  if (groupChatReadsSupported === false) return result;
+
+  const { data, error } = await supabaseClient
+    .from("group_chat_reads")
+    .select("chat_id, last_read_at")
+    .eq("user_id", uid)
+    .in("chat_id", chatIds);
+
+  if (error) {
+    if (noteGroupChatReadsSupport(error)) return result;
+    console.warn("Не удалось загрузить прочитанность групповых чатов:", error);
+    return result;
+  }
+
+  groupChatReadsSupported = true;
+  for (const row of data || []) {
+    const chatId = String(row.chat_id);
+    const at = row.last_read_at ? String(row.last_read_at) : null;
+    if (!chatId || !at) continue;
+    result.set(chatId, mergeLaterReadAt(result.get(chatId), at));
+  }
+  writeGroupChatReadsLocal(result, uid);
+  return result;
+}
+
+async function markGroupChatRead(chatId, at = new Date().toISOString()) {
+  const uid = getCurrentUserId();
+  if (!uid || !chatId) return;
+
+  const local = readGroupChatReadsLocal(uid);
+  const nextAt = mergeLaterReadAt(local.get(String(chatId)), at) || at;
+  local.set(String(chatId), nextAt);
+  writeGroupChatReadsLocal(local, uid);
+
+  if (groupChatReadsSupported === false) return;
+
+  const { error } = await supabaseClient.from("group_chat_reads").upsert(
+    {
+      chat_id: chatId,
+      user_id: uid,
+      last_read_at: nextAt,
+    },
+    { onConflict: "chat_id,user_id" },
+  );
+
+  if (error) {
+    if (noteGroupChatReadsSupport(error)) return;
+    console.warn("Не удалось отметить групповой чат прочитанным:", error);
+  } else {
+    groupChatReadsSupported = true;
+  }
+}
+
+function countUnreadGroupMessagesForChat(messages, uid, lastReadAt) {
+  const me = String(uid);
+  return (messages || []).filter((row) => {
+    if (isMessageDeleted(row)) return false;
+    if (String(row.sender_id) === me) return false;
+    if (!lastReadAt) return true;
+    return String(row.created_at || "") > String(lastReadAt);
+  }).length;
 }
 
 function groupChatSelectColumns() {
@@ -734,7 +868,9 @@ async function fetchGroupMessages(chatId) {
 }
 
 async function fetchLastGroupMessagesByChat(chatIds) {
-  if (!chatIds?.length || groupChatsSupported === false) return new Map();
+  if (!chatIds?.length || groupChatsSupported === false) {
+    return { lastByChat: new Map(), messagesByChat: new Map() };
+  }
 
   const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
   let select = withMessageActionColumns(withAttachmentColumns(selectBase));
@@ -763,23 +899,28 @@ async function fetchLastGroupMessagesByChat(chatIds) {
   }
 
   if (error) {
-    if (noteGroupChatsSupport(error)) return new Map();
+    if (noteGroupChatsSupport(error)) {
+      return { lastByChat: new Map(), messagesByChat: new Map() };
+    }
     console.warn("Ошибка загрузки сообщений групповых чатов:", error);
-    return new Map();
+    return { lastByChat: new Map(), messagesByChat: new Map() };
   }
 
   const lastByChat = new Map();
+  const messagesByChat = new Map();
   for (const row of data || []) {
     if (isMessageDeleted(row)) continue;
     const chatId = String(row.chat_id);
+    if (!messagesByChat.has(chatId)) messagesByChat.set(chatId, []);
+    messagesByChat.get(chatId).push(row);
     if (!lastByChat.has(chatId)) {
       lastByChat.set(chatId, row);
     }
   }
-  return lastByChat;
+  return { lastByChat, messagesByChat };
 }
 
-function buildChatListEntries(users, rows, groupChats, lastGroupMessages) {
+function buildChatListEntries(users, rows, groupChats, lastGroupMessages, groupUnreadByChat) {
   const uid = getCurrentUserId();
   const byPeer = new Map();
 
@@ -819,13 +960,14 @@ function buildChatListEntries(users, rows, groupChats, lastGroupMessages) {
 
   const groupEntries = (groupChats || []).map((chat) => {
     const last = lastGroupMessages?.get(chat.id) || null;
+    const unreadCount = groupUnreadByChat?.get(chat.id) || 0;
     return {
       peerId: toGroupPeerId(chat.id),
       kind: "group",
       name: chat.name,
       email: "",
       avatarStoragePath: chat.avatarStoragePath || null,
-      unreadCount: 0,
+      unreadCount,
       last: last
         ? {
             ...last,
@@ -880,7 +1022,7 @@ function renderChatListItem(entry) {
     entry.kind === "group" ? null : avatarLogoUrl({ email: entry.email, name: entry.name });
   const groupAvatarPath =
     entry.kind === "group" && entry.avatarStoragePath ? String(entry.avatarStoragePath) : "";
-  const unread = entry.kind !== "group" && unreadCount > 0;
+  const unread = unreadCount > 0;
   let avatarHtml;
   if (logoUrl) {
     avatarHtml = `<span class="messages-chat-avatar messages-chat-avatar--logo" aria-hidden="true"><img src="${escapeHtml(logoUrl)}" alt="" width="48" height="48" decoding="async"></span>`;
@@ -976,8 +1118,23 @@ export async function loadChatList() {
     console.warn("Ошибка загрузки групповых чатов:", groupError);
   }
 
-  const lastGroupMessages = await fetchLastGroupMessagesByChat(groupChats.map((chat) => chat.id));
-  const entries = buildChatListEntries(users, rows, groupChats, lastGroupMessages);
+  const chatIds = groupChats.map((chat) => chat.id);
+  const [{ lastByChat: lastGroupMessages, messagesByChat }, lastReadByChat] = await Promise.all([
+    fetchLastGroupMessagesByChat(chatIds),
+    fetchGroupChatReads(chatIds),
+  ]);
+
+  const groupUnreadByChat = new Map();
+  for (const chat of groupChats) {
+    const unreadCount = countUnreadGroupMessagesForChat(
+      messagesByChat.get(chat.id) || [],
+      uid,
+      lastReadByChat.get(chat.id) || null,
+    );
+    groupUnreadByChat.set(chat.id, unreadCount);
+  }
+
+  const entries = buildChatListEntries(users, rows, groupChats, lastGroupMessages, groupUnreadByChat);
   list.innerHTML = entries.map(renderChatListItem).join("");
   void hydrateGroupAvatars(list);
   void refreshMessagesUnreadBadge();
@@ -1151,6 +1308,13 @@ export async function loadMessages() {
 
   if (!isGroupChat()) {
     await markIncomingMessagesRead(visibleRows);
+  } else {
+    const groupId = parseGroupId();
+    const latestAt =
+      visibleRows.length > 0
+        ? visibleRows[visibleRows.length - 1].created_at
+        : new Date().toISOString();
+    if (groupId) await markGroupChatRead(groupId, latestAt || new Date().toISOString());
   }
   void refreshMessagesUnreadBadge();
 }
@@ -1324,6 +1488,12 @@ async function pollNewMessages() {
     const rows = data || [];
     if (rows.length) {
       appendMessagesToFeed(rows);
+      const latestAt = rows.reduce((max, row) => {
+        const at = row.created_at || "";
+        return !max || at > max ? at : max;
+      }, lastFeedMessageAt || "");
+      if (groupId && latestAt) await markGroupChatRead(groupId, latestAt);
+      void refreshMessagesUnreadBadge();
     }
     return;
   }
@@ -1493,6 +1663,42 @@ async function acknowledgeIncomingDelivered() {
   }
 }
 
+/** Число непрочитанных входящих в групповых чатах текущего пользователя. */
+async function countUnreadGroupMessagesTotal() {
+  if (groupChatsSupported === false) return 0;
+
+  const uid = getCurrentUserId();
+  if (!uid) return 0;
+
+  let chats = [...groupChatsById.values()];
+  if (!chats.length) {
+    const { chats: fetched, error } = await fetchMyGroupChats();
+    if (error || !fetched?.length) return 0;
+    chats = fetched;
+  }
+
+  const chatIds = chats.map((chat) => chat.id);
+  if (!chatIds.length) return 0;
+
+  const [{ messagesByChat }, lastReadByChat] = await Promise.all([
+    fetchLastGroupMessagesByChat(chatIds),
+    fetchGroupChatReads(chatIds),
+  ]);
+
+  let total = 0;
+  const activeGroupId = isGroupChat() ? parseGroupId() : null;
+  for (const chat of chats) {
+    // Открытый сейчас групповой чат считаем прочитанным.
+    if (activeGroupId && chat.id === activeGroupId) continue;
+    total += countUnreadGroupMessagesForChat(
+      messagesByChat.get(chat.id) || [],
+      uid,
+      lastReadByChat.get(chat.id) || null,
+    );
+  }
+  return total;
+}
+
 export async function refreshMessagesUnreadBadge() {
   const badge = document.getElementById("messagesUnreadBadge");
   const btn = document.getElementById("messagesNavBtn");
@@ -1532,7 +1738,15 @@ export async function refreshMessagesUnreadBadge() {
     return;
   }
 
-  const n = count || 0;
+  const dmUnread = count || 0;
+  let groupUnread = 0;
+  try {
+    groupUnread = await countUnreadGroupMessagesTotal();
+  } catch (err) {
+    console.warn("Не удалось получить число непрочитанных групповых:", err);
+  }
+
+  const n = dmUnread + groupUnread;
   if (n > 0) {
     badge.textContent = n > 99 ? "99+" : String(n);
     badge.hidden = false;
