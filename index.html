@@ -923,6 +923,42 @@
                 maxlength="120"
               />
             </label>
+            <div class="messages-create-group-avatar-field">
+              <span class="messages-create-group-label">Картинка чата</span>
+              <div class="messages-create-group-avatar-row">
+                <div
+                  id="messagesCreateGroupAvatarPreview"
+                  class="messages-create-group-avatar-preview"
+                  aria-hidden="true"
+                >
+                  <span id="messagesCreateGroupAvatarInitial" class="messages-create-group-avatar-initial">?</span>
+                  <img id="messagesCreateGroupAvatarImg" class="messages-create-group-avatar-img" alt="" hidden />
+                </div>
+                <div class="messages-create-group-avatar-actions">
+                  <button
+                    type="button"
+                    id="messagesCreateGroupAvatarPickBtn"
+                    class="messages-create-group-avatar-pick-btn"
+                  >
+                    Выбрать фото
+                  </button>
+                  <button
+                    type="button"
+                    id="messagesCreateGroupAvatarClearBtn"
+                    class="messages-create-group-avatar-clear-btn"
+                    hidden
+                  >
+                    Убрать
+                  </button>
+                </div>
+              </div>
+              <input
+                type="file"
+                id="messagesCreateGroupAvatarInput"
+                accept="image/*"
+                hidden
+              />
+            </div>
             <div class="messages-create-group-users-wrap">
               <span class="messages-create-group-label">Участники</span>
               <div id="messagesCreateGroupUsers" class="messages-create-group-users" role="group" aria-label="Участники группового чата"></div>
@@ -952,6 +988,17 @@
               <p id="messagesDialogTitle" class="messages-dialog-title">Чат</p>
               <p id="messagesDialogSubtitle" class="messages-dialog-subtitle" hidden></p>
             </div>
+            <button
+              type="button"
+              id="messagesEditGroupBtn"
+              class="messages-edit-group-btn"
+              title="Изменить группу"
+              aria-label="Изменить групповой чат"
+              aria-haspopup="dialog"
+              hidden
+            >
+              Изменить
+            </button>
           </header>
           <div id="messagesFeed" class="messages-feed" role="log" aria-live="polite" aria-label="Сообщения"></div>
           <p id="messagesPageMessage" class="messages-page-message"></p>
