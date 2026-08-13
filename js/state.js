@@ -33,6 +33,8 @@ export const state = {
   defaultInstallerRatePerM2: 1400,
   /** ФИО водителя для доставки (из app_settings) */
   driverName: "",
+  /** Имя и отчество редакторов (из app_settings) */
+  editors: [],
   /** корректировки баланса по участникам (целые, из app_settings) */
   balanceAdjustments: { Дима: 0, Вова: 0, Касса: 0, Безнал: 0 },
   /** заказ, для которого открыт раздел «Задачи» (id из orders) */

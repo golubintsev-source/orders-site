@@ -57,10 +57,13 @@ import { initClientAutocomplete, initAddressAutocomplete } from "./clientAutocom
 import {
   saveInstallerRate,
   saveDriverName,
+  saveEditors,
   saveBalanceAdjustments,
   updateSettingsSaveButtonState,
   updateDriverSaveButtonState,
+  updateEditorsSaveButtonState,
   updateAdjustmentsSaveButtonState,
+  addEditorField,
   BALANCE_ADJ_FIELDS,
 } from "./settings.js";
 import { loadBalance } from "./balance.js";
@@ -410,6 +413,40 @@ export function bindUIEvents() {
     settingsDriverInput.addEventListener("input", onDriverInput);
     settingsDriverInput.addEventListener("change", onDriverInput);
     settingsDriverInput.addEventListener("blur", onDriverInput);
+  }
+
+  const settingsAddEditorBtn = document.getElementById("settingsAddEditorBtn");
+  const settingsEditorsList = document.getElementById("settingsEditorsList");
+  const settingsSaveEditorsBtn = document.getElementById("settingsSaveEditorsBtn");
+  if (settingsAddEditorBtn) {
+    settingsAddEditorBtn.addEventListener("click", () => {
+      addEditorField();
+    });
+  }
+  if (settingsEditorsList) {
+    settingsEditorsList.addEventListener("click", (e) => {
+      const removeBtn = e.target.closest(".settings-editor-remove-btn");
+      if (!removeBtn || !settingsEditorsList.contains(removeBtn)) return;
+      const row = removeBtn.closest(".settings-editor-row");
+      row?.remove();
+      updateEditorsSaveButtonState();
+    });
+    settingsEditorsList.addEventListener("input", (e) => {
+      if (e.target instanceof HTMLInputElement && e.target.classList.contains("settings-editor-input")) {
+        updateEditorsSaveButtonState();
+      }
+    });
+    settingsEditorsList.addEventListener("change", (e) => {
+      if (e.target instanceof HTMLInputElement && e.target.classList.contains("settings-editor-input")) {
+        updateEditorsSaveButtonState();
+      }
+    });
+  }
+  if (settingsSaveEditorsBtn) {
+    settingsSaveEditorsBtn.addEventListener("click", async () => {
+      const ok = await saveEditors();
+      setMessage(ok ? "Редакторы сохранены" : "Ошибка сохранения редакторов", ok ? "" : "#d32f2f");
+    });
   }
 
   const settingsSaveAdjustmentsBtn = document.getElementById("settingsSaveAdjustmentsBtn");

@@ -2164,6 +2164,115 @@ h2 {
   opacity: 0.9;
 }
 
+#section-settings .settings-editors-card {
+  margin-top: 16px;
+  max-width: 520px;
+}
+#section-settings .settings-editors-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+#section-settings .settings-editors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+#section-settings .settings-editors-list:empty {
+  margin-bottom: 0;
+}
+#section-settings .settings-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+#section-settings .settings-editor-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  max-width: 360px;
+  height: 36px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+#section-settings .settings-editor-remove-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  background: #fff;
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  box-sizing: border-box;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+#section-settings .settings-editor-remove-btn:hover {
+  background: #fef2f2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+#section-settings .settings-editor-remove-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+#section-settings .settings-editors-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+#section-settings .settings-add-editor-btn {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #fff;
+  color: #111827;
+  box-sizing: border-box;
+}
+#section-settings .settings-add-editor-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+#section-settings .settings-save-editors-btn {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #1f6feb;
+  color: #fff;
+  box-sizing: border-box;
+}
+#section-settings .settings-save-editors-btn:hover:not(:disabled) {
+  opacity: 0.95;
+}
+#section-settings .settings-save-editors-btn.settings-save-btn-inactive,
+#section-settings .settings-save-editors-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+
 #section-settings .settings-adjustments-card {
   margin-top: 16px;
   max-width: 520px;
