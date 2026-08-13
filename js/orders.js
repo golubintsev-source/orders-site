@@ -81,6 +81,7 @@ import {
   raceWithTimeout,
 } from "./offline-cache.js";
 import { shortLoginByEmail } from "./user-names.js";
+import { getEditors } from "./settings.js";
 
 function mergedLocalOrdersForOfflineDisplayMeta() {
   const snap = readSnapshot();
@@ -227,6 +228,7 @@ const ORDERS_LIST_SELECT = [
   "installer_payment_amount",
   "installer_payment_by",
   "installer_rate_per_m2",
+  "installer_name",
   "reveals",
   "reveals_date",
   "mosquito_nets",
@@ -2130,6 +2132,7 @@ const ORDER_HISTORY_FIELDS = [
   { key: "delivery_date", label: "Дата доставки" },
   { key: "installation", label: "Монтаж" },
   { key: "installation_date", label: "Дата монтажа" },
+  { key: "installer_name", label: "Монтажник" },
   { key: "reveals", label: "Откосы" },
   { key: "reveals_date", label: "Дата откосов" },
   { key: "installer_payment_amount", label: "з/п монтаж" },
@@ -2282,6 +2285,7 @@ export function getFormData() {
     reveals_date: document.getElementById("reveals").checked
       ? syncOrderFormDateFieldFromDom("reveals_date", "date")
       : null,
+    installer_name: document.getElementById("installer_name")?.value?.trim() || null,
     installer_payment_amount: parseRublesFieldFromDom("installer_payment_amount"),
     installer_payment_by: document.getElementById("installer_payment_by")?.value?.trim() || null,
   };
@@ -2338,9 +2342,37 @@ function getInstallerPaymentElements() {
     block: document.getElementById("installer_payment_block"),
     amountEl: document.getElementById("installer_payment_amount"),
     byEl: document.getElementById("installer_payment_by"),
+    nameEl: document.getElementById("installer_name"),
     rateEl: document.getElementById("installer_rate_per_m2"),
     calcBtn: document.getElementById("installer_calc_btn"),
   };
+}
+
+/**
+ * Заполнить select «Монтажник» списком из настроек (Монтажники).
+ * @param {string} [selectedValue] — текущее значение заказа (сохраняется, даже если уже нет в списке)
+ */
+export function populateOrderFormInstallerSelect(selectedValue) {
+  const sel = document.getElementById("installer_name");
+  if (!sel) return;
+  const current =
+    selectedValue != null
+      ? String(selectedValue).trim()
+      : String(sel.value || "").trim();
+  const names = getEditors();
+  const opts = ['<option value="">—</option>'];
+  const seen = new Set();
+  for (const name of names) {
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    opts.push(`<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`);
+  }
+  if (current && !seen.has(current)) {
+    opts.push(`<option value="${escapeAttr(current)}">${escapeHtml(current)}</option>`);
+  }
+  sel.innerHTML = opts.join("");
+  sel.value = current;
+  if (sel.value !== current) sel.value = "";
 }
 
 function applyOrderFormFieldsVisibilityForRole() {
@@ -2376,10 +2408,11 @@ export function updateInstallerBlockByInstallationDate() {
   const installationDateInput = document.getElementById("installation_date");
   const raw = (installationDateInput?.value || "").trim();
   const hasDate = !!parseOrderFormDdMmYyyyToIso(raw);
-  const { block, amountEl, byEl, rateEl, calcBtn } = getInstallerPaymentElements();
+  const { block, amountEl, byEl, nameEl, rateEl, calcBtn } = getInstallerPaymentElements();
   if (!block) return;
   block.classList.toggle(INSTALLER_BLOCK_INACTIVE_CLASS, !hasDate);
   if (rateEl) rateEl.disabled = !hasDate;
+  if (nameEl) nameEl.disabled = !hasDate;
   /* Калькулятор всегда кликабелен (кроме блокировки после оплаты), иначе нельзя посчитать Площадь×1м² без даты */
   if (calcBtn) calcBtn.disabled = !!state.installerPaymentDone;
   const amountDisabled = !hasDate || state.installerPaymentDone;
@@ -2502,6 +2535,7 @@ export async function fillForm(order) {
   document.getElementById("area_m2").value = order.area_m2 != null
     ? formatOrderFormNumberValue(order.area_m2, ORDER_FORM_NUMERIC_FIELD_DECIMALS.area_m2)
     : "";
+  populateOrderFormInstallerSelect(order.installer_name || "");
   const installerAmountEl = document.getElementById("installer_payment_amount");
   if (installerAmountEl) installerAmountEl.value = order.installer_payment_amount != null
     ? formatOrderFormNumberValue(order.installer_payment_amount, ORDER_FORM_NUMERIC_FIELD_DECIMALS.installer_payment_amount)
@@ -2700,6 +2734,7 @@ export function resetFormMode() {
   const inst = getInstallerPaymentElements();
   if (inst.amountEl) inst.amountEl.value = "";
   if (inst.byEl) inst.byEl.value = "";
+  populateOrderFormInstallerSelect("");
   setInstallerPaymentBlockDisabled(false);
   const ratePerM2El = document.getElementById("installer_rate_per_m2");
   if (ratePerM2El) {
@@ -3572,6 +3607,7 @@ export async function createOrderFromVoicePayload(draft) {
     installation_date: installationDate,
     reveals: false,
     reveals_date: null,
+    installer_name: null,
     installer_payment_amount: null,
     installer_payment_by: null,
   };
@@ -3797,6 +3833,7 @@ function buildOrderDataFromExistingAndPatch(existing, patch) {
     installation_date: installationDate,
     reveals: Boolean(existing.reveals),
     reveals_date: existing.reveals_date ?? null,
+    installer_name: existing.installer_name ?? null,
     installer_payment_amount: normalizeVoiceInteger(existing.installer_payment_amount),
     installer_payment_by: existing.installer_payment_by ?? null,
   };
