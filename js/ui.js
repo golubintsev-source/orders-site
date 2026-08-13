@@ -445,7 +445,7 @@ export function bindUIEvents() {
   if (settingsSaveEditorsBtn) {
     settingsSaveEditorsBtn.addEventListener("click", async () => {
       const ok = await saveEditors();
-      setMessage(ok ? "Редакторы сохранены" : "Ошибка сохранения редакторов", ok ? "" : "#d32f2f");
+      setMessage(ok ? "Монтажники сохранены" : "Ошибка сохранения монтажников", ok ? "" : "#d32f2f");
     });
   }
 
