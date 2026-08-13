@@ -78,6 +78,18 @@ let composerEditing = null;
 let actionMenuMessageId = null;
 /** true, если меню открыли долгим нажатием / ПКМ по фото */
 let actionMenuFromPhoto = false;
+/** timestamp открытия меню — игнор ghost-click/scroll сразу после long-press (iOS) */
+let actionMenuOpenedAt = 0;
+/** пока палец на пункте меню — не закрывать меню из scroll/outside-click */
+let actionMenuPointerDown = false;
+/**
+ * Запоминаем действие на pointerdown, выполняем на pointerup —
+ * click на iOS после long-press иногда теряется или приходит уже после hide.
+ * @type {{ action: string, messageId: string, pointerId: number } | null}
+ */
+let actionMenuArmed = null;
+/** защита от двойного срабатывания pointerup + click */
+let actionMenuHandledAt = 0;
 let longPressTimer = null;
 let longPressMessageEl = null;
 let longPressStartX = 0;
@@ -86,6 +98,9 @@ let longPressTriggered = false;
 let longPressFromPhoto = false;
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
+/** После показа меню игнорим outside-click/scroll (отпускание пальца / micro-scroll iOS). */
+const ACTION_MENU_DISMISS_GRACE_MS = 450;
+const ACTION_MENU_ACTION_DEDUP_MS = 500;
 
 const MESSAGE_ACTION_COLS = "reply_to_id, edited_at, deleted_at";
 const MESSAGE_SELECT_WITH_DELIVERED =
@@ -2228,7 +2243,13 @@ function hideMessageActionMenu() {
   }
   actionMenuMessageId = null;
   actionMenuFromPhoto = false;
+  actionMenuPointerDown = false;
+  actionMenuArmed = null;
   document.querySelector(".message-item--menu-open")?.classList.remove("message-item--menu-open");
+}
+
+function isActionMenuDismissGraceActive() {
+  return Date.now() - actionMenuOpenedAt < ACTION_MENU_DISMISS_GRACE_MS;
 }
 
 function clearMessageTextSelection() {
@@ -2251,6 +2272,9 @@ function showMessageActionMenu(messageEl, clientX, clientY, { fromPhoto = false 
   const isOwn = messageEl.getAttribute("data-own") === "1";
   actionMenuMessageId = String(messageId);
   actionMenuFromPhoto = Boolean(fromPhoto);
+  actionMenuOpenedAt = Date.now();
+  actionMenuPointerDown = false;
+  actionMenuArmed = null;
 
   clearMessageTextSelection();
   requestAnimationFrame(() => {
@@ -2345,8 +2369,12 @@ function startReplyToMessage(row) {
   composerReplyTo = row;
   syncComposerContextBar();
   hideMessageActionMenu();
-  const input = document.getElementById("messagesComposerInput");
-  input?.focus();
+  // focus после закрытия меню — иначе на iOS первый жест иногда «съедается»
+  // системным UI/scroll и клавиатура не открывается.
+  queueMicrotask(() => {
+    const input = document.getElementById("messagesComposerInput");
+    input?.focus();
+  });
 }
 
 function startEditMessage(row) {
@@ -2368,12 +2396,16 @@ function startEditMessage(row) {
   if (input) {
     input.value = String(row.body || "");
     resizeMessagesComposerInput(input);
-    input.focus();
-    const len = input.value.length;
-    input.setSelectionRange(len, len);
   }
   syncComposerContextBar();
   hideMessageActionMenu();
+  queueMicrotask(() => {
+    const inputEl = document.getElementById("messagesComposerInput");
+    if (!inputEl) return;
+    inputEl.focus();
+    const len = inputEl.value.length;
+    inputEl.setSelectionRange(len, len);
+  });
 }
 
 function replaceMessageElement(row) {
@@ -2619,28 +2651,95 @@ function highlightMessageInFeed(messageId) {
   setTimeout(() => el.classList.remove("message-item--flash"), 1200);
 }
 
+function runMessageAction(action, messageId) {
+  if (!action || messageId == null || messageId === "") return false;
+  const now = Date.now();
+  if (now - actionMenuHandledAt < ACTION_MENU_ACTION_DEDUP_MS) return false;
+  actionMenuHandledAt = now;
+
+  const row = feedMessagesById.get(String(messageId));
+  hideMessageActionMenu();
+  longPressTriggered = false;
+  if (!row) return false;
+
+  if (action === "reply") {
+    startReplyToMessage(row);
+    return true;
+  }
+  if (action === "edit") {
+    startEditMessage(row);
+    return true;
+  }
+  if (action === "attach-to-order") {
+    const meta = readAttachPhotoMetaFromRow(row);
+    if (!meta) return false;
+    // Открываем после текущего pointer/click, иначе document-слушатель сразу закроет список заказов.
+    queueMicrotask(() => openAttachPhotoToOrderPicker(meta));
+    return true;
+  }
+  if (action === "delete") {
+    void deleteOwnMessage(row);
+    return true;
+  }
+  return false;
+}
+
+function onMessageActionMenuPointerDown(e) {
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  const btn = e.target.closest("[data-action]");
+  if (!btn || btn.hidden) {
+    actionMenuArmed = null;
+    return;
+  }
+  const action = btn.getAttribute("data-action");
+  if (!action || actionMenuMessageId == null) {
+    actionMenuArmed = null;
+    return;
+  }
+  actionMenuPointerDown = true;
+  // Снимок id на pointerdown: к моменту pointerup/click меню могли закрыть scroll/ghost-click.
+  actionMenuArmed = {
+    action,
+    messageId: String(actionMenuMessageId),
+    pointerId: e.pointerId,
+  };
+}
+
+function onMessageActionMenuPointerUp(e) {
+  const armed = actionMenuArmed;
+  actionMenuPointerDown = false;
+  if (!armed || armed.pointerId !== e.pointerId) {
+    actionMenuArmed = null;
+    return;
+  }
+  const btn = e.target.closest("[data-action]");
+  actionMenuArmed = null;
+  if (!btn || btn.getAttribute("data-action") !== armed.action) return;
+  e.preventDefault();
+  e.stopPropagation();
+  runMessageAction(armed.action, armed.messageId);
+}
+
+function onMessageActionMenuPointerCancel() {
+  actionMenuPointerDown = false;
+  actionMenuArmed = null;
+}
+
 function onMessageActionMenuClick(e) {
   const btn = e.target.closest("[data-action]");
   if (!btn) return;
   e.preventDefault();
   e.stopPropagation();
   const action = btn.getAttribute("data-action");
-  const row = actionMenuMessageId ? feedMessagesById.get(String(actionMenuMessageId)) : null;
-  hideMessageActionMenu();
-  if (!row) return;
-
-  if (action === "reply") {
-    startReplyToMessage(row);
-  } else if (action === "edit") {
-    startEditMessage(row);
-  } else if (action === "attach-to-order") {
-    const meta = readAttachPhotoMetaFromRow(row);
-    if (!meta) return;
-    // Открываем после текущего click, иначе document-слушатель сразу закроет список заказов.
-    queueMicrotask(() => openAttachPhotoToOrderPicker(meta));
-  } else if (action === "delete") {
-    void deleteOwnMessage(row);
-  }
+  // messageId мог уже сброситься hideMessageActionMenu — берём из armed, если ещё есть.
+  const messageId =
+    actionMenuArmed?.action === action
+      ? actionMenuArmed.messageId
+      : actionMenuMessageId;
+  actionMenuArmed = null;
+  actionMenuPointerDown = false;
+  if (!action || messageId == null) return;
+  runMessageAction(action, messageId);
 }
 
 async function sendMessage() {
@@ -3386,6 +3485,9 @@ export function initMessagesSection() {
 
   const actionMenu = document.getElementById("messagesActionMenu");
   if (actionMenu) {
+    actionMenu.addEventListener("pointerdown", onMessageActionMenuPointerDown);
+    actionMenu.addEventListener("pointerup", onMessageActionMenuPointerUp);
+    actionMenu.addEventListener("pointercancel", onMessageActionMenuPointerCancel);
     actionMenu.addEventListener("click", onMessageActionMenuClick);
   }
 
@@ -3489,7 +3591,14 @@ export function initMessagesSection() {
 
   document.addEventListener("click", (e) => {
     const menu = document.getElementById("messagesActionMenu");
-    if (menu && !menu.hidden && !menu.contains(e.target) && !e.target.closest(".message-item--menu-open")) {
+    if (
+      menu &&
+      !menu.hidden &&
+      !menu.contains(e.target) &&
+      !e.target.closest(".message-item--menu-open") &&
+      !actionMenuPointerDown &&
+      !isActionMenuDismissGraceActive()
+    ) {
       hideMessageActionMenu();
     }
 
@@ -3510,11 +3619,18 @@ export function initMessagesSection() {
     }
   });
 
-  document.addEventListener("scroll", () => {
-    if (document.getElementById("messagesActionMenu") && !document.getElementById("messagesActionMenu").hidden) {
+  document.addEventListener(
+    "scroll",
+    () => {
+      const menu = document.getElementById("messagesActionMenu");
+      if (!menu || menu.hidden) return;
+      // Micro-scroll / rubber-band / scrollIntoView на iOS во время tap по «Ответить»
+      // раньше закрывали меню до click и сбрасывали actionMenuMessageId.
+      if (actionMenuPointerDown || isActionMenuDismissGraceActive()) return;
       hideMessageActionMenu();
-    }
-  }, true);
+    },
+    true,
+  );
 
   if (input) {
     let debounceTimer = null;
