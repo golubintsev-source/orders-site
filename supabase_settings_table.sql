@@ -12,7 +12,7 @@ INSERT INTO app_settings (key, value) VALUES ('installer_rate_per_m2', '1400')
 INSERT INTO app_settings (key, value) VALUES ('driver_name', '')
   ON CONFLICT (key) DO NOTHING;
 
--- Имя и отчество редакторов (JSON-массив строк)
+-- Редакторы окон: имя или инициалы (JSON-массив строк)
 INSERT INTO app_settings (key, value) VALUES ('editors', '[]')
   ON CONFLICT (key) DO NOTHING;
 
