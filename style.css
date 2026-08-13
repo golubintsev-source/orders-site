@@ -832,6 +832,52 @@ h2 {
   box-sizing: border-box;
 }
 
+/* Телефон: 4 поля монтажа в 2 ряда
+   1) Монтаж 1м² | з/п монтаж
+   2) Оплатил | Монтажник */
+@media (max-width: 768px) {
+  #section-new .installer-payment-one-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "rate salary"
+      "paid name";
+    gap: 12px 16px;
+    align-items: end;
+  }
+
+  #section-new .installer-payment-one-row > .field.field-installer-rate-with-calc {
+    grid-area: rate;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+  }
+
+  #section-new .installer-payment-one-row > .field:has(#installer_payment_amount) {
+    grid-area: salary;
+    flex: none;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+  }
+
+  #section-new .installer-payment-one-row > .field:has(#installer_payment_by) {
+    grid-area: paid;
+    flex: none;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+  }
+
+  #section-new .installer-payment-one-row > .field.field-installer-name,
+  #section-new .installer-payment-one-row > .field:has(#installer_name) {
+    grid-area: name;
+    flex: none;
+    max-width: none;
+    min-width: 0;
+  }
+}
+
 #installer_payment_block.installer-block-inactive {
   background: #e5e7eb;
   opacity: 0.9;
