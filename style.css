@@ -5965,7 +5965,8 @@ th {
   border: 1px solid #d1d5db;
   border-radius: 8px;
   font: inherit;
-  font-size: 14px;
+  /* ≥16px — иначе iOS зумит страницу при фокусе */
+  font-size: 16px;
   color: #111827;
   background: #fff;
 }
