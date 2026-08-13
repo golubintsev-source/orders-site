@@ -88,14 +88,14 @@ function createEditorRow(initialValue = "") {
   input.className = "settings-editor-input";
   input.autocomplete = "off";
   input.placeholder = "Имя Отчество";
-  input.title = "Имя и отчество редактора";
+  input.title = "Имя и отчество монтажника";
   input.value = initialValue;
 
   const removeBtn = document.createElement("button");
   removeBtn.type = "button";
   removeBtn.className = "settings-editor-remove-btn";
-  removeBtn.title = "Удалить редактора";
-  removeBtn.setAttribute("aria-label", "Удалить редактора");
+  removeBtn.title = "Удалить монтажника";
+  removeBtn.setAttribute("aria-label", "Удалить монтажника");
   removeBtn.innerHTML = EDITOR_REMOVE_BTN_HTML;
 
   row.appendChild(input);
