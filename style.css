@@ -6629,6 +6629,7 @@ th {
   line-height: 1.4;
   color: #111827;
   word-break: break-word;
+  white-space: pre-wrap;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
