@@ -61,6 +61,14 @@ export function canDeleteOrders() {
   return isAdmin() || state.currentRole === "user";
 }
 
+/** Места «Касса» и «Безнал» в выпадающих списках передачи денег. */
+export const KASSA_BEZNAL_PLACES = new Set(["Касса", "Безнал"]);
+
+/** Выбор «Касса» / «Безнал» (кому переданы деньги) — только admin и user. */
+export function canSelectKassaBeznal() {
+  return isAdmin() || state.currentRole === "user";
+}
+
 /** Разделы меню, закрытые для отдельных ролей. Настройки доступны всем (блок уведомлений). */
 export function canAccessSection(sectionId) {
   if (isUserShop()) {

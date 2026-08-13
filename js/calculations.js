@@ -1,7 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile } from "./auth.js";
 import { formatAmount, formatAmountWholeRubles, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY, refreshRublesIntegerInputState } from "./format.js";
-import { canAccessSection, isAdmin } from "./roles.js";
+import { canAccessSection, canSelectKassaBeznal, isAdmin, KASSA_BEZNAL_PLACES } from "./roles.js";
 import { hrefToHome } from "./app-routes.js";
 import {
   applySavedScroll,
@@ -34,6 +34,9 @@ import {
 
 let editingId = null;
 let editingCreatedAt = null;
+/** Снимок «Откуда»/«Куда» при начале редактирования (для проверки роли). */
+let editingInitialFrom = "";
+let editingInitialTo = "";
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 /** Пустое значение в комментарии расчёта (вместо «—»). */
 const CALC_COMMENT_EMPTY = "[__]";
@@ -66,6 +69,53 @@ let appliedCalcDateToYmd = "";
 const CALC_SALDO_PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
 /** «Куда» = доход: Вова, Дима, Касса, Безнал; иначе сумма в колонке «Расход». */
 const CALC_INCOME_TO_PLACES = new Set(["Вова", "Дима", "Касса", "Безнал"]);
+
+/** Полный HTML опций «Откуда»/«Куда» до ограничений по роли. */
+const calcPlaceSelectHtmlBackup = new Map();
+const CALC_PLACE_SELECT_IDS = ["calcFrom", "calcTo"];
+
+/**
+ * «Касса» и «Безнал» в «Откуда»/«Куда» — только для admin/user.
+ * Текущее значение при редактировании сохраняется в списке.
+ */
+export function applyCalcPlaceSelectsForRole() {
+  const allowed = canSelectKassaBeznal();
+  for (const id of CALC_PLACE_SELECT_IDS) {
+    const sel = document.getElementById(id);
+    if (!sel) continue;
+    if (!calcPlaceSelectHtmlBackup.has(id)) {
+      calcPlaceSelectHtmlBackup.set(id, sel.innerHTML);
+    }
+    const current = String(sel.value || "");
+    sel.innerHTML = calcPlaceSelectHtmlBackup.get(id);
+    if (!allowed) {
+      for (const opt of [...sel.options]) {
+        if (!KASSA_BEZNAL_PLACES.has(opt.value)) continue;
+        if (opt.value !== current) opt.remove();
+      }
+    }
+    if (current) {
+      sel.value = current;
+      if (sel.value !== current) sel.value = "";
+    }
+  }
+}
+
+function bindCalcPlaceSelectRoleGuards() {
+  for (const id of CALC_PLACE_SELECT_IDS) {
+    const sel = document.getElementById(id);
+    if (!sel || sel.dataset.moneyRoleBound) continue;
+    sel.dataset.moneyRoleBound = "1";
+    sel.addEventListener("change", () => applyCalcPlaceSelectsForRole());
+  }
+}
+
+function isForbiddenCalcKassaBeznal(newVal, previousVal) {
+  if (canSelectKassaBeznal()) return false;
+  const next = String(newVal || "").trim();
+  if (!KASSA_BEZNAL_PLACES.has(next)) return false;
+  return next !== String(previousVal || "").trim();
+}
 
 /** Сумма в «Доход» или «Расход» в зависимости от «Куда». */
 export function getCalcIncomeExpenseDisplay(row) {
@@ -374,6 +424,13 @@ export async function createCalculationFromVoicePayload(draft) {
   let to_place = String(draft?.to_place || "").trim();
   if (!CALC_TO_OPTIONS.has(to_place)) {
     to_place = DEFAULT_VOICE_EXPENSE_TO;
+  }
+
+  if (isForbiddenCalcKassaBeznal(from_place, "") || isForbiddenCalcKassaBeznal(to_place, "")) {
+    return {
+      ok: false,
+      message: "«Касса» и «Безнал» доступны только ролям admin и user",
+    };
   }
 
   if (from_place && to_place && from_place === to_place) {
@@ -965,6 +1022,9 @@ function setFormValues(row) {
   const commentEl = document.getElementById("calcComment");
   if (fromEl) fromEl.value = row.from_place || "";
   if (toEl) toEl.value = row.to_place || "";
+  editingInitialFrom = row.from_place || "";
+  editingInitialTo = row.to_place || "";
+  applyCalcPlaceSelectsForRole();
   if (amountEl) {
     amountEl.value = row.amount != null ? formatAmountWholeRubles(row.amount) : "";
     amountEl.classList.remove("sum-input-invalid");
@@ -1000,6 +1060,8 @@ function setCalcSubmitMode(mode) {
 function resetForm() {
   editingId = null;
   editingCreatedAt = null;
+  editingInitialFrom = "";
+  editingInitialTo = "";
   clearFormError();
   const fromEl = document.getElementById("calcFrom");
   const toEl = document.getElementById("calcTo");
@@ -1013,6 +1075,7 @@ function resetForm() {
     amountEl.removeAttribute("title");
   }
   if (commentEl) commentEl.value = "";
+  applyCalcPlaceSelectsForRole();
   setCalcSubmitMode("add");
 }
 
@@ -1070,6 +1133,14 @@ async function submitForm(e) {
     payload.from_place === payload.to_place
   ) {
     setFormError("Откуда и куда не могут совпадать.");
+    return;
+  }
+
+  if (
+    isForbiddenCalcKassaBeznal(payload.from_place, editingId ? editingInitialFrom : "") ||
+    isForbiddenCalcKassaBeznal(payload.to_place, editingId ? editingInitialTo : "")
+  ) {
+    setFormError("«Касса» и «Безнал» доступны только ролям admin и user");
     return;
   }
 
@@ -1183,6 +1254,8 @@ function setupCalculationsForm() {
     toEl.dataset.fromToBound = "1";
     toEl.addEventListener("change", clearFormError);
   }
+  bindCalcPlaceSelectRoleGuards();
+  applyCalcPlaceSelectsForRole();
 
   const searchBtn = document.getElementById("calcSearchBtn");
   const searchInput = document.getElementById("calcSearchInput");

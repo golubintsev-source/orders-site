@@ -44,6 +44,8 @@ import { applyOrdersTableMobileFit } from "./ordersTableMobileFit.js";
 import {
   canMutateOrders,
   canDeleteOrders,
+  canSelectKassaBeznal,
+  KASSA_BEZNAL_PLACES,
   isAdmin,
   isOrderEditLockedForUserLite,
   isOrderHiddenForCurrentRole,
@@ -2395,6 +2397,56 @@ function applyOrderFormFieldsVisibilityForRole() {
   });
 }
 
+/** Селекты «Кому предоплата» / «Кому остаток». */
+const MONEY_RECIPIENT_SELECT_IDS = ["prepayment_to", "remaining_to"];
+/** Полный HTML опций до ограничений по роли. */
+const moneyRecipientSelectHtmlBackup = new Map();
+
+/**
+ * «Безнал» и «Касса» только для admin/user.
+ * Для остальных опции убираются из списка; текущее значение при редактировании сохраняется,
+ * чтобы не затереть уже записанное при сохранении без изменений.
+ */
+export function applyMoneyRecipientSelectsForRole() {
+  const allowed = canSelectKassaBeznal();
+  for (const id of MONEY_RECIPIENT_SELECT_IDS) {
+    const sel = document.getElementById(id);
+    if (!sel) continue;
+    if (!moneyRecipientSelectHtmlBackup.has(id)) {
+      moneyRecipientSelectHtmlBackup.set(id, sel.innerHTML);
+    }
+    const current = String(sel.value || "");
+    sel.innerHTML = moneyRecipientSelectHtmlBackup.get(id);
+    if (!allowed) {
+      for (const opt of [...sel.options]) {
+        if (!KASSA_BEZNAL_PLACES.has(opt.value)) continue;
+        if (opt.value !== current) opt.remove();
+      }
+    }
+    if (current) {
+      sel.value = current;
+      if (sel.value !== current) sel.value = "";
+    }
+  }
+}
+
+function bindMoneyRecipientSelectRoleGuards() {
+  for (const id of MONEY_RECIPIENT_SELECT_IDS) {
+    const sel = document.getElementById(id);
+    if (!sel || sel.dataset.moneyRoleBound) continue;
+    sel.dataset.moneyRoleBound = "1";
+    sel.addEventListener("change", () => applyMoneyRecipientSelectsForRole());
+  }
+}
+
+/** Новое значение «Касса»/«Безнал» запрещено для роли; прежнее при редактировании — можно оставить. */
+function isForbiddenKassaBeznalSelection(newVal, previousVal) {
+  if (canSelectKassaBeznal()) return false;
+  const next = String(newVal || "").trim();
+  if (!KASSA_BEZNAL_PLACES.has(next)) return false;
+  return next !== String(previousVal || "").trim();
+}
+
 export function setInstallerPaymentBlockDisabled(disabled) {
   const { amountEl, byEl } = getInstallerPaymentElements();
   if (amountEl) amountEl.disabled = disabled;
@@ -2597,6 +2649,8 @@ export async function fillForm(order) {
   });
   await checkInstallerPaymentDone(order.id);
   applyOrderFormFieldsVisibilityForRole();
+  bindMoneyRecipientSelectRoleGuards();
+  applyMoneyRecipientSelectsForRole();
   state.initialOrderSnapshot = JSON.parse(JSON.stringify(getFormData()));
 }
 
@@ -2793,6 +2847,8 @@ export function resetFormMode() {
 
   applyOrderTypeSelectForRole();
   applyOrderFormFieldsVisibilityForRole();
+  bindMoneyRecipientSelectRoleGuards();
+  applyMoneyRecipientSelectsForRole();
 }
 
 async function loadOrderRowForForm(orderId) {
@@ -3230,6 +3286,15 @@ export async function submitOrderForm(event) {
 
   const prepaymentVal = (document.getElementById("prepayment")?.value || "").trim();
   const prepaymentToVal = (document.getElementById("prepayment_to")?.value || "").trim();
+  const remainingToVal = (document.getElementById("remaining_to")?.value || "").trim();
+  const initialParticipants = state.initialOrderParticipants || {};
+  if (
+    isForbiddenKassaBeznalSelection(prepaymentToVal, initialParticipants.prepayment_to) ||
+    isForbiddenKassaBeznalSelection(remainingToVal, initialParticipants.remaining_to)
+  ) {
+    setMessage("«Касса» и «Безнал» доступны только ролям admin и user", "#d32f2f");
+    return;
+  }
   const conditionalMissing = [];
   if (prepaymentVal && !prepaymentToVal) conditionalMissing.push("Кому предоплата");
   const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
@@ -3562,6 +3627,12 @@ export async function createOrderFromVoicePayload(draft) {
   const prepaymentTo = normalizeVoiceMoneyTo(draft?.prepayment_to);
   if (prepayment != null && prepayment !== 0 && !prepaymentTo) {
     return { ok: false, message: "Укажите, кому предоплата" };
+  }
+  if (
+    isForbiddenKassaBeznalSelection(prepaymentTo, "") ||
+    isForbiddenKassaBeznalSelection(normalizeVoiceMoneyTo(draft?.remaining_to), "")
+  ) {
+    return { ok: false, message: "«Касса» и «Безнал» доступны только ролям admin и user" };
   }
 
   let delivery = String(draft?.delivery || "").trim() || null;
@@ -3896,6 +3967,12 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
   }
   if (orderData.payment_status === "Заказ закрыт" && !isAdmin() && state.currentRole !== "user") {
     return { ok: false, message: "Статус «Заказ закрыт» недоступен для вашей роли" };
+  }
+  if (
+    isForbiddenKassaBeznalSelection(orderData.prepayment_to, existing.prepayment_to) ||
+    isForbiddenKassaBeznalSelection(orderData.remaining_to, existing.remaining_to)
+  ) {
+    return { ok: false, message: "«Касса» и «Безнал» доступны только ролям admin и user" };
   }
 
   if (isUserLite() && orderData.order_type === "Магазин") {

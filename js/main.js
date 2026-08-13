@@ -163,8 +163,9 @@ async function init() {
     await Promise.all([loadProfile(), loadSettings()]);
     const { applySettingsAdminBlocksVisibility } = await import("./settings.js");
     applySettingsAdminBlocksVisibility();
-    const { populateOrderFormInstallerSelect } = await import("./orders.js");
+    const { populateOrderFormInstallerSelect, applyMoneyRecipientSelectsForRole } = await import("./orders.js");
     populateOrderFormInstallerSelect();
+    applyMoneyRecipientSelectsForRole();
     refreshSectionNavAfterProfile();
     applyRouteOnLoad();
     ensurePopstateRouting();
