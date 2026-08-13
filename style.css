@@ -5976,6 +5976,86 @@ th {
   border-color: #93c5fd;
 }
 
+.messages-create-group-avatar-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.messages-create-group-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.messages-create-group-avatar-preview {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(210 55% 88%);
+  color: hsl(210 45% 32%);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid #d1d5db;
+}
+
+.messages-create-group-avatar-initial {
+  display: block;
+}
+
+.messages-create-group-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.messages-create-group-avatar-img[hidden] {
+  display: none !important;
+}
+
+.messages-create-group-avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.messages-create-group-avatar-pick-btn,
+.messages-create-group-avatar-clear-btn {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f6feb;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.messages-create-group-avatar-pick-btn:hover,
+.messages-create-group-avatar-clear-btn:hover {
+  background: #f0f7ff;
+  border-color: #93c5fd;
+}
+
+.messages-create-group-avatar-clear-btn {
+  color: #64748b;
+  font-weight: 500;
+}
+
 .messages-create-group-users-wrap {
   display: flex;
   flex-direction: column;
@@ -6302,6 +6382,40 @@ th {
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+.messages-edit-group-btn {
+  flex-shrink: 0;
+  margin: 0 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f6feb;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.messages-edit-group-btn:hover,
+.messages-edit-group-btn:focus-visible {
+  background: #f0f7ff;
+  border-color: #93c5fd;
+  outline: none;
+}
+
+.messages-edit-group-btn:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
+}
+
+.messages-edit-group-btn[hidden] {
+  display: none !important;
 }
 
 .messages-dialog-title {

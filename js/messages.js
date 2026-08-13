@@ -35,7 +35,7 @@ let lastMessagePeerId = null;
 let messagesView = "list";
 /** @type {string | null} null на списке; uuid пользователя или group:<uuid> в диалоге */
 let activePeerId = null;
-/** @type {Map<string, { id: string, name: string, memberIds: string[], created_at?: string }>} */
+/** @type {Map<string, { id: string, name: string, memberIds: string[], avatarStoragePath?: string|null, created_at?: string, created_by?: string }>} */
 let groupChatsById = new Map();
 /** @type {Map<string, { id: string, email: string }>} */
 let composerRecipients = new Map();
@@ -44,10 +44,23 @@ let activePicker = null;
 let deliveredAtSupported = null;
 /** null = unknown, true/false after first probe */
 let groupChatsSupported = null;
+/** null = unknown, true/false after first probe — avatar_storage_path on group_chats */
+let groupAvatarSupported = null;
 /** null = unknown, true/false after first probe */
 let attachmentColumnsSupported = null;
 /** null = unknown, true/false after first probe — reply_to_id / edited_at / deleted_at */
 let messageActionsSupported = null;
+/** @type {"create" | "edit"} */
+let groupFormMode = "create";
+/** @type {string | null} */
+let editingGroupId = null;
+/** @type {File | null} */
+let groupFormAvatarFile = null;
+/** @type {string | null} object URL for local preview */
+let groupFormAvatarObjectUrl = null;
+/** Existing storage path when editing; null if none / cleared */
+let groupFormAvatarExistingPath = null;
+let groupFormAvatarRemoved = false;
 /** @type {{ file: File, previewUrl: string } | null} */
 let pendingChatPhoto = null;
 /** Фото из чата, которое пользователь хочет прикрепить к заказу через список заказов. */
@@ -252,13 +265,50 @@ function noteGroupChatsSupport(error) {
     msg.includes("group_chats") ||
     msg.includes("group_messages") ||
     error.code === "42P01" ||
-    error.code === "PGRST205" ||
-    error.code === "PGRST204"
+    error.code === "PGRST205"
   ) {
     groupChatsSupported = false;
     return true;
   }
   return false;
+}
+
+function noteGroupAvatarSupport(error) {
+  if (!error) {
+    groupAvatarSupported = true;
+    return false;
+  }
+  const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""} ${error.code || ""}`.toLowerCase();
+  if (
+    msg.includes("avatar_storage_path") ||
+    (error.code === "PGRST204" && msg.includes("avatar"))
+  ) {
+    groupAvatarSupported = false;
+    return true;
+  }
+  return false;
+}
+
+function groupChatSelectColumns() {
+  const base = "id, name, created_by, member_ids, created_at";
+  if (groupAvatarSupported === false) return base;
+  return `${base}, avatar_storage_path`;
+}
+
+function mapGroupChatRow(row) {
+  return {
+    id: String(row.id),
+    name: String(row.name || "").trim() || "Групповой чат",
+    created_by: row.created_by,
+    memberIds: (row.member_ids || []).map(String),
+    avatarStoragePath:
+      groupAvatarSupported === false
+        ? null
+        : row.avatar_storage_path
+          ? String(row.avatar_storage_path)
+          : null,
+    created_at: row.created_at,
+  };
 }
 
 /** Родительный падеж месяца для даты в списке чатов («25 июля»). */
@@ -612,11 +662,21 @@ async function fetchMyGroupChats() {
   const uid = getCurrentUserId();
   if (!uid) return { chats: [], error: null };
 
-  const { data, error } = await supabaseClient
+  let select = groupChatSelectColumns();
+  let { data, error } = await supabaseClient
     .from("group_chats")
-    .select("id, name, created_by, member_ids, created_at")
+    .select(select)
     .contains("member_ids", [uid])
     .order("created_at", { ascending: false });
+
+  if (error && noteGroupAvatarSupport(error)) {
+    select = groupChatSelectColumns();
+    ({ data, error } = await supabaseClient
+      .from("group_chats")
+      .select(select)
+      .contains("member_ids", [uid])
+      .order("created_at", { ascending: false }));
+  }
 
   if (error) {
     if (noteGroupChatsSupport(error)) return { chats: [], error: null };
@@ -624,13 +684,10 @@ async function fetchMyGroupChats() {
   }
 
   groupChatsSupported = true;
-  const chats = (data || []).map((row) => ({
-    id: String(row.id),
-    name: String(row.name || "").trim() || "Групповой чат",
-    created_by: row.created_by,
-    memberIds: (row.member_ids || []).map(String),
-    created_at: row.created_at,
-  }));
+  if (groupAvatarSupported !== false && select.includes("avatar_storage_path")) {
+    groupAvatarSupported = true;
+  }
+  const chats = (data || []).map(mapGroupChatRow);
 
   groupChatsById = new Map(chats.map((chat) => [chat.id, chat]));
   return { chats, error: null };
@@ -767,6 +824,7 @@ function buildChatListEntries(users, rows, groupChats, lastGroupMessages) {
       kind: "group",
       name: chat.name,
       email: "",
+      avatarStoragePath: chat.avatarStoragePath || null,
       unreadCount: 0,
       last: last
         ? {
@@ -820,10 +878,17 @@ function renderChatListItem(entry) {
   const initial = avatarInitial(entry.name);
   const logoUrl =
     entry.kind === "group" ? null : avatarLogoUrl({ email: entry.email, name: entry.name });
+  const groupAvatarPath =
+    entry.kind === "group" && entry.avatarStoragePath ? String(entry.avatarStoragePath) : "";
   const unread = entry.kind !== "group" && unreadCount > 0;
-  const avatarHtml = logoUrl
-    ? `<span class="messages-chat-avatar messages-chat-avatar--logo" aria-hidden="true"><img src="${escapeHtml(logoUrl)}" alt="" width="48" height="48" decoding="async"></span>`
-    : `<span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" aria-hidden="true">${escapeHtml(initial)}</span>`;
+  let avatarHtml;
+  if (logoUrl) {
+    avatarHtml = `<span class="messages-chat-avatar messages-chat-avatar--logo" aria-hidden="true"><img src="${escapeHtml(logoUrl)}" alt="" width="48" height="48" decoding="async"></span>`;
+  } else if (groupAvatarPath) {
+    avatarHtml = `<span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" data-avatar-path="${escapeHtml(groupAvatarPath)}" aria-hidden="true">${escapeHtml(initial)}</span>`;
+  } else {
+    avatarHtml = `<span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" aria-hidden="true">${escapeHtml(initial)}</span>`;
+  }
 
   return `
     <button
@@ -848,6 +913,34 @@ function renderChatListItem(entry) {
       </span>
     </button>
   `;
+}
+
+async function hydrateGroupAvatars(root = document) {
+  const nodes = [...root.querySelectorAll(".messages-chat-avatar[data-avatar-path]")];
+  if (!nodes.length) return;
+  await Promise.all(
+    nodes.map(async (el) => {
+      const storagePath = el.getAttribute("data-avatar-path") || "";
+      if (!storagePath) return;
+      try {
+        const url = await getSignedFileUrl(storagePath);
+        if (!url || !el.isConnected) return;
+        el.classList.add("messages-chat-avatar--logo");
+        el.removeAttribute("style");
+        el.textContent = "";
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "";
+        img.width = 48;
+        img.height = 48;
+        img.decoding = "async";
+        el.appendChild(img);
+        el.removeAttribute("data-avatar-path");
+      } catch (err) {
+        console.warn("Не удалось загрузить аватар группы:", err);
+      }
+    }),
+  );
 }
 
 export async function loadChatList() {
@@ -886,6 +979,7 @@ export async function loadChatList() {
   const lastGroupMessages = await fetchLastGroupMessagesByChat(groupChats.map((chat) => chat.id));
   const entries = buildChatListEntries(users, rows, groupChats, lastGroupMessages);
   list.innerHTML = entries.map(renderChatListItem).join("");
+  void hydrateGroupAvatars(list);
   void refreshMessagesUnreadBadge();
 }
 
@@ -926,6 +1020,7 @@ function syncComposerForActivePeer() {
 function updateDialogHeader() {
   const title = document.getElementById("messagesDialogTitle");
   const subtitle = document.getElementById("messagesDialogSubtitle");
+  const editBtn = document.getElementById("messagesEditGroupBtn");
   if (!title) return;
 
   if (isGroupChat()) {
@@ -937,8 +1032,11 @@ function updateDialogHeader() {
       subtitle.textContent = memberCount ? `${memberCount} участн.` : "";
       subtitle.hidden = !memberCount;
     }
+    if (editBtn) editBtn.hidden = false;
     return;
   }
+
+  if (editBtn) editBtn.hidden = true;
 
   const users = usersCache || [];
   const peer = users.find((u) => String(u.id) === String(activePeerId));
@@ -2602,38 +2700,162 @@ function setCreateGroupError(text) {
   }
 }
 
+function clearGroupFormAvatarPreview() {
+  if (groupFormAvatarObjectUrl) {
+    URL.revokeObjectURL(groupFormAvatarObjectUrl);
+    groupFormAvatarObjectUrl = null;
+  }
+  groupFormAvatarFile = null;
+}
+
+function resetGroupFormAvatarState() {
+  clearGroupFormAvatarPreview();
+  groupFormAvatarExistingPath = null;
+  groupFormAvatarRemoved = false;
+  const input = document.getElementById("messagesCreateGroupAvatarInput");
+  if (input) input.value = "";
+  updateGroupFormAvatarPreview();
+}
+
+function updateGroupFormAvatarPreview() {
+  const preview = document.getElementById("messagesCreateGroupAvatarPreview");
+  const initialEl = document.getElementById("messagesCreateGroupAvatarInitial");
+  const imgEl = document.getElementById("messagesCreateGroupAvatarImg");
+  const clearBtn = document.getElementById("messagesCreateGroupAvatarClearBtn");
+  const nameInput = document.getElementById("messagesCreateGroupName");
+  if (!preview || !initialEl || !imgEl) return;
+
+  const name = nameInput?.value?.trim() || "";
+  initialEl.textContent = avatarInitial(name || "?");
+  const hue = avatarHue(editingGroupId ? toGroupPeerId(editingGroupId) : name || "group");
+  preview.style.background = `hsl(${hue} 55% 88%)`;
+  preview.style.color = `hsl(${hue} 45% 32%)`;
+
+  const hasExisting = Boolean(groupFormAvatarExistingPath && !groupFormAvatarRemoved);
+  const showClear = Boolean(groupFormAvatarFile || hasExisting);
+  if (clearBtn) clearBtn.hidden = !showClear;
+
+  if (groupFormAvatarObjectUrl) {
+    imgEl.src = groupFormAvatarObjectUrl;
+    imgEl.hidden = false;
+    initialEl.hidden = true;
+    return;
+  }
+
+  if (hasExisting && imgEl.getAttribute("src")) {
+    imgEl.hidden = false;
+    initialEl.hidden = true;
+    return;
+  }
+
+  imgEl.removeAttribute("src");
+  imgEl.hidden = true;
+  initialEl.hidden = false;
+}
+
+async function loadExistingGroupAvatarPreview(storagePath) {
+  const imgEl = document.getElementById("messagesCreateGroupAvatarImg");
+  const initialEl = document.getElementById("messagesCreateGroupAvatarInitial");
+  const clearBtn = document.getElementById("messagesCreateGroupAvatarClearBtn");
+  if (!storagePath || !imgEl || !initialEl) return;
+  try {
+    const url = await getSignedFileUrl(storagePath);
+    if (!url) return;
+    if (groupFormAvatarFile || groupFormAvatarRemoved || groupFormAvatarExistingPath !== storagePath) {
+      return;
+    }
+    imgEl.src = url;
+    imgEl.hidden = false;
+    initialEl.hidden = true;
+    if (clearBtn) clearBtn.hidden = false;
+  } catch (err) {
+    console.warn("Не удалось загрузить текущий аватар группы:", err);
+  }
+}
+
+function setGroupFormAvatarFile(file) {
+  clearGroupFormAvatarPreview();
+  if (!file) {
+    updateGroupFormAvatarPreview();
+    return;
+  }
+  groupFormAvatarFile = file;
+  groupFormAvatarRemoved = false;
+  groupFormAvatarObjectUrl = URL.createObjectURL(file);
+  updateGroupFormAvatarPreview();
+}
+
+function clearGroupFormAvatarSelection() {
+  clearGroupFormAvatarPreview();
+  groupFormAvatarRemoved = true;
+  const input = document.getElementById("messagesCreateGroupAvatarInput");
+  if (input) input.value = "";
+  updateGroupFormAvatarPreview();
+}
+
 function closeCreateGroupDialog() {
   const dialog = document.getElementById("messagesCreateGroupDialog");
   if (dialog?.open) dialog.close();
   setCreateGroupError("");
+  groupFormMode = "create";
+  editingGroupId = null;
+  resetGroupFormAvatarState();
 }
 
-async function openCreateGroupDialog() {
-  const dialog = document.getElementById("messagesCreateGroupDialog");
-  const nameInput = document.getElementById("messagesCreateGroupName");
-  const usersEl = document.getElementById("messagesCreateGroupUsers");
-  if (!dialog || !usersEl) return;
-
-  setCreateGroupError("");
-  if (nameInput) nameInput.value = "";
-
-  const users = await loadUsersDirectory();
+function renderGroupFormUsers(usersEl, selectedIds) {
   const uid = getCurrentUserId();
-  const others = (users || []).filter((u) => String(u.id) !== String(uid));
+  const selected = new Set((selectedIds || []).map(String));
+  const users = usersCache || [];
+  const others = users.filter((u) => String(u.id) !== String(uid));
 
   usersEl.innerHTML = others.length
     ? others
         .map((user) => {
           const name = displayNameByEmail(user.email) || user.email || "—";
+          const checked = selected.has(String(user.id)) ? " checked" : "";
           return `
             <label class="messages-create-group-user">
-              <input type="checkbox" value="${escapeHtml(user.id)}" data-email="${escapeHtml(user.email)}" />
+              <input type="checkbox" value="${escapeHtml(user.id)}" data-email="${escapeHtml(user.email)}"${checked} />
               <span class="messages-create-group-user-name">${escapeHtml(name)}</span>
             </label>
           `;
         })
         .join("")
     : `<p class="messages-page-message">Нет доступных пользователей.</p>`;
+}
+
+async function openGroupFormDialog({ mode, chat = null } = {}) {
+  const dialog = document.getElementById("messagesCreateGroupDialog");
+  const nameInput = document.getElementById("messagesCreateGroupName");
+  const usersEl = document.getElementById("messagesCreateGroupUsers");
+  const titleEl = document.getElementById("messagesCreateGroupDialogTitle");
+  if (!dialog || !usersEl) return;
+
+  groupFormMode = mode === "edit" ? "edit" : "create";
+  editingGroupId = groupFormMode === "edit" && chat?.id ? String(chat.id) : null;
+  setCreateGroupError("");
+  resetGroupFormAvatarState();
+
+  if (titleEl) {
+    titleEl.textContent = groupFormMode === "edit" ? "Изменить групповой чат" : "Новый групповой чат";
+  }
+
+  await loadUsersDirectory();
+
+  if (groupFormMode === "edit" && chat) {
+    if (nameInput) nameInput.value = chat.name || "";
+    renderGroupFormUsers(usersEl, chat.memberIds || []);
+    groupFormAvatarExistingPath = chat.avatarStoragePath || null;
+    groupFormAvatarRemoved = false;
+    updateGroupFormAvatarPreview();
+    if (groupFormAvatarExistingPath) {
+      void loadExistingGroupAvatarPreview(groupFormAvatarExistingPath);
+    }
+  } else {
+    if (nameInput) nameInput.value = "";
+    renderGroupFormUsers(usersEl, []);
+    updateGroupFormAvatarPreview();
+  }
 
   if (typeof dialog.showModal === "function") {
     dialog.showModal();
@@ -2641,6 +2863,44 @@ async function openCreateGroupDialog() {
     dialog.setAttribute("open", "");
   }
   nameInput?.focus();
+}
+
+async function openCreateGroupDialog() {
+  await openGroupFormDialog({ mode: "create" });
+}
+
+async function openEditGroupDialog() {
+  if (!isGroupChat()) return;
+  const groupId = parseGroupId();
+  if (!groupId) return;
+
+  if (!groupChatsById.has(groupId)) {
+    await fetchMyGroupChats();
+  }
+  const chat = groupChatsById.get(groupId);
+  if (!chat) {
+    setCreateGroupError("");
+    const msg = document.getElementById("messagesPageMessage");
+    if (msg) {
+      msg.textContent = "Групповой чат не найден.";
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+
+  await openGroupFormDialog({ mode: "edit", chat });
+}
+
+async function resolveGroupFormAvatarPath() {
+  if (groupFormAvatarFile) {
+    const uploaded = await uploadChatPhoto(groupFormAvatarFile);
+    return uploaded.storagePath;
+  }
+  if (groupFormMode === "edit") {
+    if (groupFormAvatarRemoved) return null;
+    return groupFormAvatarExistingPath || null;
+  }
+  return null;
 }
 
 async function saveCreateGroupChat() {
@@ -2670,15 +2930,104 @@ async function saveCreateGroupChat() {
   if (saveBtn) saveBtn.disabled = true;
   setCreateGroupError("");
 
-  const { data, error } = await supabaseClient
-    .from("group_chats")
-    .insert({
+  let avatarStoragePath = null;
+  try {
+    if (groupFormAvatarFile || (groupFormMode === "edit" && (groupFormAvatarRemoved || groupFormAvatarExistingPath))) {
+      avatarStoragePath = await resolveGroupFormAvatarPath();
+    }
+  } catch (err) {
+    console.error("Ошибка загрузки картинки группы:", err);
+    if (saveBtn) saveBtn.disabled = false;
+    setCreateGroupError(err?.message || "Не удалось загрузить картинку чата.");
+    return;
+  }
+
+  if (groupFormMode === "edit") {
+    const groupId = editingGroupId;
+    if (!groupId) {
+      if (saveBtn) saveBtn.disabled = false;
+      setCreateGroupError("Не удалось определить групповой чат.");
+      return;
+    }
+
+    const payload = {
       name,
-      created_by: uid,
       member_ids: memberIds,
-    })
-    .select("id, name, created_by, member_ids, created_at")
+    };
+    if (groupAvatarSupported !== false) {
+      payload.avatar_storage_path = avatarStoragePath;
+    }
+
+    let { data, error } = await supabaseClient
+      .from("group_chats")
+      .update(payload)
+      .eq("id", groupId)
+      .select(groupChatSelectColumns())
+      .single();
+
+    if (error && noteGroupAvatarSupport(error) && "avatar_storage_path" in payload) {
+      delete payload.avatar_storage_path;
+      ({ data, error } = await supabaseClient
+        .from("group_chats")
+        .update(payload)
+        .eq("id", groupId)
+        .select(groupChatSelectColumns())
+        .single());
+    }
+
+    if (saveBtn) saveBtn.disabled = false;
+
+    if (error) {
+      console.error("Ошибка обновления группового чата:", error);
+      const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""}`.toLowerCase();
+      setCreateGroupError(
+        noteGroupChatsSupport(error)
+          ? "Таблицы групповых чатов не созданы. Выполните supabase_group_chats.sql в Supabase."
+          : msg.includes("permission") || msg.includes("policy") || error.code === "42501"
+            ? "Нет прав на изменение группы. Выполните supabase_group_chats_edit.sql в Supabase."
+            : "Не удалось сохранить изменения группового чата.",
+      );
+      return;
+    }
+
+    const chat = mapGroupChatRow(data || { id: groupId, name, created_by: uid, member_ids: memberIds, avatar_storage_path: avatarStoragePath });
+    groupChatsById.set(chat.id, chat);
+    groupChatsSupported = true;
+    if (groupAvatarSupported !== false && Object.prototype.hasOwnProperty.call(payload, "avatar_storage_path")) {
+      groupAvatarSupported = true;
+    }
+
+    closeCreateGroupDialog();
+    updateDialogHeader();
+    if (messagesView === "list") {
+      void loadChatList();
+    }
+    return;
+  }
+
+  const insertPayload = {
+    name,
+    created_by: uid,
+    member_ids: memberIds,
+  };
+  if (groupAvatarSupported !== false && avatarStoragePath) {
+    insertPayload.avatar_storage_path = avatarStoragePath;
+  }
+
+  let { data, error } = await supabaseClient
+    .from("group_chats")
+    .insert(insertPayload)
+    .select(groupChatSelectColumns())
     .single();
+
+  if (error && noteGroupAvatarSupport(error) && "avatar_storage_path" in insertPayload) {
+    delete insertPayload.avatar_storage_path;
+    ({ data, error } = await supabaseClient
+      .from("group_chats")
+      .insert(insertPayload)
+      .select(groupChatSelectColumns())
+      .single());
+  }
 
   if (saveBtn) saveBtn.disabled = false;
 
@@ -2692,15 +3041,12 @@ async function saveCreateGroupChat() {
     return;
   }
 
-  const chat = {
-    id: String(data.id),
-    name: String(data.name || name).trim() || name,
-    created_by: data.created_by,
-    memberIds: (data.member_ids || memberIds).map(String),
-    created_at: data.created_at,
-  };
+  const chat = mapGroupChatRow(data);
   groupChatsById.set(chat.id, chat);
   groupChatsSupported = true;
+  if (groupAvatarSupported !== false && insertPayload.avatar_storage_path) {
+    groupAvatarSupported = true;
+  }
 
   closeCreateGroupDialog();
   await openMessagesDialog(toGroupPeerId(chat.id));
@@ -2718,6 +3064,11 @@ export function initMessagesSection() {
   const createGroupSaveBtn = document.getElementById("messagesCreateGroupSaveBtn");
   const createGroupCancelBtn = document.getElementById("messagesCreateGroupCancelBtn");
   const createGroupCloseBtn = document.getElementById("messagesCreateGroupCloseBtn");
+  const editGroupBtn = document.getElementById("messagesEditGroupBtn");
+  const groupAvatarPickBtn = document.getElementById("messagesCreateGroupAvatarPickBtn");
+  const groupAvatarClearBtn = document.getElementById("messagesCreateGroupAvatarClearBtn");
+  const groupAvatarInput = document.getElementById("messagesCreateGroupAvatarInput");
+  const createGroupNameInput = document.getElementById("messagesCreateGroupName");
 
   if (navBtn) {
     navBtn.addEventListener("click", () => {
@@ -2738,6 +3089,44 @@ export function initMessagesSection() {
   if (createGroupBtn) {
     createGroupBtn.addEventListener("click", () => {
       void openCreateGroupDialog();
+    });
+  }
+
+  if (editGroupBtn) {
+    editGroupBtn.addEventListener("click", () => {
+      void openEditGroupDialog();
+    });
+  }
+
+  if (groupAvatarPickBtn && groupAvatarInput) {
+    groupAvatarPickBtn.addEventListener("click", () => {
+      groupAvatarInput.click();
+    });
+  }
+
+  if (groupAvatarClearBtn) {
+    groupAvatarClearBtn.addEventListener("click", () => {
+      clearGroupFormAvatarSelection();
+    });
+  }
+
+  if (groupAvatarInput) {
+    groupAvatarInput.addEventListener("change", () => {
+      const file = groupAvatarInput.files?.[0] || null;
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        setCreateGroupError("Выберите файл изображения.");
+        groupAvatarInput.value = "";
+        return;
+      }
+      setCreateGroupError("");
+      setGroupFormAvatarFile(file);
+    });
+  }
+
+  if (createGroupNameInput) {
+    createGroupNameInput.addEventListener("input", () => {
+      updateGroupFormAvatarPreview();
     });
   }
 

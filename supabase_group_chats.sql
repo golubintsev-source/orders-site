@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS public.group_chats (
   name text NOT NULL,
   created_by uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
   member_ids uuid[] NOT NULL DEFAULT '{}',
+  avatar_storage_path text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -37,6 +38,12 @@ DROP POLICY IF EXISTS "group_chats_insert_own" ON public.group_chats;
 CREATE POLICY "group_chats_insert_own" ON public.group_chats
   FOR INSERT TO authenticated
   WITH CHECK (created_by = auth.uid() AND auth.uid() = ANY (member_ids));
+
+DROP POLICY IF EXISTS "group_chats_update_member" ON public.group_chats;
+CREATE POLICY "group_chats_update_member" ON public.group_chats
+  FOR UPDATE TO authenticated
+  USING (auth.uid() = ANY (member_ids))
+  WITH CHECK (auth.uid() = ANY (member_ids));
 
 DROP POLICY IF EXISTS "group_messages_select_member" ON public.group_messages;
 CREATE POLICY "group_messages_select_member" ON public.group_messages
