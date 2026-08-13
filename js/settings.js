@@ -87,8 +87,8 @@ function createEditorRow(initialValue = "") {
   input.type = "text";
   input.className = "settings-editor-input";
   input.autocomplete = "off";
-  input.placeholder = "Имя Отчество";
-  input.title = "Имя и отчество редактора";
+  input.placeholder = "Имя или инициалы";
+  input.title = "Имя редактора окон (можно только имя или с инициалами)";
   input.value = initialValue;
 
   const removeBtn = document.createElement("button");
