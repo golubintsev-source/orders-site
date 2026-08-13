@@ -68,6 +68,7 @@ const HISTORY_LABEL_TO_KEY = {
   "Дата доставки": "delivery_date",
   Монтаж: "installation",
   "Дата монтажа": "installation_date",
+  Монтажник: "installer_name",
   Откосы: "reveals",
   "Дата откосов": "reveals_date",
   "з/п монтаж": "installer_payment_amount",

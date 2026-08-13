@@ -790,6 +790,14 @@ h2 {
   border-right-width: 0;
 }
 
+/* «Монтажник» — список имён из настроек */
+#section-new .installer-payment-one-row > .field.field-installer-name,
+#section-new .installer-payment-one-row > .field:has(#installer_name) {
+  flex: 1 1 140px;
+  min-width: 120px;
+  max-width: 200px;
+}
+
 /* «з/п монтаж» — узкая колонка */
 #section-new .installer-payment-one-row > .field:has(#installer_payment_amount) {
   flex: 0 0 95px;

@@ -8,6 +8,7 @@ import {
   editOrder,
   viewOrder,
   deleteOrder,
+  populateOrderFormInstallerSelect,
 } from "./orders.js";
 import { loadSettings } from "./settings.js";
 import { openFilesModal, removeFile } from "./files.js";
@@ -162,6 +163,8 @@ async function init() {
     await Promise.all([loadProfile(), loadSettings()]);
     const { applySettingsAdminBlocksVisibility } = await import("./settings.js");
     applySettingsAdminBlocksVisibility();
+    const { populateOrderFormInstallerSelect } = await import("./orders.js");
+    populateOrderFormInstallerSelect();
     refreshSectionNavAfterProfile();
     applyRouteOnLoad();
     ensurePopstateRouting();

@@ -45,6 +45,7 @@ import {
   updateOrderFormDateFieldHighlights,
   updateInstallerPaymentAmountFromArea,
   updateInstallerBlockByInstallationDate,
+  populateOrderFormInstallerSelect,
   formatOrderFormNumericInputById,
   bindOrderFormDdMmYyyyInputs,
   canShowEditButtonForOrder,
@@ -446,6 +447,7 @@ export function bindUIEvents() {
     settingsSaveEditorsBtn.addEventListener("click", async () => {
       const ok = await saveEditors();
       setMessage(ok ? "Монтажники сохранены" : "Ошибка сохранения монтажников", ok ? "" : "#d32f2f");
+      if (ok) populateOrderFormInstallerSelect();
     });
   }
 
