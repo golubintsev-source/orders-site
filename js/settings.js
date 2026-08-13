@@ -6,7 +6,11 @@ import { readSnapshot, persistSettingsSnapshotFromRows } from "./offline-cache.j
 
 const KEY_INSTALLER_RATE = "installer_rate_per_m2";
 const KEY_DRIVER_NAME = "driver_name";
+const KEY_EDITORS = "editors";
 const DEFAULT_RATE = 1400;
+
+const EDITOR_REMOVE_BTN_HTML =
+  '<span aria-hidden="true">×</span>';
 
 /** Поля корректировок баланса: ключ в app_settings и id поля ввода. */
 export const BALANCE_ADJ_FIELDS = [
@@ -29,6 +33,100 @@ function normalizeDriverName(raw) {
   return String(raw ?? "").trim().replace(/\s+/g, " ");
 }
 
+function normalizeEditorName(raw) {
+  return String(raw ?? "").trim().replace(/\s+/g, " ");
+}
+
+/** Разобрать значение настройки editors (JSON-массив строк). */
+export function parseEditorsSettingValue(raw) {
+  if (raw == null || raw === "") return [];
+  if (Array.isArray(raw)) {
+    return raw.map(normalizeEditorName).filter(Boolean);
+  }
+  const s = String(raw).trim();
+  if (!s) return [];
+  try {
+    const parsed = JSON.parse(s);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeEditorName).filter(Boolean);
+  } catch {
+    // На случай старого/ручного формата «Имя; Имя» или по строкам
+    return s
+      .split(/[\n;|]+/)
+      .map(normalizeEditorName)
+      .filter(Boolean);
+  }
+}
+
+function editorsListsEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+/** Имена из полей формы: пустые строки сохраняются как слоты UI. */
+function collectEditorInputsFromDom({ onlyFilled = false } = {}) {
+  const list = document.getElementById("settingsEditorsList");
+  if (!list) return [];
+  const values = [];
+  list.querySelectorAll(".settings-editor-input").forEach((el) => {
+    const name = normalizeEditorName(el.value);
+    if (onlyFilled && !name) return;
+    values.push(onlyFilled ? name : String(el.value ?? ""));
+  });
+  return values;
+}
+
+function createEditorRow(initialValue = "") {
+  const row = document.createElement("div");
+  row.className = "settings-editor-row";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "settings-editor-input";
+  input.autocomplete = "off";
+  input.placeholder = "Имя Отчество";
+  input.title = "Имя и отчество редактора";
+  input.value = initialValue;
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "settings-editor-remove-btn";
+  removeBtn.title = "Удалить редактора";
+  removeBtn.setAttribute("aria-label", "Удалить редактора");
+  removeBtn.innerHTML = EDITOR_REMOVE_BTN_HTML;
+
+  row.appendChild(input);
+  row.appendChild(removeBtn);
+  return row;
+}
+
+/** Отрисовать список полей редакторов. */
+export function renderEditorsList(names) {
+  const list = document.getElementById("settingsEditorsList");
+  if (!list) return;
+  const items = Array.isArray(names) ? names : [];
+  list.innerHTML = "";
+  for (const name of items) {
+    list.appendChild(createEditorRow(name));
+  }
+}
+
+/** Добавить пустое поле редактора. */
+export function addEditorField() {
+  const list = document.getElementById("settingsEditorsList");
+  if (!list) return;
+  const row = createEditorRow("");
+  list.appendChild(row);
+  const input = row.querySelector(".settings-editor-input");
+  if (input instanceof HTMLInputElement) {
+    queueMicrotask(() => input.focus());
+  }
+  updateEditorsSaveButtonState();
+}
+
 /** Синхронизировать поле «Водитель» на маршрутном листе с сохранённым значением. */
 function syncRouteSheetDriverInput(driverName) {
   const el = document.getElementById("routeSheetDriver");
@@ -47,6 +145,7 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
   state.defaultInstallerRatePerM2 = Number.isFinite(rateNum) ? rateNum : DEFAULT_RATE;
 
   state.driverName = normalizeDriverName(byKey[KEY_DRIVER_NAME] ?? "");
+  state.editors = parseEditorsSettingValue(byKey[KEY_EDITORS]);
 
   for (const { participant, settingKey } of BALANCE_ADJ_FIELDS) {
     const raw = byKey[settingKey];
@@ -64,6 +163,7 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
   if (settingsDriverInput) settingsDriverInput.value = state.driverName;
 
   syncRouteSheetDriverInput(state.driverName);
+  renderEditorsList(state.editors);
 
   for (const { participant, inputId } of BALANCE_ADJ_FIELDS) {
     const el = document.getElementById(inputId);
@@ -72,6 +172,7 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
 
   updateSettingsSaveButtonState();
   updateDriverSaveButtonState();
+  updateEditorsSaveButtonState();
   updateAdjustmentsSaveButtonState();
 }
 
@@ -83,7 +184,12 @@ export async function loadSettings() {
     return state.defaultInstallerRatePerM2;
   }
 
-  const keys = [KEY_INSTALLER_RATE, KEY_DRIVER_NAME, ...BALANCE_ADJ_FIELDS.map((f) => f.settingKey)];
+  const keys = [
+    KEY_INSTALLER_RATE,
+    KEY_DRIVER_NAME,
+    KEY_EDITORS,
+    ...BALANCE_ADJ_FIELDS.map((f) => f.settingKey),
+  ];
   const { data: rows, error } = await supabaseClient.from("app_settings").select("key, value").in("key", keys);
   let effectiveRows = rows || [];
   if (error) {
@@ -119,6 +225,17 @@ export function updateDriverSaveButtonState() {
   const current = normalizeDriverName(input.value);
   const saved = normalizeDriverName(state.driverName);
   const isDirty = current !== saved;
+  btn.disabled = !isDirty;
+  btn.classList.toggle("settings-save-btn-inactive", !isDirty);
+}
+
+/** Кнопка «Сохранить» у блока редакторов: активна при отличии от сохранённого списка. */
+export function updateEditorsSaveButtonState() {
+  const btn = document.getElementById("settingsSaveEditorsBtn");
+  if (!btn) return;
+  const current = collectEditorInputsFromDom({ onlyFilled: true }).map(normalizeEditorName);
+  const saved = (state.editors || []).map(normalizeEditorName);
+  const isDirty = !editorsListsEqual(current, saved);
   btn.disabled = !isDirty;
   btn.classList.toggle("settings-save-btn-inactive", !isDirty);
 }
@@ -193,6 +310,24 @@ export async function saveDriverName(value) {
   return true;
 }
 
+/** Сохранить список редакторов в БД и state. */
+export async function saveEditors() {
+  if (!isAdmin()) return false;
+
+  const names = collectEditorInputsFromDom({ onlyFilled: true }).map(normalizeEditorName);
+  const valueStr = JSON.stringify(names);
+  const { error } = await supabaseClient
+    .from("app_settings")
+    .upsert({ key: KEY_EDITORS, value: valueStr }, { onConflict: "key" });
+
+  if (error) return false;
+
+  state.editors = names;
+  renderEditorsList(names);
+  updateEditorsSaveButtonState();
+  return true;
+}
+
 /** Сохранить корректировки баланса в БД и state. */
 export async function saveBalanceAdjustments() {
   if (!isAdmin()) return false;
@@ -225,6 +360,10 @@ export function getDefaultInstallerRatePerM2() {
 
 export function getDriverName() {
   return normalizeDriverName(state.driverName);
+}
+
+export function getEditors() {
+  return (state.editors || []).map(normalizeEditorName).filter(Boolean);
 }
 
 /** Блоки настроек кроме уведомлений — только для админов. */
