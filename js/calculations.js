@@ -643,11 +643,39 @@ function rowMatchesCalculationsSearch(row, needleLower) {
   return parts.join(" ").toLowerCase().includes(needleLower);
 }
 
+/** Поиск применён (кнопка могла бы быть «Отменить», если поля не менялись). */
+function isCalculationsSearchApplied() {
+  return (
+    appliedCalculationsSearchQuery != null &&
+    String(appliedCalculationsSearchQuery).trim() !== ""
+  );
+}
+
+/**
+ * Поля периода или поиска отличаются от применённых значений.
+ * Тогда «Отменить» сразу сменяется на «Показать».
+ */
+function areCalculationsFilterInputsDirty() {
+  if (!isCalculationsSearchApplied()) return false;
+  const searchInput = document.getElementById("calcSearchInput");
+  const searchRaw = (searchInput?.value ?? "").trim();
+  const appliedQ = String(appliedCalculationsSearchQuery).trim();
+  if (searchRaw !== appliedQ) return true;
+  const { fromYmd, toYmd } = readCalcPeriodInputs();
+  if (fromYmd !== appliedCalcDateFromYmd) return true;
+  if (toYmd !== appliedCalcDateToYmd) return true;
+  return false;
+}
+
+/** Режим «Отменить»: поиск применён и поля совпадают с применёнными. */
+function isCalculationsCancelMode() {
+  return isCalculationsSearchApplied() && !areCalculationsFilterInputsDirty();
+}
+
 function updateCalculationsSearchButton() {
   const btn = document.getElementById("calcSearchBtn");
   if (!btn) return;
-  const active =
-    appliedCalculationsSearchQuery != null && String(appliedCalculationsSearchQuery).trim() !== "";
+  const active = isCalculationsCancelMode();
   btn.textContent = active ? "Отменить" : "Показать";
   btn.setAttribute("aria-pressed", active ? "true" : "false");
 }
@@ -1161,10 +1189,7 @@ function setupCalculationsForm() {
   if (searchBtn && searchInput && !searchBtn.dataset.searchBound) {
     searchBtn.dataset.searchBound = "1";
     searchBtn.addEventListener("click", () => {
-      const active =
-        appliedCalculationsSearchQuery != null &&
-        String(appliedCalculationsSearchQuery).trim() !== "";
-      if (active) {
+      if (isCalculationsCancelMode()) {
         cancelCalculationsSearch();
       } else {
         void applyCalculationsFindCombined();
@@ -1173,15 +1198,27 @@ function setupCalculationsForm() {
     searchInput.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-      const active =
-        appliedCalculationsSearchQuery != null &&
-        String(appliedCalculationsSearchQuery).trim() !== "";
-      if (active) {
+      if (isCalculationsCancelMode()) {
         applyCalculationsSearchFromInput();
       } else {
         void applyCalculationsFindCombined();
       }
     });
+    // Любое изменение полей при «Отменить» → сразу «Показать».
+    searchInput.addEventListener("input", updateCalculationsSearchButton);
+  }
+
+  const calcDateFromEl = document.getElementById("calcDateFrom");
+  const calcDateToEl = document.getElementById("calcDateTo");
+  if (calcDateFromEl && !calcDateFromEl.dataset.filterDirtyBound) {
+    calcDateFromEl.dataset.filterDirtyBound = "1";
+    calcDateFromEl.addEventListener("input", updateCalculationsSearchButton);
+    calcDateFromEl.addEventListener("change", updateCalculationsSearchButton);
+  }
+  if (calcDateToEl && !calcDateToEl.dataset.filterDirtyBound) {
+    calcDateToEl.dataset.filterDirtyBound = "1";
+    calcDateToEl.addEventListener("input", updateCalculationsSearchButton);
+    calcDateToEl.addEventListener("change", updateCalculationsSearchButton);
   }
 
   const exportBtn = document.getElementById("calcExportExcelBtn");
