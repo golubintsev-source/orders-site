@@ -248,6 +248,7 @@ const routeSheetAddressGeoPopoverState = {
   manualOrderId: /** @type {string | null} */ (null),
   saveAllowed: false,
   previousCoordinates: "",
+  address: "",
 };
 
 /** Как «Комментарий» в «Расчётах»: фокус и клавиатура для показа полного текста на iOS. */
@@ -1397,6 +1398,31 @@ function routeSheetGeoDbKeyFromDisplayAddress(displayAddr) {
   return k || null;
 }
 
+/** @param {object | null | undefined} data */
+function parseRouteSheetAddressGeoRow(data) {
+  if (!data) return null;
+  const lat = Number(data.lat);
+  const lon = Number(data.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const km = data.km_office == null ? null : Number(data.km_office);
+  return {
+    lat,
+    lon,
+    km_office: km != null && Number.isFinite(km) ? km : null,
+  };
+}
+
+function rememberNominatimCoordsForAddress(displayAddr, coords) {
+  const searchAddr = addressForNominatimSearch(String(displayAddr ?? "").trim());
+  if (!searchAddr || !coords || !Number.isFinite(coords.lat) || !Number.isFinite(coords.lon)) return;
+  nominatimCache.set(geocodeNominatimCacheKey(searchAddr), { lat: coords.lat, lon: coords.lon });
+}
+
+function coordsMatchCachedGeo(coords, cached, eps = 1e-5) {
+  if (!coords || !cached) return false;
+  return Math.abs(cached.lat - coords.lat) <= eps && Math.abs(cached.lon - coords.lon) <= eps;
+}
+
 async function fetchRouteSheetAddressGeoFromDb(addressKey) {
   try {
     const { data, error } = await supabaseClient
@@ -1408,35 +1434,109 @@ async function fetchRouteSheetAddressGeoFromDb(addressKey) {
       console.warn("route_sheet_address_geo:", error.message);
       return null;
     }
-    if (!data) return null;
-    const lat = Number(data.lat);
-    const lon = Number(data.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    const km = data.km_office == null ? null : Number(data.km_office);
-    return {
-      lat,
-      lon,
-      km_office: km != null && Number.isFinite(km) ? km : null,
-    };
+    return parseRouteSheetAddressGeoRow(data);
   } catch (e) {
     console.warn("route_sheet_address_geo:", e);
     return null;
   }
 }
 
+/**
+ * @returns {Promise<boolean>}
+ */
 async function persistRouteSheetAddressGeo(addressKey, lat, lon, kmOffice) {
-  if (!addressKey || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
-  const payload = {
-    address_key: addressKey,
-    lat,
-    lon,
-    km_office: kmOffice != null && Number.isFinite(kmOffice) ? kmOffice : null,
-    updated_at: new Date().toISOString(),
-  };
-  const { error } = await supabaseClient.from("route_sheet_address_geo").upsert(payload, {
-    onConflict: "address_key",
-  });
-  if (error) console.warn("route_sheet_address_geo upsert:", error.message);
+  if (!addressKey || !Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  try {
+    const payload = {
+      address_key: addressKey,
+      lat,
+      lon,
+      km_office: kmOffice != null && Number.isFinite(kmOffice) ? kmOffice : null,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabaseClient.from("route_sheet_address_geo").upsert(payload, {
+      onConflict: "address_key",
+    });
+    if (error) {
+      console.warn("route_sheet_address_geo upsert:", error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn("route_sheet_address_geo upsert:", e);
+    return false;
+  }
+}
+
+/**
+ * Сохраняет вручную введённые (или найденные) координаты в справочник адрес→гео,
+ * чтобы тот же адрес в других заказах ставился на карту без Nominatim.
+ * @returns {Promise<boolean>}
+ */
+async function persistCoordinatesAttachedToAddress(displayAddr, lat, lon, kmOffice) {
+  const dbKey = routeSheetGeoDbKeyFromDisplayAddress(displayAddr);
+  if (!dbKey || !Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  rememberNominatimCoordsForAddress(displayAddr, { lat, lon });
+  return persistRouteSheetAddressGeo(dbKey, lat, lon, kmOffice);
+}
+
+const ADDRESS_GEO_IN_CHUNK = 100;
+
+/**
+ * @param {string[]} addressKeys
+ * @returns {Promise<Map<string, { lat: number, lon: number, km_office: number | null }>>}
+ */
+async function prefetchRouteSheetAddressGeoMap(addressKeys) {
+  /** @type {Map<string, { lat: number, lon: number, km_office: number | null }>} */
+  const map = new Map();
+  const unique = [];
+  const seen = new Set();
+  for (const raw of addressKeys || []) {
+    const k = String(raw ?? "").trim();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    unique.push(k);
+  }
+  for (let i = 0; i < unique.length; i += ADDRESS_GEO_IN_CHUNK) {
+    const chunk = unique.slice(i, i + ADDRESS_GEO_IN_CHUNK);
+    try {
+      const { data, error } = await supabaseClient
+        .from("route_sheet_address_geo")
+        .select("address_key, lat, lon, km_office")
+        .in("address_key", chunk);
+      if (error) {
+        console.warn("route_sheet_address_geo:", error.message);
+        continue;
+      }
+      for (const row of data || []) {
+        const parsed = parseRouteSheetAddressGeoRow(row);
+        const key = String(row?.address_key ?? "").trim();
+        if (!key || !parsed) continue;
+        map.set(key, parsed);
+      }
+    } catch (e) {
+      console.warn("route_sheet_address_geo:", e);
+    }
+  }
+  return map;
+}
+
+/**
+ * Подставляет координаты из справочника в заказы без своих координат (только в памяти).
+ * Тогда точка попадает на карту, а колонка «км» считается по этим координатам.
+ */
+function applyAddressGeoCacheToOrders(orders, geoMap) {
+  if (!orders?.length || !geoMap?.size) return;
+  for (const o of orders) {
+    if (!o || orderHasSavedCoordinates(o)) continue;
+    if (isRouteSheetOfficeAddress(o.address)) continue;
+    const k = routeSheetGeoDbKeyFromDisplayAddress(o.address);
+    if (!k) continue;
+    const cached = geoMap.get(k);
+    if (!cached) continue;
+    o.coordinates = formatCoordinatesForStorage(cached);
+    rememberNominatimCoordsForAddress(o.address, { lat: cached.lat, lon: cached.lon });
+  }
 }
 
 /** Строка для запроса к Nominatim и ключей кэша: часть до «//» (после часто пишут квартиру и т.п.). */
@@ -1685,6 +1785,13 @@ async function runDeliveryPipeline(deliveryRows, gen) {
     clearRouteDeliveryMarkersAndRoadRoute();
     deliveryKmByOrderId.clear();
 
+    const geoKeys = deliveryRows
+      .map((o) => routeSheetGeoDbKeyFromDisplayAddress(o?.address))
+      .filter(Boolean);
+    const addressGeoMap = await prefetchRouteSheetAddressGeoMap(geoKeys);
+    if (gen !== routeDeliveryPipelineGeneration) return;
+    applyAddressGeoCacheToOrders(deliveryRows, addressGeoMap);
+
     const noGeoOrders = deliveryRows.filter((o) => deliveryPipelineGroupKey(o) === "");
     for (const o of noGeoOrders) deliveryKmByOrderId.set(o.id, /** @type {null} */ (null));
     updateKmCellsForOrders(noGeoOrders);
@@ -1775,16 +1882,25 @@ async function runDeliveryPipeline(deliveryRows, gen) {
         }
 
         let km = null;
-        try {
-          km = await osrmDrivingDistanceKm(
-            ROUTE_SHEET_OFFICE_LON,
-            ROUTE_SHEET_OFFICE_LAT,
-            coords.lon,
-            coords.lat,
-          );
-        } catch (e) {
-          console.error("OSRM:", e);
-          setRouteDeliveryMapStatus(`Ошибка маршрута км (${x} из ${Y}).`, true);
+        let fromDbFull = false;
+        const dbKey = routeSheetGeoDbKeyFromDisplayAddress(displayAddr);
+        const cachedGeo = dbKey ? addressGeoMap.get(dbKey) : null;
+        if (coordsMatchCachedGeo(coords, cachedGeo) && cachedGeo.km_office != null) {
+          km = cachedGeo.km_office;
+          fromDbFull = true;
+        }
+        if (km == null) {
+          try {
+            km = await osrmDrivingDistanceKm(
+              ROUTE_SHEET_OFFICE_LON,
+              ROUTE_SHEET_OFFICE_LAT,
+              coords.lon,
+              coords.lat,
+            );
+          } catch (e) {
+            console.error("OSRM:", e);
+            setRouteDeliveryMapStatus(`Ошибка маршрута км (${x} из ${Y}).`, true);
+          }
         }
         if (gen !== routeDeliveryPipelineGeneration) return;
         if (km == null) failedOsrm.push(displayAddr || "координаты");
@@ -1792,7 +1908,17 @@ async function runDeliveryPipeline(deliveryRows, gen) {
         for (const o of ordersHere) deliveryKmByOrderId.set(o.id, kmEntry);
         updateKmCellsForOrders(ordersHere);
         syncRouteSheetDeliveryAddressRecognition(ordersHere, true);
-        if (i < orderedKeys.length - 1) await sleep(250);
+        if (dbKey && !fromDbFull) {
+          void persistCoordinatesAttachedToAddress(displayAddr, coords.lat, coords.lon, km).then((ok) => {
+            if (!ok) return;
+            addressGeoMap.set(dbKey, {
+              lat: coords.lat,
+              lon: coords.lon,
+              km_office: km != null && Number.isFinite(km) ? km : null,
+            });
+          });
+        }
+        if (i < orderedKeys.length - 1 && !fromDbFull) await sleep(250);
         continue;
       }
 
@@ -1815,12 +1941,15 @@ async function runDeliveryPipeline(deliveryRows, gen) {
       let fromDbFull = false;
 
       if (dbKey) {
-        const cached = await fetchRouteSheetAddressGeoFromDb(dbKey);
+        let cached = addressGeoMap.get(dbKey) || null;
+        if (!cached) {
+          cached = await fetchRouteSheetAddressGeoFromDb(dbKey);
+          if (cached) addressGeoMap.set(dbKey, cached);
+        }
         if (gen !== routeDeliveryPipelineGeneration) return;
         if (cached) {
           coords = { lat: cached.lat, lon: cached.lon };
-          const memKey = geocodeNominatimCacheKey(addressForNominatimSearch(displayAddr));
-          nominatimCache.set(memKey, coords);
+          rememberNominatimCoordsForAddress(displayAddr, coords);
           if (cached.km_office != null) {
             km = cached.km_office;
             fromDbFull = true;
@@ -1888,9 +2017,14 @@ async function runDeliveryPipeline(deliveryRows, gen) {
       syncRouteSheetDeliveryAddressRecognition(ordersHere, true);
 
       if (dbKey && !fromDbFull) {
-        void persistRouteSheetAddressGeo(dbKey, coords.lat, coords.lon, km).catch((e) =>
-          console.warn("route_sheet_address_geo upsert:", e),
-        );
+        void persistCoordinatesAttachedToAddress(displayAddr, coords.lat, coords.lon, km).then((ok) => {
+          if (!ok) return;
+          addressGeoMap.set(dbKey, {
+            lat: coords.lat,
+            lon: coords.lon,
+            km_office: km != null && Number.isFinite(km) ? km : null,
+          });
+        });
       }
 
       if (i < orderedKeys.length - 1 && !fromDbFull) await sleep(NOMINATIM_DELAY_MS);
@@ -3141,6 +3275,7 @@ function closeRouteSheetAddressGeoPopover() {
   routeSheetAddressGeoPopoverState.manualOrderId = null;
   routeSheetAddressGeoPopoverState.saveAllowed = false;
   routeSheetAddressGeoPopoverState.previousCoordinates = "";
+  routeSheetAddressGeoPopoverState.address = "";
 }
 
 function positionRouteSheetAddressGeoPopover(anchorEl) {
@@ -3188,6 +3323,7 @@ function openRouteSheetAddressGeoPopover(anchorEl) {
   }
   routeSheetAddressGeoPopoverState.previousCoordinates =
     order?.coordinates != null && String(order.coordinates).trim() !== "" ? String(order.coordinates).trim() : "";
+  routeSheetAddressGeoPopoverState.address = String(order.address ?? "").trim();
 
   const inp = document.getElementById("routeSheetAddressGeoInput");
   if (inp) inp.value = routeSheetAddressGeoPopoverState.previousCoordinates;
@@ -3283,6 +3419,14 @@ function initRouteSheetAddressGeoPopover() {
         payload = { coordinates: formatCoordinatesForStorage(parsed) };
       }
 
+      const persistGeoForAddress = async (coordStr) => {
+        const parsedGeo = parseLatLonCommaInput(coordStr);
+        const addr = routeSheetAddressGeoPopoverState.address;
+        if (!parsedGeo || !addr) return true;
+        if (!routeSheetGeoDbKeyFromDisplayAddress(addr)) return true;
+        return persistCoordinatesAttachedToAddress(addr, parsedGeo.lat, parsedGeo.lon, null);
+      };
+
       const manualId = routeSheetAddressGeoPopoverState.manualOrderId;
       if (manualId) {
         const mo = routeSheetManualDeliveryOrders.find((o) => String(o.id) === manualId);
@@ -3291,8 +3435,12 @@ function initRouteSheetAddressGeoPopover() {
         try {
           mo.coordinates = payload.coordinates != null ? payload.coordinates : "";
           persistRouteSheetManualToSession();
+          const geoOk = await persistGeoForAddress(mo.coordinates);
           closeRouteSheetAddressGeoPopover();
-          setMessage("Координаты точки обновлены", "#2e7d32");
+          setMessage(
+            geoOk ? "Координаты точки обновлены" : "Координаты точки обновлены, справочник адресов обновить не удалось",
+            geoOk ? "#2e7d32" : "#c62828",
+          );
           loadRouteSheet();
         } finally {
           saveBtn.disabled = false;
@@ -3323,8 +3471,12 @@ function initRouteSheetAddressGeoPopover() {
           ]);
           if (histError) console.warn("order_history:", histError.message);
         }
+        const geoOk = await persistGeoForAddress(payload.coordinates);
         closeRouteSheetAddressGeoPopover();
-        setMessage("Координаты сохранены", "#2e7d32");
+        setMessage(
+          geoOk ? "Координаты сохранены" : "Координаты заказа сохранены, справочник адресов обновить не удалось",
+          geoOk ? "#2e7d32" : "#c62828",
+        );
         await loadOrders();
       } finally {
         saveBtn.disabled = false;
@@ -3596,7 +3748,7 @@ function initRouteSheetPointByNoDialog() {
   }
 }
 
-function confirmRouteSheetAddPoint() {
+async function confirmRouteSheetAddPoint() {
   clearRouteSheetAddPointFormError();
 
   const dateEl = document.getElementById("routeSheetAddPointDate");
@@ -3686,6 +3838,12 @@ function confirmRouteSheetAddPoint() {
   }
 
   persistRouteSheetManualToSession();
+  if (coordinates && address) {
+    const parsedGeo = parseLatLonCommaInput(coordinates);
+    if (parsedGeo) {
+      await persistCoordinatesAttachedToAddress(address, parsedGeo.lat, parsedGeo.lon, null);
+    }
+  }
   closeRouteSheetAddPointDialog();
   loadRouteSheet();
 }
@@ -3703,7 +3861,7 @@ function initRouteSheetAddPointDialog() {
   openBtn.addEventListener("click", () => openRouteSheetAddPointDialog());
   if (closeBtn) closeBtn.addEventListener("click", () => closeRouteSheetAddPointDialog());
   if (cancelBtn) cancelBtn.addEventListener("click", () => closeRouteSheetAddPointDialog());
-  if (confirmBtn) confirmBtn.addEventListener("click", () => confirmRouteSheetAddPoint());
+  if (confirmBtn) confirmBtn.addEventListener("click", () => void confirmRouteSheetAddPoint());
   dlg.addEventListener("close", () => {
     routeSheetAddPointEditingId = null;
     setRouteSheetAddPointDialogMode(false);
