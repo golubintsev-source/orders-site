@@ -664,7 +664,8 @@ h2 {
 }
 
 #section-new .client-input-wrap,
-#section-new .address-input-wrap {
+#section-new .address-input-wrap,
+#section-excess .client-input-wrap {
   position: relative;
   width: 100%;
 }
@@ -674,7 +675,8 @@ h2 {
   box-sizing: border-box;
 }
 
-#section-new .client-suggestions {
+#section-new .client-suggestions,
+#section-excess .client-suggestions {
   position: absolute;
   left: 0;
   right: 0;
@@ -691,7 +693,8 @@ h2 {
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
 }
 
-#section-new .client-suggestions li {
+#section-new .client-suggestions li,
+#section-excess .client-suggestions li {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -703,18 +706,22 @@ h2 {
 }
 
 #section-new .client-suggestions li[aria-selected="true"],
-#section-new .client-suggestions li:hover {
+#section-new .client-suggestions li:hover,
+#section-excess .client-suggestions li[aria-selected="true"],
+#section-excess .client-suggestions li:hover {
   background: #f3f4f6;
 }
 
-#section-new .client-suggestions .client-suggestion-text {
+#section-new .client-suggestions .client-suggestion-text,
+#section-excess .client-suggestions .client-suggestion-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-#section-new .client-suggestions .client-suggestion-count {
+#section-new .client-suggestions .client-suggestion-count,
+#section-excess .client-suggestions .client-suggestion-count {
   flex-shrink: 0;
   font-size: 12px;
   font-weight: 600;
@@ -1618,6 +1625,239 @@ h2 {
 
 #calculationsTable .btn-delete:hover {
   color: #d32f2f;
+}
+
+/* ——— Излишки ——— */
+#section-excess .excess-start-wrap {
+  margin-bottom: 16px;
+}
+
+#section-excess .excess-add-client-btn,
+#section-excess .excess-save-btn,
+#section-excess .excess-add-row-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  width: fit-content;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.15s;
+}
+
+#section-excess .excess-add-client-btn,
+#section-excess .excess-save-btn {
+  background: #0078d4;
+  color: #fff;
+  border: 1px solid transparent;
+}
+
+#section-excess .excess-add-client-btn:hover,
+#section-excess .excess-save-btn:hover {
+  background: #106ebe;
+  color: #fff;
+}
+
+#section-excess .excess-add-client-btn:active,
+#section-excess .excess-save-btn:active {
+  transform: translateY(1px);
+}
+
+#section-excess .excess-save-btn:disabled {
+  background: #9aa4b2;
+  color: #f3f4f6;
+  cursor: not-allowed;
+  transform: none;
+  pointer-events: none;
+}
+
+#section-excess .excess-add-row-btn {
+  background: #fff;
+  color: #1f2937;
+  border: 1px solid #d1d5db;
+}
+
+#section-excess .excess-add-row-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+#section-excess .excess-form-panel {
+  margin-bottom: 20px;
+}
+
+#section-excess .excess-rows-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+#section-excess .excess-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+#section-excess .excess-row .field {
+  margin: 0;
+}
+
+#section-excess .excess-client-field {
+  flex: 1 1 220px;
+  min-width: 160px;
+}
+
+#section-excess .excess-amount-field {
+  flex: 0 1 140px;
+  min-width: 110px;
+}
+
+#section-excess .excess-row label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+#section-excess .excess-row input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+#section-excess .excess-row input:focus {
+  outline: none;
+  border-color: #0078d4;
+  box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.15);
+}
+
+#section-excess .excess-row-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+#section-excess .excess-row-remove-btn:hover {
+  background: #fef2f2;
+  color: #d32f2f;
+  border-color: #fecaca;
+}
+
+#section-excess .excess-form-actions {
+  margin-bottom: 12px;
+}
+
+#section-excess .excess-form-add-wrap {
+  margin-bottom: 8px;
+}
+
+#section-excess .excess-form-message {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #059669;
+}
+
+#section-excess .excess-form-message--error {
+  color: #d32f2f;
+}
+
+#section-excess .excess-form-message[hidden] {
+  display: none;
+}
+
+#section-excess .excess-table-wrap {
+  margin-top: 8px;
+}
+
+#section-excess .excess-table-message {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+#excessesTable th,
+#excessesTable td {
+  padding: 8px 10px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+#excessesTable .td-actions {
+  white-space: nowrap;
+  padding: 4px 2px;
+  width: 40px;
+}
+
+#excessesTable .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  vertical-align: middle;
+}
+
+#excessesTable .btn-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+#excessesTable .btn-icon:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+#excessesTable .btn-delete:hover {
+  color: #d32f2f;
+}
+
+@media (max-width: 560px) {
+  #section-excess .excess-row {
+    align-items: stretch;
+  }
+
+  #section-excess .excess-client-field,
+  #section-excess .excess-amount-field {
+    flex: 1 1 100%;
+  }
+
+  #section-excess .excess-row-remove-btn {
+    align-self: flex-end;
+  }
 }
 
 #allTasksTable {
