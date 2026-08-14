@@ -322,19 +322,38 @@ function deliveryAddressCellHtml(order) {
 }
 
 /**
+ * Сколько дней прибавить к «сегодня» для даты маршрутного листа.
+ * Обычно завтра; в пятницу — понедельник (+3), не суббота.
+ * @param {number} weekday `Date#getDay()`: 0=вс … 5=пт … 6=сб
+ */
+function routeSheetDefaultDateDeltaDays(weekday) {
+  return weekday === 5 ? 3 : 1;
+}
+
+/**
  * Дата доставки по умолчанию для маршрутного листа: завтра.
  * В пятницу — понедельник (не суббота), чтобы не ставить выходной.
+ * @param {Date} [now]
  */
-function getTomorrowIsoDate() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  // 0=вс … 5=пт … 6=сб
-  const weekday = d.getDay();
-  d.setDate(d.getDate() + (weekday === 5 ? 3 : 1));
+function getTomorrowIsoDate(now = new Date()) {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  d.setDate(d.getDate() + routeSheetDefaultDateDeltaDays(d.getDay()));
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+/**
+ * Дата, на которую сейчас построен маршрутный лист (поле «с»).
+ * «Добавить заказ» должен попадать в видимую таблицу, а не пересчитывать
+ * «завтра» отдельно: в пятницу лист уже на понедельнике.
+ */
+function getRouteSheetActiveDeliveryDate() {
+  const fromEl = document.getElementById("routeSheetDateFrom");
+  const raw = (fromEl?.value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  return getTomorrowIsoDate();
 }
 
 /** Ключ YYYY-MM-DD для сравнения диапазона (дата отправки). */
@@ -3513,7 +3532,7 @@ async function confirmRouteSheetPointByNo() {
     return;
   }
 
-  const defaultDeliveryDate = getTomorrowIsoDate();
+  const defaultDeliveryDate = getRouteSheetActiveDeliveryDate();
   const confirmBtn = document.getElementById("routeSheetPointByNoConfirmBtn");
   if (confirmBtn) confirmBtn.disabled = true;
   try {

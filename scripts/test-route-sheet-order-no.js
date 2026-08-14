@@ -72,4 +72,34 @@ assert(findOrderByRouteSheetNumberInput("112", orders)?.id === 112, "digits 112"
 assert(findOrderByRouteSheetNumberInput("112_О", orders)?.id === 112, "unpadded chip <1000");
 assert(findOrderByRouteSheetNumberInput("9999", orders) == null, "missing id");
 
+function routeSheetDefaultDateDeltaDays(weekday) {
+  return weekday === 5 ? 3 : 1;
+}
+
+function getTomorrowIsoDate(now) {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  d.setDate(d.getDate() + routeSheetDefaultDateDeltaDays(d.getDay()));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getRouteSheetActiveDeliveryDate(fromValue, now) {
+  const raw = String(fromValue ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  return getTomorrowIsoDate(now);
+}
+
+// Пятница 14 авг 2026 → понедельник 17 авг, не суббота 15 авг
+const friday = new Date(2026, 7, 14, 16, 0, 0);
+assert(friday.getDay() === 5, "fixture is Friday");
+assert(getTomorrowIsoDate(friday) === "2026-08-17", "Friday default is Monday");
+assert(getRouteSheetActiveDeliveryDate("2026-08-17", friday) === "2026-08-17", "add order uses sheet date");
+assert(getRouteSheetActiveDeliveryDate("", friday) === "2026-08-17", "empty sheet date falls back to Monday");
+
+const thursday = new Date(2026, 7, 13, 10, 0, 0);
+assert(thursday.getDay() === 4, "fixture is Thursday");
+assert(getTomorrowIsoDate(thursday) === "2026-08-14", "Thursday default is Friday");
+
 console.log("ok: route-sheet order number lookup");
