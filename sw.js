@@ -1,15 +1,54 @@
 /* eslint-disable no-restricted-globals */
 /**
- * Service worker: push-уведомления и badge.
- * Статику и API не перехватывает — страница всегда грузится с сервера без задержек кэша.
+ * Service worker: push/badge + кэш статики (JS/CSS/иконки) для быстрого открытия PWA.
+ * HTML — network-first (чтобы не залипать на старой оболочке).
+ * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
+const STATIC_CACHE = "orders-site-static-v2";
 const BADGE_COUNT_KEY = "/badge-count";
 
 const LEGACY_CACHE_PREFIXES = ["orders-site-static-"];
 
+const PRECACHE_URLS = [
+  "/",
+  "/index.html",
+  "/style.css",
+  "/js/boot-route.js",
+  "/js/main.js",
+  "/js/config.js",
+  "/js/state.js",
+  "/js/auth.js",
+  "/js/orders.js",
+  "/js/dom.js",
+  "/js/ui.js",
+  "/js/section-nav.js",
+  "/js/app-routes.js",
+  "/js/settings.js",
+  "/js/roles.js",
+  "/js/files.js",
+  "/js/register-sw.js",
+  "/manifest.webmanifest",
+  "/img/icon-192.png?v=20260803",
+];
+
 self.addEventListener("install", (event) => {
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(STATIC_CACHE);
+      await Promise.all(
+        PRECACHE_URLS.map(async (url) => {
+          try {
+            const res = await fetch(url, { cache: "reload" });
+            if (res.ok) await cache.put(url, res.clone());
+          } catch {
+            /* ignore individual precache failures */
+          }
+        }),
+      );
+      await self.skipWaiting();
+    })(),
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -18,7 +57,12 @@ self.addEventListener("activate", (event) => {
       const keys = await caches.keys();
       await Promise.all(
         keys
-          .filter((k) => k !== BADGE_CACHE && LEGACY_CACHE_PREFIXES.some((p) => k.startsWith(p)))
+          .filter(
+            (k) =>
+              k !== BADGE_CACHE &&
+              k !== STATIC_CACHE &&
+              LEGACY_CACHE_PREFIXES.some((p) => k.startsWith(p)),
+          )
           .map((k) => caches.delete(k)),
       );
       await self.clients.claim();
@@ -26,6 +70,95 @@ self.addEventListener("activate", (event) => {
       if (count > 0) await applyAppBadge(count);
     })(),
   );
+});
+
+function isSameOrigin(url) {
+  return url.origin === self.location.origin;
+}
+
+function isApiPath(pathname) {
+  return pathname.startsWith("/api/");
+}
+
+function isStaticAsset(url) {
+  const p = url.pathname;
+  if (p.startsWith("/js/") || p.startsWith("/img/")) return true;
+  if (p === "/style.css" || p.endsWith(".css")) return true;
+  if (p.endsWith(".webmanifest") || p.endsWith(".woff2") || p.endsWith(".woff")) return true;
+  return false;
+}
+
+function isNavigationRequest(request) {
+  if (request.mode === "navigate") return true;
+  const accept = request.headers.get("accept") || "";
+  return accept.includes("text/html");
+}
+
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  const cached = await cache.match(request);
+  const networkPromise = fetch(request)
+    .then((res) => {
+      if (res && res.ok) {
+        void cache.put(request, res.clone());
+      }
+      return res;
+    })
+    .catch(() => null);
+
+  if (cached) {
+    void networkPromise;
+    return cached;
+  }
+  const network = await networkPromise;
+  if (network) return network;
+  return new Response("Offline", { status: 503, statusText: "Offline" });
+}
+
+async function networkFirstNavigate(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  try {
+    const res = await fetch(request);
+    if (res && res.ok) {
+      // Кладём оболочку под стабильные ключи.
+      void cache.put("/", res.clone());
+      void cache.put("/index.html", res.clone());
+    }
+    return res;
+  } catch {
+    const fallback =
+      (await cache.match(request)) ||
+      (await cache.match("/index.html")) ||
+      (await cache.match("/"));
+    if (fallback) return fallback;
+    return new Response("Нет сети", {
+      status: 503,
+      statusText: "Offline",
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+}
+
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+  if (request.method !== "GET") return;
+
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return;
+  }
+  if (!isSameOrigin(url) || isApiPath(url.pathname)) return;
+
+  if (isStaticAsset(url)) {
+    event.respondWith(staleWhileRevalidate(request));
+    return;
+  }
+
+  if (isNavigationRequest(request)) {
+    event.respondWith(networkFirstNavigate(request));
+  }
 });
 
 async function getBadgeCount() {

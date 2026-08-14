@@ -352,7 +352,11 @@ export async function createOrderTask() {
   void loadAllTasks();
 }
 
+let orderTasksSectionInited = false;
+
 export function initOrderTasksSection() {
+  if (orderTasksSectionInited) return;
+  orderTasksSectionInited = true;
   const createBtn = document.getElementById("orderTaskCreateBtn");
   const input = document.getElementById("orderTaskTextInput");
   const highlightCb = document.getElementById("orderTaskHighlightCheckbox");

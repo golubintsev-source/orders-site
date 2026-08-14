@@ -101,6 +101,9 @@ function mergedLocalOrdersForOfflineDisplay() {
 
 const SESSION_ORDERS_CACHE_KEY = "orders_site_session_orders_v1";
 const SESSION_FILES_COUNT_CACHE_KEY = "orders_site_session_files_count_v1";
+/** Долгоживущий кэш для мгновенного открытия PWA после убийства WebView (iOS). */
+const LOCAL_ORDERS_CACHE_KEY = "orders_site_local_orders_v1";
+const LOCAL_FILES_COUNT_CACHE_KEY = "orders_site_local_files_count_v1";
 
 /** 7 и +7 → 8 в phone (отображение и последующее сохранение). */
 function normalizeOrdersPhones(orders) {
@@ -120,20 +123,45 @@ function persistOrdersSessionCache(orders, filesCountMap) {
   } catch {
     /* ignore quota */
   }
+  try {
+    localStorage.setItem(LOCAL_ORDERS_CACHE_KEY, JSON.stringify(orders));
+    localStorage.setItem(LOCAL_FILES_COUNT_CACHE_KEY, JSON.stringify(filesCountMap || {}));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+function paintOrdersFromCacheRaw(ordersRaw, filesCountRaw) {
+  if (!ordersRaw) return false;
+  const orders = JSON.parse(ordersRaw);
+  if (!Array.isArray(orders) || orders.length === 0) return false;
+  state.allOrders = normalizeOrdersPhones(orders);
+  state.filesCountMap = filesCountRaw ? JSON.parse(filesCountRaw) : {};
+  applyFiltersAndRender();
+  updateSectionNavRicherStat();
+  return true;
 }
 
 /** Мгновенная отрисовка таблицы из sessionStorage (stale-while-revalidate). */
 export function paintOrdersFromSessionCacheIfAny() {
   try {
-    const raw = sessionStorage.getItem(SESSION_ORDERS_CACHE_KEY);
-    if (!raw) return;
-    const orders = JSON.parse(raw);
-    if (!Array.isArray(orders) || orders.length === 0) return;
-    state.allOrders = normalizeOrdersPhones(orders);
-    const fcRaw = sessionStorage.getItem(SESSION_FILES_COUNT_CACHE_KEY);
-    state.filesCountMap = fcRaw ? JSON.parse(fcRaw) : {};
-    applyFiltersAndRender();
-    updateSectionNavRicherStat();
+    paintOrdersFromCacheRaw(
+      sessionStorage.getItem(SESSION_ORDERS_CACHE_KEY),
+      sessionStorage.getItem(SESSION_FILES_COUNT_CACHE_KEY),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Мгновенная отрисовка после холодного старта PWA, если sessionStorage пуст. */
+export function paintOrdersFromLocalCacheIfAny() {
+  if (state.allOrders?.length) return;
+  try {
+    paintOrdersFromCacheRaw(
+      localStorage.getItem(LOCAL_ORDERS_CACHE_KEY),
+      localStorage.getItem(LOCAL_FILES_COUNT_CACHE_KEY),
+    );
   } catch {
     /* ignore */
   }
