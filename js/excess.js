@@ -13,6 +13,11 @@ import { shortLoginByEmail } from "./user-names.js";
 let excessesBound = false;
 let excessesRowsCache = [];
 let rowSeq = 0;
+/** @type {number|null} */
+let editingExcessId = null;
+
+const EXCESS_ICON_EDIT_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+const EXCESS_ICON_DELETE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -61,6 +66,29 @@ function getStartBtn() {
   return document.getElementById("excessAddClientBtn");
 }
 
+function getAddRowBtn() {
+  return document.getElementById("excessAddRowBtn");
+}
+
+function getSaveBtn() {
+  return document.getElementById("excessSaveBtn");
+}
+
+function isEditMode() {
+  return editingExcessId != null;
+}
+
+function syncFormChrome() {
+  const addRowBtn = getAddRowBtn();
+  const addRowWrap = addRowBtn?.closest(".excess-form-add-wrap");
+  const saveBtn = getSaveBtn();
+  if (addRowWrap) addRowWrap.hidden = isEditMode();
+  if (addRowBtn) addRowBtn.hidden = isEditMode();
+  if (saveBtn) {
+    saveBtn.textContent = isEditMode() ? "Сохранить изменения" : "Сохранить";
+  }
+}
+
 function showFormPanel(show) {
   const panel = getFormPanel();
   const startBtn = getStartBtn();
@@ -68,9 +96,12 @@ function showFormPanel(show) {
   if (startBtn) startBtn.hidden = show;
 }
 
-function createExcessRow(initial = { client: "", amount: "" }) {
+function createExcessRow(initial = { client: "", amount: "" }, options = {}) {
   const list = getRowsList();
   if (!list) return null;
+
+  const clientReadonly = Boolean(options.clientReadonly);
+  const hideRemove = Boolean(options.hideRemove);
 
   rowSeq += 1;
   const id = rowSeq;
@@ -78,12 +109,13 @@ function createExcessRow(initial = { client: "", amount: "" }) {
   const row = document.createElement("div");
   row.className = "excess-row";
   row.dataset.rowId = String(id);
+  if (clientReadonly) row.classList.add("excess-row--edit");
 
   row.innerHTML = `
     <div class="field excess-client-field">
       <label for="excessClient_${id}">Клиент</label>
       <div class="client-input-wrap excess-client-input-wrap">
-        <input type="text" id="excessClient_${id}" class="excess-client-input" autocomplete="off" />
+        <input type="text" id="excessClient_${id}" class="excess-client-input" autocomplete="off" ${clientReadonly ? "readonly" : ""} />
         <ul class="client-suggestions excess-client-suggestions" hidden role="listbox"></ul>
       </div>
     </div>
@@ -91,9 +123,13 @@ function createExcessRow(initial = { client: "", amount: "" }) {
       <label for="excessAmount_${id}">Сумма</label>
       <input type="text" id="excessAmount_${id}" class="excess-amount-input" inputmode="numeric" title="Только целые рубли, без копеек" />
     </div>
-    <button type="button" class="excess-row-remove-btn" title="Удалить строку" aria-label="Удалить строку">
+    ${
+      hideRemove
+        ? ""
+        : `<button type="button" class="excess-row-remove-btn" title="Удалить строку" aria-label="Удалить строку">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
+    </button>`
+    }
   `;
 
   const clientInput = row.querySelector(".excess-client-input");
@@ -104,6 +140,10 @@ function createExcessRow(initial = { client: "", amount: "" }) {
 
   if (clientInput instanceof HTMLInputElement) {
     clientInput.value = initial.client || "";
+    if (clientReadonly) {
+      clientInput.readOnly = true;
+      clientInput.setAttribute("aria-readonly", "true");
+    }
   }
   if (amountInput instanceof HTMLInputElement) {
     amountInput.value = initial.amount || "";
@@ -112,7 +152,7 @@ function createExcessRow(initial = { client: "", amount: "" }) {
     });
   }
 
-  if (clientInput instanceof HTMLInputElement && listEl && wrap) {
+  if (!clientReadonly && clientInput instanceof HTMLInputElement && listEl && wrap) {
     attachFieldAutocomplete({
       input: clientInput,
       list: listEl,
@@ -125,6 +165,7 @@ function createExcessRow(initial = { client: "", amount: "" }) {
     row.remove();
     const remaining = list.querySelectorAll(".excess-row").length;
     if (remaining === 0) {
+      cancelEditMode();
       showFormPanel(false);
       setFormMessage("");
     }
@@ -148,15 +189,23 @@ function collectRowsFromDom() {
   return rows;
 }
 
+function cancelEditMode() {
+  editingExcessId = null;
+  syncFormChrome();
+}
+
 function resetFormToEmpty() {
   const list = getRowsList();
   if (list) list.innerHTML = "";
+  cancelEditMode();
   showFormPanel(false);
   setFormMessage("");
 }
 
 function startWithClientRow() {
+  cancelEditMode();
   showFormPanel(true);
+  syncFormChrome();
   setFormMessage("");
   const list = getRowsList();
   if (list && list.querySelectorAll(".excess-row").length === 0) {
@@ -169,6 +218,7 @@ function startWithClientRow() {
 }
 
 function addEmptyRow() {
+  if (isEditMode()) return;
   showFormPanel(true);
   setFormMessage("");
   const row = createExcessRow();
@@ -178,7 +228,55 @@ function addEmptyRow() {
   }
 }
 
+function formatAmountForInput(value) {
+  if (value == null || value === "") return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return String(Math.trunc(n));
+}
+
+function startEditExcess(id) {
+  const n = Number(id);
+  if (!Number.isFinite(n)) return;
+  const existing = excessesRowsCache.find((r) => Number(r.id) === n);
+  if (!existing) {
+    setTableMessage("Запись не найдена.");
+    return;
+  }
+
+  editingExcessId = n;
+  const list = getRowsList();
+  if (list) list.innerHTML = "";
+  showFormPanel(true);
+  syncFormChrome();
+  setFormMessage("Редактирование: можно изменить только сумму.");
+  setTableMessage("");
+
+  const row = createExcessRow(
+    {
+      client: existing.client || "",
+      amount: formatAmountForInput(existing.amount),
+    },
+    { clientReadonly: true, hideRemove: true },
+  );
+  const amountInput = row?.querySelector(".excess-amount-input");
+  if (amountInput instanceof HTMLInputElement) {
+    queueMicrotask(() => {
+      amountInput.focus();
+      amountInput.select();
+    });
+  }
+
+  const panel = getFormPanel();
+  panel?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+}
+
 async function saveExcessRows() {
+  if (isEditMode()) {
+    await saveEditedExcess();
+    return;
+  }
+
   const rows = collectRowsFromDom();
   if (rows.length === 0) {
     setFormMessage("Добавьте хотя бы одну строку.", true);
@@ -223,7 +321,7 @@ async function saveExcessRows() {
     return;
   }
 
-  const saveBtn = document.getElementById("excessSaveBtn");
+  const saveBtn = getSaveBtn();
   if (saveBtn) saveBtn.disabled = true;
 
   try {
@@ -240,6 +338,65 @@ async function saveExcessRows() {
     await loadExcesses();
   } catch (err) {
     console.error("excesses save:", err);
+    setFormMessage("Ошибка сохранения. Проверьте интернет и настройки Supabase.", true);
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function saveEditedExcess() {
+  const id = editingExcessId;
+  if (id == null) return;
+
+  const rows = collectRowsFromDom();
+  const row = rows[0];
+  if (!row) {
+    setFormMessage("Нет данных для сохранения.", true);
+    return;
+  }
+
+  const amountParsed = tryParseRublesInteger(row.amountRaw);
+  const hasAmount = String(row.amountRaw ?? "").trim() !== "";
+  if (!hasAmount) {
+    setFormMessage("Укажите сумму.", true);
+    row.amountInput?.focus();
+    return;
+  }
+  if (!amountParsed.ok || amountParsed.value == null) {
+    setFormMessage(MSG_SUM_INTEGER_ONLY, true);
+    if (row.amountInput) refreshRublesIntegerInputState(row.amountInput, row.amountRaw);
+    row.amountInput?.focus();
+    return;
+  }
+
+  const saveBtn = getSaveBtn();
+  if (saveBtn) saveBtn.disabled = true;
+
+  const payload = {
+    amount: amountParsed.value,
+    created_by: state.currentUser?.email || null,
+    created_at: new Date().toISOString(),
+  };
+
+  try {
+    const result = await raceWithTimeout(
+      supabaseClient
+        .from("excesses")
+        .update(payload)
+        .eq("id", id)
+        .is("deleted_at", null)
+        .select(),
+    );
+    if (result?.error) {
+      console.error("excesses update:", result.error);
+      setFormMessage("Не удалось сохранить изменения.", true);
+      return;
+    }
+    resetFormToEmpty();
+    setFormMessage("Изменения сохранены.");
+    await loadExcesses();
+  } catch (err) {
+    console.error("excesses update:", err);
     setFormMessage("Ошибка сохранения. Проверьте интернет и настройки Supabase.", true);
   } finally {
     if (saveBtn) saveBtn.disabled = false;
@@ -268,8 +425,11 @@ function renderExcessesTable(rows) {
       <td>${escapeHtml(row.client || "")}</td>
       <td class="td-money">${escapeHtml(amount)}</td>
       <td class="td-actions">
+        <button type="button" class="btn-icon btn-edit excess-edit-btn" data-id="${escapeHtml(String(row.id))}" title="Редактировать" aria-label="Редактировать">
+          ${EXCESS_ICON_EDIT_SVG}
+        </button>
         <button type="button" class="btn-icon btn-delete excess-delete-btn" data-id="${escapeHtml(String(row.id))}" title="Удалить" aria-label="Удалить">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          ${EXCESS_ICON_DELETE_SVG}
         </button>
       </td>
     `;
@@ -293,6 +453,9 @@ async function deleteExcess(id) {
       console.error("excesses delete:", result.error);
       setTableMessage("Не удалось удалить запись.");
       return;
+    }
+    if (editingExcessId === n) {
+      resetFormToEmpty();
     }
     await loadExcesses();
   } catch (err) {
@@ -345,8 +508,13 @@ export function bindExcessSection() {
   });
 
   document.querySelector("#excessesTable tbody")?.addEventListener("click", (e) => {
-    const btn = e.target?.closest?.(".excess-delete-btn");
-    if (!btn) return;
-    void deleteExcess(btn.dataset.id);
+    const editBtn = e.target?.closest?.(".excess-edit-btn");
+    if (editBtn) {
+      startEditExcess(editBtn.dataset.id);
+      return;
+    }
+    const deleteBtn = e.target?.closest?.(".excess-delete-btn");
+    if (!deleteBtn) return;
+    void deleteExcess(deleteBtn.dataset.id);
   });
 }
