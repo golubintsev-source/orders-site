@@ -66,6 +66,7 @@ export function updateSectionNavRicherStat() {
 const SECTION_LABELS = {
   all: "Заказы",
   calculations: "Расчеты",
+  excess: "Излишки",
   "tasks-all": "Все задачи",
   "changes-all": "Все изменения",
   balance: "Баланс",
@@ -85,6 +86,7 @@ export const STANDALONE_SECTION_NAV_ID = "__standalone__";
 /** Разделы, где под шапкой в области страницы показывается «К заказам». */
 const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "calculations",
+  "excess",
   "tasks-all",
   "changes-all",
   "order-tasks",
@@ -354,6 +356,9 @@ export function switchSection(sectionId, opts = {}) {
   }
   if (sectionId === "calculations") {
     void import("./calculations.js").then((m) => m.loadCalculations());
+  }
+  if (sectionId === "excess") {
+    void import("./excess.js").then((m) => m.loadExcesses());
   }
 
   if (sectionId === "tasks-all") {

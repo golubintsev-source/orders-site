@@ -67,9 +67,10 @@ function ensureBootOrFallback() {
 
 /** Тяжёлые разделы — после первой отрисовки заказов, чтобы не раздувать критический путь. */
 async function initSecondarySections() {
-  const [{ bindCalculationsSection, loadCalculations }, { initRouteSheetSection }, { initOrderTasksSection }, { initAllChangesSection }, { initStatisticsSection }, { initPushNotifications }, { initMessagesSection }, { initVoiceSection }] =
+  const [{ bindCalculationsSection, loadCalculations }, { bindExcessSection, loadExcesses }, { initRouteSheetSection }, { initOrderTasksSection }, { initAllChangesSection }, { initStatisticsSection }, { initPushNotifications }, { initMessagesSection }, { initVoiceSection }] =
     await Promise.all([
       import("./calculations.js"),
+      import("./excess.js"),
       import("./route-sheet.js"),
       import("./tasks.js"),
       import("./all-changes.js"),
@@ -90,6 +91,12 @@ async function initSecondarySections() {
       void loadCalculations();
     }
   }
+
+  bindExcessSection();
+  if (getCurrentSectionId() === "excess") {
+    void loadExcesses();
+  }
+
   initRouteSheetSection();
   initAllChangesSection();
   initStatisticsSection();
