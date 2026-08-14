@@ -560,10 +560,12 @@ export async function renderExistingOrderFilesInForm(orderId) {
       ? null
       : removeOrderFileFromEditForm;
 
-  for (const file of files) {
-    const row = await createOrderFileRowElement(file, orderId, onDelete);
-    list.appendChild(row);
-  }
+  const rows = await Promise.all(
+    files.map((file) => createOrderFileRowElement(file, orderId, onDelete)),
+  );
+  const frag = document.createDocumentFragment();
+  for (const row of rows) frag.appendChild(row);
+  list.appendChild(frag);
 }
 
 /** Целевой размер от исходного (~в ~20 раз меньше для многомегабайтных фото; сильнее чем раньше). */
@@ -1298,10 +1300,10 @@ export async function openFilesModal(orderId) {
   const list = document.createElement("div");
   list.className = "files-list";
 
-  for (const file of files) {
-    const row = await createOrderFileRowElement(file, orderId, removeFile, { largePreview: true });
-    list.appendChild(row);
-  }
+  const rows = await Promise.all(
+    files.map((file) => createOrderFileRowElement(file, orderId, removeFile, { largePreview: true })),
+  );
+  for (const row of rows) list.appendChild(row);
 
   filesModalBody.appendChild(list);
 }

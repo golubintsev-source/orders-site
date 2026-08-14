@@ -4,6 +4,7 @@ import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
 import {
   loadOrders,
   paintOrdersFromSessionCacheIfAny,
+  paintOrdersFromLocalCacheIfAny,
   resetFormMode,
   editOrder,
   viewOrder,
@@ -65,10 +66,25 @@ function ensureBootOrFallback() {
   document.documentElement.setAttribute("data-route-boot", "1");
 }
 
-/** Тяжёлые разделы — после первой отрисовки заказов, чтобы не раздувать критический путь. */
-async function initSecondarySections() {
-  const [{ bindCalculationsSection, loadCalculations }, { bindExcessSection, loadExcesses }, { initRouteSheetSection }, { initOrderTasksSection }, { initAllChangesSection }, { initStatisticsSection }, { initPushNotifications }, { initMessagesSection }, { initVoiceSection }] =
-    await Promise.all([
+/**
+ * Тяжёлые разделы вне критического пути заказов.
+ * @param {{ urgent?: boolean }} [opts] urgent — ждать загрузки (сообщения/задачи и т.п.)
+ */
+async function initSecondarySections(opts = {}) {
+  const urgent = Boolean(opts.urgent);
+
+  const run = async () => {
+    const [
+      { bindCalculationsSection, loadCalculations },
+      { bindExcessSection, loadExcesses },
+      { initRouteSheetSection },
+      { initOrderTasksSection },
+      { initAllChangesSection },
+      { initStatisticsSection },
+      { initPushNotifications },
+      { initMessagesSection },
+      { initVoiceSection },
+    ] = await Promise.all([
       import("./calculations.js"),
       import("./excess.js"),
       import("./route-sheet.js"),
@@ -80,32 +96,47 @@ async function initSecondarySections() {
       import("./voice.js"),
     ]);
 
-  void initPushNotifications();
-  initOrderTasksSection();
-  initMessagesSection();
-  initVoiceSection();
+    void initPushNotifications();
+    initOrderTasksSection();
+    initMessagesSection();
+    initVoiceSection();
 
-  if (canAccessSection("calculations")) {
-    bindCalculationsSection();
-    if (getCurrentSectionId() === "calculations") {
-      void loadCalculations();
+    if (canAccessSection("calculations")) {
+      bindCalculationsSection();
+      if (getCurrentSectionId() === "calculations") {
+        void loadCalculations();
+      }
     }
+
+    bindExcessSection();
+    if (getCurrentSectionId() === "excess") {
+      void loadExcesses();
+    }
+
+    initRouteSheetSection();
+    initAllChangesSection();
+    initStatisticsSection();
+
+    if (isAdmin()) {
+      const { initLoginLinksSection, loadLoginLinksSection } = await import("./login-links.js");
+      initLoginLinksSection();
+      void loadLoginLinksSection();
+    }
+  };
+
+  if (urgent) {
+    await run();
+    return;
   }
 
-  bindExcessSection();
-  if (getCurrentSectionId() === "excess") {
-    void loadExcesses();
-  }
-
-  initRouteSheetSection();
-  initAllChangesSection();
-  initStatisticsSection();
-
-  if (isAdmin()) {
-    const { initLoginLinksSection, loadLoginLinksSection } = await import("./login-links.js");
-    initLoginLinksSection();
-    void loadLoginLinksSection();
-  }
+  // Заказы / новый / форма: не ждём ~400 КБ вторичных модулей.
+  const schedule =
+    typeof requestIdleCallback === "function"
+      ? (cb) => requestIdleCallback(cb, { timeout: 2500 })
+      : (cb) => setTimeout(cb, 1);
+  schedule(() => {
+    void run().catch((err) => console.error("Вторичная инициализация:", err));
+  });
 }
 
 async function init() {
@@ -164,6 +195,8 @@ async function init() {
 
     hydrateCachedRoleFromStorage();
     paintOrdersFromSessionCacheIfAny();
+    // Холодный старт PWA (iOS часто чистит sessionStorage) — мгновенная таблица из localStorage.
+    paintOrdersFromLocalCacheIfAny();
 
     const ordersPromise = loadOrders();
 
@@ -192,8 +225,26 @@ async function init() {
 
     applyPendingOrdersSearchFromHistory();
 
-    // Разделы вне критического пути заказов, но нужны до restore (маршрут/задачи).
-    await initSecondarySections();
+    // Не блокируем открытие заказа/restore на загрузке messages/voice/route-sheet.
+    const sectionNow = getCurrentSectionId();
+    const waitSecondary =
+      sectionNow === "messages" ||
+      sectionNow === "voice" ||
+      sectionNow === "order-tasks" ||
+      sectionNow === "tasks-all" ||
+      sectionNow === "calculations" ||
+      sectionNow === "excess" ||
+      sectionNow === "route-sheet" ||
+      sectionNow === "changes-all" ||
+      sectionNow === "statistics" ||
+      savedApp?.sectionId === "order-tasks" ||
+      savedApp?.sectionId === "messages" ||
+      savedApp?.sectionId === "voice";
+    if (waitSecondary) {
+      await initSecondarySections({ urgent: true });
+    } else {
+      void initSecondarySections({ urgent: false });
+    }
 
     if (orderIdFromUrl != null) {
       await viewOrder(orderIdFromUrl);

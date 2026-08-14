@@ -1489,7 +1489,11 @@ function sendFromInput() {
   void handleUserText(text);
 }
 
+let voiceSectionInited = false;
+
 export function initVoiceSection() {
+  if (voiceSectionInited) return;
+  voiceSectionInited = true;
   ensureBrowserVoices();
   bindPageInactiveListeners();
   // AudioContext создаём только по жесту (unlockTtsAudio) — иначе iOS держит suspended.
@@ -1576,6 +1580,7 @@ export function initVoiceSection() {
 }
 
 export function onVoiceSectionEnter() {
+  initVoiceSection();
   // Разблокируем AudioContext при входе в раздел (жест навигации), чтобы озвучка
   // ответов работала после fetch, не используя HTMLAudioElement.
   unlockTtsAudio();
