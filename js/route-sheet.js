@@ -1928,6 +1928,8 @@ function ordersVisibleOnRouteSheet({ includeShopForUserLite = false } = {}) {
 
 /**
  * Найти заказ по вводу «Точка по номеру»: только цифры (id) или полный номер, как в таблице заказов.
+ * Id ≥ 1000 отображаются без ведущего нуля (1113_О), id < 1000 — с padStart(4) (0112_О);
+ * сравнение чипа допускает лишние/отсутствующие ведущие нули в цифровой части.
  */
 function findOrderByRouteSheetNumberInput(raw) {
   const s = String(raw ?? "").trim();
@@ -1941,11 +1943,32 @@ function findOrderByRouteSheetNumberInput(raw) {
   }
 
   const norm = s.replace(/\s+/g, "");
+  const normLower = norm.toLowerCase();
   for (const o of orders) {
     const chip = formatOrderIdTypeChip(o.id, o.order_type);
     if (!chip) continue;
-    if (chip.replace(/\s+/g, "").toLowerCase() === norm.toLowerCase()) return o;
+    if (chip.replace(/\s+/g, "").toLowerCase() === normLower) return o;
   }
+
+  // «01113_О» / «1113_О» / «1113_окна» — id без учёта ведущих нулей + буква/тип
+  const m = norm.match(/^0*(\d+)[_.,\-]*(.*)$/u);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    const suffix = (m[2] || "").trim();
+    if (Number.isFinite(n)) {
+      const found = orders.find((o) => {
+        if (Number(o.id) !== n) return false;
+        if (!suffix) return true;
+        const type = (o.order_type || "").trim();
+        const letter = type.charAt(0);
+        if (!letter) return false;
+        const sufLower = suffix.toLowerCase();
+        return letter.toLowerCase() === sufLower.charAt(0) || type.toLowerCase() === sufLower;
+      });
+      if (found) return found;
+    }
+  }
+
   return null;
 }
 
@@ -3494,13 +3517,15 @@ async function confirmRouteSheetPointByNo() {
   const confirmBtn = document.getElementById("routeSheetPointByNoConfirmBtn");
   if (confirmBtn) confirmBtn.disabled = true;
   try {
+    // Таблица «Доставка» фильтрует по delivery === «Доставка» и дате — без отправки заказ
+    // не появляется в списке (даже если дата уже проставлена).
     const { error } = await supabaseClient
       .from("orders")
-      .update({ delivery_date: defaultDeliveryDate })
+      .update({ delivery_date: defaultDeliveryDate, delivery: DELIVERY_SHIP })
       .eq("id", order.id);
     if (error) {
       console.error("route-sheet point by no:", error);
-      setRouteSheetPointByNoError(error.message || "Не удалось сохранить дату.");
+      setRouteSheetPointByNoError(error.message || "Не удалось сохранить заказ.");
       return;
     }
     if (state.currentUser?.email) {
@@ -3508,13 +3533,16 @@ async function confirmRouteSheetPointByNo() {
         {
           order_id: order.id,
           user_email: state.currentUser.email,
-          comment: `Маршрутный лист: дата доставки → ${defaultDeliveryDate}`,
+          comment: `Маршрутный лист: отправка → ${DELIVERY_SHIP}, дата доставки → ${defaultDeliveryDate}`,
         },
       ]);
       if (histError) console.warn("order_history:", histError.message);
     }
     closeRouteSheetPointByNoDialog();
-    setMessage(`Дата доставки обновлена: ${formatOrderIdTypeChip(order.id, order.order_type)}`, "#2e7d32");
+    setMessage(
+      `Добавлен в доставку: ${formatOrderIdTypeChip(order.id, order.order_type)}`,
+      "#2e7d32",
+    );
     await loadOrders();
     loadRouteSheet();
   } finally {
