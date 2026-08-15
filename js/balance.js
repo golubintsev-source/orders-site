@@ -4,6 +4,7 @@ import { formatAmountWholeRubles } from "./format.js";
 import { state } from "./state.js";
 import { persistBalanceOfflineView, readBalanceOfflineView, isOfflineDataMode } from "./offline-cache.js";
 import { isOfflineWorkModeEnabled } from "./config.js";
+import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 
 const PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
 const MSK_TZ = "Europe/Moscow";
@@ -175,32 +176,17 @@ function tryPaintBalanceFromOfflineCache(messageEl, cacheHint) {
 
 /**
  * Все неудалённые расчёты для баланса.
- * PostgREST/Supabase по умолчанию отдаёт не больше ~1000 строк за запрос без .range(),
- * поэтому без пагинации «С-1»/«С-2»/«С-3» (недавние дни) часто остаются нулями.
+ * Без пагинации Supabase молча обрезает ответ (~1000 строк) — С-1/С-2/С-3 становятся нулями.
  */
 async function fetchAllCalculationsForBalance() {
-  const pageSize = 1000;
-  const all = [];
-  let from = 0;
-
-  for (;;) {
-    const { data, error } = await supabaseClient
+  return fetchAllSupabaseRows(() =>
+    supabaseClient
       .from("calculations")
       .select("id,from_place,to_place,amount,created_at")
       .is("deleted_at", null)
       .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, from + pageSize - 1);
-
-    if (error) return { data: null, error };
-
-    const rows = data || [];
-    all.push(...rows);
-    if (rows.length < pageSize) break;
-    from += pageSize;
-  }
-
-  return { data: all, error: null };
+      .order("id", { ascending: true }),
+  );
 }
 
 export async function loadBalance() {

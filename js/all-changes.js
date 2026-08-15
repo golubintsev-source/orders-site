@@ -10,6 +10,7 @@ import {
   isOfflineDataMode,
   OFFLINE_SUPABASE_WAIT_MS,
 } from "./offline-cache.js";
+import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 
 /** YYYY-MM-DD в локальной календарной дате. */
 function ymdLocal(d = new Date()) {
@@ -157,12 +158,15 @@ export async function loadAllChanges() {
   const { startIso, endIso } = readAllChangesDateRangeFromInputs();
 
   if (!isOfflineWorkModeEnabled()) {
-    const { data, error } = await supabaseClient
-      .from("order_history")
-      .select("created_at, user_email, comment, order_id")
-      .gte("created_at", startIso)
-      .lte("created_at", endIso)
-      .order("created_at", { ascending: false });
+    const { data, error } = await fetchAllSupabaseRows(() =>
+      supabaseClient
+        .from("order_history")
+        .select("created_at, user_email, comment, order_id")
+        .gte("created_at", startIso)
+        .lte("created_at", endIso)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false }),
+    );
 
     if (error) {
       console.error("Ошибка загрузки истории изменений:", error);
@@ -187,7 +191,8 @@ export async function loadAllChanges() {
       .select("created_at, user_email, comment, order_id")
       .gte("created_at", startIso)
       .lte("created_at", endIso)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
 
   const skipNetwork =
     (typeof navigator !== "undefined" && navigator.onLine === false) || isOfflineDataMode();
@@ -203,7 +208,7 @@ export async function loadAllChanges() {
     }
     try {
       const waitMs = snapFiltered.length > 0 ? 1800 : OFFLINE_SUPABASE_WAIT_MS;
-      const res = await raceWithTimeout(historyQuery(), waitMs);
+      const res = await raceWithTimeout(fetchAllSupabaseRows(historyQuery), waitMs);
       data = res.data;
       error = res.error;
     } catch (e) {

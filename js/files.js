@@ -2,6 +2,7 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { isAdmin, isOrderHiddenForCurrentRole, isUserLite } from "./roles.js";
 import { formatOrderIdTypeChip } from "./format.js";
+import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import {
   downloadAttachmentOnIos,
   isIosDevice,
@@ -995,9 +996,9 @@ export async function attachStorageFileToOrder(orderId, meta) {
 }
 
 export async function loadFilesCountMap() {
-  const { data, error } = await supabaseClient
-    .from("order_files")
-    .select("order_id");
+  const { data, error } = await fetchAllSupabaseRows(() =>
+    supabaseClient.from("order_files").select("order_id").order("id", { ascending: true }),
+  );
 
   if (error) {
     console.error("Ошибка загрузки количества файлов:", error);

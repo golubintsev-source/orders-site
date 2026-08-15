@@ -9,6 +9,7 @@ import {
 import { readSnapshot } from "./offline-cache.js";
 import { downloadXlsxBuffer } from "./xlsxDownload.js";
 import { ensureXlsx } from "./lazy-cdn.js";
+import { fetchSupabaseByIdsInChunks } from "./supabase-fetch.js";
 
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 
@@ -113,13 +114,17 @@ async function fetchOrdersByIds(orderIds) {
   }
 
   try {
-    const { data, error } = await supabaseClient
-      .from("orders")
-      .select(
-        "id, order_date, client, address, amount, prepayment, remaining_amount, installer_payment_amount, order_type"
-      )
-      .in("id", orderIds)
-      .is("deleted_at", null);
+    const { data, error } = await fetchSupabaseByIdsInChunks(
+      (chunkIds) =>
+        supabaseClient
+          .from("orders")
+          .select(
+            "id, order_date, client, address, amount, prepayment, remaining_amount, installer_payment_amount, order_type"
+          )
+          .in("id", chunkIds)
+          .is("deleted_at", null),
+      orderIds,
+    );
     if (error) throw error;
     for (const o of data || []) {
       if (o?.id != null) map.set(o.id, o);

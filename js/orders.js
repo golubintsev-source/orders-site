@@ -1,6 +1,7 @@
 import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { syncDbUnavailableBanner } from "./dbHealth.js";
 import { state } from "./state.js";
+import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import {
   clientSearch,
   setMessage,
@@ -288,27 +289,33 @@ function getOrdersFastLoadSinceYmd(days = ORDERS_FAST_LOAD_DAYS) {
 }
 
 async function fetchOrdersFromDb({ sinceOrderDateYmd = null } = {}) {
-  let query = supabaseClient
-    .from("orders")
-    .select(ORDERS_LIST_SELECT)
-    .is("deleted_at", null)
-    .order("id", { ascending: false });
-  if (sinceOrderDateYmd) {
-    query = query.gte("order_date", sinceOrderDateYmd);
-  }
-
-  let { data, error } = await query;
-
-  if (error) {
-    let again = supabaseClient
+  const buildListQuery = () => {
+    let query = supabaseClient
       .from("orders")
-      .select("*")
+      .select(ORDERS_LIST_SELECT)
       .is("deleted_at", null)
       .order("id", { ascending: false });
     if (sinceOrderDateYmd) {
-      again = again.gte("order_date", sinceOrderDateYmd);
+      query = query.gte("order_date", sinceOrderDateYmd);
     }
-    const againStar = await again;
+    return query;
+  };
+
+  let { data, error } = await fetchAllSupabaseRows(buildListQuery);
+
+  if (error) {
+    const buildStarQuery = () => {
+      let again = supabaseClient
+        .from("orders")
+        .select("*")
+        .is("deleted_at", null)
+        .order("id", { ascending: false });
+      if (sinceOrderDateYmd) {
+        again = again.gte("order_date", sinceOrderDateYmd);
+      }
+      return again;
+    };
+    const againStar = await fetchAllSupabaseRows(buildStarQuery);
     if (!againStar.error) {
       data = againStar.data;
       error = null;

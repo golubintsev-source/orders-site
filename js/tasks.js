@@ -13,6 +13,7 @@ import {
   isOfflineClientOrderId,
   isOfflineDataMode,
 } from "./offline-cache.js";
+import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -135,10 +136,13 @@ export async function loadAllTasks() {
     msg.classList.remove("order-tasks-message--error");
   }
 
-  const { data, error } = await supabaseClient
-    .from("order_tasks")
-    .select("id, created_at, author_login, body, order_id")
-    .order("created_at", { ascending: false });
+  const { data, error } = await fetchAllSupabaseRows(() =>
+    supabaseClient
+      .from("order_tasks")
+      .select("id, created_at, author_login, body, order_id")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false }),
+  );
 
   if (error) {
     console.error("Ошибка загрузки задач:", error);
