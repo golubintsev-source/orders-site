@@ -7036,6 +7036,51 @@ th {
   opacity: 1;
 }
 
+.message-item-group-receipts {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  max-width: 100%;
+  line-height: 1;
+}
+
+.message-item-group-receipt {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1;
+}
+
+.message-item-group-receipt--pending {
+  letter-spacing: 0.04em;
+}
+
+.message-item-group-receipt-letter {
+  display: inline-block;
+  min-width: 0.65em;
+}
+
+.message-item-group-receipt .message-item-ticks {
+  margin-left: 1px;
+}
+
+.message-item-group-receipt .message-ticks-icon {
+  width: 12px;
+  height: 10px;
+}
+
+.message-item-group-receipt .message-ticks-icon--double {
+  width: 16px;
+}
+
+.message-item--out .message-item-group-receipt {
+  color: #475569;
+}
+
 .message-ticks-icon {
   width: 14px;
   height: 11px;

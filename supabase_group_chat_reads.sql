@@ -1,10 +1,13 @@
 -- Прочитанность групповых чатов (для бейджа и счётчика в списке).
 -- Выполнить в Supabase → SQL Editor (после supabase_group_chats.sql).
+-- Для галочек доставки/прочтения у участников также выполните supabase_group_chat_receipts.sql
+-- (если эта таблица уже создана ранее — достаточно только receipts-миграции).
 
 CREATE TABLE IF NOT EXISTS public.group_chat_reads (
   chat_id uuid NOT NULL REFERENCES public.group_chats (id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
   last_read_at timestamptz NOT NULL DEFAULT now(),
+  last_delivered_at timestamptz,
   PRIMARY KEY (chat_id, user_id)
 );
 
@@ -15,15 +18,17 @@ COMMENT ON TABLE public.group_chat_reads IS
   'Момент, до которого пользователь прочитал сообщения группового чата';
 COMMENT ON COLUMN public.group_chat_reads.last_read_at IS
   'Сообщения других участников с created_at > last_read_at считаются непрочитанными';
+COMMENT ON COLUMN public.group_chat_reads.last_delivered_at IS
+  'Момент, до которого пользователь получил сообщения группового чата на клиенте';
 
 ALTER TABLE public.group_chat_reads ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "group_chat_reads_select_own" ON public.group_chat_reads;
-CREATE POLICY "group_chat_reads_select_own" ON public.group_chat_reads
+DROP POLICY IF EXISTS "group_chat_reads_select_member" ON public.group_chat_reads;
+CREATE POLICY "group_chat_reads_select_member" ON public.group_chat_reads
   FOR SELECT TO authenticated
   USING (
-    user_id = auth.uid()
-    AND EXISTS (
+    EXISTS (
       SELECT 1
       FROM public.group_chats g
       WHERE g.id = group_chat_reads.chat_id

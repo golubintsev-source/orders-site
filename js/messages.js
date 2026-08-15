@@ -55,6 +55,13 @@ let groupChatsSupported = null;
 let groupAvatarSupported = null;
 /** null = unknown, true/false after first probe — group_chat_reads table */
 let groupChatReadsSupported = null;
+/** null = unknown, true/false after first probe — last_delivered_at on group_chat_reads */
+let groupDeliveredAtSupported = null;
+/**
+ * Статусы участников активного группового диалога.
+ * @type {Map<string, { lastReadAt: string|null, lastDeliveredAt: string|null }>}
+ */
+let activeGroupReceiptsByUser = new Map();
 /** null = unknown, true/false after first probe */
 let attachmentColumnsSupported = null;
 /** null = unknown, true/false after first probe — reply_to_id / edited_at / deleted_at */
@@ -201,6 +208,7 @@ function rememberFeedMessages(rows) {
 
 function clearFeedMessageCache() {
   feedMessagesById = new Map();
+  activeGroupReceiptsByUser = new Map();
 }
 
 function getMessageActionsSetupHint() {
@@ -332,6 +340,120 @@ function noteGroupChatReadsSupport(error) {
   return false;
 }
 
+function noteGroupDeliveredAtSupport(error) {
+  if (!error) {
+    groupDeliveredAtSupported = true;
+    return false;
+  }
+  const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""} ${error.code || ""}`.toLowerCase();
+  if (
+    msg.includes("last_delivered_at") ||
+    error.code === "PGRST204" ||
+    error.code === "42703"
+  ) {
+    groupDeliveredAtSupported = false;
+    return true;
+  }
+  return false;
+}
+
+function groupReceiptSelectColumns() {
+  if (groupDeliveredAtSupported === false) return "chat_id, user_id, last_read_at";
+  return "chat_id, user_id, last_read_at, last_delivered_at";
+}
+
+function mapGroupReceiptRow(row) {
+  return {
+    lastReadAt: row?.last_read_at ? String(row.last_read_at) : null,
+    lastDeliveredAt: row?.last_delivered_at ? String(row.last_delivered_at) : null,
+  };
+}
+
+/** Доставлено/прочитано участником относительно created_at сообщения. */
+function memberReceiptState(messageCreatedAt, receipt) {
+  const created = String(messageCreatedAt || "");
+  if (!created) {
+    return { read: false, delivered: false, status: "sent" };
+  }
+  const readAt = receipt?.lastReadAt || null;
+  const deliveredAt = receipt?.lastDeliveredAt || null;
+  const read = Boolean(readAt && readAt >= created);
+  const delivered = read || Boolean(deliveredAt && deliveredAt >= created);
+  if (read) return { read: true, delivered: true, status: "read" };
+  if (delivered) return { read: false, delivered: true, status: "delivered" };
+  return { read: false, delivered: false, status: "sent" };
+}
+
+function groupOtherMemberIds(memberIds, senderId, uid = getCurrentUserId()) {
+  const me = String(uid || "");
+  const sender = String(senderId || me);
+  return (memberIds || [])
+    .map(String)
+    .filter((id) => id && id !== me && id !== sender);
+}
+
+/**
+ * Агрегат для списка чатов: две галочки — все прочитали; одна — все получили;
+ * иначе пусто (пока не все получили).
+ */
+function aggregateGroupOutgoingListStatus(messageCreatedAt, memberIds, receiptsByUser, senderId) {
+  const others = groupOtherMemberIds(memberIds, senderId);
+  if (!others.length) return null;
+  let allDelivered = true;
+  let allRead = true;
+  for (const memberId of others) {
+    const state = memberReceiptState(messageCreatedAt, receiptsByUser?.get(String(memberId)));
+    if (!state.delivered) allDelivered = false;
+    if (!state.read) allRead = false;
+  }
+  if (allRead) return "read";
+  if (allDelivered) return "delivered";
+  return null;
+}
+
+function resolveMemberLabel(memberId) {
+  const user = (usersCache || []).find((u) => String(u.id) === String(memberId));
+  const email = user?.email || "";
+  const name = displayNameByEmail(email) || email || "Участник";
+  return { name, email, letter: avatarInitial(name) };
+}
+
+function groupParticipantReceiptLabel(name, state) {
+  if (state.read) return `${name}: прочитано`;
+  if (state.delivered) return `${name}: доставлено`;
+  return `${name}: не получено`;
+}
+
+/** Буква имени + 0/1/2 галочки для каждого участника (кроме отправителя). */
+function renderGroupParticipantReceiptsHtml(messageCreatedAt, memberIds, receiptsByUser, senderId) {
+  const others = groupOtherMemberIds(memberIds, senderId);
+  if (!others.length) return "";
+
+  const sorted = others
+    .map((memberId) => {
+      const { name, letter } = resolveMemberLabel(memberId);
+      const state = memberReceiptState(messageCreatedAt, receiptsByUser?.get(String(memberId)));
+      return { name, letter, state };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+
+  const html = sorted
+    .map(({ name, letter, state }) => {
+      const label = groupParticipantReceiptLabel(name, state);
+      let ticksHtml = "";
+      if (state.read) {
+        ticksHtml = `<span class="message-item-ticks message-item-ticks--read" aria-hidden="true">${TICK_SVG_DOUBLE}</span>`;
+      } else if (state.delivered) {
+        ticksHtml = `<span class="message-item-ticks message-item-ticks--delivered" aria-hidden="true">${TICK_SVG_SINGLE}</span>`;
+      }
+      const noneClass = state.delivered || state.read ? "" : " message-item-group-receipt--pending";
+      return `<span class="message-item-group-receipt${noneClass}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"><span class="message-item-group-receipt-letter">${escapeHtml(letter)}</span>${ticksHtml}</span>`;
+    })
+    .join("");
+
+  return `<span class="message-item-group-receipts">${html}</span>`;
+}
+
 function groupChatReadsStorageKey(uid = getCurrentUserId()) {
   return uid ? `messages:groupChatReads:${uid}` : null;
 }
@@ -418,21 +540,234 @@ async function markGroupChatRead(chatId, at = new Date().toISOString()) {
 
   if (groupChatReadsSupported === false) return;
 
-  const { error } = await supabaseClient.from("group_chat_reads").upsert(
-    {
-      chat_id: chatId,
-      user_id: uid,
-      last_read_at: nextAt,
-    },
-    { onConflict: "chat_id,user_id" },
-  );
+  const payload = {
+    chat_id: chatId,
+    user_id: uid,
+    last_read_at: nextAt,
+  };
+  if (groupDeliveredAtSupported !== false) {
+    payload.last_delivered_at = nextAt;
+  }
+
+  const { error } = await supabaseClient.from("group_chat_reads").upsert(payload, {
+    onConflict: "chat_id,user_id",
+  });
 
   if (error) {
     if (noteGroupChatReadsSupport(error)) return;
+    if (noteGroupDeliveredAtSupport(error) && groupDeliveredAtSupported === false) {
+      const retry = await supabaseClient.from("group_chat_reads").upsert(
+        {
+          chat_id: chatId,
+          user_id: uid,
+          last_read_at: nextAt,
+        },
+        { onConflict: "chat_id,user_id" },
+      );
+      if (retry.error) {
+        if (!noteGroupChatReadsSupport(retry.error)) {
+          console.warn("Не удалось отметить групповой чат прочитанным:", retry.error);
+        }
+        return;
+      }
+      groupChatReadsSupported = true;
+      return;
+    }
     console.warn("Не удалось отметить групповой чат прочитанным:", error);
   } else {
     groupChatReadsSupported = true;
+    if (groupDeliveredAtSupported !== false) groupDeliveredAtSupported = true;
   }
+}
+
+/**
+ * Отметить доставку групповых сообщений без прочтения.
+ * Не затирает last_read_at: сначала UPDATE, при отсутствии строки — INSERT с epoch.
+ */
+async function markGroupChatDelivered(chatId, at = new Date().toISOString()) {
+  const uid = getCurrentUserId();
+  if (!uid || !chatId || groupChatReadsSupported === false || groupDeliveredAtSupported === false) {
+    return;
+  }
+
+  const selectCols = groupReceiptSelectColumns();
+  let { data: existing, error: selectError } = await supabaseClient
+    .from("group_chat_reads")
+    .select(selectCols)
+    .eq("chat_id", chatId)
+    .eq("user_id", uid)
+    .maybeSingle();
+
+  if (selectError) {
+    if (noteGroupChatReadsSupport(selectError)) return;
+    if (noteGroupDeliveredAtSupport(selectError) && groupDeliveredAtSupported === false) return;
+    console.warn("Не удалось проверить доставку группового чата:", selectError);
+    return;
+  }
+
+  groupChatReadsSupported = true;
+  if (groupDeliveredAtSupported !== false) groupDeliveredAtSupported = true;
+
+  const prevDelivered = existing?.last_delivered_at ? String(existing.last_delivered_at) : null;
+  const nextDelivered = mergeLaterReadAt(prevDelivered, at) || at;
+  if (prevDelivered && prevDelivered >= nextDelivered) return;
+
+  if (existing) {
+    const { error } = await supabaseClient
+      .from("group_chat_reads")
+      .update({ last_delivered_at: nextDelivered })
+      .eq("chat_id", chatId)
+      .eq("user_id", uid);
+    if (error) {
+      if (noteGroupDeliveredAtSupport(error)) return;
+      if (!noteGroupChatReadsSupport(error)) {
+        console.warn("Не удалось отметить доставку группового чата:", error);
+      }
+    }
+    return;
+  }
+
+  // Новая строка: last_read_at = epoch, чтобы не считать чат прочитанным.
+  const { error: insertError } = await supabaseClient.from("group_chat_reads").insert({
+    chat_id: chatId,
+    user_id: uid,
+    last_read_at: "1970-01-01T00:00:00.000Z",
+    last_delivered_at: nextDelivered,
+  });
+
+  if (insertError) {
+    if (noteGroupDeliveredAtSupport(insertError)) return;
+    if (!noteGroupChatReadsSupport(insertError)) {
+      console.warn("Не удалось создать статус доставки группового чата:", insertError);
+    }
+  }
+}
+
+/** Статусы всех участников по списку чатов: Map<chatId, Map<userId, receipt>> */
+async function fetchGroupMemberReceiptsByChat(chatIds) {
+  const byChat = new Map();
+  if (!chatIds?.length || groupChatReadsSupported === false) return byChat;
+
+  let select = groupReceiptSelectColumns();
+  let { data, error } = await supabaseClient
+    .from("group_chat_reads")
+    .select(select)
+    .in("chat_id", chatIds);
+
+  if (error && noteGroupDeliveredAtSupport(error) && groupDeliveredAtSupported === false) {
+    select = groupReceiptSelectColumns();
+    ({ data, error } = await supabaseClient.from("group_chat_reads").select(select).in("chat_id", chatIds));
+  }
+
+  if (error) {
+    if (noteGroupChatReadsSupport(error)) return byChat;
+    console.warn("Не удалось загрузить статусы участников групп:", error);
+    return byChat;
+  }
+
+  groupChatReadsSupported = true;
+  if (groupDeliveredAtSupported !== false && select.includes("last_delivered_at")) {
+    groupDeliveredAtSupported = true;
+  }
+
+  for (const row of data || []) {
+    const chatId = String(row.chat_id || "");
+    const userId = String(row.user_id || "");
+    if (!chatId || !userId) continue;
+    let map = byChat.get(chatId);
+    if (!map) {
+      map = new Map();
+      byChat.set(chatId, map);
+    }
+    map.set(userId, mapGroupReceiptRow(row));
+  }
+  return byChat;
+}
+
+async function loadActiveGroupReceipts(chatId) {
+  activeGroupReceiptsByUser = new Map();
+  if (!chatId || groupChatReadsSupported === false) return activeGroupReceiptsByUser;
+  const byChat = await fetchGroupMemberReceiptsByChat([chatId]);
+  activeGroupReceiptsByUser = byChat.get(String(chatId)) || new Map();
+  return activeGroupReceiptsByUser;
+}
+
+function applyGroupOutgoingReceiptsToFeed() {
+  const feed = document.getElementById("messagesFeed");
+  const groupId = parseGroupId();
+  if (!feed || !groupId || !isGroupChat()) return;
+  const chat = groupChatsById.get(groupId);
+  const memberIds = chat?.memberIds || [];
+  const uid = getCurrentUserId();
+
+  for (const el of feed.querySelectorAll('.message-item--out[data-message-id]')) {
+    const id = el.getAttribute("data-message-id");
+    const row = id ? feedMessagesById.get(String(id)) : null;
+    if (!row) continue;
+    const html = renderGroupParticipantReceiptsHtml(
+      row.created_at,
+      memberIds,
+      activeGroupReceiptsByUser,
+      row.sender_id || uid,
+    );
+    let slot = el.querySelector(".message-item-group-receipts");
+    if (!html) {
+      if (slot) slot.remove();
+      continue;
+    }
+    if (slot) {
+      slot.outerHTML = html;
+    } else {
+      const meta = el.querySelector(".message-item-meta");
+      if (meta) {
+        const edited = meta.querySelector(".message-item-edited");
+        const time = meta.querySelector(".message-item-time");
+        const tmp = document.createElement("div");
+        tmp.innerHTML = html;
+        const node = tmp.firstChild;
+        if (node) {
+          if (time) meta.insertBefore(node, time);
+          else if (edited) meta.insertBefore(node, edited.nextSibling);
+          else meta.appendChild(node);
+        }
+      }
+    }
+  }
+}
+
+async function syncGroupOutgoingReceipts() {
+  if (!isGroupChat() || groupChatReadsSupported === false) return;
+  const groupId = parseGroupId();
+  if (!groupId) return;
+  await loadActiveGroupReceipts(groupId);
+  applyGroupOutgoingReceiptsToFeed();
+}
+
+async function acknowledgeGroupMessagesDelivered() {
+  if (groupChatsSupported === false || groupChatReadsSupported === false) return;
+  if (groupDeliveredAtSupported === false) return;
+
+  const uid = getCurrentUserId();
+  if (!uid) return;
+
+  let chats = [...groupChatsById.values()];
+  if (!chats.length) {
+    const { chats: fetched, error } = await fetchMyGroupChats();
+    if (error || !fetched?.length) return;
+    chats = fetched;
+  }
+  if (!chats.length) return;
+
+  const at = new Date().toISOString();
+  const activeGroupId = isGroupChat() && messagesView === "dialog" ? parseGroupId() : null;
+
+  await Promise.all(
+    chats.map(async (chat) => {
+      // Открытый групповой чат помечается через markGroupChatRead.
+      if (activeGroupId && chat.id === activeGroupId) return;
+      await markGroupChatDelivered(chat.id, at);
+    }),
+  );
 }
 
 function countUnreadGroupMessagesForChat(messages, uid, lastReadAt) {
@@ -696,13 +1031,26 @@ function renderMessageItem(row) {
   const bodyHtml = renderMessageBodyHtml(bodyForDisplay);
   const attachmentHtml = renderMessageAttachmentHtml(row);
   const replyHtml = renderReplyQuoteHtml(row);
-  const showTicks = isOut && !isGroupChat();
-  const statusAttr = showTicks ? ` data-delivery-status="${state.status}"` : "";
+  const groupId = showPeer ? parseGroupId() : null;
+  const groupChat = groupId ? groupChatsById.get(groupId) : null;
+  const groupReceiptsHtml =
+    isOut && showPeer && groupChat
+      ? renderGroupParticipantReceiptsHtml(
+          row.created_at,
+          groupChat.memberIds,
+          activeGroupReceiptsByUser,
+          row.sender_id,
+        )
+      : "";
+  const showDmTicks = isOut && !isGroupChat();
+  const statusAttr = showDmTicks ? ` data-delivery-status="${state.status}"` : "";
   const editedLabel = row.edited_at ? `<span class="message-item-edited" title="Изменено">изм.</span>` : "";
   const timeHtml = `<time class="message-item-time">${escapeHtml(formatTaskDateRu(row.created_at))}</time>`;
-  const metaTrailing = showTicks
+  const metaTrailing = showDmTicks
     ? `${editedLabel}${renderOutgoingTicksHtml(state)}${timeHtml}`
-    : `${editedLabel}${timeHtml}`;
+    : showPeer && isOut
+      ? `${editedLabel}${groupReceiptsHtml}${timeHtml}`
+      : `${editedLabel}${timeHtml}`;
   const headerHtml = showPeer
     ? `<header class="message-item-header">
         <span class="message-item-peer">${escapeHtml(peerLabel)}</span>
@@ -1124,14 +1472,13 @@ function buildChatListEntries(users, rows, groupChats, lastGroupMessages, groupU
       name: chat.name,
       email: "",
       avatarStoragePath: chat.avatarStoragePath || null,
+      memberIds: chat.memberIds || [],
       unreadCount,
       last: last
         ? {
             ...last,
             recipient_id: null,
             recipient_email: "",
-            read_at: null,
-            delivered_at: null,
           }
         : null,
       sortAt: last?.created_at || chat.created_at || "",
@@ -1150,11 +1497,29 @@ function buildChatListEntries(users, rows, groupChats, lastGroupMessages, groupU
   return entries;
 }
 
-function renderChatListTicks(last, uid) {
+function renderChatListTicks(last, uid, entry = null, receiptsByUser = null) {
   if (!last) return "";
   const isOut = String(last.sender_id) === String(uid);
   if (!isOut) return "";
-  if (last.recipient_id == null && last.chat_id) return "";
+
+  if (entry?.kind === "group" || (last.recipient_id == null && last.chat_id)) {
+    const memberIds = entry?.memberIds || groupChatsById.get(String(last.chat_id))?.memberIds || [];
+    const status = aggregateGroupOutgoingListStatus(
+      last.created_at,
+      memberIds,
+      receiptsByUser,
+      last.sender_id,
+    );
+    if (status === "read") {
+      return renderOutgoingTicksHtml({ read: true, delivered: true, status: "read" });
+    }
+    if (status === "delivered") {
+      // В списке: доставлено всем — одна галочка (как «sent» у DM).
+      return renderOutgoingTicksHtml({ read: false, delivered: true, status: "sent" });
+    }
+    return "";
+  }
+
   const state = messageDeliveryState(last, true);
   // В списке чатов: прочитано — две синие, доставлено/отправлено — одна.
   if (state.read) {
@@ -1163,14 +1528,19 @@ function renderChatListTicks(last, uid) {
   return renderOutgoingTicksHtml({ ...state, status: "sent" });
 }
 
-function renderChatListItem(entry) {
+function renderChatListItem(entry, groupReceiptsByChat = null) {
   const uid = getCurrentUserId();
   const last = entry.last;
   const preview = last
     ? previewMessageBody(last.body, last.recipient_email, last)
     : "Нет сообщений";
   const time = last ? formatChatListTime(last.created_at) : "";
-  const ticks = entry.kind === "group" ? "" : renderChatListTicks(last, uid);
+  const chatId = entry.kind === "group" ? parseGroupId(entry.peerId) : null;
+  const receiptsByUser =
+    entry.kind === "group" && chatId && groupReceiptsByChat
+      ? groupReceiptsByChat.get(String(chatId)) || new Map()
+      : null;
+  const ticks = renderChatListTicks(last, uid, entry, receiptsByUser);
   const unreadCount = entry.unreadCount || 0;
   const countLabel = unreadCount > 0 ? (unreadCount > 99 ? "99+" : String(unreadCount)) : "";
   const hue = avatarHue(entry.kind === "group" ? entry.peerId : entry.email || entry.peerId);
@@ -1260,9 +1630,10 @@ async function paintChatListFromData(list, users, rows, unreadRows, groupChats) 
   const uid = getCurrentUserId();
   const dmUnreadByPeer = buildDmUnreadByPeer(unreadRows);
   const chatIds = (groupChats || []).map((chat) => chat.id);
-  const [{ lastByChat: lastGroupMessages }, lastReadByChat] = await Promise.all([
+  const [{ lastByChat: lastGroupMessages }, lastReadByChat, groupReceiptsByChat] = await Promise.all([
     fetchLastGroupMessagesByChat(chatIds),
     fetchGroupChatReads(chatIds),
+    fetchGroupMemberReceiptsByChat(chatIds),
   ]);
   const groupUnreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
   const entries = buildChatListEntries(
@@ -1273,7 +1644,7 @@ async function paintChatListFromData(list, users, rows, unreadRows, groupChats) 
     groupUnreadByChat,
     dmUnreadByPeer,
   );
-  list.innerHTML = entries.map(renderChatListItem).join("");
+  list.innerHTML = entries.map((entry) => renderChatListItem(entry, groupReceiptsByChat)).join("");
   void hydrateGroupAvatars(list);
 }
 
@@ -1477,6 +1848,11 @@ export async function loadMessages() {
 
     clearFeedMessageCache();
     rememberFeedMessages(rows);
+
+    if (isGroupChat()) {
+      const groupId = parseGroupId();
+      if (groupId) await loadActiveGroupReceipts(groupId);
+    }
 
     const visibleRows = rows.filter((row) => !isMessageDeleted(row));
     const emptyText = isGroupChat()
@@ -1710,6 +2086,7 @@ async function pollNewMessages() {
       if (!noteGroupChatsSupport(error)) {
         console.warn("Ошибка проверки новых сообщений группы:", error);
       }
+      await syncGroupOutgoingReceipts();
       return;
     }
     const rows = data || [];
@@ -1722,6 +2099,7 @@ async function pollNewMessages() {
       if (groupId && latestAt) await markGroupChatRead(groupId, latestAt);
       void refreshMessagesUnreadBadge();
     }
+    await syncGroupOutgoingReceipts();
     return;
   }
 
@@ -1873,29 +2251,33 @@ async function markIncomingMessagesRead(rows) {
 /** Mark undelivered incoming as delivered without reading (badge / background poll). */
 async function acknowledgeIncomingDelivered() {
   const uid = getCurrentUserId();
-  if (!uid || deliveredAtSupported === false) return;
+  if (!uid) return;
 
-  const { data, error } = await fetchAllSupabaseRows(() =>
-    supabaseClient
-      .from("user_messages")
-      .select("id")
-      .eq("recipient_id", uid)
-      .is("delivered_at", null)
-      .is("read_at", null)
-      .order("id", { ascending: true }),
-  );
+  if (deliveredAtSupported !== false) {
+    const { data, error } = await fetchAllSupabaseRows(() =>
+      supabaseClient
+        .from("user_messages")
+        .select("id")
+        .eq("recipient_id", uid)
+        .is("delivered_at", null)
+        .is("read_at", null)
+        .order("id", { ascending: true }),
+    );
 
-  if (error) {
-    if (noteDeliveredAtSupport(error)) return;
-    console.warn("Не удалось проверить недоставленные входящие:", error);
-    return;
+    if (error) {
+      if (!noteDeliveredAtSupport(error)) {
+        console.warn("Не удалось проверить недоставленные входящие:", error);
+      }
+    } else {
+      deliveredAtSupported = true;
+      const ids = (data || []).map((row) => row.id);
+      if (ids.length) {
+        await markIncomingMessagesDelivered(ids);
+      }
+    }
   }
 
-  deliveredAtSupported = true;
-  const ids = (data || []).map((row) => row.id);
-  if (ids.length) {
-    await markIncomingMessagesDelivered(ids);
-  }
+  await acknowledgeGroupMessagesDelivered();
 }
 
 /** Число непрочитанных входящих в групповых чатах текущего пользователя. */
