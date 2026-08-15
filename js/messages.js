@@ -900,6 +900,52 @@ function stripRecipientMentionFromBody(body, recipientEmail) {
   return text.replace(new RegExp(`@${escaped}\\s*`, "gi"), "").trim();
 }
 
+/** Текст сообщения для копирования в буфер обмена. */
+function getMessageCopyText(row) {
+  const stripped = stripRecipientMentionFromBody(row?.body, row?.recipient_email);
+  return String(stripped || "")
+    .replace(/\[\[order:(\d+)\]\]/g, (_, id) => `#${id}`)
+    .trim();
+}
+
+async function copyTextToClipboard(text) {
+  const value = String(text ?? "");
+  if (!value) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = value;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+async function copyMessageText(row) {
+  const text = getMessageCopyText(row);
+  if (!text) return false;
+  const ok = await copyTextToClipboard(text);
+  if (!ok) {
+    const msg = document.getElementById("messagesPageMessage");
+    if (msg) msg.textContent = "Не удалось скопировать текст";
+  }
+  return ok;
+}
+
 function renderMessageBodyHtml(body) {
   const raw = String(body || "");
   const parts = [];
@@ -2882,10 +2928,12 @@ function showMessageActionMenu(messageEl, clientX, clientY, { fromPhoto = false 
   messageEl.classList.add("message-item--menu-open");
 
   const replyBtn = menu.querySelector('[data-action="reply"]');
+  const copyBtn = menu.querySelector('[data-action="copy"]');
   const editBtn = menu.querySelector('[data-action="edit"]');
   const attachBtn = menu.querySelector('[data-action="attach-to-order"]');
   const deleteBtn = menu.querySelector('[data-action="delete"]');
   if (replyBtn) replyBtn.hidden = false;
+  if (copyBtn) copyBtn.hidden = !getMessageCopyText(row);
   if (editBtn) editBtn.hidden = !isOwn;
   if (attachBtn) attachBtn.hidden = !(actionMenuFromPhoto && messageHasAttachment(row));
   if (deleteBtn) deleteBtn.hidden = !isOwn;
@@ -3260,6 +3308,10 @@ function runMessageAction(action, messageId) {
 
   if (action === "reply") {
     startReplyToMessage(row);
+    return true;
+  }
+  if (action === "copy") {
+    void copyMessageText(row);
     return true;
   }
   if (action === "edit") {
