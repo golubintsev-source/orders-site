@@ -9,6 +9,7 @@ import {
 } from "./format.js";
 import { raceWithTimeout } from "./offline-cache.js";
 import { shortLoginByEmail } from "./user-names.js";
+import { canSelectKassaBeznal, KASSA_BEZNAL_PLACES } from "./roles.js";
 
 let excessesBound = false;
 let excessesRowsCache = [];
@@ -18,6 +19,18 @@ let editingExcessId = null;
 
 const EXCESS_ICON_EDIT_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 const EXCESS_ICON_DELETE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+
+/** Префикс автозаписей излишков в calculations (как [AUTO_ORDER_DELTA] для заказов). */
+export const EXCESS_DELTA_CALC_COMMENT_PREFIX = "[AUTO_EXCESS_DELTA]";
+/** Пустое значение в теле автокомментария расчёта. */
+const CALC_COMMENT_EMPTY = "[__]";
+
+const EXCESS_WHO_OPTIONS = [
+  { value: "Дима", label: "Дима" },
+  { value: "Вова", label: "Вова" },
+  { value: "Безнал", label: "Безнал" },
+  { value: "Касса", label: "Касса" },
+];
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -32,6 +45,29 @@ function formatDateTime(iso) {
   if (Number.isNaN(d.getTime())) return "";
   const pad = (n) => String(n).padStart(2, "0");
   return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatTimeHHmmFromIso(iso) {
+  if (!iso) return "--:--";
+  try {
+    const d = new Date(iso);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mi}`;
+  } catch {
+    return "--:--";
+  }
+}
+
+function toComparableNumber(v) {
+  if (v == null || v === "") return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normRecipientSelect(v) {
+  const t = String(v ?? "").trim();
+  return t === "—" ? "" : t;
 }
 
 function setFormMessage(text, isError = false) {
@@ -96,7 +132,122 @@ function showFormPanel(show) {
   if (startBtn) startBtn.hidden = show;
 }
 
-function createExcessRow(initial = { client: "", amount: "" }, options = {}) {
+function isForbiddenKassaBeznalSelection(newVal, previousVal) {
+  if (canSelectKassaBeznal()) return false;
+  const next = String(newVal || "").trim();
+  if (!KASSA_BEZNAL_PLACES.has(next)) return false;
+  return next !== String(previousVal || "").trim();
+}
+
+function buildWhoSelectOptionsHtml(selectedValue = "") {
+  const current = String(selectedValue || "").trim();
+  const allowedKassaBeznal = canSelectKassaBeznal();
+  const options = [`<option value="">—</option>`];
+  for (const opt of EXCESS_WHO_OPTIONS) {
+    if (KASSA_BEZNAL_PLACES.has(opt.value) && !allowedKassaBeznal && opt.value !== current) {
+      continue;
+    }
+    const selected = opt.value === current ? " selected" : "";
+    options.push(`<option value="${escapeHtml(opt.value)}"${selected}>${escapeHtml(opt.label)}</option>`);
+  }
+  if (current && !EXCESS_WHO_OPTIONS.some((o) => o.value === current)) {
+    options.push(`<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>`);
+  }
+  return options.join("");
+}
+
+/**
+ * Строки для calculations по схеме «Предоплата / Кому предоплата»:
+ * пустой select и «—» = пусто; ветки добавления / снятия / смены суммы / смены получателя.
+ */
+export function buildExcessDeltaCalculationInsertRows({
+  wasEditing,
+  oldAmount,
+  oldPaidTo,
+  newAmount,
+  newPaidTo,
+  client,
+}) {
+  const nowIso = new Date().toISOString();
+  const timeHHmm = formatTimeHHmmFromIso(nowIso);
+  const actorShort = shortLoginByEmail(state.currentUser?.email);
+  const clientStr = (client && String(client).trim()) || CALC_COMMENT_EMPTY;
+
+  const toBefore = normRecipientSelect(wasEditing ? oldPaidTo : "");
+  const toAfter = normRecipientSelect(newPaidTo);
+  const toBeforeEmpty = toBefore === "";
+  const toAfterEmpty = toAfter === "";
+  const amountOld = wasEditing ? toComparableNumber(oldAmount) : 0;
+  const amountNew = toComparableNumber(newAmount);
+  const amountSame = Math.abs(amountOld - amountNew) < 0.000001;
+  const toSame = toBefore === toAfter;
+
+  const rows = [];
+
+  const pushRow = ({ from_place, to_place, amount, detail }) => {
+    if (Math.abs(amount) < 0.000001) return;
+    rows.push({
+      created_at: nowIso,
+      from_place: from_place || "—",
+      to_place: to_place || "—",
+      amount,
+      comment: `${EXCESS_DELTA_CALC_COMMENT_PREFIX} Излишек; ${clientStr}; ${detail}; ${timeHHmm}; ${actorShort}`,
+    });
+  };
+
+  if ((toBeforeEmpty && toAfterEmpty) || (amountSame && toSame)) {
+    return [];
+  }
+
+  if (toBeforeEmpty && !toAfterEmpty) {
+    pushRow({
+      from_place: "Клиент",
+      to_place: toAfter,
+      amount: amountNew,
+      detail: `кому ${CALC_COMMENT_EMPTY} → ${toAfter}; сумма ${formatAmount(amountNew)}`,
+    });
+  } else if (!toBeforeEmpty && toAfterEmpty) {
+    pushRow({
+      from_place: toBefore,
+      to_place: "Клиент",
+      amount: amountOld,
+      detail: `${toBefore} → клиент; сумма ${formatAmount(amountOld)}`,
+    });
+  } else if (!toBeforeEmpty && !toAfterEmpty && toSame) {
+    pushRow({
+      from_place: "Клиент",
+      to_place: toAfter,
+      amount: amountNew - amountOld,
+      detail: `${toAfter}; ${formatAmount(amountOld)} → ${formatAmount(amountNew)}`,
+    });
+  } else if (!toBeforeEmpty && !toAfterEmpty && !toSame) {
+    pushRow({
+      from_place: toBefore,
+      to_place: "Клиент",
+      amount: amountOld,
+      detail: `смена получателя; ${toBefore} → клиент; ${formatAmount(amountOld)}`,
+    });
+    pushRow({
+      from_place: "Клиент",
+      to_place: toAfter,
+      amount: amountNew,
+      detail: `смена получателя; клиент → ${toAfter}; ${formatAmount(amountNew)}`,
+    });
+  }
+
+  return rows;
+}
+
+async function writeExcessDeltaCalculations(args) {
+  const payload = buildExcessDeltaCalculationInsertRows(args);
+  if (payload.length === 0) return;
+  const { error } = await supabaseClient.from("calculations").insert(payload);
+  if (error) {
+    console.error("Автозапись дельт излишков в calculations:", error);
+  }
+}
+
+function createExcessRow(initial = { client: "", amount: "", paid_to: "" }, options = {}) {
   const list = getRowsList();
   if (!list) return null;
 
@@ -123,6 +274,12 @@ function createExcessRow(initial = { client: "", amount: "" }, options = {}) {
       <label for="excessAmount_${id}">Сумма</label>
       <input type="text" id="excessAmount_${id}" class="excess-amount-input" inputmode="numeric" title="Только целые рубли, без копеек" />
     </div>
+    <div class="field excess-who-field">
+      <label for="excessWho_${id}">Кому</label>
+      <select id="excessWho_${id}" class="excess-who-select">
+        ${buildWhoSelectOptionsHtml(initial.paid_to || "")}
+      </select>
+    </div>
     ${
       hideRemove
         ? ""
@@ -134,6 +291,7 @@ function createExcessRow(initial = { client: "", amount: "" }, options = {}) {
 
   const clientInput = row.querySelector(".excess-client-input");
   const amountInput = row.querySelector(".excess-amount-input");
+  const whoSelect = row.querySelector(".excess-who-select");
   const listEl = row.querySelector(".excess-client-suggestions");
   const wrap = row.querySelector(".excess-client-input-wrap");
   const removeBtn = row.querySelector(".excess-row-remove-btn");
@@ -149,7 +307,19 @@ function createExcessRow(initial = { client: "", amount: "" }, options = {}) {
     amountInput.value = initial.amount || "";
     amountInput.addEventListener("input", () => {
       refreshRublesIntegerInputState(amountInput, amountInput.value);
+      refreshWhoRequiredState(row);
     });
+  }
+  if (whoSelect instanceof HTMLSelectElement) {
+    whoSelect.addEventListener("change", () => {
+      // Пересобрать опции с учётом роли и текущего значения (как в заказе).
+      const keep = whoSelect.value;
+      whoSelect.innerHTML = buildWhoSelectOptionsHtml(keep);
+      whoSelect.value = keep;
+      if (whoSelect.value !== keep) whoSelect.value = "";
+      refreshWhoRequiredState(row);
+    });
+    refreshWhoRequiredState(row);
   }
 
   if (!clientReadonly && clientInput instanceof HTMLInputElement && listEl && wrap) {
@@ -175,6 +345,15 @@ function createExcessRow(initial = { client: "", amount: "" }, options = {}) {
   return row;
 }
 
+function refreshWhoRequiredState(row) {
+  const amountInput = row?.querySelector?.(".excess-amount-input");
+  const whoSelect = row?.querySelector?.(".excess-who-select");
+  if (!(whoSelect instanceof HTMLSelectElement)) return;
+  const hasAmount = String(amountInput instanceof HTMLInputElement ? amountInput.value : "").trim() !== "";
+  const hasWho = Boolean(String(whoSelect.value || "").trim());
+  whoSelect.classList.toggle("conditional-invalid", hasAmount && !hasWho);
+}
+
 function collectRowsFromDom() {
   const list = getRowsList();
   if (!list) return [];
@@ -182,9 +361,11 @@ function collectRowsFromDom() {
   list.querySelectorAll(".excess-row").forEach((row) => {
     const clientInput = row.querySelector(".excess-client-input");
     const amountInput = row.querySelector(".excess-amount-input");
+    const whoSelect = row.querySelector(".excess-who-select");
     const client = (clientInput instanceof HTMLInputElement ? clientInput.value : "").trim();
     const amountRaw = amountInput instanceof HTMLInputElement ? amountInput.value : "";
-    rows.push({ client, amountRaw, amountInput, clientInput });
+    const paidTo = (whoSelect instanceof HTMLSelectElement ? whoSelect.value : "").trim();
+    rows.push({ client, amountRaw, paidTo, amountInput, clientInput, whoSelect });
   });
   return rows;
 }
@@ -249,13 +430,14 @@ function startEditExcess(id) {
   if (list) list.innerHTML = "";
   showFormPanel(true);
   syncFormChrome();
-  setFormMessage("Редактирование: можно изменить только сумму.");
+  setFormMessage("Редактирование: можно изменить сумму или «Кому».");
   setTableMessage("");
 
   const row = createExcessRow(
     {
       client: existing.client || "",
       amount: formatAmountForInput(existing.amount),
+      paid_to: existing.paid_to || "",
     },
     { clientReadonly: true, hideRemove: true },
   );
@@ -288,8 +470,9 @@ async function saveExcessRows() {
     const hasClient = Boolean(row.client);
     const amountParsed = tryParseRublesInteger(row.amountRaw);
     const hasAmount = String(row.amountRaw ?? "").trim() !== "";
+    const paidTo = normRecipientSelect(row.paidTo);
 
-    if (!hasClient && !hasAmount) continue;
+    if (!hasClient && !hasAmount && !paidTo) continue;
 
     if (!hasClient) {
       setFormMessage("Укажите клиента во всех заполненных строках.", true);
@@ -307,17 +490,29 @@ async function saveExcessRows() {
       row.amountInput?.focus();
       return;
     }
+    if (!paidTo) {
+      setFormMessage("Укажите «Кому» во всех заполненных строках.", true);
+      row.whoSelect?.focus();
+      if (row.whoSelect) refreshWhoRequiredState(row.whoSelect.closest(".excess-row"));
+      return;
+    }
+    if (isForbiddenKassaBeznalSelection(paidTo, "")) {
+      setFormMessage("Выбор «Касса» или «Безнал» недоступен для вашей роли.", true);
+      row.whoSelect?.focus();
+      return;
+    }
 
     payloads.push({
       client: row.client,
       amount: amountParsed.value,
+      paid_to: paidTo,
       created_by: state.currentUser?.email || null,
       created_at: new Date().toISOString(),
     });
   }
 
   if (payloads.length === 0) {
-    setFormMessage("Заполните хотя бы одну строку: клиент и сумма.", true);
+    setFormMessage("Заполните хотя бы одну строку: клиент, сумма и «Кому».", true);
     return;
   }
 
@@ -330,9 +525,24 @@ async function saveExcessRows() {
     );
     if (result?.error) {
       console.error("excesses insert:", result.error);
-      setFormMessage("Не удалось сохранить излишки. Проверьте таблицу excesses в Supabase.", true);
+      setFormMessage(
+        "Не удалось сохранить излишки. Проверьте таблицу excesses и поле paid_to в Supabase (supabase_excesses_paid_to.sql).",
+        true,
+      );
       return;
     }
+
+    for (const item of payloads) {
+      await writeExcessDeltaCalculations({
+        wasEditing: false,
+        oldAmount: 0,
+        oldPaidTo: "",
+        newAmount: item.amount,
+        newPaidTo: item.paid_to,
+        client: item.client,
+      });
+    }
+
     resetFormToEmpty();
     setFormMessage(`Сохранено записей: ${payloads.length}.`);
     await loadExcesses();
@@ -348,6 +558,12 @@ async function saveEditedExcess() {
   const id = editingExcessId;
   if (id == null) return;
 
+  const existing = excessesRowsCache.find((r) => Number(r.id) === id);
+  if (!existing) {
+    setFormMessage("Запись не найдена.", true);
+    return;
+  }
+
   const rows = collectRowsFromDom();
   const row = rows[0];
   if (!row) {
@@ -357,6 +573,8 @@ async function saveEditedExcess() {
 
   const amountParsed = tryParseRublesInteger(row.amountRaw);
   const hasAmount = String(row.amountRaw ?? "").trim() !== "";
+  const paidTo = normRecipientSelect(row.paidTo);
+
   if (!hasAmount) {
     setFormMessage("Укажите сумму.", true);
     row.amountInput?.focus();
@@ -368,12 +586,24 @@ async function saveEditedExcess() {
     row.amountInput?.focus();
     return;
   }
+  if (!paidTo) {
+    setFormMessage("Укажите «Кому».", true);
+    row.whoSelect?.focus();
+    if (row.whoSelect) refreshWhoRequiredState(row.whoSelect.closest(".excess-row"));
+    return;
+  }
+  if (isForbiddenKassaBeznalSelection(paidTo, existing.paid_to)) {
+    setFormMessage("Выбор «Касса» или «Безнал» недоступен для вашей роли.", true);
+    row.whoSelect?.focus();
+    return;
+  }
 
   const saveBtn = getSaveBtn();
   if (saveBtn) saveBtn.disabled = true;
 
   const payload = {
     amount: amountParsed.value,
+    paid_to: paidTo,
     created_by: state.currentUser?.email || null,
     created_at: new Date().toISOString(),
   };
@@ -392,6 +622,16 @@ async function saveEditedExcess() {
       setFormMessage("Не удалось сохранить изменения.", true);
       return;
     }
+
+    await writeExcessDeltaCalculations({
+      wasEditing: true,
+      oldAmount: existing.amount,
+      oldPaidTo: existing.paid_to || "",
+      newAmount: payload.amount,
+      newPaidTo: payload.paid_to,
+      client: existing.client || row.client,
+    });
+
     resetFormToEmpty();
     setFormMessage("Изменения сохранены.");
     await loadExcesses();
@@ -419,11 +659,13 @@ function renderExcessesTable(rows) {
     const author = shortLoginByEmail(row.created_by) || "—";
     const amount =
       row.amount != null && row.amount !== "" ? `${formatAmount(row.amount)}\u00A0₽` : "—";
+    const paidTo = row.paid_to ? String(row.paid_to) : "";
     tr.innerHTML = `
       <td>${escapeHtml(formatDateTime(row.created_at))}</td>
       <td>${escapeHtml(author)}</td>
       <td>${escapeHtml(row.client || "")}</td>
       <td class="td-money">${escapeHtml(amount)}</td>
+      <td>${escapeHtml(paidTo)}</td>
       <td class="td-actions">
         <button type="button" class="btn-icon btn-edit excess-edit-btn" data-id="${escapeHtml(String(row.id))}" title="Редактировать" aria-label="Редактировать">
           ${EXCESS_ICON_EDIT_SVG}
@@ -442,6 +684,8 @@ async function deleteExcess(id) {
   if (!Number.isFinite(n)) return;
   if (!window.confirm("Удалить запись излишка?")) return;
 
+  const existing = excessesRowsCache.find((r) => Number(r.id) === n);
+
   try {
     const result = await raceWithTimeout(
       supabaseClient
@@ -454,6 +698,18 @@ async function deleteExcess(id) {
       setTableMessage("Не удалось удалить запись.");
       return;
     }
+
+    if (existing) {
+      await writeExcessDeltaCalculations({
+        wasEditing: true,
+        oldAmount: existing.amount,
+        oldPaidTo: existing.paid_to || "",
+        newAmount: 0,
+        newPaidTo: "",
+        client: existing.client || "",
+      });
+    }
+
     if (editingExcessId === n) {
       resetFormToEmpty();
     }
@@ -469,7 +725,7 @@ export async function loadExcesses() {
     const result = await raceWithTimeout(
       supabaseClient
         .from("excesses")
-        .select("id, created_at, client, amount, created_by")
+        .select("id, created_at, client, amount, paid_to, created_by")
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(500),
@@ -478,7 +734,9 @@ export async function loadExcesses() {
       console.error("excesses load:", result.error);
       excessesRowsCache = [];
       renderExcessesTable([]);
-      setTableMessage("Не удалось загрузить излишки. Выполните supabase_excesses_table.sql в Supabase.");
+      setTableMessage(
+        "Не удалось загрузить излишки. Выполните supabase_excesses_table.sql и supabase_excesses_paid_to.sql в Supabase.",
+      );
       return;
     }
     excessesRowsCache = Array.isArray(result?.data) ? result.data : [];

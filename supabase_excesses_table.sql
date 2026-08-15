@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS excesses (
   created_at timestamptz DEFAULT now() NOT NULL,
   client text NOT NULL,
   amount numeric NOT NULL,
+  paid_to text,
   created_by text,
   deleted_at timestamptz NULL
 );
