@@ -1,3 +1,4 @@
+import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { isOrderHiddenForCurrentRole, isOrderEditLockedForUserLite, isShopOrder } from "./roles.js";
 import { formatAmount, formatAmountWholeRubles, formatDateShortRU, formatOrderIdTypeChip } from "./format.js";
@@ -25,17 +26,32 @@ const MONTH_NAMES_RU = [
   "Декабрь",
 ];
 
+/** Префикс ключа в app_settings: manager_salary_unchecked_YYYY-MM */
+const SETTINGS_KEY_PREFIX = "manager_salary_unchecked_";
+
 /** Выбранный месяц YYYY-MM; по умолчанию — текущий. */
 let selectedMonthKey = currentMonthKey();
 
 /** id заказов, снятых с учёта (чекбокс снят). По умолчанию все учтены. */
 const uncheckedOrderIds = new Set();
 
+/** Последнее сохранённое в БД состояние снятых чекбоксов для текущего месяца. */
+const savedUncheckedOrderIds = new Set();
+
+/** Месяц, для которого уже загружены сохранённые чекбоксы. */
+let loadedMonthKey = null;
+
 let bound = false;
+let saveInFlight = false;
+let loadToken = 0;
 
 function currentMonthKey() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function settingsKeyForMonth(monthKey) {
+  return `${SETTINGS_KEY_PREFIX}${monthKey}`;
 }
 
 function escapeHtml(s) {
@@ -207,6 +223,71 @@ function isOrderChecked(order) {
   return !uncheckedOrderIds.has(orderIdKey(order));
 }
 
+function parseUncheckedIds(raw) {
+  if (raw == null || raw === "") return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((id) => String(id)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function visibleUncheckedIds(visibleIds) {
+  const ids = [];
+  for (const id of uncheckedOrderIds) {
+    if (visibleIds.has(id)) ids.push(id);
+  }
+  ids.sort();
+  return ids;
+}
+
+function setsEqualForVisible(a, b, visibleIds) {
+  const left = [];
+  const right = [];
+  for (const id of a) {
+    if (visibleIds.has(id)) left.push(id);
+  }
+  for (const id of b) {
+    if (visibleIds.has(id)) right.push(id);
+  }
+  left.sort();
+  right.sort();
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i++) {
+    if (left[i] !== right[i]) return false;
+  }
+  return true;
+}
+
+function setSaveMessage(text, isError = false) {
+  const el = document.getElementById("managerSalarySaveMessage");
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = "";
+    el.classList.remove("is-error");
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+  el.classList.toggle("is-error", Boolean(isError));
+}
+
+function updateSaveButtonState() {
+  const btn = document.getElementById("managerSalarySaveChecksBtn");
+  if (!btn) return;
+
+  const orders = getManagerSalaryOrders();
+  const visibleIds = new Set(orders.map(orderIdKey));
+  const isDirty = !setsEqualForVisible(uncheckedOrderIds, savedUncheckedOrderIds, visibleIds);
+  const canSave = isDirty && !saveInFlight;
+
+  btn.disabled = !canSave;
+  btn.classList.toggle("manager-salary-save-btn-inactive", !canSave);
+}
+
 /** Базовая часть зарплаты менеджера (руб.) + процент от стоимости. */
 const MANAGER_SALARY_BASE = 22000;
 const MANAGER_SALARY_COST_RATE = 0.015;
@@ -322,6 +403,84 @@ function applyCellTitles(tbody) {
   });
 }
 
+function applyUncheckedIds(ids) {
+  uncheckedOrderIds.clear();
+  savedUncheckedOrderIds.clear();
+  for (const id of ids) {
+    const s = String(id);
+    uncheckedOrderIds.add(s);
+    savedUncheckedOrderIds.add(s);
+  }
+}
+
+async function loadUncheckedForMonth(monthKey) {
+  const token = ++loadToken;
+  const key = settingsKeyForMonth(monthKey);
+
+  const { data, error } = await supabaseClient
+    .from("app_settings")
+    .select("value")
+    .eq("key", key)
+    .maybeSingle();
+
+  if (token !== loadToken || monthKey !== selectedMonthKey) return;
+
+  if (error) {
+    applyUncheckedIds([]);
+    loadedMonthKey = monthKey;
+    setSaveMessage("Не удалось загрузить сохранённый выбор", true);
+    updateSaveButtonState();
+    return;
+  }
+
+  applyUncheckedIds(parseUncheckedIds(data?.value));
+  loadedMonthKey = monthKey;
+  setSaveMessage("");
+  updateSaveButtonState();
+}
+
+async function saveUncheckedSelection() {
+  if (saveInFlight) return;
+
+  const orders = getManagerSalaryOrders();
+  const visibleIds = new Set(orders.map(orderIdKey));
+  if (setsEqualForVisible(uncheckedOrderIds, savedUncheckedOrderIds, visibleIds)) {
+    updateSaveButtonState();
+    return;
+  }
+
+  const ids = visibleUncheckedIds(visibleIds);
+  const monthKey = selectedMonthKey;
+  const key = settingsKeyForMonth(monthKey);
+  const value = JSON.stringify(ids);
+
+  saveInFlight = true;
+  updateSaveButtonState();
+  setSaveMessage("Сохранение…");
+
+  const { error } = await supabaseClient
+    .from("app_settings")
+    .upsert({ key, value }, { onConflict: "key" });
+
+  saveInFlight = false;
+
+  if (monthKey !== selectedMonthKey) {
+    updateSaveButtonState();
+    return;
+  }
+
+  if (error) {
+    setSaveMessage("Не удалось сохранить выбор", true);
+    updateSaveButtonState();
+    return;
+  }
+
+  savedUncheckedOrderIds.clear();
+  for (const id of ids) savedUncheckedOrderIds.add(id);
+  setSaveMessage("Выбор сохранён");
+  updateSaveButtonState();
+}
+
 export function renderManagerSalary() {
   if (!selectedMonthKey) selectedMonthKey = currentMonthKey();
   fillMonthSelect();
@@ -343,27 +502,32 @@ export function renderManagerSalary() {
       emptyEl.textContent = `Нет заказов за ${formatMonthLabel(selectedMonthKey)} со статусом «Производство» и далее (включая закрытые).`;
     }
     updateSummary([]);
+    updateSaveButtonState();
     return;
   }
 
   if (emptyEl) emptyEl.hidden = true;
   tbody.innerHTML = orders.map(buildRowHtml).join("");
   updateSummary(orders);
+  updateSaveButtonState();
 
   requestAnimationFrame(() => applyCellTitles(tbody));
 }
 
-export function loadManagerSalary() {
+export async function loadManagerSalary() {
   initManagerSalarySection();
   if (!selectedMonthKey) selectedMonthKey = currentMonthKey();
+  if (loadedMonthKey !== selectedMonthKey) {
+    await loadUncheckedForMonth(selectedMonthKey);
+  }
   renderManagerSalary();
 }
 
-function onMonthChange(e) {
+async function onMonthChange(e) {
   const value = e.target?.value;
   if (!value) return;
   selectedMonthKey = value;
-  uncheckedOrderIds.clear();
+  await loadUncheckedForMonth(selectedMonthKey);
   renderManagerSalary();
 }
 
@@ -374,7 +538,9 @@ function onTableChange(e) {
   if (!id) return;
   if (checkbox.checked) uncheckedOrderIds.delete(id);
   else uncheckedOrderIds.add(id);
+  setSaveMessage("");
   updateSummary(getManagerSalaryOrders());
+  updateSaveButtonState();
 }
 
 export function initManagerSalarySection() {
@@ -383,12 +549,21 @@ export function initManagerSalarySection() {
 
   const select = document.getElementById("managerSalaryMonthSelect");
   if (select) {
-    select.addEventListener("change", onMonthChange);
+    select.addEventListener("change", (e) => {
+      void onMonthChange(e);
+    });
   }
 
   const table = document.getElementById("managerSalaryTable");
   if (table) {
     table.addEventListener("change", onTableChange);
+  }
+
+  const saveBtn = document.getElementById("managerSalarySaveChecksBtn");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => {
+      void saveUncheckedSelection();
+    });
   }
 
   const refreshIfActive = () => {

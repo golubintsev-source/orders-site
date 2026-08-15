@@ -5,7 +5,7 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-const STATIC_CACHE = "orders-site-static-v7";
+const STATIC_CACHE = "orders-site-static-v8";
 const BADGE_COUNT_KEY = "/badge-count";
 
 const LEGACY_CACHE_PREFIXES = ["orders-site-static-"];

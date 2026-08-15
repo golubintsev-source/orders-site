@@ -2224,6 +2224,42 @@ h2 {
 #section-manager-salary .manager-salary-formula .manager-salary-summary-value {
   margin-left: 4px;
 }
+#section-manager-salary .manager-salary-save-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 0 0 14px;
+}
+#section-manager-salary .manager-salary-save-checks-btn {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #1f6feb;
+  color: #fff;
+  box-sizing: border-box;
+}
+#section-manager-salary .manager-salary-save-checks-btn:hover:not(:disabled) {
+  opacity: 0.95;
+}
+#section-manager-salary .manager-salary-save-checks-btn.manager-salary-save-btn-inactive,
+#section-manager-salary .manager-salary-save-checks-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+#section-manager-salary .manager-salary-save-message {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+#section-manager-salary .manager-salary-save-message.is-error {
+  color: #d32f2f;
+}
 #section-manager-salary .manager-salary-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
