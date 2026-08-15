@@ -5,7 +5,7 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-const STATIC_CACHE = "orders-site-static-v3";
+const STATIC_CACHE = "orders-site-static-v4";
 const BADGE_COUNT_KEY = "/badge-count";
 
 const LEGACY_CACHE_PREFIXES = ["orders-site-static-"];
@@ -27,6 +27,7 @@ const PRECACHE_URLS = [
   "/js/settings.js",
   "/js/roles.js",
   "/js/files.js",
+  "/js/manager-salary.js",
   "/js/register-sw.js",
   "/manifest.webmanifest",
   "/img/icon-192.png?v=20260803",

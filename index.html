@@ -1579,7 +1579,20 @@
       <div class="card">
         <div class="manager-salary-month-toolbar" aria-label="Месяц">
           <label for="managerSalaryMonthSelect" class="manager-salary-month-label">Месяц</label>
-          <select id="managerSalaryMonthSelect" class="manager-salary-month-select" aria-label="Выбор месяца"></select>
+          <select id="managerSalaryMonthSelect" class="manager-salary-month-select" aria-label="Выбор месяца">
+            <option value="2026-08" selected>Август 2026</option>
+            <option value="2026-07">Июль 2026</option>
+            <option value="2026-06">Июнь 2026</option>
+            <option value="2026-05">Май 2026</option>
+            <option value="2026-04">Апрель 2026</option>
+            <option value="2026-03">Март 2026</option>
+            <option value="2026-02">Февраль 2026</option>
+            <option value="2026-01">Январь 2026</option>
+            <option value="2025-12">Декабрь 2025</option>
+            <option value="2025-11">Ноябрь 2025</option>
+            <option value="2025-10">Октябрь 2025</option>
+            <option value="2025-09">Сентябрь 2025</option>
+          </select>
         </div>
         <div class="manager-salary-summary" role="status" aria-live="polite" aria-label="Расчёт по отмеченным заказам">
           <div class="manager-salary-summary-item">
@@ -1885,6 +1898,35 @@
       }
     })();
   </script>
-  <script type="module" src="./js/main.js?v=34"></script>
+  <script type="module" src="./js/main.js?v=35"></script>
+  <script type="module">
+    /* HTML — network-first; /js/* может прийти из старого SW-кэша.
+       Поднимаем раздел даже если section-nav ещё без обработчика. */
+    (function bootManagerSalaryPage() {
+      const section = document.getElementById("section-manager-salary");
+      if (!section) return;
+      let inflight = null;
+      const run = () => {
+        if (!section.classList.contains("active")) return;
+        const label = document.getElementById("sectionNavCurrentLabel");
+        if (label) label.textContent = "Зарплата менеджера";
+        if (!inflight) {
+          inflight = import("./js/manager-salary.js")
+            .then((m) => {
+              m.loadManagerSalary();
+            })
+            .catch((err) => console.error("Зарплата менеджера:", err))
+            .finally(() => {
+              inflight = null;
+            });
+        }
+        return inflight;
+      };
+      new MutationObserver(run).observe(section, { attributes: true, attributeFilter: ["class"] });
+      run();
+      document.addEventListener("orders-filters-updated", run);
+      document.addEventListener("orders-table-will-render", run);
+    })();
+  </script>
 </body>
 </html>
