@@ -211,12 +211,10 @@ function updateSummary(orders) {
   const countEl = document.getElementById("managerSalaryCount");
   const sumEl = document.getElementById("managerSalarySum");
   const paidSumEl = document.getElementById("managerSalaryPaidSum");
-  const paidCountEl = document.getElementById("managerSalaryPaidCount");
   if (!countEl || !sumEl) return;
 
   let count = 0;
   let sum = 0;
-  let paidCount = 0;
   let paidSum = 0;
   for (const order of orders) {
     if (!isOrderChecked(order)) continue;
@@ -227,18 +225,12 @@ function updateSummary(orders) {
     if (paidAmount > 0) {
       paidSum += paidAmount;
     }
-    if (isOrderPaid(order)) {
-      paidCount += 1;
-    }
   }
 
   countEl.textContent = String(count);
   sumEl.textContent = count ? `${formatAmountWholeRubles(sum)}\u00A0₽` : "—";
   if (paidSumEl) {
     paidSumEl.textContent = paidSum > 0 ? `${formatAmountWholeRubles(paidSum)}\u00A0₽` : "—";
-  }
-  if (paidCountEl) {
-    paidCountEl.textContent = String(paidCount);
   }
 }
 
