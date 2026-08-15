@@ -1722,6 +1722,11 @@ h2 {
   min-width: 110px;
 }
 
+#section-excess .excess-who-field {
+  flex: 0 1 140px;
+  min-width: 120px;
+}
+
 #section-excess .excess-row label {
   display: block;
   margin-bottom: 4px;
@@ -1730,7 +1735,8 @@ h2 {
   color: #374151;
 }
 
-#section-excess .excess-row input {
+#section-excess .excess-row input,
+#section-excess .excess-row select {
   width: 100%;
   box-sizing: border-box;
   min-height: 36px;
@@ -1739,12 +1745,19 @@ h2 {
   border-radius: 8px;
   font-family: inherit;
   font-size: 14px;
+  background: #fff;
 }
 
-#section-excess .excess-row input:focus {
+#section-excess .excess-row input:focus,
+#section-excess .excess-row select:focus {
   outline: none;
   border-color: #0078d4;
   box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.15);
+}
+
+#section-excess .excess-who-select.conditional-invalid {
+  border-color: #dc2626;
+  background: #fef2f2;
 }
 
 #section-excess .excess-row-remove-btn {
@@ -1865,7 +1878,8 @@ h2 {
   }
 
   #section-excess .excess-client-field,
-  #section-excess .excess-amount-field {
+  #section-excess .excess-amount-field,
+  #section-excess .excess-who-field {
     flex: 1 1 100%;
   }
 
@@ -2417,7 +2431,8 @@ h2 {
   height: 36px;
   padding: 0 8px;
   box-sizing: border-box;
-  font-size: 13px;
+  /* 16px: иначе iPhone Safari зумит страницу при фокусе */
+  font-size: 16px;
 }
 #section-settings #settingsSaveInstallerRateBtn {
   height: 36px;
@@ -2505,7 +2520,8 @@ h2 {
   height: 36px;
   padding: 0 8px;
   box-sizing: border-box;
-  font-size: 13px;
+  /* 16px: иначе iPhone Safari зумит страницу при фокусе */
+  font-size: 16px;
 }
 #section-settings .settings-editor-remove-btn {
   flex-shrink: 0;
@@ -2608,13 +2624,49 @@ h2 {
   font-size: 13px;
   color: #374151;
 }
-#section-settings .settings-adjustments-field input {
-  width: 100%;
+#section-settings .settings-adj-input-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
   max-width: 220px;
+}
+#section-settings .settings-adj-sign-btn {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f9fafb;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#section-settings .settings-adj-sign-btn[aria-pressed="true"] {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+#section-settings .settings-adj-sign-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+#section-settings .settings-adjustments-field input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
   height: 36px;
   padding: 0 8px;
   box-sizing: border-box;
-  font-size: 13px;
+  /* 16px: иначе iPhone Safari зумит страницу при фокусе */
+  font-size: 16px;
 }
 #section-settings .settings-save-adjustments-btn {
   height: 36px;
