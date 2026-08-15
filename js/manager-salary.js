@@ -86,6 +86,22 @@ function isOrderPaid(order) {
   return paidByRemainingTo || paidByRemainingAmountZero;
 }
 
+/**
+ * Сумма, уже поступившая по заказу для сводки «Оплачено»:
+ * полностью оплаченный — вся стоимость; иначе — предоплата (частичная оплата).
+ */
+function getOrderPaidAmount(order) {
+  const amount = parseLooseNumber(order.amount);
+  if (isOrderPaid(order)) {
+    return amount != null ? amount : 0;
+  }
+  const prepayment = parseLooseNumber(order.prepayment);
+  if (prepayment != null && prepayment > 0) {
+    return prepayment;
+  }
+  return 0;
+}
+
 function isOplahenoPaidNoAlert(order) {
   if (order.amount == null || order.amount === "") return false;
   if (isOrderPaid(order)) return false;
@@ -207,16 +223,19 @@ function updateSummary(orders) {
     count += 1;
     const amount = parseLooseNumber(order.amount);
     if (amount != null) sum += amount;
+    const paidAmount = getOrderPaidAmount(order);
+    if (paidAmount > 0) {
+      paidSum += paidAmount;
+    }
     if (isOrderPaid(order)) {
       paidCount += 1;
-      if (amount != null) paidSum += amount;
     }
   }
 
   countEl.textContent = String(count);
   sumEl.textContent = count ? `${formatAmountWholeRubles(sum)}\u00A0₽` : "—";
   if (paidSumEl) {
-    paidSumEl.textContent = paidCount ? `${formatAmountWholeRubles(paidSum)}\u00A0₽` : "—";
+    paidSumEl.textContent = paidSum > 0 ? `${formatAmountWholeRubles(paidSum)}\u00A0₽` : "—";
   }
   if (paidCountEl) {
     paidCountEl.textContent = String(paidCount);
