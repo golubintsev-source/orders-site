@@ -1,7 +1,6 @@
 import { state } from "./state.js";
 import { isOrderHiddenForCurrentRole, isOrderEditLockedForUserLite } from "./roles.js";
 import { formatAmount, formatAmountWholeRubles, formatDateShortRU, formatOrderIdTypeChip } from "./format.js";
-import { isOrderPaid } from "./orders.js";
 
 /** Статусы с «Производство» и далее, включая «Заказ закрыт». */
 const MANAGER_SALARY_STATUSES = new Set([
@@ -76,7 +75,15 @@ function getOrderCalendarYmd(order) {
 
 function normalizeStatus(val) {
   if (val === "нет" || val === "оплачен" || val == null || val === "") return "Контакт с клиентом";
-  return val;
+  return String(val).trim();
+}
+
+function isOrderPaid(order) {
+  const remainingToRaw = (order.remaining_to || "").trim();
+  const paidByRemainingTo = remainingToRaw !== "" && remainingToRaw !== "—";
+  const remainingAmount = parseLooseNumber(order.remaining_amount);
+  const paidByRemainingAmountZero = remainingAmount != null && Math.abs(remainingAmount) < 1e-9;
+  return paidByRemainingTo || paidByRemainingAmountZero;
 }
 
 function isOplahenoPaidNoAlert(order) {
@@ -109,7 +116,7 @@ function formatMonthLabel(monthKey) {
   return `${MONTH_NAMES_RU[m - 1]} ${y}`;
 }
 
-/** Список месяцев для выбора: от самого раннего заказа до текущего (+ текущий всегда). */
+/** Список месяцев для выбора: от заказов + минимум 36 месяцев назад до текущего. */
 function buildMonthOptions() {
   const keys = new Set();
   const current = currentMonthKey();
@@ -122,9 +129,8 @@ function buildMonthOptions() {
     if (mk) keys.add(mk);
   }
 
-  // Минимум — 24 месяца назад, чтобы был выбор даже без заказов.
   const now = new Date();
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 36; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     keys.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   }
@@ -141,12 +147,21 @@ function fillMonthSelect() {
     selectedMonthKey = currentMonthKey();
   }
 
-  select.innerHTML = options
-    .map((key) => {
-      const selected = key === selectedMonthKey ? " selected" : "";
-      return `<option value="${escapeAttr(key)}"${selected}>${escapeHtml(formatMonthLabel(key))}</option>`;
-    })
-    .join("");
+  const prev = select.value;
+  select.innerHTML = "";
+  for (const key of options) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = formatMonthLabel(key);
+    if (key === selectedMonthKey) opt.selected = true;
+    select.appendChild(opt);
+  }
+
+  if (prev && options.includes(prev) && prev === selectedMonthKey) {
+    select.value = prev;
+  } else {
+    select.value = selectedMonthKey;
+  }
 }
 
 function getManagerSalaryOrders() {
@@ -269,6 +284,7 @@ function applyCellTitles(tbody) {
 }
 
 export function renderManagerSalary() {
+  if (!selectedMonthKey) selectedMonthKey = currentMonthKey();
   fillMonthSelect();
 
   const tbody = document.querySelector("#managerSalaryTable tbody");
@@ -285,7 +301,7 @@ export function renderManagerSalary() {
     tbody.innerHTML = "";
     if (emptyEl) {
       emptyEl.hidden = false;
-      emptyEl.textContent = "Нет заказов за выбранный месяц со статусом «Производство» и далее.";
+      emptyEl.textContent = `Нет заказов за ${formatMonthLabel(selectedMonthKey)} со статусом «Производство» и далее (включая закрытые).`;
     }
     updateSummary([]);
     return;
@@ -300,7 +316,7 @@ export function renderManagerSalary() {
 
 export function loadManagerSalary() {
   initManagerSalarySection();
-  selectedMonthKey = selectedMonthKey || currentMonthKey();
+  if (!selectedMonthKey) selectedMonthKey = currentMonthKey();
   renderManagerSalary();
 }
 
@@ -336,9 +352,12 @@ export function initManagerSalarySection() {
     table.addEventListener("change", onTableChange);
   }
 
-  document.addEventListener("orders-filters-updated", () => {
+  const refreshIfActive = () => {
     if (document.getElementById("section-manager-salary")?.classList.contains("active")) {
       renderManagerSalary();
     }
-  });
+  };
+
+  document.addEventListener("orders-filters-updated", refreshIfActive);
+  document.addEventListener("orders-table-will-render", refreshIfActive);
 }
