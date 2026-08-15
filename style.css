@@ -2644,6 +2644,9 @@ h2 {
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 #section-settings .settings-adj-sign-btn[aria-pressed="true"] {
