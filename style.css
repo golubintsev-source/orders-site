@@ -2431,7 +2431,8 @@ h2 {
   height: 36px;
   padding: 0 8px;
   box-sizing: border-box;
-  font-size: 13px;
+  /* 16px: иначе iPhone Safari зумит страницу при фокусе */
+  font-size: 16px;
 }
 #section-settings #settingsSaveInstallerRateBtn {
   height: 36px;
@@ -2519,7 +2520,8 @@ h2 {
   height: 36px;
   padding: 0 8px;
   box-sizing: border-box;
-  font-size: 13px;
+  /* 16px: иначе iPhone Safari зумит страницу при фокусе */
+  font-size: 16px;
 }
 #section-settings .settings-editor-remove-btn {
   flex-shrink: 0;
@@ -2660,7 +2662,8 @@ h2 {
   height: 36px;
   padding: 0 8px;
   box-sizing: border-box;
-  font-size: 13px;
+  /* 16px: иначе iPhone Safari зумит страницу при фокусе */
+  font-size: 16px;
 }
 #section-settings .settings-save-adjustments-btn {
   height: 36px;
