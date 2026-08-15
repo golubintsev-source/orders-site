@@ -2213,6 +2213,17 @@ h2 {
   color: #111827;
   font-variant-numeric: tabular-nums;
 }
+#section-manager-salary .manager-salary-formula {
+  flex: 1 1 100%;
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  line-height: 1.45;
+}
+#section-manager-salary .manager-salary-formula .manager-salary-summary-value {
+  margin-left: 4px;
+}
 #section-manager-salary .manager-salary-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
