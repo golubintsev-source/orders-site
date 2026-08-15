@@ -42,6 +42,8 @@ const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 const CALC_COMMENT_EMPTY = "[__]";
 let currentUserEmail = "";
 
+const EXCESS_DELTA_CALC_COMMENT_PREFIX = "[AUTO_EXCESS_DELTA]";
+
 const CALC_FROM_OPTIONS = new Set(["Вова", "Дима", "Касса", "Безнал", "Другое"]);
 const CALC_TO_OPTIONS = new Set([
   "Вова",
@@ -579,6 +581,10 @@ export function getCalcDisplayAuthor(comment) {
     const body = c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim();
     return extractAuthorFromOrderDeltaBody(body);
   }
+  if (c.startsWith(EXCESS_DELTA_CALC_COMMENT_PREFIX)) {
+    const body = c.slice(EXCESS_DELTA_CALC_COMMENT_PREFIX.length).trim();
+    return extractAuthorFromOrderDeltaBody(body);
+  }
   return extractAuthorFromManualComment(c);
 }
 
@@ -614,14 +620,18 @@ function insertAddressAfterClientInDeltaComment(body, address) {
 export function getCalcDisplayComment(comment) {
   const c = comment ?? "";
   const isOrderDeltaRow = typeof c === "string" && c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
-  if (!isOrderDeltaRow) {
+  const isExcessDeltaRow = typeof c === "string" && c.startsWith(EXCESS_DELTA_CALC_COMMENT_PREFIX);
+  if (!isOrderDeltaRow && !isExcessDeltaRow) {
     return formatCalcCommentEmptyPlaceholders(stripAuthorFromManualComment(c));
   }
-  const body = c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim();
+  const prefix = isOrderDeltaRow ? ORDER_DELTA_CALC_COMMENT_PREFIX : EXCESS_DELTA_CALC_COMMENT_PREFIX;
+  const body = c.slice(prefix.length).trim();
   let display = stripOrderDeltaTrailingTime(body);
-  const orderId = parseOrderDeltaCommentOrderId(c);
-  if (orderId != null && calcOrderAddressById.has(orderId)) {
-    display = insertAddressAfterClientInDeltaComment(display, calcOrderAddressById.get(orderId));
+  if (isOrderDeltaRow) {
+    const orderId = parseOrderDeltaCommentOrderId(c);
+    if (orderId != null && calcOrderAddressById.has(orderId)) {
+      display = insertAddressAfterClientInDeltaComment(display, calcOrderAddressById.get(orderId));
+    }
   }
   return formatCalcCommentEmptyPlaceholders(stripAuthorFromOrderDeltaBody(display));
 }
@@ -859,6 +869,9 @@ function renderCalculationsTableFromCache() {
   rows.forEach((row) => {
     const comment = row.comment ?? "";
     const isOrderDeltaRow = typeof comment === "string" && comment.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
+    const isExcessDeltaRow =
+      typeof comment === "string" && comment.startsWith(EXCESS_DELTA_CALC_COMMENT_PREFIX);
+    const isSystemDeltaRow = isOrderDeltaRow || isExcessDeltaRow;
     const displayComment = getCalcDisplayComment(comment);
     const displayAuthor = getCalcDisplayAuthor(comment);
     const escapedComment = escapeHtml(displayComment);
@@ -876,18 +889,18 @@ function renderCalculationsTableFromCache() {
         <button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" data-offline-pending="1" title="Удалить локальную запись (ещё не в базе)">${CALC_ICON_DELETE_SVG}</button>
       </td>`
         : `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`
-      : isAdmin() && !isOrderDeltaRow
+      : isAdmin() && !isSystemDeltaRow
         ? `<td class="td-actions">
         <button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>
         <button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>
       </td>`
-        : isAdmin() && isOrderDeltaRow
+        : isAdmin() && isSystemDeltaRow
           ? `<td class="td-actions">
         <button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>
       </td>`
           : `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`;
     const tr = document.createElement("tr");
-    if (isOrderDeltaRow) tr.classList.add("calc-row-system");
+    if (isSystemDeltaRow) tr.classList.add("calc-row-system");
     if (isOfflineRow) tr.classList.add("tr-order-offline-pending");
     tr.innerHTML = `
       <td><span class="status-value">${escapeHtml(formatCalcTimeRu(row.created_at))}</span></td>

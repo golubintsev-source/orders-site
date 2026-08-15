@@ -1722,6 +1722,11 @@ h2 {
   min-width: 110px;
 }
 
+#section-excess .excess-who-field {
+  flex: 0 1 140px;
+  min-width: 120px;
+}
+
 #section-excess .excess-row label {
   display: block;
   margin-bottom: 4px;
@@ -1730,7 +1735,8 @@ h2 {
   color: #374151;
 }
 
-#section-excess .excess-row input {
+#section-excess .excess-row input,
+#section-excess .excess-row select {
   width: 100%;
   box-sizing: border-box;
   min-height: 36px;
@@ -1739,12 +1745,19 @@ h2 {
   border-radius: 8px;
   font-family: inherit;
   font-size: 14px;
+  background: #fff;
 }
 
-#section-excess .excess-row input:focus {
+#section-excess .excess-row input:focus,
+#section-excess .excess-row select:focus {
   outline: none;
   border-color: #0078d4;
   box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.15);
+}
+
+#section-excess .excess-who-select.conditional-invalid {
+  border-color: #dc2626;
+  background: #fef2f2;
 }
 
 #section-excess .excess-row-remove-btn {
@@ -1865,7 +1878,8 @@ h2 {
   }
 
   #section-excess .excess-client-field,
-  #section-excess .excess-amount-field {
+  #section-excess .excess-amount-field,
+  #section-excess .excess-who-field {
     flex: 1 1 100%;
   }
 
