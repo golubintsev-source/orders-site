@@ -207,10 +207,15 @@ function isOrderChecked(order) {
   return !uncheckedOrderIds.has(orderIdKey(order));
 }
 
+/** Базовая часть зарплаты менеджера (руб.) + процент от стоимости. */
+const MANAGER_SALARY_BASE = 22000;
+const MANAGER_SALARY_COST_RATE = 0.015;
+
 function updateSummary(orders) {
   const countEl = document.getElementById("managerSalaryCount");
   const sumEl = document.getElementById("managerSalarySum");
   const paidSumEl = document.getElementById("managerSalaryPaidSum");
+  const salaryResultEl = document.getElementById("managerSalaryResult");
   if (!countEl || !sumEl) return;
 
   let count = 0;
@@ -231,6 +236,14 @@ function updateSummary(orders) {
   sumEl.textContent = count ? `${formatAmountWholeRubles(sum)}\u00A0₽` : "—";
   if (paidSumEl) {
     paidSumEl.textContent = paidSum > 0 ? `${formatAmountWholeRubles(paidSum)}\u00A0₽` : "—";
+  }
+  if (salaryResultEl) {
+    if (count) {
+      const salary = MANAGER_SALARY_BASE + sum * MANAGER_SALARY_COST_RATE;
+      salaryResultEl.textContent = `${formatAmountWholeRubles(salary)}\u00A0₽`;
+    } else {
+      salaryResultEl.textContent = "—";
+    }
   }
 }
 
