@@ -2622,9 +2622,41 @@ h2 {
   font-size: 13px;
   color: #374151;
 }
-#section-settings .settings-adjustments-field input {
-  width: 100%;
+#section-settings .settings-adj-input-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
   max-width: 220px;
+}
+#section-settings .settings-adj-sign-btn {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f9fafb;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#section-settings .settings-adj-sign-btn[aria-pressed="true"] {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+#section-settings .settings-adj-sign-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+#section-settings .settings-adjustments-field input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
   height: 36px;
   padding: 0 8px;
   box-sizing: border-box;
