@@ -908,42 +908,94 @@ function getMessageCopyText(row) {
     .trim();
 }
 
-async function copyTextToClipboard(text) {
-  const value = String(text ?? "");
-  if (!value) return false;
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value);
-      return true;
-    }
-  } catch {
-    /* fall through */
-  }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = value;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    ta.remove();
-    return ok;
-  } catch {
-    return false;
-  }
+function getMessageCopyTextFromDom(messageId) {
+  const feed = document.getElementById("messagesFeed");
+  if (!feed || messageId == null || messageId === "") return "";
+  const item = feed.querySelector(`.message-item[data-message-id="${String(messageId)}"]`);
+  const body = item?.querySelector(".message-item-body");
+  return String(body?.innerText || body?.textContent || "").trim();
 }
 
-async function copyMessageText(row) {
-  const text = getMessageCopyText(row);
-  if (!text) return false;
-  const ok = await copyTextToClipboard(text);
-  if (!ok) {
-    const msg = document.getElementById("messagesPageMessage");
-    if (msg) msg.textContent = "Не удалось скопировать текст";
+/**
+ * Синхронное копирование в буфер.
+ * Важно: на iOS/Android Clipboard API из async после pointerup часто теряет
+ * user activation — поэтому сначала execCommand в том же жесте.
+ */
+function copyTextToClipboardSync(text) {
+  const value = String(text ?? "");
+  if (!value) return false;
+
+  const ta = document.createElement("textarea");
+  ta.value = value;
+  ta.setAttribute("readonly", "");
+  ta.setAttribute("aria-hidden", "true");
+  ta.tabIndex = -1;
+  // iOS надёжнее копирует, если поле в видимой области, а не left:-9999px.
+  ta.style.cssText =
+    "position:fixed;top:0;left:0;width:1px;height:1px;padding:0;margin:0;border:0;outline:none;box-shadow:none;background:transparent;opacity:0;color:transparent;";
+  document.body.appendChild(ta);
+
+  const selection = window.getSelection?.();
+  const prevRange =
+    selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
+
+  let ok = false;
+  try {
+    ta.focus({ preventScroll: true });
+    ta.select();
+    ta.setSelectionRange(0, value.length);
+    if (selection) {
+      selection.removeAllRanges();
+      const range = document.createRange();
+      range.selectNodeContents(ta);
+      selection.addRange(range);
+      ta.setSelectionRange(0, value.length);
+    }
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+
+  ta.remove();
+  if (selection) {
+    selection.removeAllRanges();
+    if (prevRange) {
+      try {
+        selection.addRange(prevRange);
+      } catch {
+        /* ignore */
+      }
+    }
   }
   return ok;
+}
+
+function copyMessageTextSync(row, messageId = null) {
+  const text = getMessageCopyText(row) || getMessageCopyTextFromDom(messageId);
+  if (!text) return false;
+
+  if (copyTextToClipboardSync(text)) return true;
+
+  // Запасной путь: Clipboard API (десктоп / современные браузеры).
+  // Не ждём Promise — жест пользователя уже может быть израсходован.
+  if (navigator.clipboard?.writeText) {
+    try {
+      const pending = navigator.clipboard.writeText(text);
+      if (pending && typeof pending.then === "function") {
+        void pending.catch(() => {
+          const msg = document.getElementById("messagesPageMessage");
+          if (msg) msg.textContent = "Не удалось скопировать текст";
+        });
+        return true;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const msg = document.getElementById("messagesPageMessage");
+  if (msg) msg.textContent = "Не удалось скопировать текст";
+  return false;
 }
 
 function renderMessageBodyHtml(body) {
@@ -3295,7 +3347,7 @@ function highlightMessageInFeed(messageId) {
   setTimeout(() => el.classList.remove("message-item--flash"), 1200);
 }
 
-function runMessageAction(action, messageId) {
+function runMessageAction(action, messageId, armed = null) {
   if (!action || messageId == null || messageId === "") return false;
   const now = Date.now();
   if (now - actionMenuHandledAt < ACTION_MENU_ACTION_DEDUP_MS) return false;
@@ -3311,7 +3363,8 @@ function runMessageAction(action, messageId) {
     return true;
   }
   if (action === "copy") {
-    void copyMessageText(row);
+    // Если уже скопировали на pointerdown — не повторяем.
+    if (!armed?.copyDone) copyMessageTextSync(row, messageId);
     return true;
   }
   if (action === "edit") {
@@ -3346,10 +3399,18 @@ function onMessageActionMenuPointerDown(e) {
   }
   actionMenuPointerDown = true;
   // Снимок id на pointerdown: к моменту pointerup/click меню могли закрыть scroll/ghost-click.
+  const messageId = String(actionMenuMessageId);
+  let copyDone = false;
+  // Копирование в том же жесте pointerdown — иначе на iOS буфер часто остаётся пустым.
+  if (action === "copy") {
+    const row = feedMessagesById.get(messageId);
+    copyDone = copyMessageTextSync(row, messageId);
+  }
   actionMenuArmed = {
     action,
-    messageId: String(actionMenuMessageId),
+    messageId,
     pointerId: e.pointerId,
+    copyDone,
   };
 }
 
@@ -3365,7 +3426,7 @@ function onMessageActionMenuPointerUp(e) {
   if (!btn || btn.getAttribute("data-action") !== armed.action) return;
   e.preventDefault();
   e.stopPropagation();
-  runMessageAction(armed.action, armed.messageId);
+  runMessageAction(armed.action, armed.messageId, armed);
 }
 
 function onMessageActionMenuPointerCancel() {
@@ -3380,14 +3441,12 @@ function onMessageActionMenuClick(e) {
   e.stopPropagation();
   const action = btn.getAttribute("data-action");
   // messageId мог уже сброситься hideMessageActionMenu — берём из armed, если ещё есть.
-  const messageId =
-    actionMenuArmed?.action === action
-      ? actionMenuArmed.messageId
-      : actionMenuMessageId;
+  const armed = actionMenuArmed?.action === action ? actionMenuArmed : null;
+  const messageId = armed?.messageId ?? actionMenuMessageId;
   actionMenuArmed = null;
   actionMenuPointerDown = false;
   if (!action || messageId == null) return;
-  runMessageAction(action, messageId);
+  runMessageAction(action, messageId, armed);
 }
 
 async function sendMessage() {
