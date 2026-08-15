@@ -34,8 +34,8 @@ const ATTACHMENT_DIMENSION_COLS = "attachment_width, attachment_height";
 /** Максимальный CSS-слот фото в пузыре (должен совпадать со style.css). */
 const CHAT_PHOTO_MAX_W = 240;
 const CHAT_PHOTO_MAX_H = 280;
-/** Запасной слот 4:3, пока нет natural/БД размеров. */
-const CHAT_PHOTO_FALLBACK_RATIO = "4 / 3";
+/** Фиксированный слот без известных размеров — никогда не растёт после load. */
+const CHAT_PHOTO_FALLBACK_RATIO = `${CHAT_PHOTO_MAX_W} / ${CHAT_PHOTO_MAX_H}`;
 
 let usersCache = null;
 let usersCachePromise = null;
@@ -270,56 +270,26 @@ function stripAttachmentDimensionFields(payload) {
   return next;
 }
 
-/** CSS-слот фото в пузыре: вписываем natural size в max 240×280. */
+/** CSS-слот фото в пузыре. Без известных размеров — сразу max 240×280 (без роста после load). */
 function chatPhotoSlotSize(naturalW, naturalH) {
   const nw = Number(naturalW);
   const nh = Number(naturalH);
   if (!Number.isFinite(nw) || !Number.isFinite(nh) || nw <= 0 || nh <= 0) {
     return {
       width: CHAT_PHOTO_MAX_W,
-      height: Math.round((CHAT_PHOTO_MAX_W * 3) / 4),
+      height: CHAT_PHOTO_MAX_H,
       ratio: CHAT_PHOTO_FALLBACK_RATIO,
     };
   }
   const scale = Math.min(CHAT_PHOTO_MAX_W / nw, CHAT_PHOTO_MAX_H / nh, 1);
   const width = Math.max(1, Math.round(nw * scale));
   const height = Math.max(1, Math.round(nh * scale));
-  return { width, height, ratio: `${Math.round(nw)} / ${Math.round(nh)}` };
+  return { width, height, ratio: `${width} / ${height}` };
 }
 
-function applyChatPhotoSlotSize(el, naturalW, naturalH) {
-  if (!el) return;
+function chatPhotoSlotStyleAttr(naturalW, naturalH) {
   const slot = chatPhotoSlotSize(naturalW, naturalH);
-  el.style.aspectRatio = slot.ratio;
-  el.style.width = `min(100%, ${slot.width}px)`;
-  el.style.maxHeight = `${CHAT_PHOTO_MAX_H}px`;
-  el.dataset.slotW = String(slot.width);
-  el.dataset.slotH = String(slot.height);
-}
-
-/**
- * Сохраняет позицию скролла ленты при изменении высоты контента:
- * у низа — прилипаем вниз; иначе компенсируем delta scrollHeight.
- */
-function preserveMessagesFeedScroll(feed, mutate) {
-  if (!feed) return mutate();
-  const atBottom = isFeedAtBottom(feed, 80);
-  const prevTop = feed.scrollTop;
-  const prevHeight = feed.scrollHeight;
-  const result = mutate();
-  const restore = () => {
-    if (atBottom) {
-      scrollMessagesFeedToBottom(feed);
-      return;
-    }
-    const delta = feed.scrollHeight - prevHeight;
-    if (delta) feed.scrollTop = prevTop + delta;
-  };
-  if (result && typeof result.then === "function") {
-    return result.finally(restore);
-  }
-  restore();
-  return result;
+  return `style="width:min(100%,${slot.width}px);aspect-ratio:${slot.ratio};height:auto"`;
 }
 
 function escapeHtml(s) {
@@ -1129,15 +1099,16 @@ function renderMessageAttachmentHtml(row) {
   const knownH = Number(row.attachment_height);
   const hasKnownSize =
     Number.isFinite(knownW) && knownW > 0 && Number.isFinite(knownH) && knownH > 0;
+  // Без размеров из БД сразу берём max-слот — после load размер НЕ меняем (иначе прыжки).
   const slot = chatPhotoSlotSize(hasKnownSize ? knownW : null, hasKnownSize ? knownH : null);
-  const sizeStyle = `style="aspect-ratio:${slot.ratio};width:min(100%, ${slot.width}px);max-height:${CHAT_PHOTO_MAX_H}px"`;
+  const sizeStyle = chatPhotoSlotStyleAttr(hasKnownSize ? knownW : null, hasKnownSize ? knownH : null);
   const dimAttrs = hasKnownSize
     ? ` data-width="${Math.round(knownW)}" data-height="${Math.round(knownH)}"`
     : "";
   return `<div class="message-item-attachment" ${sizeStyle} data-storage-path="${escapeHtml(row.attachment_storage_path || "")}" data-thumb-path="${escapeHtml(row.attachment_thumbnail_path || "")}" data-mime-type="${mime}" data-file-name="${escapeHtml(fileName)}" data-file-size="${escapeHtml(size)}"${dimAttrs}>
       <div class="message-item-photo-loading" aria-hidden="true">Загрузка…</div>
       <a class="message-item-photo-link" href="#" target="_blank" rel="noopener noreferrer" title="Открыть полное изображение" hidden>
-        <img class="message-item-photo" alt="${alt}" decoding="async"${hasKnownSize ? ` width="${Math.round(slot.width)}" height="${Math.round(slot.height)}"` : ""} />
+        <img class="message-item-photo" alt="${alt}" width="${slot.width}" height="${slot.height}" decoding="async" />
       </a>
     </div>`;
 }
@@ -1236,18 +1207,14 @@ function waitForImageSettle(img, timeoutMs = 4000) {
 
 async function hydrateMessageAttachments(root = document.getElementById("messagesFeed")) {
   if (!root) return;
-  const feed =
-    root.id === "messagesFeed"
-      ? root
-      : root.closest?.("#messagesFeed") || document.getElementById("messagesFeed");
   const nodes = [...root.querySelectorAll(".message-item-attachment[data-storage-path]")];
 
-  const settled = await Promise.all(
+  await Promise.all(
     nodes.map(async (el) => {
-      if (el.dataset.hydrated === "1") return null;
+      if (el.dataset.hydrated === "1") return;
       const storagePath = el.getAttribute("data-storage-path") || "";
       const thumbPath = el.getAttribute("data-thumb-path") || "";
-      if (!storagePath) return null;
+      if (!storagePath) return;
       // В пузыре (~240 CSS-px, на Retina до ~720 физ. px) старые thumb ~280px мылят «квадратами».
       // Показываем уже сжатый полный файл — объём в storage/БД не растёт; thumb остаётся для списков.
       let previewUrl = await getSignedFileUrl(storagePath);
@@ -1260,36 +1227,18 @@ async function hydrateMessageAttachments(root = document.getElementById("message
       const img = el.querySelector(".message-item-photo");
       if (!previewUrl || !link || !img) {
         if (loading) loading.textContent = "Фото недоступно";
-        return null;
+        return;
       }
 
-      // Не снимаем плейсхолдер до decode — иначе слот схлопывается и лента прыгает.
+      // Слот уже зафиксирован при рендере — после load размер НЕ трогаем.
       img.src = previewUrl;
       link.href = fullUrl || previewUrl;
       link.hidden = false;
       await waitForImageSettle(img);
-
-      const knownW = Number(el.getAttribute("data-width")) || img.naturalWidth;
-      const knownH = Number(el.getAttribute("data-height")) || img.naturalHeight;
-      return { el, loading, img, knownW, knownH };
-    }),
-  );
-
-  // Одним проходом меняем высоты, чтобы не гонять scrollTop на каждое фото.
-  preserveMessagesFeedScroll(feed, () => {
-    for (const item of settled) {
-      if (!item) continue;
-      const { el, loading, img, knownW, knownH } = item;
-      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-        const slot = chatPhotoSlotSize(knownW, knownH);
-        applyChatPhotoSlotSize(el, knownW, knownH);
-        img.setAttribute("width", String(slot.width));
-        img.setAttribute("height", String(slot.height));
-      }
       if (loading) loading.remove();
       el.dataset.hydrated = "1";
-    }
-  });
+    }),
+  );
 }
 
 function getMessagesFastLoadSinceIso(days = MESSAGES_FAST_LOAD_DAYS) {
@@ -2061,16 +2010,8 @@ export async function loadMessages() {
       : `<p class="messages-empty">${emptyText}</p>`;
 
     if (stickBottom) scrollMessagesFeedToBottom(feed);
-    const keepAtBottom = (event) => {
-      if (event.target?.tagName === "IMG" && stickBottom) scrollMessagesFeedToBottom(feed);
-    };
-    feed.addEventListener("load", keepAtBottom, true);
-    try {
-      await hydrateMessageAttachments(feed);
-    } finally {
-      feed.removeEventListener("load", keepAtBottom, true);
-    }
-    if (stickBottom) scrollMessagesFeedToBottom(feed);
+    // Слоты фото фиксированы при рендере — повторный scroll после load не нужен (он давал мигание).
+    await hydrateMessageAttachments(feed);
 
     if (!markRead) return;
     if (!isGroupChat()) {
@@ -2104,16 +2045,16 @@ export async function loadMessages() {
 
   await renderDialogRows(fast.rows, { markRead: true });
 
-  // Фаза 2: догрузка более старых сообщений диалога.
+  // Фаза 2: догрузка более старых сообщений — только prepend, без полной перерисовки ленты.
   void (async () => {
     const fuller = await fetchDialogRows({ since: null, limit: DIALOG_MESSAGE_LIMIT });
     if (gen !== loadMessagesGeneration || activePeerId !== peerAtStart || messagesView !== "dialog") {
       return;
     }
     if (fuller.error) return;
-    // Не перерисовываем, если набор тот же (всё уложилось в 3 дня).
     if (fuller.rows.length <= fast.rows.length) return;
-    await renderDialogRows(fuller.rows, { markRead: false });
+    rememberFeedMessages(fuller.rows);
+    prependOlderMessagesToFeed(fuller.rows);
   })();
 }
 
@@ -2147,6 +2088,32 @@ function scrollMessagesFeedToBottom(feed) {
     pin();
     requestAnimationFrame(pin);
   });
+}
+
+/**
+ * Вставляет более старые сообщения сверху, сохраняя визуальную позицию ленты.
+ * Нельзя заново делать innerHTML всего диалога — иначе фото перезагружаются и лента мигает.
+ */
+function prependOlderMessagesToFeed(rows) {
+  const feed = document.getElementById("messagesFeed");
+  if (!feed || !rows?.length) return;
+
+  const existingIds = getFeedMessageIds();
+  const olderRows = rows.filter(
+    (row) => !isMessageDeleted(row) && !existingIds.has(String(row.id)),
+  );
+  if (!olderRows.length) return;
+
+  // rows приходят ascending (старые → новые); для prepend нужен тот же порядок.
+  const html = olderRows.map(renderMessageItem).join("");
+  if (!html) return;
+
+  const prevHeight = feed.scrollHeight;
+  const prevTop = feed.scrollTop;
+  feed.insertAdjacentHTML("afterbegin", html);
+  feed.scrollTop = prevTop + (feed.scrollHeight - prevHeight);
+
+  void hydrateMessageAttachments(feed);
 }
 
 function appendMessagesToFeed(rows) {
@@ -2188,21 +2155,7 @@ function appendMessagesToFeed(rows) {
   if (atBottom) {
     scrollMessagesFeedToBottom(feed);
   }
-  const keepAtBottom = (event) => {
-    if (event.target?.tagName === "IMG" && (atBottom || isFeedAtBottom(feed))) {
-      scrollMessagesFeedToBottom(feed);
-    }
-  };
-  feed.addEventListener("load", keepAtBottom, true);
-  void hydrateMessageAttachments(feed)
-    .then(() => {
-      if (atBottom || isFeedAtBottom(feed)) {
-        scrollMessagesFeedToBottom(feed);
-      }
-    })
-    .finally(() => {
-      feed.removeEventListener("load", keepAtBottom, true);
-    });
+  void hydrateMessageAttachments(feed);
 }
 
 async function syncOutgoingReadStatus() {
