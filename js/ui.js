@@ -66,6 +66,8 @@ import {
   updateAdjustmentsSaveButtonState,
   addEditorField,
   BALANCE_ADJ_FIELDS,
+  toggleAdjustmentSign,
+  syncAdjustmentSignButton,
 } from "./settings.js";
 import { loadBalance } from "./balance.js";
 import { canMutateOrders, isOrderEditLockedForUserLite, isUserLite, isUserShop } from "./roles.js";
@@ -463,13 +465,21 @@ export function bindUIEvents() {
       if (adjInput) {
         const onAdj = () => {
           refreshRublesIntegerInputState(adjInput, adjInput.value, { allowSign: true });
+          syncAdjustmentSignButton(adjInput);
           updateAdjustmentsSaveButtonState();
         };
         adjInput.addEventListener("input", onAdj);
         adjInput.addEventListener("change", onAdj);
         adjInput.addEventListener("blur", onAdj);
+        syncAdjustmentSignButton(adjInput);
       }
     }
+    document.querySelectorAll(".settings-adj-sign-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(btn.getAttribute("data-adj-input") || "");
+        toggleAdjustmentSign(input);
+      });
+    });
   }
 
   const ordersSearchOpenBtn = document.getElementById("ordersSearchOpenBtn");

@@ -29,6 +29,31 @@ export function parseAdjustmentInt(raw) {
   return r.value ?? 0;
 }
 
+/** На мобильной numeric-клавиатуре часто нет «−» — переключаем знак кнопкой ±. */
+export function toggleAdjustmentSign(input) {
+  if (!input) return;
+  const s = String(input.value ?? "").trim();
+  if (s.startsWith("-")) {
+    input.value = s.slice(1);
+  } else if (s === "" || s === "+" || /^0+$/.test(s)) {
+    input.value = "-";
+  } else if (s.startsWith("+")) {
+    input.value = `-${s.slice(1)}`;
+  } else {
+    input.value = `-${s}`;
+  }
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+export function syncAdjustmentSignButton(input) {
+  if (!input?.id) return;
+  const btn = document.querySelector(`.settings-adj-sign-btn[data-adj-input="${input.id}"]`);
+  if (!btn) return;
+  const negative = String(input.value ?? "").trim().startsWith("-");
+  btn.setAttribute("aria-pressed", negative ? "true" : "false");
+  btn.title = negative ? "Сейчас минус — нажмите для плюса" : "Сменить знак (+/−)";
+}
+
 function normalizeDriverName(raw) {
   return String(raw ?? "").trim().replace(/\s+/g, " ");
 }
@@ -167,7 +192,10 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
 
   for (const { participant, inputId } of BALANCE_ADJ_FIELDS) {
     const el = document.getElementById(inputId);
-    if (el) el.value = String(state.balanceAdjustments[participant] ?? 0);
+    if (el) {
+      el.value = String(state.balanceAdjustments[participant] ?? 0);
+      syncAdjustmentSignButton(el);
+    }
   }
 
   updateSettingsSaveButtonState();

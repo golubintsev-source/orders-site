@@ -1677,19 +1677,31 @@
         <div class="settings-adjustments-grid">
           <div class="settings-adjustments-field">
             <label for="settings_adj_dima">Дима</label>
-            <input type="text" inputmode="numeric" id="settings_adj_dima" title="Целое число рублей; допускается знак минус" />
+            <div class="settings-adj-input-wrap">
+              <button type="button" class="settings-adj-sign-btn" data-adj-input="settings_adj_dima" aria-label="Сменить знак" title="Сменить знак (+/−)" aria-pressed="false">±</button>
+              <input type="text" inputmode="numeric" id="settings_adj_dima" title="Целое число рублей; на телефоне минус — кнопкой ±" autocomplete="off" />
+            </div>
           </div>
           <div class="settings-adjustments-field">
             <label for="settings_adj_vova">Вова</label>
-            <input type="text" inputmode="numeric" id="settings_adj_vova" title="Целое число рублей; допускается знак минус" />
+            <div class="settings-adj-input-wrap">
+              <button type="button" class="settings-adj-sign-btn" data-adj-input="settings_adj_vova" aria-label="Сменить знак" title="Сменить знак (+/−)" aria-pressed="false">±</button>
+              <input type="text" inputmode="numeric" id="settings_adj_vova" title="Целое число рублей; на телефоне минус — кнопкой ±" autocomplete="off" />
+            </div>
           </div>
           <div class="settings-adjustments-field">
             <label for="settings_adj_kassa">Касса</label>
-            <input type="text" inputmode="numeric" id="settings_adj_kassa" title="Целое число рублей; допускается знак минус" />
+            <div class="settings-adj-input-wrap">
+              <button type="button" class="settings-adj-sign-btn" data-adj-input="settings_adj_kassa" aria-label="Сменить знак" title="Сменить знак (+/−)" aria-pressed="false">±</button>
+              <input type="text" inputmode="numeric" id="settings_adj_kassa" title="Целое число рублей; на телефоне минус — кнопкой ±" autocomplete="off" />
+            </div>
           </div>
           <div class="settings-adjustments-field">
             <label for="settings_adj_beznal">Безнал</label>
-            <input type="text" inputmode="numeric" id="settings_adj_beznal" title="Целое число рублей; допускается знак минус" />
+            <div class="settings-adj-input-wrap">
+              <button type="button" class="settings-adj-sign-btn" data-adj-input="settings_adj_beznal" aria-label="Сменить знак" title="Сменить знак (+/−)" aria-pressed="false">±</button>
+              <input type="text" inputmode="numeric" id="settings_adj_beznal" title="Целое число рублей; на телефоне минус — кнопкой ±" autocomplete="off" />
+            </div>
           </div>
         </div>
         <button type="button" id="settingsSaveAdjustmentsBtn" class="btn-primary settings-save-adjustments-btn settings-save-btn-inactive" disabled>Сохранить</button>
