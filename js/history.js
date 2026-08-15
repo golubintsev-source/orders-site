@@ -3,6 +3,7 @@ import { checkAuth, loadProfile, logout } from "./auth.js";
 import { isOrderHiddenForCurrentRole } from "./roles.js";
 import { mergeOrderHistoryRows } from "./offline-cache.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
+import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import {
   initSectionNavDropdown,
   setStandaloneSectionNavLabel,
@@ -116,11 +117,14 @@ function wireHistorySearchAndLogout() {
 async function loadHistory() {
   if (!orderId) return;
 
-  const { data, error } = await supabaseClient
-    .from("order_history")
-    .select("created_at, user_email, comment, order_id")
-    .eq("order_id", orderId)
-    .order("created_at", { ascending: true });
+  const { data, error } = await fetchAllSupabaseRows(() =>
+    supabaseClient
+      .from("order_history")
+      .select("created_at, user_email, comment, order_id")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true }),
+  );
 
   const tbody = document.querySelector("#historyTable tbody");
   const msgEl = document.getElementById("historyMessage");

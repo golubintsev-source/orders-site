@@ -11,6 +11,7 @@ import {
   isCroppableImageFile,
   uploadChatPhoto,
 } from "./files.js";
+import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 /** Максимальная высота поля ввода сообщения (как в CSS max-height). */
@@ -808,13 +809,15 @@ async function fetchAllUserMessages() {
   const uid = getCurrentUserId();
   if (!uid) return { rows: [], error: null };
 
-  return fetchUserMessagesQuery((cols) =>
+  const { data, error } = await fetchAllSupabaseRows(() =>
     supabaseClient
       .from("user_messages")
-      .select(cols)
+      .select(messageSelectColumns())
       .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
-      .order("created_at", { ascending: true }),
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true }),
   );
+  return { rows: data || [], error };
 }
 
 /** Недавние DM для списка чатов (превью последнего сообщения). */
@@ -845,22 +848,29 @@ async function fetchUnreadIncomingDmMeta() {
   let select = "id, sender_id, recipient_id, read_at";
   if (messageActionsSupported !== false) select += ", deleted_at";
 
-  let query = supabaseClient
-    .from("user_messages")
-    .select(select)
-    .eq("recipient_id", uid)
-    .is("read_at", null);
-  if (messageActionsSupported !== false) {
-    query = query.is("deleted_at", null);
-  }
-
-  let { data, error } = await query;
-  if (error && noteMessageActionsSupport(error)) {
-    ({ data, error } = await supabaseClient
+  const buildQuery = () => {
+    let query = supabaseClient
       .from("user_messages")
-      .select("id, sender_id, recipient_id, read_at")
+      .select(select)
       .eq("recipient_id", uid)
-      .is("read_at", null));
+      .is("read_at", null)
+      .order("id", { ascending: true });
+    if (messageActionsSupported !== false) {
+      query = query.is("deleted_at", null);
+    }
+    return query;
+  };
+
+  let { data, error } = await fetchAllSupabaseRows(buildQuery);
+  if (error && noteMessageActionsSupport(error)) {
+    ({ data, error } = await fetchAllSupabaseRows(() =>
+      supabaseClient
+        .from("user_messages")
+        .select("id, sender_id, recipient_id, read_at")
+        .eq("recipient_id", uid)
+        .is("read_at", null)
+        .order("id", { ascending: true }),
+    ));
   }
   if (error) return { rows: [], error };
   return { rows: data || [], error: null };
@@ -1804,17 +1814,21 @@ async function markIncomingMessagesDelivered(ids) {
   if (!uid || !ids?.length || deliveredAtSupported === false) return;
 
   const now = new Date().toISOString();
-  const { error } = await supabaseClient
-    .from("user_messages")
-    .update({ delivered_at: now })
-    .in("id", ids)
-    .eq("recipient_id", uid)
-    .is("delivered_at", null);
+  const chunkSize = 200;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    const { error } = await supabaseClient
+      .from("user_messages")
+      .update({ delivered_at: now })
+      .in("id", chunk)
+      .eq("recipient_id", uid)
+      .is("delivered_at", null);
 
-  if (error) {
-    if (noteDeliveredAtSupport(error)) return;
-    console.warn("Ошибка отметки доставленных:", error);
-  } else {
+    if (error) {
+      if (noteDeliveredAtSupport(error)) return;
+      console.warn("Ошибка отметки доставленных:", error);
+      return;
+    }
     deliveredAtSupported = true;
   }
 }
@@ -1861,12 +1875,15 @@ async function acknowledgeIncomingDelivered() {
   const uid = getCurrentUserId();
   if (!uid || deliveredAtSupported === false) return;
 
-  const { data, error } = await supabaseClient
-    .from("user_messages")
-    .select("id")
-    .eq("recipient_id", uid)
-    .is("delivered_at", null)
-    .is("read_at", null);
+  const { data, error } = await fetchAllSupabaseRows(() =>
+    supabaseClient
+      .from("user_messages")
+      .select("id")
+      .eq("recipient_id", uid)
+      .is("delivered_at", null)
+      .is("read_at", null)
+      .order("id", { ascending: true }),
+  );
 
   if (error) {
     if (noteDeliveredAtSupport(error)) return;

@@ -31,6 +31,7 @@ import {
   isBrowserOffline,
   raceWithTimeout,
 } from "./offline-cache.js";
+import { fetchAllSupabaseRows, fetchSupabaseByIdsInChunks } from "./supabase-fetch.js";
 
 let editingId = null;
 let editingCreatedAt = null;
@@ -663,11 +664,15 @@ async function refreshCalcOrderAddressesForRows(rows) {
 
   try {
     const { data, error } = await raceWithTimeout(
-      supabaseClient
-        .from("orders")
-        .select("id, address")
-        .in("id", uniqueIds)
-        .is("deleted_at", null),
+      fetchSupabaseByIdsInChunks(
+        (chunkIds) =>
+          supabaseClient
+            .from("orders")
+            .select("id, address")
+            .in("id", chunkIds)
+            .is("deleted_at", null),
+        uniqueIds,
+      ),
     );
     if (error) throw error;
     for (const o of data || []) {
@@ -959,7 +964,8 @@ export async function loadCalculations() {
       .is("deleted_at", null)
       .gte("created_at", fromIso)
       .lte("created_at", toIso)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
 
   let data = null;
   let error = null;
@@ -967,7 +973,7 @@ export async function loadCalculations() {
     error = { message: "offline" };
   } else {
     try {
-      const res = await raceWithTimeout(calculationsQuery());
+      const res = await raceWithTimeout(fetchAllSupabaseRows(calculationsQuery));
       data = res.data;
       error = res.error;
     } catch (e) {
