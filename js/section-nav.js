@@ -351,7 +351,9 @@ export function switchSection(sectionId, opts = {}) {
     loadBalance();
   }
   if (sectionId === "manager-salary") {
-    void import("./manager-salary.js").then((m) => m.loadManagerSalary());
+    void import("./manager-salary.js")
+      .then((m) => m.loadManagerSalary())
+      .catch((err) => console.error("Зарплата менеджера: не удалось загрузить раздел", err));
   }
   if (sectionId === "route-sheet") {
     void import("./route-sheet.js").then((m) => m.loadRouteSheet());
