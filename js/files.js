@@ -66,6 +66,21 @@ export async function cropImageAttachment(file) {
  * Правила сжатия — те же, что для файлов заявки.
  * @returns {Promise<{ storagePath: string, thumbnailPath: string | null, mimeType: string, fileName: string, fileSize: number }>}
  */
+/** Пиксельный размер растрового изображения (для резерва места в ленте чата). */
+async function readImagePixelSize(imageFile) {
+  if (!imageFile?.type?.startsWith("image/")) return { width: null, height: null };
+  if (imageFile.type === "image/svg+xml") return { width: null, height: null };
+  try {
+    const bitmap = await createImageBitmap(imageFile);
+    const width = bitmap.width || null;
+    const height = bitmap.height || null;
+    bitmap.close();
+    return { width, height };
+  } catch {
+    return { width: null, height: null };
+  }
+}
+
 export async function uploadChatPhoto(file) {
   if (!state.currentUser?.id) {
     throw new Error("Нет авторизации для загрузки фото");
@@ -79,6 +94,7 @@ export async function uploadChatPhoto(file) {
   const safeName = rawName.replace(/[^\w.\-]+/g, "_").replace(/^\.+$/, "") || "photo.jpg";
   const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const filePath = `${state.currentUser.id}/messages/${stamp}_${safeName}`;
+  const pixelSize = await readImagePixelSize(fileToUpload);
 
   const uploadBody = await blobBodyForStorageUpload(fileToUpload);
   const { error: uploadError } = await supabaseClient.storage
@@ -126,6 +142,8 @@ export async function uploadChatPhoto(file) {
     mimeType: fileToUpload.type || "image/jpeg",
     fileName: file.name || fileToUpload.name || safeName,
     fileSize: fileToUpload.size ?? 0,
+    width: pixelSize.width,
+    height: pixelSize.height,
   };
 }
 

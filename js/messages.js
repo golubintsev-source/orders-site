@@ -30,6 +30,12 @@ const MESSAGES_FAST_LOAD_DAYS = 3;
 const GROUP_PEER_PREFIX = "group:";
 const ATTACHMENT_SELECT_COLS =
   "attachment_storage_path, attachment_thumbnail_path, attachment_mime_type, attachment_file_name, attachment_file_size";
+const ATTACHMENT_DIMENSION_COLS = "attachment_width, attachment_height";
+/** Максимальный CSS-слот фото в пузыре (должен совпадать со style.css). */
+const CHAT_PHOTO_MAX_W = 240;
+const CHAT_PHOTO_MAX_H = 280;
+/** Запасной слот 4:3, пока нет natural/БД размеров. */
+const CHAT_PHOTO_FALLBACK_RATIO = "4 / 3";
 
 let usersCache = null;
 let usersCachePromise = null;
@@ -64,6 +70,8 @@ let groupDeliveredAtSupported = null;
 let activeGroupReceiptsByUser = new Map();
 /** null = unknown, true/false after first probe */
 let attachmentColumnsSupported = null;
+/** null = неизвестно, true/false = колонки attachment_width/height доступны. */
+let attachmentDimensionColumnsSupported = null;
 /** null = unknown, true/false after first probe — reply_to_id / edited_at / deleted_at */
 let messageActionsSupported = null;
 /** @type {"create" | "edit"} */
@@ -124,7 +132,10 @@ const MESSAGE_SELECT_BASIC =
 
 function withAttachmentColumns(base) {
   if (attachmentColumnsSupported === false) return base;
-  return `${base}, ${ATTACHMENT_SELECT_COLS}`;
+  if (attachmentDimensionColumnsSupported === false) {
+    return `${base}, ${ATTACHMENT_SELECT_COLS}`;
+  }
+  return `${base}, ${ATTACHMENT_SELECT_COLS}, ${ATTACHMENT_DIMENSION_COLS}`;
 }
 
 function withMessageActionColumns(base) {
@@ -145,6 +156,19 @@ function noteDeliveredAtSupport(error) {
   const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""}`.toLowerCase();
   if (msg.includes("delivered_at") || error.code === "PGRST204" || error.code === "42703") {
     deliveredAtSupported = false;
+    return true;
+  }
+  return false;
+}
+
+function noteAttachmentDimensionSupport(error) {
+  if (!error) {
+    if (attachmentDimensionColumnsSupported !== false) attachmentDimensionColumnsSupported = true;
+    return false;
+  }
+  const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""} ${error.code || ""}`.toLowerCase();
+  if (msg.includes("attachment_width") || msg.includes("attachment_height")) {
+    attachmentDimensionColumnsSupported = false;
     return true;
   }
   return false;
@@ -221,13 +245,81 @@ function messageHasAttachment(row) {
 
 function attachmentFieldsFromUpload(uploaded) {
   if (!uploaded) return {};
-  return {
+  const fields = {
     attachment_storage_path: uploaded.storagePath,
     attachment_thumbnail_path: uploaded.thumbnailPath,
     attachment_mime_type: uploaded.mimeType,
     attachment_file_name: uploaded.fileName,
     attachment_file_size: uploaded.fileSize,
   };
+  if (attachmentDimensionColumnsSupported === false) return fields;
+  const width = Number(uploaded.width);
+  const height = Number(uploaded.height);
+  if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
+    fields.attachment_width = Math.round(width);
+    fields.attachment_height = Math.round(height);
+  }
+  return fields;
+}
+
+function stripAttachmentDimensionFields(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  const next = { ...payload };
+  delete next.attachment_width;
+  delete next.attachment_height;
+  return next;
+}
+
+/** CSS-слот фото в пузыре: вписываем natural size в max 240×280. */
+function chatPhotoSlotSize(naturalW, naturalH) {
+  const nw = Number(naturalW);
+  const nh = Number(naturalH);
+  if (!Number.isFinite(nw) || !Number.isFinite(nh) || nw <= 0 || nh <= 0) {
+    return {
+      width: CHAT_PHOTO_MAX_W,
+      height: Math.round((CHAT_PHOTO_MAX_W * 3) / 4),
+      ratio: CHAT_PHOTO_FALLBACK_RATIO,
+    };
+  }
+  const scale = Math.min(CHAT_PHOTO_MAX_W / nw, CHAT_PHOTO_MAX_H / nh, 1);
+  const width = Math.max(1, Math.round(nw * scale));
+  const height = Math.max(1, Math.round(nh * scale));
+  return { width, height, ratio: `${Math.round(nw)} / ${Math.round(nh)}` };
+}
+
+function applyChatPhotoSlotSize(el, naturalW, naturalH) {
+  if (!el) return;
+  const slot = chatPhotoSlotSize(naturalW, naturalH);
+  el.style.aspectRatio = slot.ratio;
+  el.style.width = `min(100%, ${slot.width}px)`;
+  el.style.maxHeight = `${CHAT_PHOTO_MAX_H}px`;
+  el.dataset.slotW = String(slot.width);
+  el.dataset.slotH = String(slot.height);
+}
+
+/**
+ * Сохраняет позицию скролла ленты при изменении высоты контента:
+ * у низа — прилипаем вниз; иначе компенсируем delta scrollHeight.
+ */
+function preserveMessagesFeedScroll(feed, mutate) {
+  if (!feed) return mutate();
+  const atBottom = isFeedAtBottom(feed, 80);
+  const prevTop = feed.scrollTop;
+  const prevHeight = feed.scrollHeight;
+  const result = mutate();
+  const restore = () => {
+    if (atBottom) {
+      scrollMessagesFeedToBottom(feed);
+      return;
+    }
+    const delta = feed.scrollHeight - prevHeight;
+    if (delta) feed.scrollTop = prevTop + delta;
+  };
+  if (result && typeof result.then === "function") {
+    return result.finally(restore);
+  }
+  restore();
+  return result;
 }
 
 function escapeHtml(s) {
@@ -1033,10 +1125,19 @@ function renderMessageAttachmentHtml(row) {
     row.attachment_file_size != null && Number.isFinite(Number(row.attachment_file_size))
       ? String(row.attachment_file_size)
       : "";
-  return `<div class="message-item-attachment" data-storage-path="${escapeHtml(row.attachment_storage_path || "")}" data-thumb-path="${escapeHtml(row.attachment_thumbnail_path || "")}" data-mime-type="${mime}" data-file-name="${escapeHtml(fileName)}" data-file-size="${escapeHtml(size)}">
+  const knownW = Number(row.attachment_width);
+  const knownH = Number(row.attachment_height);
+  const hasKnownSize =
+    Number.isFinite(knownW) && knownW > 0 && Number.isFinite(knownH) && knownH > 0;
+  const slot = chatPhotoSlotSize(hasKnownSize ? knownW : null, hasKnownSize ? knownH : null);
+  const sizeStyle = `style="aspect-ratio:${slot.ratio};width:min(100%, ${slot.width}px);max-height:${CHAT_PHOTO_MAX_H}px"`;
+  const dimAttrs = hasKnownSize
+    ? ` data-width="${Math.round(knownW)}" data-height="${Math.round(knownH)}"`
+    : "";
+  return `<div class="message-item-attachment" ${sizeStyle} data-storage-path="${escapeHtml(row.attachment_storage_path || "")}" data-thumb-path="${escapeHtml(row.attachment_thumbnail_path || "")}" data-mime-type="${mime}" data-file-name="${escapeHtml(fileName)}" data-file-size="${escapeHtml(size)}"${dimAttrs}>
       <div class="message-item-photo-loading" aria-hidden="true">Загрузка…</div>
       <a class="message-item-photo-link" href="#" target="_blank" rel="noopener noreferrer" title="Открыть полное изображение" hidden>
-        <img class="message-item-photo" alt="${alt}" decoding="async" />
+        <img class="message-item-photo" alt="${alt}" decoding="async"${hasKnownSize ? ` width="${Math.round(slot.width)}" height="${Math.round(slot.height)}"` : ""} />
       </a>
     </div>`;
 }
@@ -1120,7 +1221,8 @@ function renderMessageItem(row) {
 }
 
 function waitForImageSettle(img, timeoutMs = 4000) {
-  if (!img || img.complete) return Promise.resolve();
+  if (!img) return Promise.resolve();
+  if (img.complete && img.naturalWidth > 0) return Promise.resolve();
   return new Promise((resolve) => {
     const finish = () => {
       clearTimeout(timer);
@@ -1134,13 +1236,18 @@ function waitForImageSettle(img, timeoutMs = 4000) {
 
 async function hydrateMessageAttachments(root = document.getElementById("messagesFeed")) {
   if (!root) return;
+  const feed =
+    root.id === "messagesFeed"
+      ? root
+      : root.closest?.("#messagesFeed") || document.getElementById("messagesFeed");
   const nodes = [...root.querySelectorAll(".message-item-attachment[data-storage-path]")];
-  await Promise.all(
+
+  const settled = await Promise.all(
     nodes.map(async (el) => {
-      if (el.dataset.hydrated === "1") return;
+      if (el.dataset.hydrated === "1") return null;
       const storagePath = el.getAttribute("data-storage-path") || "";
       const thumbPath = el.getAttribute("data-thumb-path") || "";
-      if (!storagePath) return;
+      if (!storagePath) return null;
       // В пузыре (~240 CSS-px, на Retina до ~720 физ. px) старые thumb ~280px мылят «квадратами».
       // Показываем уже сжатый полный файл — объём в storage/БД не растёт; thumb остаётся для списков.
       let previewUrl = await getSignedFileUrl(storagePath);
@@ -1153,16 +1260,36 @@ async function hydrateMessageAttachments(root = document.getElementById("message
       const img = el.querySelector(".message-item-photo");
       if (!previewUrl || !link || !img) {
         if (loading) loading.textContent = "Фото недоступно";
-        return;
+        return null;
       }
+
+      // Не снимаем плейсхолдер до decode — иначе слот схлопывается и лента прыгает.
       img.src = previewUrl;
       link.href = fullUrl || previewUrl;
       link.hidden = false;
+      await waitForImageSettle(img);
+
+      const knownW = Number(el.getAttribute("data-width")) || img.naturalWidth;
+      const knownH = Number(el.getAttribute("data-height")) || img.naturalHeight;
+      return { el, loading, img, knownW, knownH };
+    }),
+  );
+
+  // Одним проходом меняем высоты, чтобы не гонять scrollTop на каждое фото.
+  preserveMessagesFeedScroll(feed, () => {
+    for (const item of settled) {
+      if (!item) continue;
+      const { el, loading, img, knownW, knownH } = item;
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        const slot = chatPhotoSlotSize(knownW, knownH);
+        applyChatPhotoSlotSize(el, knownW, knownH);
+        img.setAttribute("width", String(slot.width));
+        img.setAttribute("height", String(slot.height));
+      }
       if (loading) loading.remove();
       el.dataset.hydrated = "1";
-      await waitForImageSettle(img);
-    })
-  );
+    }
+  });
 }
 
 function getMessagesFastLoadSinceIso(days = MESSAGES_FAST_LOAD_DAYS) {
@@ -1181,6 +1308,11 @@ async function fetchUserMessagesQuery(buildQuery) {
     ({ data, error } = await query);
   }
 
+  if (error && noteAttachmentDimensionSupport(error)) {
+    query = buildQuery(messageSelectColumns());
+    ({ data, error } = await query);
+  }
+
   if (error && noteAttachmentSupport(error)) {
     query = buildQuery(messageSelectColumns());
     ({ data, error } = await query);
@@ -1192,6 +1324,9 @@ async function fetchUserMessagesQuery(buildQuery) {
   } else if (!error) {
     deliveredAtSupported = deliveredAtSupported !== false;
     if (attachmentColumnsSupported !== false) attachmentColumnsSupported = true;
+    if (attachmentDimensionColumnsSupported !== false && messageSelectColumns().includes("attachment_width")) {
+      attachmentDimensionColumnsSupported = true;
+    }
     if (messageActionsSupported !== false) messageActionsSupported = true;
   }
 
@@ -1351,6 +1486,11 @@ async function fetchGroupMessages(chatId, { sinceIso = null, limit = DIALOG_MESS
     ({ data, error } = await run(select));
   }
 
+  if (error && noteAttachmentDimensionSupport(error)) {
+    select = withMessageActionColumns(withAttachmentColumns(selectBase));
+    ({ data, error } = await run(select));
+  }
+
   if (error && noteAttachmentSupport(error)) {
     select = withMessageActionColumns(withAttachmentColumns(selectBase));
     ({ data, error } = await run(select));
@@ -1387,6 +1527,16 @@ async function fetchLastGroupMessagesByChat(chatIds) {
         .limit(8);
 
       if (error && noteMessageActionsSupport(error)) {
+        select = withMessageActionColumns(withAttachmentColumns(selectBase));
+        ({ data, error } = await supabaseClient
+          .from("group_messages")
+          .select(select)
+          .eq("chat_id", chatId)
+          .order("created_at", { ascending: false })
+          .limit(8));
+      }
+
+      if (error && noteAttachmentDimensionSupport(error)) {
         select = withMessageActionColumns(withAttachmentColumns(selectBase));
         ({ data, error } = await supabaseClient
           .from("group_messages")
@@ -2038,11 +2188,21 @@ function appendMessagesToFeed(rows) {
   if (atBottom) {
     scrollMessagesFeedToBottom(feed);
   }
-  void hydrateMessageAttachments(feed).then(() => {
-    if (atBottom || isFeedAtBottom(feed)) {
+  const keepAtBottom = (event) => {
+    if (event.target?.tagName === "IMG" && (atBottom || isFeedAtBottom(feed))) {
       scrollMessagesFeedToBottom(feed);
     }
-  });
+  };
+  feed.addEventListener("load", keepAtBottom, true);
+  void hydrateMessageAttachments(feed)
+    .then(() => {
+      if (atBottom || isFeedAtBottom(feed)) {
+        scrollMessagesFeedToBottom(feed);
+      }
+    })
+    .finally(() => {
+      feed.removeEventListener("load", keepAtBottom, true);
+    });
 }
 
 async function syncOutgoingReadStatus() {
@@ -2119,6 +2279,15 @@ async function pollNewMessages() {
       query = query.gte("created_at", lastFeedMessageAt);
     }
     let { data, error } = await query;
+    if (error && noteAttachmentDimensionSupport(error)) {
+      query = supabaseClient
+        .from("group_messages")
+        .select(withAttachmentColumns(selectBase))
+        .eq("chat_id", groupId)
+        .order("created_at", { ascending: true });
+      if (lastFeedMessageAt) query = query.gte("created_at", lastFeedMessageAt);
+      ({ data, error } = await query);
+    }
     if (error && noteAttachmentSupport(error)) {
       query = supabaseClient
         .from("group_messages")
@@ -2161,6 +2330,15 @@ async function pollNewMessages() {
   }
 
   let { data, error } = await query;
+  if (error && noteAttachmentDimensionSupport(error)) {
+    let retry = supabaseClient
+      .from("user_messages")
+      .select(messageSelectColumns())
+      .or(peerFilter)
+      .order("created_at", { ascending: true });
+    if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
+    ({ data, error } = await retry);
+  }
   if (error && noteAttachmentSupport(error)) {
     let retry = supabaseClient
       .from("user_messages")
@@ -3480,7 +3658,7 @@ async function sendMessage() {
       return;
     }
 
-    const { error } = await supabaseClient.from("group_messages").insert({
+    let { error } = await supabaseClient.from("group_messages").insert({
       chat_id: groupId,
       sender_id: uid,
       sender_email: getCurrentUserEmail(),
@@ -3488,6 +3666,17 @@ async function sendMessage() {
       ...attachmentPayload,
       ...replyPayload,
     });
+
+    if (error && noteAttachmentDimensionSupport(error) && attachmentPayload.attachment_width != null) {
+      ({ error } = await supabaseClient.from("group_messages").insert({
+        chat_id: groupId,
+        sender_id: uid,
+        sender_email: getCurrentUserEmail(),
+        body,
+        ...stripAttachmentDimensionFields(attachmentPayload),
+        ...replyPayload,
+      }));
+    }
 
     if (sendBtn) sendBtn.disabled = false;
     if (attachBtn) attachBtn.disabled = false;
@@ -3574,7 +3763,12 @@ async function sendMessage() {
     ...replyPayload,
   }));
 
-  const { error } = await supabaseClient.from("user_messages").insert(inserts);
+  let { error } = await supabaseClient.from("user_messages").insert(inserts);
+
+  if (error && noteAttachmentDimensionSupport(error) && attachmentPayload.attachment_width != null) {
+    const insertsWithoutDims = inserts.map(stripAttachmentDimensionFields);
+    ({ error } = await supabaseClient.from("user_messages").insert(insertsWithoutDims));
+  }
 
   if (sendBtn) sendBtn.disabled = false;
   if (attachBtn) attachBtn.disabled = false;
