@@ -23,6 +23,8 @@ const CHAT_LIST_POLL_MS = 20_000;
 const CHAT_LIST_DM_PREVIEW_LIMIT = 800;
 /** Сколько последних сообщений диалога грузить сразу. */
 const DIALOG_MESSAGE_LIMIT = 400;
+/** Первая отрисовка списка/диалога: только сообщения за последние N дней. */
+const MESSAGES_FAST_LOAD_DAYS = 3;
 /** Префикс peer id для группового чата. */
 const GROUP_PEER_PREFIX = "group:";
 const ATTACHMENT_SELECT_COLS =
@@ -768,6 +770,13 @@ async function hydrateMessageAttachments(root = document.getElementById("message
   );
 }
 
+function getMessagesFastLoadSinceIso(days = MESSAGES_FAST_LOAD_DAYS) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - Math.max(0, days - 1));
+  return d.toISOString();
+}
+
 async function fetchUserMessagesQuery(buildQuery) {
   let query = buildQuery(messageSelectColumns());
   let { data, error } = await query;
@@ -809,18 +818,20 @@ async function fetchAllUserMessages() {
 }
 
 /** Недавние DM для списка чатов (превью последнего сообщения). */
-async function fetchRecentUserMessagesForChatList() {
+async function fetchRecentUserMessagesForChatList({ sinceIso = null, limit = CHAT_LIST_DM_PREVIEW_LIMIT } = {}) {
   const uid = getCurrentUserId();
   if (!uid) return { rows: [], error: null };
 
-  const { rows, error } = await fetchUserMessagesQuery((cols) =>
-    supabaseClient
+  const { rows, error } = await fetchUserMessagesQuery((cols) => {
+    let q = supabaseClient
       .from("user_messages")
       .select(cols)
       .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
       .order("created_at", { ascending: false })
-      .limit(CHAT_LIST_DM_PREVIEW_LIMIT),
-  );
+      .limit(limit);
+    if (sinceIso) q = q.gte("created_at", sinceIso);
+    return q;
+  });
   if (error) return { rows, error };
   // buildChatListEntries ожидает хронологию; reverse дешёвый на ≤800 строк.
   return { rows: rows.slice().reverse(), error: null };
@@ -856,19 +867,21 @@ async function fetchUnreadIncomingDmMeta() {
 }
 
 /** Сообщения одного peer (1:1), без выгрузки всей переписки пользователя. */
-async function fetchPeerMessages(peerId) {
+async function fetchPeerMessages(peerId, { sinceIso = null, limit = DIALOG_MESSAGE_LIMIT } = {}) {
   const uid = getCurrentUserId();
   if (!uid || !peerId) return { rows: [], error: null };
 
   const filter = `and(sender_id.eq.${uid},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${uid})`;
-  const { rows, error } = await fetchUserMessagesQuery((cols) =>
-    supabaseClient
+  const { rows, error } = await fetchUserMessagesQuery((cols) => {
+    let q = supabaseClient
       .from("user_messages")
       .select(cols)
       .or(filter)
       .order("created_at", { ascending: false })
-      .limit(DIALOG_MESSAGE_LIMIT),
-  );
+      .limit(limit);
+    if (sinceIso) q = q.gte("created_at", sinceIso);
+    return q;
+  });
   if (error) return { rows, error };
   return { rows: rows.slice().reverse(), error: null };
 }
@@ -910,36 +923,33 @@ async function fetchMyGroupChats() {
   return { chats, error: null };
 }
 
-async function fetchGroupMessages(chatId) {
+async function fetchGroupMessages(chatId, { sinceIso = null, limit = DIALOG_MESSAGE_LIMIT } = {}) {
   if (!chatId || groupChatsSupported === false) return { rows: [], error: null };
 
   const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
   let select = withMessageActionColumns(withAttachmentColumns(selectBase));
-  let { data, error } = await supabaseClient
-    .from("group_messages")
-    .select(select)
-    .eq("chat_id", chatId)
-    .order("created_at", { ascending: false })
-    .limit(DIALOG_MESSAGE_LIMIT);
+
+  async function run(sel) {
+    let q = supabaseClient
+      .from("group_messages")
+      .select(sel)
+      .eq("chat_id", chatId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (sinceIso) q = q.gte("created_at", sinceIso);
+    return q;
+  }
+
+  let { data, error } = await run(select);
 
   if (error && noteMessageActionsSupport(error)) {
     select = withMessageActionColumns(withAttachmentColumns(selectBase));
-    ({ data, error } = await supabaseClient
-      .from("group_messages")
-      .select(select)
-      .eq("chat_id", chatId)
-      .order("created_at", { ascending: false })
-      .limit(DIALOG_MESSAGE_LIMIT));
+    ({ data, error } = await run(select));
   }
 
   if (error && noteAttachmentSupport(error)) {
     select = withMessageActionColumns(withAttachmentColumns(selectBase));
-    ({ data, error } = await supabaseClient
-      .from("group_messages")
-      .select(select)
-      .eq("chat_id", chatId)
-      .order("created_at", { ascending: false })
-      .limit(DIALOG_MESSAGE_LIMIT));
+    ({ data, error } = await run(select));
   }
 
   if (error) {
@@ -1222,41 +1232,10 @@ async function hydrateGroupAvatars(root = document) {
   );
 }
 
-export async function loadChatList() {
-  const list = document.getElementById("messagesChatList");
-  const msg = document.getElementById("messagesChatListMessage");
-  if (!list) return;
+let loadChatListGeneration = 0;
+let loadMessagesGeneration = 0;
 
-  const uid = getCurrentUserId();
-  if (!uid) return;
-
-  if (msg) {
-    msg.textContent = "";
-    msg.classList.remove("messages-page-message--error");
-  }
-
-  const [users, { rows, error }, { rows: unreadRows }, { chats: groupChats, error: groupError }] =
-    await Promise.all([
-      loadUsersDirectory(),
-      fetchRecentUserMessagesForChatList(),
-      fetchUnreadIncomingDmMeta(),
-      fetchMyGroupChats(),
-    ]);
-
-  if (error) {
-    console.error("Ошибка загрузки сообщений:", error);
-    if (msg) {
-      msg.textContent = "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
-      msg.classList.add("messages-page-message--error");
-    }
-    list.innerHTML = "";
-    return;
-  }
-
-  if (groupError) {
-    console.warn("Ошибка загрузки групповых чатов:", groupError);
-  }
-
+function buildDmUnreadByPeer(unreadRows) {
   const dmUnreadByPeer = new Map();
   for (const row of unreadRows || []) {
     if (isMessageDeleted(row)) continue;
@@ -1264,15 +1243,18 @@ export async function loadChatList() {
     if (!peerId) continue;
     dmUnreadByPeer.set(peerId, (dmUnreadByPeer.get(peerId) || 0) + 1);
   }
+  return dmUnreadByPeer;
+}
 
-  const chatIds = groupChats.map((chat) => chat.id);
+async function paintChatListFromData(list, users, rows, unreadRows, groupChats) {
+  const uid = getCurrentUserId();
+  const dmUnreadByPeer = buildDmUnreadByPeer(unreadRows);
+  const chatIds = (groupChats || []).map((chat) => chat.id);
   const [{ lastByChat: lastGroupMessages }, lastReadByChat] = await Promise.all([
     fetchLastGroupMessagesByChat(chatIds),
     fetchGroupChatReads(chatIds),
   ]);
-
   const groupUnreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
-
   const entries = buildChatListEntries(
     users,
     rows,
@@ -1283,7 +1265,74 @@ export async function loadChatList() {
   );
   list.innerHTML = entries.map(renderChatListItem).join("");
   void hydrateGroupAvatars(list);
+}
+
+export async function loadChatList() {
+  const list = document.getElementById("messagesChatList");
+  const msg = document.getElementById("messagesChatListMessage");
+  if (!list) return;
+
+  const uid = getCurrentUserId();
+  if (!uid) return;
+
+  const gen = ++loadChatListGeneration;
+
+  if (msg) {
+    msg.textContent = "";
+    msg.classList.remove("messages-page-message--error");
+  }
+
+  const sinceIso = getMessagesFastLoadSinceIso();
+
+  // Фаза 1: только сообщения за 3 дня — быстрый список.
+  const [users, recentPack, unreadPack, groupPack] = await Promise.all([
+    loadUsersDirectory(),
+    fetchRecentUserMessagesForChatList({ sinceIso }),
+    fetchUnreadIncomingDmMeta(),
+    fetchMyGroupChats(),
+  ]);
+
+  if (gen !== loadChatListGeneration) return;
+
+  if (recentPack.error) {
+    console.error("Ошибка загрузки сообщений:", recentPack.error);
+    if (msg) {
+      msg.textContent = "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
+      msg.classList.add("messages-page-message--error");
+    }
+    list.innerHTML = "";
+    return;
+  }
+
+  if (groupPack.error) {
+    console.warn("Ошибка загрузки групповых чатов:", groupPack.error);
+  }
+
+  await paintChatListFromData(
+    list,
+    users,
+    recentPack.rows,
+    unreadPack.rows,
+    groupPack.chats || [],
+  );
   void refreshMessagesUnreadBadge();
+
+  // Фаза 2: догрузка более старых превью в фоне.
+  void (async () => {
+    const fuller = await fetchRecentUserMessagesForChatList({
+      sinceIso: null,
+      limit: CHAT_LIST_DM_PREVIEW_LIMIT,
+    });
+    if (gen !== loadChatListGeneration) return;
+    if (fuller.error || messagesView !== "list") return;
+    await paintChatListFromData(
+      list,
+      usersCache || users,
+      fuller.rows,
+      unreadPack.rows,
+      groupPack.chats || [...groupChatsById.values()],
+    );
+  })();
 }
 
 function setMessagesView(view) {
@@ -1392,77 +1441,98 @@ export async function loadMessages() {
 
   if (messagesView !== "dialog" || !activePeerId) return;
 
+  const gen = ++loadMessagesGeneration;
+  const peerAtStart = activePeerId;
+  const sinceIso = getMessagesFastLoadSinceIso();
+
   if (msg) {
     msg.textContent = "";
     msg.classList.remove("messages-page-message--error");
   }
 
-  let rows = [];
-  if (isGroupChat()) {
-    const groupId = parseGroupId();
-    const { rows: groupRows, error } = await fetchGroupMessages(groupId);
-    if (error) {
-      console.error("Ошибка загрузки сообщений группы:", error);
-      if (msg) {
-        msg.textContent = "Ошибка загрузки сообщений группового чата.";
-        msg.classList.add("messages-page-message--error");
-      }
-      feed.innerHTML = "";
+  async function fetchDialogRows({ since = null, limit = DIALOG_MESSAGE_LIMIT } = {}) {
+    if (isGroupChat()) {
+      return fetchGroupMessages(parseGroupId(), { sinceIso: since, limit });
+    }
+    return fetchPeerMessages(activePeerId, { sinceIso: since, limit });
+  }
+
+  async function renderDialogRows(rows, { markRead = true } = {}) {
+    if (gen !== loadMessagesGeneration || activePeerId !== peerAtStart || messagesView !== "dialog") {
       return;
     }
-    rows = groupRows;
-  } else {
-    const { rows: peerRows, error } = await fetchPeerMessages(activePeerId);
-    if (error) {
-      console.error("Ошибка загрузки сообщений:", error);
-      if (msg) {
-        msg.textContent = "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
-        msg.classList.add("messages-page-message--error");
-      }
-      feed.innerHTML = "";
+
+    lastFeedMessageAt = rows.length ? rows[rows.length - 1].created_at : null;
+    updateLastMessagePeerId(isGroupChat() ? [] : rows.filter((r) => !isMessageDeleted(r)));
+
+    clearFeedMessageCache();
+    rememberFeedMessages(rows);
+
+    const visibleRows = rows.filter((row) => !isMessageDeleted(row));
+    const emptyText = isGroupChat()
+      ? "Пока нет сообщений в этом групповом чате. Напишите первое."
+      : "Пока нет сообщений в этой переписке. Напишите первое.";
+
+    const stickBottom = isFeedAtBottom(feed, 80) || !feed.querySelector("[data-message-id]");
+    feed.innerHTML = visibleRows.length
+      ? visibleRows.map(renderMessageItem).join("")
+      : `<p class="messages-empty">${emptyText}</p>`;
+
+    if (stickBottom) scrollMessagesFeedToBottom(feed);
+    const keepAtBottom = (event) => {
+      if (event.target?.tagName === "IMG" && stickBottom) scrollMessagesFeedToBottom(feed);
+    };
+    feed.addEventListener("load", keepAtBottom, true);
+    try {
+      await hydrateMessageAttachments(feed);
+    } finally {
+      feed.removeEventListener("load", keepAtBottom, true);
+    }
+    if (stickBottom) scrollMessagesFeedToBottom(feed);
+
+    if (!markRead) return;
+    if (!isGroupChat()) {
+      await markIncomingMessagesRead(visibleRows);
+    } else {
+      const groupId = parseGroupId();
+      const latestAt =
+        visibleRows.length > 0
+          ? visibleRows[visibleRows.length - 1].created_at
+          : new Date().toISOString();
+      if (groupId) await markGroupChatRead(groupId, latestAt || new Date().toISOString());
+    }
+    void refreshMessagesUnreadBadge();
+  }
+
+  // Фаза 1: только последние 3 дня.
+  const fast = await fetchDialogRows({ since: sinceIso });
+  if (gen !== loadMessagesGeneration || activePeerId !== peerAtStart) return;
+
+  if (fast.error) {
+    console.error("Ошибка загрузки сообщений:", fast.error);
+    if (msg) {
+      msg.textContent = isGroupChat()
+        ? "Ошибка загрузки сообщений группового чата."
+        : "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
+      msg.classList.add("messages-page-message--error");
+    }
+    feed.innerHTML = "";
+    return;
+  }
+
+  await renderDialogRows(fast.rows, { markRead: true });
+
+  // Фаза 2: догрузка более старых сообщений диалога.
+  void (async () => {
+    const fuller = await fetchDialogRows({ since: null, limit: DIALOG_MESSAGE_LIMIT });
+    if (gen !== loadMessagesGeneration || activePeerId !== peerAtStart || messagesView !== "dialog") {
       return;
     }
-    rows = peerRows;
-  }
-
-  lastFeedMessageAt = rows.length ? rows[rows.length - 1].created_at : null;
-  updateLastMessagePeerId(isGroupChat() ? [] : rows.filter((r) => !isMessageDeleted(r)));
-
-  clearFeedMessageCache();
-  rememberFeedMessages(rows);
-
-  const visibleRows = rows.filter((row) => !isMessageDeleted(row));
-  const emptyText = isGroupChat()
-    ? "Пока нет сообщений в этом групповом чате. Напишите первое."
-    : "Пока нет сообщений в этой переписке. Напишите первое.";
-
-  feed.innerHTML = visibleRows.length
-    ? visibleRows.map(renderMessageItem).join("")
-    : `<p class="messages-empty">${emptyText}</p>`;
-
-  scrollMessagesFeedToBottom(feed);
-  const keepAtBottom = (event) => {
-    if (event.target?.tagName === "IMG") scrollMessagesFeedToBottom(feed);
-  };
-  feed.addEventListener("load", keepAtBottom, true);
-  try {
-    await hydrateMessageAttachments(feed);
-  } finally {
-    feed.removeEventListener("load", keepAtBottom, true);
-  }
-  scrollMessagesFeedToBottom(feed);
-
-  if (!isGroupChat()) {
-    await markIncomingMessagesRead(visibleRows);
-  } else {
-    const groupId = parseGroupId();
-    const latestAt =
-      visibleRows.length > 0
-        ? visibleRows[visibleRows.length - 1].created_at
-        : new Date().toISOString();
-    if (groupId) await markGroupChatRead(groupId, latestAt || new Date().toISOString());
-  }
-  void refreshMessagesUnreadBadge();
+    if (fuller.error) return;
+    // Не перерисовываем, если набор тот же (всё уложилось в 3 дня).
+    if (fuller.rows.length <= fast.rows.length) return;
+    await renderDialogRows(fuller.rows, { markRead: false });
+  })();
 }
 
 export function onMessagesSectionEnter() {
@@ -1645,10 +1715,11 @@ async function pollNewMessages() {
     return;
   }
 
+  const peerFilter = `and(sender_id.eq.${uid},recipient_id.eq.${activePeerId}),and(sender_id.eq.${activePeerId},recipient_id.eq.${uid})`;
   let query = supabaseClient
     .from("user_messages")
     .select(messageSelectColumns())
-    .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
+    .or(peerFilter)
     .order("created_at", { ascending: true });
 
   if (lastFeedMessageAt) {
@@ -1660,7 +1731,7 @@ async function pollNewMessages() {
     let retry = supabaseClient
       .from("user_messages")
       .select(messageSelectColumns())
-      .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
+      .or(peerFilter)
       .order("created_at", { ascending: true });
     if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
     ({ data, error } = await retry);
@@ -1669,7 +1740,7 @@ async function pollNewMessages() {
     let retry = supabaseClient
       .from("user_messages")
       .select(messageSelectColumns())
-      .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
+      .or(peerFilter)
       .order("created_at", { ascending: true });
     if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
     ({ data, error } = await retry);
@@ -1683,7 +1754,7 @@ async function pollNewMessages() {
     return;
   }
 
-  const rows = (data || []).filter((row) => messageBelongsToPeer(row, activePeerId, uid));
+  const rows = data || [];
   if (rows.length) {
     appendMessagesToFeed(rows);
     await markIncomingMessagesRead(rows);

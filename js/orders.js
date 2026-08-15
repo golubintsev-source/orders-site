@@ -270,57 +270,77 @@ const ORDERS_LIST_SELECT = [
   "coordinates",
 ].join(",");
 
-export async function loadOrders() {
-  let { data, error } = await supabaseClient
+/** Первая отрисовка: только заказы за последние N календарных дней (включая сегодня). */
+const ORDERS_FAST_LOAD_DAYS = 3;
+
+/** Поколение loadOrders — отменяет устаревшие фоновые догрузки. */
+let loadOrdersGeneration = 0;
+
+/** YYYY-MM-DD: начало окна «последние days» (сегодня и days-1 предыдущих). */
+function getOrdersFastLoadSinceYmd(days = ORDERS_FAST_LOAD_DAYS) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - Math.max(0, days - 1));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+async function fetchOrdersFromDb({ sinceOrderDateYmd = null } = {}) {
+  let query = supabaseClient
     .from("orders")
     .select(ORDERS_LIST_SELECT)
     .is("deleted_at", null)
     .order("id", { ascending: false });
+  if (sinceOrderDateYmd) {
+    query = query.gte("order_date", sinceOrderDateYmd);
+  }
 
-  // Если в БД ещё нет части колонок из миграций — fallback на select("*").
+  let { data, error } = await query;
+
   if (error) {
-    const againStar = await supabaseClient
+    let again = supabaseClient
       .from("orders")
       .select("*")
       .is("deleted_at", null)
       .order("id", { ascending: false });
+    if (sinceOrderDateYmd) {
+      again = again.gte("order_date", sinceOrderDateYmd);
+    }
+    const againStar = await again;
     if (!againStar.error) {
       data = againStar.data;
       error = null;
+    } else {
+      error = againStar.error || error;
     }
   }
 
-  if (!error && data) {
-    state.dbUnavailable = false;
-    let finalData = data;
-    if (isOfflineWorkModeEnabled()) {
-      await syncPendingOfflineDataToSupabase();
-      const again = await supabaseClient
-        .from("orders")
-        .select(ORDERS_LIST_SELECT)
-        .is("deleted_at", null)
-        .order("id", { ascending: false });
-      finalData = again.error ? data : again.data || data;
-      persistServerOrdersForOffline(finalData);
-    }
-    state.ordersFromCache = false;
-    state.allOrders = normalizeOrdersPhones(
-      isOfflineWorkModeEnabled()
-        ? mergeServerOrdersWithPendingDisplayRows(finalData)
-        : finalData
-    );
-    if (isOfflineWorkModeEnabled()) {
-      persistEmergencyOrdersView(state.allOrders);
-    }
-    syncDbUnavailableBanner();
-    applyFiltersAndRender();
-    updateSectionNavRicherStat();
-    refreshOrdersDependentSections();
+  return { data, error };
+}
+
+function commitOrdersToUi(rawOrders, { persistCache = true } = {}) {
+  state.dbUnavailable = false;
+  let finalData = rawOrders || [];
+  if (isOfflineWorkModeEnabled()) {
+    finalData = mergeServerOrdersWithPendingDisplayRows(finalData);
+    persistServerOrdersForOffline(rawOrders || []);
+    persistEmergencyOrdersView(finalData);
+  }
+  state.ordersFromCache = false;
+  state.allOrders = normalizeOrdersPhones(finalData);
+  syncDbUnavailableBanner();
+  applyFiltersAndRender();
+  updateSectionNavRicherStat();
+  refreshOrdersDependentSections();
+  if (persistCache) {
     persistOrdersSessionCache(state.allOrders, state.filesCountMap);
-    refreshFilesCountMapInBackground();
-    return;
   }
+  refreshFilesCountMapInBackground();
+}
 
+function applyOrdersLoadError(error) {
   console.error("Ошибка загрузки:", error);
 
   if (!isOfflineWorkModeEnabled()) {
@@ -365,6 +385,62 @@ export async function loadOrders() {
   updateSectionNavRicherStat();
   setMessage("Ошибка загрузки заявок", "#d32f2f");
   refreshOrdersDependentSections();
+}
+
+/**
+ * Быстрый старт: сначала заказы за 3 дня → сразу таблица,
+ * затем в фоне — полный список.
+ * Если уже есть кэш на экране — не сжимаем таблицу до 3 дней, сразу догружаем полное.
+ */
+export async function loadOrders() {
+  const gen = ++loadOrdersGeneration;
+  const hadPaintedCache = Array.isArray(state.allOrders) && state.allOrders.length > 0;
+
+  if (isOfflineWorkModeEnabled()) {
+    try {
+      await syncPendingOfflineDataToSupabase();
+    } catch (e) {
+      console.warn("Офлайн-синхронизация перед загрузкой заказов:", e);
+    }
+  }
+
+  if (!hadPaintedCache) {
+    const recent = await fetchOrdersFromDb({ sinceOrderDateYmd: getOrdersFastLoadSinceYmd() });
+    if (gen !== loadOrdersGeneration) return;
+    if (!recent.error && recent.data) {
+      commitOrdersToUi(recent.data, { persistCache: false });
+      void loadOrdersFullInBackground(gen);
+      return;
+    }
+    // Быстрый запрос не удался — ниже полный / ошибка.
+    if (recent.error) {
+      console.warn("Быстрая загрузка заказов (3 дня):", recent.error);
+    }
+  }
+
+  const all = await fetchOrdersFromDb({});
+  if (gen !== loadOrdersGeneration) return;
+
+  if (!all.error && all.data) {
+    commitOrdersToUi(all.data, { persistCache: true });
+    return;
+  }
+
+  if (hadPaintedCache) {
+    console.error("Ошибка фоновой/полной загрузки заказов:", all.error);
+    return;
+  }
+  applyOrdersLoadError(all.error);
+}
+
+async function loadOrdersFullInBackground(gen) {
+  const all = await fetchOrdersFromDb({});
+  if (gen !== loadOrdersGeneration) return;
+  if (!all.error && all.data) {
+    commitOrdersToUi(all.data, { persistCache: true });
+    return;
+  }
+  console.error("Ошибка полной загрузки заказов:", all.error);
 }
 
 const STATUS_OPTIONS = [
