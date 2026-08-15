@@ -1776,6 +1776,57 @@
 
   <!-- Тяжёлые CDN (Excel ~1MB, leaflet, cropper…) — лениво при экспорте/карте/обрезке фото. -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./js/main.js?v=33"></script>
+  <!-- ± в корректировках: в HTML (network-first), чтобы работало на iPhone даже при старом кэше JS. -->
+  <script>
+    (function () {
+      function toggleAdjSign(input) {
+        if (!input) return;
+        var s = String(input.value || "").trim();
+        var next;
+        if (s.charAt(0) === "-") next = s.slice(1);
+        else if (!s || s === "+" || /^0+$/.test(s)) next = "-";
+        else if (s.charAt(0) === "+") next = "-" + s.slice(1);
+        else next = "-" + s;
+        input.value = next;
+        try {
+          if (typeof input.setSelectionRange === "function") {
+            input.setSelectionRange(next.length, next.length);
+          }
+        } catch (err) {}
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        var btn = document.querySelector('.settings-adj-sign-btn[data-adj-input="' + input.id + '"]');
+        if (btn) {
+          var neg = next.charAt(0) === "-";
+          btn.setAttribute("aria-pressed", neg ? "true" : "false");
+        }
+      }
+      function bindAdjSignButtons() {
+        document.querySelectorAll(".settings-adj-sign-btn").forEach(function (btn) {
+          if (btn.dataset.adjSignBound === "1") return;
+          btn.dataset.adjSignBound = "1";
+          var lastAt = 0;
+          var activate = function (e) {
+            if (e.type === "touchstart" || e.type === "pointerdown") {
+              if (e.type === "pointerdown" && typeof e.button === "number" && e.button !== 0) return;
+              if (e.cancelable) e.preventDefault();
+            }
+            var now = Date.now();
+            if (now - lastAt < 350) return;
+            lastAt = now;
+            toggleAdjSign(document.getElementById(btn.getAttribute("data-adj-input") || ""));
+          };
+          btn.addEventListener("touchstart", activate, { passive: false });
+          btn.addEventListener("pointerdown", activate);
+          btn.addEventListener("click", activate);
+        });
+      }
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", bindAdjSignButtons);
+      } else {
+        bindAdjSignButtons();
+      }
+    })();
+  </script>
+  <script type="module" src="./js/main.js?v=34"></script>
 </body>
 </html>

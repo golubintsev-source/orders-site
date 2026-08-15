@@ -33,14 +33,25 @@ export function parseAdjustmentInt(raw) {
 export function toggleAdjustmentSign(input) {
   if (!input) return;
   const s = String(input.value ?? "").trim();
+  let next;
   if (s.startsWith("-")) {
-    input.value = s.slice(1);
+    next = s.slice(1);
   } else if (s === "" || s === "+" || /^0+$/.test(s)) {
-    input.value = "-";
+    next = "-";
   } else if (s.startsWith("+")) {
-    input.value = `-${s.slice(1)}`;
+    next = `-${s.slice(1)}`;
   } else {
-    input.value = `-${s}`;
+    next = `-${s}`;
+  }
+  input.value = next;
+  // iOS Safari иногда не перерисовывает value у сфокусированного поля.
+  try {
+    if (typeof input.setSelectionRange === "function") {
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+    }
+  } catch {
+    /* ignore */
   }
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }

@@ -475,10 +475,25 @@ export function bindUIEvents() {
       }
     }
     document.querySelectorAll(".settings-adj-sign-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      if (btn.dataset.adjSignBound === "1") return;
+      btn.dataset.adjSignBound = "1";
+      let lastActivateAt = 0;
+      const activate = (e) => {
+        // На iPhone первый тап по кнопке рядом с input часто только закрывает
+        // клавиатуру и не даёт click — ловим touchstart/pointerdown сразу.
+        if (e.type === "touchstart" || e.type === "pointerdown") {
+          if (e.type === "pointerdown" && typeof e.button === "number" && e.button !== 0) return;
+          if (e.cancelable) e.preventDefault();
+        }
+        const now = Date.now();
+        if (now - lastActivateAt < 350) return;
+        lastActivateAt = now;
         const input = document.getElementById(btn.getAttribute("data-adj-input") || "");
         toggleAdjustmentSign(input);
-      });
+      };
+      btn.addEventListener("touchstart", activate, { passive: false });
+      btn.addEventListener("pointerdown", activate);
+      btn.addEventListener("click", activate);
     });
   }
 
