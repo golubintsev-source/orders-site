@@ -173,6 +173,36 @@ function tryPaintBalanceFromOfflineCache(messageEl, cacheHint) {
   return true;
 }
 
+/**
+ * Все неудалённые расчёты для баланса.
+ * PostgREST/Supabase по умолчанию отдаёт не больше ~1000 строк за запрос без .range(),
+ * поэтому без пагинации «С-1»/«С-2»/«С-3» (недавние дни) часто остаются нулями.
+ */
+async function fetchAllCalculationsForBalance() {
+  const pageSize = 1000;
+  const all = [];
+  let from = 0;
+
+  for (;;) {
+    const { data, error } = await supabaseClient
+      .from("calculations")
+      .select("id,from_place,to_place,amount,created_at")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) return { data: null, error };
+
+    const rows = data || [];
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return { data: all, error: null };
+}
+
 export async function loadBalance() {
   const messageEl = document.getElementById("balanceMessage");
   const theadRow = document.querySelector("#balanceTable thead tr");
@@ -191,10 +221,7 @@ export async function loadBalance() {
 
   let calcRes;
   try {
-    calcRes = await supabaseClient
-      .from("calculations")
-      .select("from_place,to_place,amount,created_at")
-      .is("deleted_at", null);
+    calcRes = await fetchAllCalculationsForBalance();
   } catch (e) {
     console.error("Ошибка загрузки расчётов для баланса:", e);
     if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса.";
