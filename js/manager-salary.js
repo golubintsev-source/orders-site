@@ -1,5 +1,5 @@
 import { state } from "./state.js";
-import { isOrderHiddenForCurrentRole, isOrderEditLockedForUserLite } from "./roles.js";
+import { isOrderHiddenForCurrentRole, isOrderEditLockedForUserLite, isShopOrder } from "./roles.js";
 import { formatAmount, formatAmountWholeRubles, formatDateShortRU, formatOrderIdTypeChip } from "./format.js";
 
 /** Статусы с «Производство» и далее, включая «Заказ закрыт». */
@@ -167,6 +167,7 @@ function fillMonthSelect() {
 function getManagerSalaryOrders() {
   const list = (state.allOrders || []).filter((order) => {
     if (isOrderHiddenForCurrentRole(order)) return false;
+    if (isShopOrder(order)) return false;
     const status = normalizeStatus(order.payment_status);
     if (!MANAGER_SALARY_STATUSES.has(status)) return false;
     const ymd = getOrderCalendarYmd(order);
