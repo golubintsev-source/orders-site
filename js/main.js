@@ -84,6 +84,7 @@ async function initSecondarySections(opts = {}) {
       { initPushNotifications },
       { initMessagesSection },
       { initVoiceSection },
+      { initManagerSalarySection, loadManagerSalary },
     ] = await Promise.all([
       import("./calculations.js"),
       import("./excess.js"),
@@ -94,12 +95,17 @@ async function initSecondarySections(opts = {}) {
       import("./push-notifications.js"),
       import("./messages.js"),
       import("./voice.js"),
+      import("./manager-salary.js"),
     ]);
 
     void initPushNotifications();
     initOrderTasksSection();
     initMessagesSection();
     initVoiceSection();
+    initManagerSalarySection();
+    if (getCurrentSectionId() === "manager-salary") {
+      void loadManagerSalary();
+    }
 
     if (canAccessSection("calculations")) {
       bindCalculationsSection();
@@ -237,6 +243,8 @@ async function init() {
       sectionNow === "route-sheet" ||
       sectionNow === "changes-all" ||
       sectionNow === "statistics" ||
+      sectionNow === "manager-salary" ||
+      sectionNow === "balance" ||
       savedApp?.sectionId === "order-tasks" ||
       savedApp?.sectionId === "messages" ||
       savedApp?.sectionId === "voice";

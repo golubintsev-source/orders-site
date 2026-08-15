@@ -12,6 +12,7 @@ const BOOT_LABELS = {
   "tasks-all": "Все задачи",
   "changes-all": "Все изменения",
   balance: "Баланс",
+  "manager-salary": "Зарплата менеджера",
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
   statistics: "Статистика",

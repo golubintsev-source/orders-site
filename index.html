@@ -87,6 +87,10 @@
               <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
               <span class="section-nav-dropdown-item-text">Баланс</span>
             </button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="manager-salary">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>
+              <span class="section-nav-dropdown-item-text">Зарплата менеджера</span>
+            </button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="route-sheet">
               <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-8-4.5-8-11a8 8 0 0 1 16 0c0 6.5-8 11-8 11z"/><circle cx="12" cy="10" r="3"/></svg>
               <span class="section-nav-dropdown-item-text">Маршрутный лист</span>
@@ -1568,6 +1572,59 @@
           </table>
         </div>
         <p id="balanceMessage"></p>
+      </div>
+    </section>
+
+    <section id="section-manager-salary" class="content-section">
+      <div class="card">
+        <div class="manager-salary-month-toolbar" aria-label="Месяц">
+          <label for="managerSalaryMonthSelect" class="manager-salary-month-label">Месяц</label>
+          <select id="managerSalaryMonthSelect" class="manager-salary-month-select" aria-label="Выбор месяца"></select>
+        </div>
+        <div class="manager-salary-summary" role="status" aria-live="polite" aria-label="Расчёт по отмеченным заказам">
+          <div class="manager-salary-summary-item">
+            <span class="manager-salary-summary-label">Заказов</span>
+            <span class="manager-salary-summary-value" id="managerSalaryCount">0</span>
+          </div>
+          <div class="manager-salary-summary-item">
+            <span class="manager-salary-summary-label">Стоимость</span>
+            <span class="manager-salary-summary-value" id="managerSalarySum">—</span>
+          </div>
+        </div>
+        <div class="table-wrap manager-salary-table-wrap">
+          <table id="managerSalaryTable" class="manager-salary-table">
+            <colgroup>
+              <col class="manager-salary-col-check" />
+              <col />
+              <col />
+              <col class="orders-col-150" />
+              <col />
+              <col class="orders-col-150" />
+              <col class="orders-col-150" />
+              <col class="orders-col-status" />
+              <col span="5" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="th-manager-salary-check" aria-label="Учитывать"></th>
+                <th>Номер</th>
+                <th class="th-order-date">Дата</th>
+                <th class="th-orders-col-150">Клиент</th>
+                <th class="th-paid">Опл.</th>
+                <th class="th-orders-col-150">Адрес</th>
+                <th class="th-orders-col-150">Описание</th>
+                <th class="th-status-header">Статус</th>
+                <th class="th-money">Стоимость</th>
+                <th class="th-money">Предоплата</th>
+                <th>Кому</th>
+                <th class="th-money">Остаток</th>
+                <th>Кому</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="managerSalaryEmpty" class="manager-salary-empty" hidden></p>
       </div>
     </section>
 

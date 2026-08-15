@@ -70,6 +70,7 @@ const SECTION_LABELS = {
   "tasks-all": "Все задачи",
   "changes-all": "Все изменения",
   balance: "Баланс",
+  "manager-salary": "Зарплата менеджера",
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
   statistics: "Статистика",
@@ -93,6 +94,7 @@ const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "messages",
   "voice",
   "balance",
+  "manager-salary",
   "route-sheet",
   "settings",
   "statistics",
@@ -347,6 +349,9 @@ export function switchSection(sectionId, opts = {}) {
 
   if (sectionId === "balance") {
     loadBalance();
+  }
+  if (sectionId === "manager-salary") {
+    void import("./manager-salary.js").then((m) => m.loadManagerSalary());
   }
   if (sectionId === "route-sheet") {
     void import("./route-sheet.js").then((m) => m.loadRouteSheet());

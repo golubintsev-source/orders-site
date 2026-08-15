@@ -58,6 +58,7 @@
     { "source": "/tasks-all", "destination": "/index.html" },
     { "source": "/changes-all", "destination": "/index.html" },
     { "source": "/balance", "destination": "/index.html" },
+    { "source": "/manager-salary", "destination": "/index.html" },
     { "source": "/route-sheet", "destination": "/index.html" },
     { "source": "/settings", "destination": "/index.html" },
     { "source": "/statistics", "destination": "/index.html" },

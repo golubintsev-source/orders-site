@@ -74,6 +74,7 @@ export function canAccessSection(sectionId) {
   if (isUserShop()) {
     return (
       sectionId !== "balance" &&
+      sectionId !== "manager-salary" &&
       sectionId !== "statistics" &&
       sectionId !== "calculations"
     );
@@ -81,7 +82,11 @@ export function canAccessSection(sectionId) {
   if (sectionId === "statistics" && !isAdmin()) return false;
   if (sectionId === "orders-excel" && isUserLite()) return false;
   if (!isUserLite()) return true;
-  return sectionId !== "balance" && sectionId !== "calculations";
+  return (
+    sectionId !== "balance" &&
+    sectionId !== "manager-salary" &&
+    sectionId !== "calculations"
+  );
 }
 
 export function isSectionHiddenFromNav(sectionId) {
@@ -91,6 +96,7 @@ export function isSectionHiddenFromNav(sectionId) {
   if (isUserShop()) {
     return (
       sectionId === "balance" ||
+      sectionId === "manager-salary" ||
       sectionId === "statistics" ||
       sectionId === "calculations"
     );
@@ -98,5 +104,9 @@ export function isSectionHiddenFromNav(sectionId) {
   if (sectionId === "statistics" && !isAdmin()) return true;
   if (sectionId === "orders-excel" && isUserLite()) return true;
   if (!isUserLite()) return false;
-  return sectionId === "balance" || sectionId === "calculations";
+  return (
+    sectionId === "balance" ||
+    sectionId === "manager-salary" ||
+    sectionId === "calculations"
+  );
 }

@@ -2153,6 +2153,141 @@ h2 {
   color: #6b7280;
 }
 
+/* Зарплата менеджера */
+#section-manager-salary .manager-salary-month-toolbar {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+  width: 100%;
+  min-width: 0;
+}
+#section-manager-salary .manager-salary-month-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  flex-shrink: 0;
+}
+#section-manager-salary .manager-salary-month-select {
+  box-sizing: border-box;
+  height: 36px;
+  min-width: 180px;
+  max-width: 100%;
+  padding: 0 10px;
+  font-size: 15px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+}
+#section-manager-salary .manager-salary-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  align-items: baseline;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+#section-manager-salary .manager-salary-summary-item {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+#section-manager-salary .manager-salary-summary-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+}
+#section-manager-salary .manager-salary-summary-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+#section-manager-salary .manager-salary-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#managerSalaryTable {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+#managerSalaryTable col.manager-salary-col-check {
+  width: 36px;
+}
+#managerSalaryTable col.orders-col-150 {
+  width: 150px;
+}
+#managerSalaryTable col.orders-col-status {
+  width: 140px;
+}
+#managerSalaryTable thead th {
+  background: #f9fafb;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 2px solid #e5e7eb;
+  white-space: nowrap;
+  font-weight: 600;
+  color: #374151;
+}
+#managerSalaryTable th.th-manager-salary-check,
+#managerSalaryTable td.td-manager-salary-check {
+  width: 36px;
+  min-width: 36px;
+  max-width: 40px;
+  text-align: center;
+  padding-left: 8px;
+  padding-right: 4px;
+  vertical-align: middle;
+}
+#managerSalaryTable .manager-salary-row-check {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #1f6feb;
+}
+#managerSalaryTable tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+#managerSalaryTable tbody tr:hover {
+  background: #f9fafb;
+}
+#managerSalaryTable td.td-order-client,
+#managerSalaryTable td.td-order-address,
+#managerSalaryTable td.td-order-description,
+#managerSalaryTable td.td-order-status {
+  max-width: 150px;
+  overflow: hidden;
+}
+#managerSalaryTable td.td-order-client .status-value,
+#managerSalaryTable td.td-order-address .status-value,
+#managerSalaryTable td.td-order-description .status-value,
+#managerSalaryTable td.td-order-status .status-value {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+#section-manager-salary .manager-salary-empty {
+  margin: 12px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
 /* Задачи по заказу */
 .order-tasks-form-stack {
   display: flex;
