@@ -74,6 +74,7 @@ const SECTION_LABELS = {
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
   statistics: "Статистика",
+  "statistics-balance": "Статистика баланса",
   messages: "Чаты",
   voice: "Голосовое управление",
 };
@@ -98,6 +99,7 @@ const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "route-sheet",
   "settings",
   "statistics",
+  "statistics-balance",
 ]);
 
 function updateBackToOrdersBtnVisibility(sectionId) {
@@ -348,7 +350,7 @@ export function switchSection(sectionId, opts = {}) {
   syncIosFormControlLocks(sectionId);
 
   if (sectionId === "balance") {
-    loadBalance();
+    loadBalance({ recordView: true });
   }
   if (sectionId === "manager-salary") {
     void import("./manager-salary.js")
@@ -377,6 +379,11 @@ export function switchSection(sectionId, opts = {}) {
   }
   if (sectionId === "statistics") {
     void import("./statistics.js").then((m) => m.loadStatistics({ refreshDefaultRange: true }));
+  }
+  if (sectionId === "statistics-balance") {
+    void import("./statistics-balance.js").then((m) =>
+      m.loadStatisticsBalance({ refreshDefaultRange: true }),
+    );
   }
   if (sectionId === "settings") {
     void import("./settings.js").then((m) => m.applySettingsAdminBlocksVisibility());

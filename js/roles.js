@@ -81,10 +81,13 @@ export function canAccessSection(sectionId) {
       sectionId !== "balance" &&
       sectionId !== "manager-salary" &&
       sectionId !== "statistics" &&
+      sectionId !== "statistics-balance" &&
       sectionId !== "calculations"
     );
   }
-  if (sectionId === "statistics" && !isAdmin()) return false;
+  if ((sectionId === "statistics" || sectionId === "statistics-balance") && !isAdmin()) {
+    return false;
+  }
   if (sectionId === "orders-excel" && isUserLite()) return false;
   if (!isUserLite()) return true;
   // user_lite: просмотр «Зарплата менеджера» разрешён; баланс и расчёты — нет
@@ -100,10 +103,13 @@ export function isSectionHiddenFromNav(sectionId) {
       sectionId === "balance" ||
       sectionId === "manager-salary" ||
       sectionId === "statistics" ||
+      sectionId === "statistics-balance" ||
       sectionId === "calculations"
     );
   }
-  if (sectionId === "statistics" && !isAdmin()) return true;
+  if ((sectionId === "statistics" || sectionId === "statistics-balance") && !isAdmin()) {
+    return true;
+  }
   if (sectionId === "orders-excel" && isUserLite()) return true;
   if (!isUserLite()) return false;
   return sectionId === "balance" || sectionId === "calculations";

@@ -2174,8 +2174,9 @@ h2 {
   min-width: 0;
 }
 
-/* Статистика обращений (только admin) */
-#section-statistics .statistics-datetime-toolbar {
+/* Статистика обращений / статистики баланса (только admin) */
+#section-statistics .statistics-datetime-toolbar,
+#section-statistics-balance .statistics-datetime-toolbar {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -2185,20 +2186,23 @@ h2 {
   width: 100%;
   min-width: 0;
 }
-#section-statistics .statistics-datetime-field {
+#section-statistics .statistics-datetime-field,
+#section-statistics-balance .statistics-datetime-field {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
-#section-statistics .statistics-datetime-label {
+#section-statistics .statistics-datetime-label,
+#section-statistics-balance .statistics-datetime-label {
   font-size: 14px;
   font-weight: 600;
   color: #374151;
   flex-shrink: 0;
 }
-#section-statistics .statistics-datetime-input {
+#section-statistics .statistics-datetime-input,
+#section-statistics-balance .statistics-datetime-input {
   box-sizing: border-box;
   height: 36px;
   padding: 0 8px;
@@ -2209,7 +2213,8 @@ h2 {
   min-width: 0;
   max-width: 100%;
 }
-#section-statistics .statistics-load-btn {
+#section-statistics .statistics-load-btn,
+#section-statistics-balance .statistics-load-btn {
   height: 36px;
   padding: 0 14px;
   font-size: 14px;
@@ -2220,16 +2225,19 @@ h2 {
   border-radius: 8px;
   cursor: pointer;
 }
-#section-statistics .statistics-load-btn:hover {
+#section-statistics .statistics-load-btn:hover,
+#section-statistics-balance .statistics-load-btn:hover {
   background: #1858c7;
 }
-#section-statistics .statistics-search-toolbar {
+#section-statistics .statistics-search-toolbar,
+#section-statistics-balance .statistics-search-toolbar {
   display: flex;
   margin-bottom: 10px;
   width: 100%;
   min-width: 0;
 }
-#section-statistics .statistics-search-input {
+#section-statistics .statistics-search-input,
+#section-statistics-balance .statistics-search-input {
   box-sizing: border-box;
   width: 100%;
   max-width: 360px;
@@ -2240,7 +2248,8 @@ h2 {
   border-radius: 8px;
   background: #fff;
 }
-#section-statistics .statistics-table-wrap {
+#section-statistics .statistics-table-wrap,
+#section-statistics-balance .statistics-table-wrap {
   overflow-x: auto;
 }
 #statisticsTable {
@@ -2249,7 +2258,14 @@ h2 {
   border-collapse: collapse;
   font-size: 13px;
 }
-#statisticsTable thead th {
+#statisticsBalanceTable {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+#statisticsTable thead th,
+#statisticsBalanceTable thead th {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -2259,12 +2275,14 @@ h2 {
   border-bottom: 2px solid #e5e7eb;
   white-space: nowrap;
 }
-#statisticsTable tbody td {
+#statisticsTable tbody td,
+#statisticsBalanceTable tbody td {
   padding: 7px 10px;
   border-bottom: 1px solid #f3f4f6;
   vertical-align: top;
 }
-#statisticsTable tbody tr:hover {
+#statisticsTable tbody tr:hover,
+#statisticsBalanceTable tbody tr:hover {
   background: #f9fafb;
 }
 #statisticsTable .statistics-page-cell {
@@ -2273,7 +2291,8 @@ h2 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-#statisticsTable .statistics-loading-cell {
+#statisticsTable .statistics-loading-cell,
+#statisticsBalanceTable .statistics-loading-cell {
   padding: 16px 10px;
   color: #6b7280;
 }
