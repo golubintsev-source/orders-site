@@ -1817,17 +1817,54 @@ h2 {
   color: #6b7280;
 }
 
-#excessesTable th,
-#excessesTable td {
-  padding: 8px 10px;
-  font-size: 13px;
-  vertical-align: middle;
+#excessesTable {
+  table-layout: fixed;
+  width: 100%;
 }
 
+#excessesTable th,
+#excessesTable td {
+  padding: 5px 6px;
+  font-size: 12px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#excessesTable .th-client,
+#excessesTable .td-client {
+  width: 28%;
+}
+
+#excessesTable .th-time,
+#excessesTable .td-time {
+  width: 18%;
+}
+
+#excessesTable .th-author,
+#excessesTable .td-author {
+  width: 12%;
+}
+
+#excessesTable .th-money,
+#excessesTable .td-money {
+  width: 14%;
+  text-align: right;
+}
+
+#excessesTable .th-who,
+#excessesTable .td-who {
+  width: 14%;
+}
+
+#excessesTable .th-actions,
 #excessesTable .td-actions {
   white-space: nowrap;
-  padding: 4px 2px;
-  width: 60px;
+  padding: 3px 2px;
+  width: 56px;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 #excessesTable .td-actions .btn-icon + .btn-icon {
