@@ -30,7 +30,8 @@ CREATE POLICY "admin_read_balance_view_logs"
   USING (public.current_app_role() = 'admin');
 
 GRANT SELECT, INSERT ON public.balance_view_logs TO authenticated;
-GRANT USAGE, SELECT ON SEQUENCE public.balance_view_logs_id_seq TO authenticated;
+-- IDENTITY/serial: без USAGE на sequence INSERT падает, а SELECT просто пустой.
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
 
 -- Если функции current_app_role() ещё нет:
 CREATE OR REPLACE FUNCTION public.current_app_role()

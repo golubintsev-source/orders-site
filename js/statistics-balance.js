@@ -30,10 +30,25 @@ export function refreshStatisticsBalanceDefaultRange() {
   if (toEl) toEl.value = defaultDatetimeTo();
 }
 
-function datetimeLocalToIso(value) {
+/** Начало минуты для datetime-local (поле без секунд). */
+function datetimeLocalToIsoStart(value) {
   if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
+  d.setSeconds(0, 0);
+  return d.toISOString();
+}
+
+/**
+ * Конец минуты для верхней границы периода.
+ * Иначе «по» = 12:24 превращается в 12:24:00.000 и свежие просмотры
+ * в текущей минуте (12:24:01…12:24:59) не попадали в выборку — таблица пустая.
+ */
+function datetimeLocalToIsoEnd(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setSeconds(59, 999);
   return d.toISOString();
 }
 
@@ -58,8 +73,8 @@ function readRangeFromInputs() {
   }
 
   return {
-    fromIso: datetimeLocalToIso(fromLocal),
-    toIso: datetimeLocalToIso(toLocal),
+    fromIso: datetimeLocalToIsoStart(fromLocal),
+    toIso: datetimeLocalToIsoEnd(toLocal),
   };
 }
 
