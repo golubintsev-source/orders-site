@@ -660,10 +660,25 @@ function sortExcessesRows(rows) {
   });
 }
 
+/** Пишет thead из того же порядка, что и строки — защита от рассинхрона HTML/кэша JS. */
+function ensureExcessesTableHead() {
+  const theadRow = document.querySelector("#excessesTable thead tr");
+  if (!theadRow) return;
+  theadRow.innerHTML = `
+    <th>Клиент</th>
+    <th>Время</th>
+    <th>Автор</th>
+    <th class="th-money">Сумма</th>
+    <th>Кому</th>
+    <th></th>
+  `;
+}
+
 function renderExcessesTable(rows) {
   const tbody = document.querySelector("#excessesTable tbody");
   if (!tbody) return;
   tbody.innerHTML = "";
+  ensureExcessesTableHead();
 
   if (!rows.length) {
     setTableMessage("Пока нет сохранённых излишков.");
@@ -671,8 +686,7 @@ function renderExcessesTable(rows) {
   }
   setTableMessage("");
 
-  // Порядок ячеек должен совпадать с thead в index.html:
-  // Клиент | Время | Автор | Сумма | Кому | действия
+  // Единый порядок с thead: Клиент | Время | Автор | Сумма | Кому | действия
   for (const row of sortExcessesRows(rows)) {
     const tr = document.createElement("tr");
 
@@ -782,6 +796,8 @@ export async function loadExcesses() {
 export function bindExcessSection() {
   if (excessesBound) return;
   excessesBound = true;
+
+  ensureExcessesTableHead();
 
   document.getElementById("excessAddClientBtn")?.addEventListener("click", () => {
     startWithClientRow();
