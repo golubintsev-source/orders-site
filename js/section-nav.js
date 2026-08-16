@@ -365,7 +365,7 @@ export function switchSection(sectionId, opts = {}) {
     void import("./calculations.js").then((m) => m.loadCalculations());
   }
   if (sectionId === "excess") {
-    void import("./excess.js").then((m) => m.loadExcesses());
+    void import("./excess.js?v=36").then((m) => m.loadExcesses());
   }
 
   if (sectionId === "tasks-all") {
