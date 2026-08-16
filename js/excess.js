@@ -798,12 +798,12 @@ function ensureExcessesTableHead() {
   const theadRow = document.querySelector("#excessesTable thead tr");
   if (!theadRow) return;
   theadRow.innerHTML = `
+    <th></th>
     <th>Клиент</th>
-    <th>Время</th>
-    <th>Автор</th>
     <th class="th-money">Сумма</th>
     <th>Кому</th>
-    <th></th>
+    <th>Время</th>
+    <th>Автор</th>
   `;
 }
 
@@ -819,26 +819,9 @@ function renderExcessesTable(rows) {
   }
   setTableMessage("");
 
-  // Единый порядок с thead: Клиент | Время | Автор | Сумма | Кому | действия
+  // Единый порядок с thead: действия | Клиент | Сумма | Кому | Время | Автор
   for (const row of sortExcessesRows(rows)) {
     const tr = document.createElement("tr");
-
-    const tdClient = document.createElement("td");
-    tdClient.textContent = row.client || "";
-
-    const tdTime = document.createElement("td");
-    tdTime.textContent = formatDateTime(row.created_at);
-
-    const tdAuthor = document.createElement("td");
-    tdAuthor.textContent = shortLoginByEmail(row.created_by) || "—";
-
-    const tdAmount = document.createElement("td");
-    tdAmount.className = "td-money";
-    tdAmount.textContent =
-      row.amount != null && row.amount !== "" ? `${formatAmount(row.amount)}\u00A0₽` : "—";
-
-    const tdWho = document.createElement("td");
-    tdWho.textContent = row.paid_to ? String(row.paid_to) : "";
 
     const tdActions = document.createElement("td");
     tdActions.className = "td-actions";
@@ -851,7 +834,24 @@ function renderExcessesTable(rows) {
       </button>
     `;
 
-    tr.append(tdClient, tdTime, tdAuthor, tdAmount, tdWho, tdActions);
+    const tdClient = document.createElement("td");
+    tdClient.textContent = row.client || "";
+
+    const tdAmount = document.createElement("td");
+    tdAmount.className = "td-money";
+    tdAmount.textContent =
+      row.amount != null && row.amount !== "" ? `${formatAmount(row.amount)}\u00A0₽` : "—";
+
+    const tdWho = document.createElement("td");
+    tdWho.textContent = row.paid_to ? String(row.paid_to) : "";
+
+    const tdTime = document.createElement("td");
+    tdTime.textContent = formatDateTime(row.created_at);
+
+    const tdAuthor = document.createElement("td");
+    tdAuthor.textContent = shortLoginByEmail(row.created_by) || "—";
+
+    tr.append(tdActions, tdClient, tdAmount, tdWho, tdTime, tdAuthor);
     tbody.appendChild(tr);
   }
 }
