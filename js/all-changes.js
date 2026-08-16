@@ -6,6 +6,7 @@ import {
   readSnapshot,
   persistOrderHistorySnapshot,
   persistExcessHistorySnapshot,
+  persistCalculationHistorySnapshot,
   mergeOrderHistoryRows,
   raceWithTimeout,
   isOfflineDataMode,
@@ -123,6 +124,7 @@ function sortAllChangesDisplayRows(rows) {
  * @param {unknown[]} orderHistoryBaseRows
  * @param {unknown[]} excessHistoryRows
  * @param {unknown[]} excessesRows — сами записи излишков (fallback / дополнение)
+ * @param {unknown[]} calculationHistoryRows
  * @param {{ error: unknown | null }} opts
  * @returns {number} число отрисованных строк
  */
@@ -132,6 +134,7 @@ function paintAllChangesFromBaseRows(
   orderHistoryBaseRows,
   excessHistoryRows,
   excessesRows,
+  calculationHistoryRows,
   opts,
 ) {
   const tbody = document.querySelector("#allChangesTable tbody");
@@ -201,6 +204,23 @@ function paintAllChangesFromBaseRows(
     });
   }
 
+  const calcHistRows = (calculationHistoryRows || []).filter((r) =>
+    rowInCreatedAtRange(r, startIso, endIso),
+  );
+  for (const row of calcHistRows) {
+    for (const comment of expandOrderHistoryCommentLines(row.comment)) {
+      displayRows.push({
+        created_at: row.created_at,
+        user_email: row.user_email,
+        chip: "Расчёт",
+        order_id: "",
+        comment,
+        __offlinePendingSync: false,
+        id: row.id != null ? `cah-${row.id}` : undefined,
+      });
+    }
+  }
+
   const sorted = sortAllChangesDisplayRows(displayRows);
   const lines = [];
   for (const row of sorted) {
@@ -260,6 +280,23 @@ async function fetchExcessesRows(startIso, endIso) {
   return { data: data || [], error: null };
 }
 
+async function fetchCalculationHistoryRows(startIso, endIso) {
+  const { data, error } = await fetchAllSupabaseRows(() =>
+    supabaseClient
+      .from("calculation_history")
+      .select("id, created_at, user_email, comment, calculation_id")
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false }),
+  );
+  if (error) {
+    console.warn("История расчётов недоступна:", error.message || error);
+    return { data: [], error };
+  }
+  return { data: data || [], error: null };
+}
+
 function excessHistoryQuery(startIso, endIso) {
   return () =>
     supabaseClient
@@ -283,6 +320,17 @@ function excessesQuery(startIso, endIso) {
       .order("id", { ascending: false });
 }
 
+function calculationHistoryQuery(startIso, endIso) {
+  return () =>
+    supabaseClient
+      .from("calculation_history")
+      .select("id, created_at, user_email, comment, calculation_id")
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+}
+
 export async function loadAllChanges() {
   const tbody = document.querySelector("#allChangesTable tbody");
   const msg = document.getElementById("allChangesMessage");
@@ -295,7 +343,7 @@ export async function loadAllChanges() {
   const { startIso, endIso } = readAllChangesDateRangeFromInputs();
 
   if (!isOfflineWorkModeEnabled()) {
-    const [histRes, excessHistRes, excessesRes] = await Promise.all([
+    const [histRes, excessHistRes, excessesRes, calcHistRes] = await Promise.all([
       fetchAllSupabaseRows(() =>
         supabaseClient
           .from("order_history")
@@ -307,6 +355,7 @@ export async function loadAllChanges() {
       ),
       fetchExcessHistoryRows(startIso, endIso),
       fetchExcessesRows(startIso, endIso),
+      fetchCalculationHistoryRows(startIso, endIso),
     ]);
 
     if (histRes.error) {
@@ -315,7 +364,7 @@ export async function loadAllChanges() {
         msg.textContent = "Ошибка загрузки истории изменений.";
         msg.classList.add("order-tasks-message--error");
       }
-      paintAllChangesFromBaseRows(startIso, endIso, [], [], [], { error: histRes.error });
+      paintAllChangesFromBaseRows(startIso, endIso, [], [], [], [], { error: histRes.error });
       return;
     }
 
@@ -325,6 +374,7 @@ export async function loadAllChanges() {
       histRes.data || [],
       excessHistRes.data || [],
       excessesRes.data || [],
+      calcHistRes.data || [],
       { error: null },
     );
     return;
@@ -337,6 +387,9 @@ export async function loadAllChanges() {
   );
   const snapExcesses = (readSnapshot()?.excesses || []).filter(
     (r) => !r.deleted_at && rowInCreatedAtRange(r, startIso, endIso),
+  );
+  const snapCalcHist = (readSnapshot()?.calculation_history || []).filter((r) =>
+    rowInCreatedAtRange(r, startIso, endIso),
   );
 
   const historyQuery = () =>
@@ -355,25 +408,36 @@ export async function loadAllChanges() {
   let error = null;
   let excessHistData = snapExcessHist;
   let excessesData = snapExcesses;
+  let calcHistData = snapCalcHist;
+
+  const hasSnap =
+    snapFiltered.length > 0 ||
+    snapExcessHist.length > 0 ||
+    snapExcesses.length > 0 ||
+    snapCalcHist.length > 0;
 
   if (skipNetwork) {
     error = { message: "offline" };
   } else {
-    if (snapFiltered.length > 0 || snapExcessHist.length > 0 || snapExcesses.length > 0) {
-      paintAllChangesFromBaseRows(startIso, endIso, snapFiltered, snapExcessHist, snapExcesses, {
-        error: null,
-      });
+    if (hasSnap) {
+      paintAllChangesFromBaseRows(
+        startIso,
+        endIso,
+        snapFiltered,
+        snapExcessHist,
+        snapExcesses,
+        snapCalcHist,
+        { error: null },
+      );
     }
     try {
-      const waitMs =
-        snapFiltered.length > 0 || snapExcessHist.length > 0 || snapExcesses.length > 0
-          ? 1800
-          : OFFLINE_SUPABASE_WAIT_MS;
-      const [histRes, excessHistRes, excessesRes] = await raceWithTimeout(
+      const waitMs = hasSnap ? 1800 : OFFLINE_SUPABASE_WAIT_MS;
+      const [histRes, excessHistRes, excessesRes, calcHistRes] = await raceWithTimeout(
         Promise.all([
           fetchAllSupabaseRows(historyQuery),
           fetchAllSupabaseRows(excessHistoryQuery(startIso, endIso)),
           fetchAllSupabaseRows(excessesQuery(startIso, endIso)),
+          fetchAllSupabaseRows(calculationHistoryQuery(startIso, endIso)),
         ]),
         waitMs,
       );
@@ -381,6 +445,7 @@ export async function loadAllChanges() {
       error = histRes.error;
       if (!excessHistRes.error) excessHistData = excessHistRes.data || [];
       if (!excessesRes.error) excessesData = excessesRes.data || [];
+      if (!calcHistRes.error) calcHistData = calcHistRes.data || [];
     } catch (e) {
       if (e?.code === "TIMEOUT") {
         data = null;
@@ -404,6 +469,7 @@ export async function loadAllChanges() {
   const baseRows = error ? snapFiltered : data || [];
   if (!error && data) persistOrderHistorySnapshot(data);
   if (!error && Array.isArray(excessHistData)) persistExcessHistorySnapshot(excessHistData);
+  if (!error && Array.isArray(calcHistData)) persistCalculationHistorySnapshot(calcHistData);
 
   paintAllChangesFromBaseRows(
     startIso,
@@ -411,6 +477,7 @@ export async function loadAllChanges() {
     baseRows,
     error ? snapExcessHist : excessHistData || [],
     error ? snapExcesses : excessesData || [],
+    error ? snapCalcHist : calcHistData || [],
     { error },
   );
 }
