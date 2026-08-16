@@ -1824,7 +1824,7 @@ h2 {
  * Не использовать table-layout:fixed + % ширины + nowrap:
  * на фоне глобального table { min-width:900px } заголовки и значения
  * визуально съезжают (Клиент/Время/Автор).
- * Порядок колонок: Клиент | Время | Автор | Сумма | Кому | действия.
+ * Порядок колонок: действия | Клиент | Сумма | Кому | Время | Автор.
  */
 #excessesTable {
   width: 100%;
@@ -1843,9 +1843,17 @@ h2 {
   white-space: nowrap;
 }
 
+/* Действия — максимально узкая колонка */
+#excessesTable th:nth-child(1),
+#excessesTable td:nth-child(1) {
+  width: 1%;
+  padding: 2px 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
 /* Узкие колонки — по содержимому; «Клиент» забирает остаток */
-#excessesTable th:nth-child(2),
-#excessesTable td:nth-child(2),
 #excessesTable th:nth-child(3),
 #excessesTable td:nth-child(3),
 #excessesTable th:nth-child(4),
@@ -1857,40 +1865,38 @@ h2 {
   width: 1%;
 }
 
-#excessesTable th:nth-child(1),
-#excessesTable td:nth-child(1) {
+#excessesTable th:nth-child(2),
+#excessesTable td:nth-child(2) {
   width: auto;
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-#excessesTable th:nth-child(4),
-#excessesTable td:nth-child(4) {
+#excessesTable th:nth-child(3),
+#excessesTable td:nth-child(3) {
   text-align: right;
 }
 
-#excessesTable th:nth-child(6),
-#excessesTable td:nth-child(6) {
-  padding: 3px 2px;
-  overflow: visible;
-  text-overflow: clip;
+#excessesTable .td-actions {
+  line-height: 0;
+  font-size: 0;
 }
 
 #excessesTable .td-actions .btn-icon + .btn-icon {
-  margin-left: 2px;
+  margin-left: 0;
 }
 
 #excessesTable .btn-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   margin: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: #6b7280;
   cursor: pointer;
@@ -1899,8 +1905,8 @@ h2 {
 }
 
 #excessesTable .btn-icon svg {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
 }
 
 #excessesTable .btn-icon:hover {
