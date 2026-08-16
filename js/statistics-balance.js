@@ -1,5 +1,5 @@
 import { supabaseClient } from "./config.js";
-import { formatAmountWholeRubles, formatTaskDateRu } from "./format.js";
+import { formatAmountWholeRubles, formatTaskDateRu, toWholeRublesNumber } from "./format.js";
 import { isAdmin } from "./roles.js";
 import { displayNameByEmail } from "./user-names.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
@@ -86,21 +86,16 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
-function toWholeRubles(val) {
-  const n = Number(val);
-  return Number.isFinite(n) ? Math.trunc(n) : 0;
-}
-
 /** Разбор /balance-snapshot?d=&v=&k=&b= → суммы Дима/Вова/Касса/Безнал. */
 export function parseBalanceSnapshotPath(pagePath) {
   try {
     const u = new URL(String(pagePath || ""), "https://local.invalid");
     if (u.pathname !== BALANCE_SNAPSHOT_PATH) return null;
     return {
-      amount_dima: toWholeRubles(u.searchParams.get("d")),
-      amount_vova: toWholeRubles(u.searchParams.get("v")),
-      amount_kassa: toWholeRubles(u.searchParams.get("k")),
-      amount_beznal: toWholeRubles(u.searchParams.get("b")),
+      amount_dima: toWholeRublesNumber(u.searchParams.get("d")),
+      amount_vova: toWholeRublesNumber(u.searchParams.get("v")),
+      amount_kassa: toWholeRublesNumber(u.searchParams.get("k")),
+      amount_beznal: toWholeRublesNumber(u.searchParams.get("b")),
     };
   } catch {
     return null;
