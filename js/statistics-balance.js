@@ -3,6 +3,7 @@ import { formatAmountWholeRubles, formatTaskDateRu } from "./format.js";
 import { isAdmin } from "./roles.js";
 import { displayNameByEmail } from "./user-names.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { BALANCE_SNAPSHOT_PATH } from "./app-routes.js";
 
 function pad2(n) {
   return String(n).padStart(2, "0");
@@ -42,7 +43,7 @@ function datetimeLocalToIsoStart(value) {
 /**
  * Конец минуты для верхней границы периода.
  * Иначе «по» = 12:24 превращается в 12:24:00.000 и свежие просмотры
- * в текущей минуте (12:24:01…12:24:59) не попадали в выборку — таблица пустая.
+ * в текущей минуте (12:24:01…12:24:59) не попадали в выборку.
  */
 function datetimeLocalToIsoEnd(value) {
   if (!value) return null;
@@ -83,6 +84,27 @@ function escapeHtml(s) {
   const div = document.createElement("div");
   div.textContent = String(s);
   return div.innerHTML;
+}
+
+function toWholeRubles(val) {
+  const n = Number(val);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
+/** Разбор /balance-snapshot?d=&v=&k=&b= → суммы Дима/Вова/Касса/Безнал. */
+export function parseBalanceSnapshotPath(pagePath) {
+  try {
+    const u = new URL(String(pagePath || ""), "https://local.invalid");
+    if (u.pathname !== BALANCE_SNAPSHOT_PATH) return null;
+    return {
+      amount_dima: toWholeRubles(u.searchParams.get("d")),
+      amount_vova: toWholeRubles(u.searchParams.get("v")),
+      amount_kassa: toWholeRubles(u.searchParams.get("k")),
+      amount_beznal: toWholeRubles(u.searchParams.get("b")),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function viewerLabel(row) {
@@ -137,6 +159,22 @@ function paintTable(rows) {
   applyFilter();
 }
 
+function mapAccessLogToBalanceRow(logRow) {
+  const amounts = parseBalanceSnapshotPath(logRow.page_path);
+  if (!amounts) return null;
+  const title = (logRow.page_title || "").trim();
+  return {
+    id: logRow.id,
+    created_at: logRow.created_at,
+    user_email: logRow.user_email,
+    user_name: title || null,
+    amount_dima: amounts.amount_dima,
+    amount_vova: amounts.amount_vova,
+    amount_kassa: amounts.amount_kassa,
+    amount_beznal: amounts.amount_beznal,
+  };
+}
+
 export async function loadStatisticsBalance(opts = {}) {
   if (!isAdmin()) return;
 
@@ -159,10 +197,9 @@ export async function loadStatisticsBalance(opts = {}) {
 
   const { data, error } = await fetchAllSupabaseRows(() =>
     supabaseClient
-      .from("balance_view_logs")
-      .select(
-        "id, created_at, user_email, user_name, amount_dima, amount_vova, amount_kassa, amount_beznal",
-      )
+      .from("site_access_logs")
+      .select("id, created_at, user_email, page_path, page_title")
+      .like("page_path", `${BALANCE_SNAPSHOT_PATH}%`)
       .gte("created_at", fromIso)
       .lte("created_at", toIso)
       .order("created_at", { ascending: false })
@@ -174,13 +211,14 @@ export async function loadStatisticsBalance(opts = {}) {
     tbody.innerHTML = "";
     const hint = error?.message ? ` ${error.message}` : "";
     if (msg) {
-      msg.textContent = `Не удалось загрузить данные.${hint} Проверьте, что выполнен SQL из supabase_balance_view_logs.sql (таблица, GRANT, RLS).`;
+      msg.textContent = `Не удалось загрузить данные.${hint} Проверьте, что выполнен SQL из supabase_site_access_logs.sql (таблица, GRANT, RLS).`;
     }
     return;
   }
 
-  paintTable(data || []);
-  if (!data?.length && msg) {
+  const rows = (data || []).map(mapAccessLogToBalanceRow).filter(Boolean);
+  paintTable(rows);
+  if (!rows.length && msg) {
     msg.textContent =
       "За выбранный период записей нет. Каждое открытие раздела «Баланс» сохраняет строку «Сейчас» — обновите период или откройте «Баланс» и нажмите «Показать».";
   }

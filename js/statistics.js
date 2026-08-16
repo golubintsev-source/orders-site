@@ -2,6 +2,7 @@ import { supabaseClient } from "./config.js";
 import { formatTaskDateRu } from "./format.js";
 import { isAdmin } from "./roles.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { BALANCE_SNAPSHOT_PATH } from "./app-routes.js";
 
 function pad2(n) {
   return String(n).padStart(2, "0");
@@ -173,6 +174,7 @@ export async function loadStatistics(opts = {}) {
       .select(
         "id, created_at, user_email, page_path, page_title, device_type, device_name, os_name, os_version, city, country, vpn_detected, work_mode, response_time_ms",
       )
+      .not("page_path", "like", `${BALANCE_SNAPSHOT_PATH}%`)
       .gte("created_at", fromIso)
       .lte("created_at", toIso)
       .order("created_at", { ascending: false })

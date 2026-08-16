@@ -1,3 +1,9 @@
+/**
+ * Служебный путь снимка строки «Сейчас» при открытии «Баланс».
+ * Пишется в site_access_logs (как обычные обращения); не является UI-разделом.
+ */
+export const BALANCE_SNAPSHOT_PATH = "/balance-snapshot";
+
 /** Разделы приложения, которые отражаются в адресной строке (кроме одноразового export Excel). */
 export const ROUTE_SECTION_IDS = new Set([
   "all",

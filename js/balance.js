@@ -6,6 +6,7 @@ import { persistBalanceOfflineView, readBalanceOfflineView, isOfflineDataMode } 
 import { isOfflineWorkModeEnabled } from "./config.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { displayNameByEmail } from "./user-names.js";
+import { BALANCE_SNAPSHOT_PATH } from "./app-routes.js";
 
 const PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
 const MSK_TZ = "Europe/Moscow";
@@ -195,8 +196,21 @@ function toWholeRubles(val) {
   return Number.isFinite(n) ? Math.trunc(n) : 0;
 }
 
+/** Путь для site_access_logs: /balance-snapshot?d=&v=&k=&b= (Дима, Вова, Касса, Безнал). */
+function buildBalanceSnapshotPath(balances) {
+  const q = new URLSearchParams({
+    d: String(toWholeRubles(balances["Дима"])),
+    v: String(toWholeRubles(balances["Вова"])),
+    k: String(toWholeRubles(balances["Касса"])),
+    b: String(toWholeRubles(balances["Безнал"])),
+  });
+  return `${BALANCE_SNAPSHOT_PATH}?${q.toString()}`;
+}
+
 /**
  * Сохраняет снимок строки «Сейчас» при открытии раздела «Баланс».
+ * Пишем в site_access_logs — та же таблица, что у «Статистики» (уже с RLS/GRANT).
+ * Отдельная balance_view_logs часто остаётся без политик/sequence → INSERT молча падает.
  * Ошибки не блокируют показ таблицы.
  */
 async function recordBalanceViewSnapshot(balances) {
@@ -206,15 +220,13 @@ async function recordBalanceViewSnapshot(balances) {
   const row = {
     user_id: user.id,
     user_email: user.email || null,
-    user_name: displayNameByEmail(user.email) || null,
-    amount_dima: toWholeRubles(balances["Дима"]),
-    amount_vova: toWholeRubles(balances["Вова"]),
-    amount_kassa: toWholeRubles(balances["Касса"]),
-    amount_beznal: toWholeRubles(balances["Безнал"]),
+    page_path: buildBalanceSnapshotPath(balances),
+    page_title: displayNameByEmail(user.email) || user.email || "Снимок баланса",
+    work_mode: "online",
   };
 
   try {
-    const { error } = await supabaseClient.from("balance_view_logs").insert(row);
+    const { error } = await supabaseClient.from("site_access_logs").insert(row);
     if (error) {
       console.error("Не удалось записать просмотр баланса:", error);
       const messageEl = document.getElementById("balanceMessage");
