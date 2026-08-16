@@ -1724,6 +1724,60 @@ h2 {
   min-width: 110px;
 }
 
+#section-excess .excess-row--edit .excess-amount-field {
+  flex: 0 1 70px;
+  min-width: 64px;
+  max-width: 80px;
+}
+
+#section-excess .excess-change-field {
+  flex: 0 1 140px;
+  min-width: 120px;
+}
+
+#section-excess .excess-change-input-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+#section-excess .excess-change-sign-btn {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f9fafb;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#section-excess .excess-change-sign-btn[aria-pressed="true"] {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+#section-excess .excess-change-sign-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+#section-excess .excess-change-input-wrap .excess-change-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
 #section-excess .excess-who-field {
   flex: 0 1 140px;
   min-width: 120px;
@@ -1922,7 +1976,8 @@ h2 {
   color: #d32f2f;
 }
 
-#section-excess .excess-row--edit .excess-client-input {
+#section-excess .excess-row--edit .excess-client-input,
+#section-excess .excess-row--edit .excess-amount-input {
   background: #f9fafb;
   color: #4b5563;
   cursor: default;
@@ -1934,9 +1989,24 @@ h2 {
   }
 
   #section-excess .excess-client-field,
-  #section-excess .excess-amount-field,
   #section-excess .excess-who-field {
     flex: 1 1 100%;
+  }
+
+  #section-excess .excess-row:not(.excess-row--edit) .excess-amount-field {
+    flex: 1 1 100%;
+  }
+
+  /* В режиме редактирования Сумма и Изменение остаются в одной строке */
+  #section-excess .excess-row--edit .excess-amount-field {
+    flex: 0 1 calc(50% - 5px);
+    min-width: 0;
+    max-width: none;
+  }
+
+  #section-excess .excess-row--edit .excess-change-field {
+    flex: 1 1 calc(50% - 5px);
+    min-width: 0;
   }
 
   #section-excess .excess-row-remove-btn {

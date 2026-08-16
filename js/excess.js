@@ -10,6 +10,10 @@ import {
 import { raceWithTimeout } from "./offline-cache.js";
 import { shortLoginByEmail } from "./user-names.js";
 import { canSelectKassaBeznal, KASSA_BEZNAL_PLACES } from "./roles.js";
+import {
+  syncAdjustmentSignButton,
+  toggleAdjustmentSign,
+} from "./settings.js";
 
 let excessesBound = false;
 let excessesRowsCache = [];
@@ -343,20 +347,43 @@ async function writeExcessDeltaCalculations(args) {
   }
 }
 
-function createExcessRow(initial = { client: "", amount: "", paid_to: "" }, options = {}) {
+function bindExcessChangeSignButton(btn) {
+  if (!(btn instanceof HTMLButtonElement) || btn.dataset.adjSignBound === "1") return;
+  btn.dataset.adjSignBound = "1";
+  let lastActivateAt = 0;
+  const activate = (e) => {
+    // Как в Settings: на iPhone первый тап рядом с input часто только закрывает клавиатуру.
+    if (e.type === "touchstart" || e.type === "pointerdown") {
+      if (e.type === "pointerdown" && typeof e.button === "number" && e.button !== 0) return;
+      if (e.cancelable) e.preventDefault();
+    }
+    const now = Date.now();
+    if (now - lastActivateAt < 350) return;
+    lastActivateAt = now;
+    const input = document.getElementById(btn.getAttribute("data-adj-input") || "");
+    toggleAdjustmentSign(input);
+  };
+  btn.addEventListener("touchstart", activate, { passive: false });
+  btn.addEventListener("pointerdown", activate);
+  btn.addEventListener("click", activate);
+}
+
+function createExcessRow(initial = { client: "", amount: "", paid_to: "", change: "" }, options = {}) {
   const list = getRowsList();
   if (!list) return null;
 
   const clientReadonly = Boolean(options.clientReadonly);
   const hideRemove = Boolean(options.hideRemove);
+  const showChangeField = Boolean(options.showChangeField);
 
   rowSeq += 1;
   const id = rowSeq;
+  const changeInputId = `excessChange_${id}`;
 
   const row = document.createElement("div");
   row.className = "excess-row";
   row.dataset.rowId = String(id);
-  if (clientReadonly) row.classList.add("excess-row--edit");
+  if (clientReadonly || showChangeField) row.classList.add("excess-row--edit");
 
   row.innerHTML = `
     <div class="field excess-client-field">
@@ -370,6 +397,17 @@ function createExcessRow(initial = { client: "", amount: "", paid_to: "" }, opti
       <label for="excessAmount_${id}">Сумма</label>
       <input type="text" id="excessAmount_${id}" class="excess-amount-input" inputmode="numeric" title="Только целые рубли, без копеек" />
     </div>
+    ${
+      showChangeField
+        ? `<div class="field excess-change-field">
+      <label for="${changeInputId}">Изменение</label>
+      <div class="excess-change-input-wrap">
+        <button type="button" class="excess-change-sign-btn" data-adj-input="${changeInputId}" aria-label="Сменить знак" title="Сменить знак (+/−)" aria-pressed="false">±</button>
+        <input type="text" id="${changeInputId}" class="excess-change-input" inputmode="numeric" title="Целое число рублей; на телефоне минус — кнопкой ±" autocomplete="off" />
+      </div>
+    </div>`
+        : ""
+    }
     <div class="field excess-who-field">
       <label for="excessWho_${id}">Кому</label>
       <select id="excessWho_${id}" class="excess-who-select">
@@ -387,6 +425,8 @@ function createExcessRow(initial = { client: "", amount: "", paid_to: "" }, opti
 
   const clientInput = row.querySelector(".excess-client-input");
   const amountInput = row.querySelector(".excess-amount-input");
+  const changeInput = row.querySelector(".excess-change-input");
+  const changeSignBtn = row.querySelector(".excess-change-sign-btn");
   const whoSelect = row.querySelector(".excess-who-select");
   const listEl = row.querySelector(".excess-client-suggestions");
   const wrap = row.querySelector(".excess-client-input-wrap");
@@ -401,10 +441,30 @@ function createExcessRow(initial = { client: "", amount: "", paid_to: "" }, opti
   }
   if (amountInput instanceof HTMLInputElement) {
     amountInput.value = initial.amount || "";
-    amountInput.addEventListener("input", () => {
-      refreshRublesIntegerInputState(amountInput, amountInput.value);
-      refreshWhoRequiredState(row);
-    });
+    if (showChangeField) {
+      amountInput.readOnly = true;
+      amountInput.setAttribute("aria-readonly", "true");
+      amountInput.title = "Текущая сумма; укажите изменение справа";
+    } else {
+      amountInput.addEventListener("input", () => {
+        refreshRublesIntegerInputState(amountInput, amountInput.value);
+        refreshWhoRequiredState(row);
+      });
+    }
+  }
+  if (changeInput instanceof HTMLInputElement) {
+    changeInput.value = initial.change || "";
+    const onChangeInput = () => {
+      refreshRublesIntegerInputState(changeInput, changeInput.value, { allowSign: true });
+      syncAdjustmentSignButton(changeInput);
+    };
+    changeInput.addEventListener("input", onChangeInput);
+    changeInput.addEventListener("change", onChangeInput);
+    changeInput.addEventListener("blur", onChangeInput);
+    syncAdjustmentSignButton(changeInput);
+  }
+  if (changeSignBtn instanceof HTMLButtonElement) {
+    bindExcessChangeSignButton(changeSignBtn);
   }
   if (whoSelect instanceof HTMLSelectElement) {
     whoSelect.addEventListener("change", () => {
@@ -457,11 +517,23 @@ function collectRowsFromDom() {
   list.querySelectorAll(".excess-row").forEach((row) => {
     const clientInput = row.querySelector(".excess-client-input");
     const amountInput = row.querySelector(".excess-amount-input");
+    const changeInput = row.querySelector(".excess-change-input");
     const whoSelect = row.querySelector(".excess-who-select");
     const client = (clientInput instanceof HTMLInputElement ? clientInput.value : "").trim();
     const amountRaw = amountInput instanceof HTMLInputElement ? amountInput.value : "";
+    const changeRaw = changeInput instanceof HTMLInputElement ? changeInput.value : "";
     const paidTo = (whoSelect instanceof HTMLSelectElement ? whoSelect.value : "").trim();
-    rows.push({ client, amountRaw, paidTo, amountInput, clientInput, whoSelect });
+    rows.push({
+      client,
+      amountRaw,
+      changeRaw,
+      paidTo,
+      amountInput,
+      changeInput: changeInput instanceof HTMLInputElement ? changeInput : null,
+      clientInput,
+      whoSelect,
+      hasChangeField: Boolean(changeInput),
+    });
   });
   return rows;
 }
@@ -526,7 +598,7 @@ function startEditExcess(id) {
   if (list) list.innerHTML = "";
   showFormPanel(true);
   syncFormChrome();
-  setFormMessage("Редактирование: можно изменить сумму или «Кому».");
+  setFormMessage("Редактирование: укажите изменение суммы (с ±) или «Кому».");
   setTableMessage("");
 
   const row = createExcessRow(
@@ -534,14 +606,14 @@ function startEditExcess(id) {
       client: existing.client || "",
       amount: formatAmountForInput(existing.amount),
       paid_to: existing.paid_to || "",
+      change: "",
     },
-    { clientReadonly: true, hideRemove: true },
+    { clientReadonly: true, hideRemove: true, showChangeField: true },
   );
-  const amountInput = row?.querySelector(".excess-amount-input");
-  if (amountInput instanceof HTMLInputElement) {
+  const changeInput = row?.querySelector(".excess-change-input");
+  if (changeInput instanceof HTMLInputElement) {
     queueMicrotask(() => {
-      amountInput.focus();
-      amountInput.select();
+      changeInput.focus();
     });
   }
 
@@ -697,6 +769,34 @@ async function saveEditedExcess() {
     row.amountInput?.focus();
     return;
   }
+
+  const changeRaw = String(row.changeRaw ?? "").trim();
+  let changeDelta = 0;
+  if (row.hasChangeField && changeRaw !== "" && changeRaw !== "+" && changeRaw !== "-") {
+    const changeParsed = tryParseRublesInteger(changeRaw, { allowSign: true });
+    if (!changeParsed.ok || changeParsed.value == null) {
+      setFormMessage(MSG_SUM_INTEGER_ONLY, true);
+      if (row.changeInput) {
+        refreshRublesIntegerInputState(row.changeInput, row.changeRaw, { allowSign: true });
+      }
+      row.changeInput?.focus();
+      return;
+    }
+    changeDelta = changeParsed.value;
+  }
+
+  const newAmount = amountParsed.value + changeDelta;
+  if (!Number.isFinite(newAmount) || !Number.isInteger(newAmount)) {
+    setFormMessage(MSG_SUM_INTEGER_ONLY, true);
+    row.changeInput?.focus();
+    return;
+  }
+  if (newAmount < 0) {
+    setFormMessage("Итоговая сумма не может быть отрицательной.", true);
+    row.changeInput?.focus();
+    return;
+  }
+
   if (!paidTo) {
     setFormMessage("Укажите «Кому».", true);
     row.whoSelect?.focus();
@@ -713,7 +813,7 @@ async function saveEditedExcess() {
   if (saveBtn) saveBtn.disabled = true;
 
   const payload = {
-    amount: amountParsed.value,
+    amount: newAmount,
     paid_to: paidTo,
     created_by: state.currentUser?.email || null,
     created_at: new Date().toISOString(),
