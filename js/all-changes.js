@@ -5,6 +5,7 @@ import { isOrderHiddenForCurrentRole } from "./roles.js";
 import {
   readSnapshot,
   persistOrderHistorySnapshot,
+  persistExcessHistorySnapshot,
   mergeOrderHistoryRows,
   raceWithTimeout,
   isOfflineDataMode,
@@ -104,39 +105,82 @@ function buildOrderTypeByIdMap() {
   return m;
 }
 
+function sortAllChangesDisplayRows(rows) {
+  return [...rows].sort((a, b) => {
+    const ap = a.__offlinePendingSync ? 1 : 0;
+    const bp = b.__offlinePendingSync ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    const ta = new Date(a.created_at || 0).getTime();
+    const tb = new Date(b.created_at || 0).getTime();
+    if (tb !== ta) return tb - ta;
+    return String(b.id ?? "").localeCompare(String(a.id ?? ""), "en");
+  });
+}
+
 /**
  * @param {string} startIso
  * @param {string} endIso
- * @param {unknown[]} baseRowsForMerge — строки из снимка или с сервера (ещё до merge с очередью офлайна)
+ * @param {unknown[]} orderHistoryBaseRows
+ * @param {unknown[]} excessHistoryRows
  * @param {{ error: unknown | null }} opts
  * @returns {number} число отрисованных строк
  */
-function paintAllChangesFromBaseRows(startIso, endIso, baseRowsForMerge, opts) {
+function paintAllChangesFromBaseRows(startIso, endIso, orderHistoryBaseRows, excessHistoryRows, opts) {
   const tbody = document.querySelector("#allChangesTable tbody");
   const msg = document.getElementById("allChangesMessage");
   if (!tbody) return 0;
   const { error } = opts;
 
-  const rows = mergeOrderHistoryRows(baseRowsForMerge).filter((r) => rowInCreatedAtRange(r, startIso, endIso));
   const orderTypeById = buildOrderTypeByIdMap();
-  const lines = [];
-  for (const row of rows) {
+  const displayRows = [];
+
+  const orderRows = mergeOrderHistoryRows(orderHistoryBaseRows).filter((r) =>
+    rowInCreatedAtRange(r, startIso, endIso),
+  );
+  for (const row of orderRows) {
     const orderType = orderTypeById.get(Number(row.order_id)) ?? "";
     if (isOrderHiddenForCurrentRole({ order_type: orderType })) continue;
-
     const chip = formatOrderIdTypeChip(row.order_id, orderType);
     const oid = row.order_id != null ? String(row.order_id) : "";
+    for (const comment of expandOrderHistoryCommentLines(row.comment)) {
+      displayRows.push({
+        created_at: row.created_at,
+        user_email: row.user_email,
+        chip,
+        order_id: oid,
+        comment,
+        __offlinePendingSync: Boolean(row.__offlinePendingSync),
+        id: row.id,
+      });
+    }
+  }
+
+  const excessRows = (excessHistoryRows || []).filter((r) => rowInCreatedAtRange(r, startIso, endIso));
+  for (const row of excessRows) {
+    for (const comment of expandOrderHistoryCommentLines(row.comment)) {
+      displayRows.push({
+        created_at: row.created_at,
+        user_email: row.user_email,
+        chip: "Излишек",
+        order_id: "",
+        comment,
+        __offlinePendingSync: false,
+        id: row.id != null ? `ex-${row.id}` : undefined,
+      });
+    }
+  }
+
+  const sorted = sortAllChangesDisplayRows(displayRows);
+  const lines = [];
+  for (const row of sorted) {
     const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
-    const commentLines = expandOrderHistoryCommentLines(row.comment);
-    for (const comment of commentLines) {
-      lines.push(`
-    <tr class="all-changes-row${offlineCls}" data-order-id="${escapeHtml(oid)}">
+    lines.push(`
+    <tr class="all-changes-row${offlineCls}" data-order-id="${escapeHtml(row.order_id || "")}">
       <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
       <td>${escapeHtml(formatLoginFive(row.user_email))}</td>
-      <td>${escapeHtml(chip)}</td>
-      <td class="all-changes-text-cell">${escapeHtml(comment || "")}</td>
+      <td>${escapeHtml(row.chip || "—")}</td>
+      <td class="all-changes-text-cell">${escapeHtml(row.comment || "")}</td>
     </tr>`);
-    }
   }
   tbody.innerHTML = lines.join("");
 
@@ -148,6 +192,35 @@ function paintAllChangesFromBaseRows(startIso, endIso, baseRowsForMerge, opts) {
 
   applyAllChangesFilter();
   return lines.length;
+}
+
+async function fetchExcessHistoryRows(startIso, endIso) {
+  const { data, error } = await fetchAllSupabaseRows(() =>
+    supabaseClient
+      .from("excess_history")
+      .select("id, created_at, user_email, comment, excess_id")
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false }),
+  );
+  if (error) {
+    // Таблица ещё может быть не создана — не ломаем страницу заказов.
+    console.warn("История излишков недоступна:", error.message || error);
+    return { data: [], error };
+  }
+  return { data: data || [], error: null };
+}
+
+function excessHistoryQuery(startIso, endIso) {
+  return () =>
+    supabaseClient
+      .from("excess_history")
+      .select("id, created_at, user_email, comment, excess_id")
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
 }
 
 export async function loadAllChanges() {
@@ -162,32 +235,40 @@ export async function loadAllChanges() {
   const { startIso, endIso } = readAllChangesDateRangeFromInputs();
 
   if (!isOfflineWorkModeEnabled()) {
-    const { data, error } = await fetchAllSupabaseRows(() =>
-      supabaseClient
-        .from("order_history")
-        .select("created_at, user_email, comment, order_id")
-        .gte("created_at", startIso)
-        .lte("created_at", endIso)
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false }),
-    );
+    const [histRes, excessRes] = await Promise.all([
+      fetchAllSupabaseRows(() =>
+        supabaseClient
+          .from("order_history")
+          .select("created_at, user_email, comment, order_id")
+          .gte("created_at", startIso)
+          .lte("created_at", endIso)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false }),
+      ),
+      fetchExcessHistoryRows(startIso, endIso),
+    ]);
 
-    if (error) {
-      console.error("Ошибка загрузки истории изменений:", error);
+    if (histRes.error) {
+      console.error("Ошибка загрузки истории изменений:", histRes.error);
       if (msg) {
         msg.textContent = "Ошибка загрузки истории изменений.";
         msg.classList.add("order-tasks-message--error");
       }
-      paintAllChangesFromBaseRows(startIso, endIso, [], { error });
+      paintAllChangesFromBaseRows(startIso, endIso, [], [], { error: histRes.error });
       return;
     }
 
-    paintAllChangesFromBaseRows(startIso, endIso, data || [], { error: null });
+    paintAllChangesFromBaseRows(startIso, endIso, histRes.data || [], excessRes.data || [], {
+      error: null,
+    });
     return;
   }
 
   const snapRows = readSnapshot()?.order_history || [];
   const snapFiltered = snapRows.filter((r) => rowInCreatedAtRange(r, startIso, endIso));
+  const snapExcess = (readSnapshot()?.excess_history || []).filter((r) =>
+    rowInCreatedAtRange(r, startIso, endIso),
+  );
 
   const historyQuery = () =>
     supabaseClient
@@ -203,18 +284,23 @@ export async function loadAllChanges() {
 
   let data = null;
   let error = null;
+  let excessData = snapExcess;
 
   if (skipNetwork) {
     error = { message: "offline" };
   } else {
-    if (snapFiltered.length > 0) {
-      paintAllChangesFromBaseRows(startIso, endIso, snapFiltered, { error: null });
+    if (snapFiltered.length > 0 || snapExcess.length > 0) {
+      paintAllChangesFromBaseRows(startIso, endIso, snapFiltered, snapExcess, { error: null });
     }
     try {
-      const waitMs = snapFiltered.length > 0 ? 1800 : OFFLINE_SUPABASE_WAIT_MS;
-      const res = await raceWithTimeout(fetchAllSupabaseRows(historyQuery), waitMs);
-      data = res.data;
-      error = res.error;
+      const waitMs = snapFiltered.length > 0 || snapExcess.length > 0 ? 1800 : OFFLINE_SUPABASE_WAIT_MS;
+      const [histRes, excessRes] = await raceWithTimeout(
+        Promise.all([fetchAllSupabaseRows(historyQuery), fetchAllSupabaseRows(excessHistoryQuery(startIso, endIso))]),
+        waitMs,
+      );
+      data = histRes.data;
+      error = histRes.error;
+      if (!excessRes.error) excessData = excessRes.data || [];
     } catch (e) {
       if (e?.code === "TIMEOUT") {
         data = null;
@@ -229,15 +315,19 @@ export async function loadAllChanges() {
   if (error) {
     console.error("Ошибка загрузки истории изменений:", error);
     if (msg) {
-      msg.textContent = "Показаны сохранённые на устройстве изменения; новые записи без сети — внизу с жёлтой заливкой.";
+      msg.textContent =
+        "Показаны сохранённые на устройстве изменения; новые записи без сети — внизу с жёлтой заливкой.";
       msg.classList.remove("order-tasks-message--error");
     }
   }
 
   const baseRows = error ? snapFiltered : data || [];
   if (!error && data) persistOrderHistorySnapshot(data);
+  if (!error && Array.isArray(excessData)) persistExcessHistorySnapshot(excessData);
 
-  paintAllChangesFromBaseRows(startIso, endIso, baseRows, { error });
+  paintAllChangesFromBaseRows(startIso, endIso, baseRows, error ? snapExcess : excessData || [], {
+    error,
+  });
 }
 
 export function initAllChangesSection() {

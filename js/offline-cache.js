@@ -156,7 +156,11 @@ export function expandOrderHistoryCommentLines(comment) {
   if (parts.length <= 1) return [c];
 
   const isHistoryEvent = (p) =>
-    p === "Заказ создан" || p === "Сохранено без изменений" || p === "Заявка удалена";
+    p === "Заказ создан" ||
+    p === "Сохранено без изменений" ||
+    p === "Заявка удалена" ||
+    p === "Излишек создан" ||
+    p === "Излишек удалён";
   const isFieldDiffPart = (p) => {
     if (isHistoryEvent(p)) return true;
     const idx = p.indexOf(":");
@@ -372,6 +376,16 @@ export function persistOrderHistorySnapshot(rows) {
     version: SNAP_VERSION,
     at: new Date().toISOString(),
     order_history: rows || [],
+  });
+}
+
+export function persistExcessHistorySnapshot(rows) {
+  const prev = readSnapshot() || { version: SNAP_VERSION };
+  writeJson(SNAP_KEY, {
+    ...prev,
+    version: SNAP_VERSION,
+    at: new Date().toISOString(),
+    excess_history: rows || [],
   });
 }
 
