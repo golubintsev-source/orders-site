@@ -323,8 +323,10 @@ h2 {
   display: none !important;
 }
 
-/* user_shop: пункты Баланс, Расчеты не показываются (дублирует логику hidden в JS) */
+/* user_shop: Баланс, Зарплата менеджера, Статистика, Расчёты скрыты (дублирует логику JS) */
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="balance"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="manager-salary"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="statistics"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="calculations"] {
   display: none !important;
 }
