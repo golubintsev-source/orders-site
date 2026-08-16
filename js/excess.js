@@ -643,6 +643,23 @@ async function saveEditedExcess() {
   }
 }
 
+/** Сортировка строк излишков: клиент А→Я, при равенстве — по возрастанию даты. */
+function sortExcessesRows(rows) {
+  return [...rows].sort((a, b) => {
+    const clientCmp = String(a?.client ?? "").localeCompare(String(b?.client ?? ""), "ru", {
+      sensitivity: "base",
+      numeric: true,
+    });
+    if (clientCmp !== 0) return clientCmp;
+    const ta = a?.created_at ? new Date(a.created_at).getTime() : 0;
+    const tb = b?.created_at ? new Date(b.created_at).getTime() : 0;
+    const aValid = Number.isFinite(ta) ? ta : 0;
+    const bValid = Number.isFinite(tb) ? tb : 0;
+    if (aValid !== bValid) return aValid - bValid;
+    return Number(a?.id) - Number(b?.id);
+  });
+}
+
 function renderExcessesTable(rows) {
   const tbody = document.querySelector("#excessesTable tbody");
   if (!tbody) return;
@@ -654,18 +671,18 @@ function renderExcessesTable(rows) {
   }
   setTableMessage("");
 
-  for (const row of rows) {
+  for (const row of sortExcessesRows(rows)) {
     const tr = document.createElement("tr");
     const author = shortLoginByEmail(row.created_by) || "—";
     const amount =
       row.amount != null && row.amount !== "" ? `${formatAmount(row.amount)}\u00A0₽` : "—";
     const paidTo = row.paid_to ? String(row.paid_to) : "";
     tr.innerHTML = `
-      <td>${escapeHtml(formatDateTime(row.created_at))}</td>
-      <td>${escapeHtml(author)}</td>
-      <td>${escapeHtml(row.client || "")}</td>
+      <td class="td-client">${escapeHtml(row.client || "")}</td>
+      <td class="td-time">${escapeHtml(formatDateTime(row.created_at))}</td>
+      <td class="td-author">${escapeHtml(author)}</td>
       <td class="td-money">${escapeHtml(amount)}</td>
-      <td>${escapeHtml(paidTo)}</td>
+      <td class="td-who">${escapeHtml(paidTo)}</td>
       <td class="td-actions">
         <button type="button" class="btn-icon btn-edit excess-edit-btn" data-id="${escapeHtml(String(row.id))}" title="Редактировать" aria-label="Редактировать">
           ${EXCESS_ICON_EDIT_SVG}
