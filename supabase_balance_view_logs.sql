@@ -1,3 +1,5 @@
+-- УСТАРЕЛО для приложения: снимки баланса пишутся в site_access_logs (/balance-snapshot).
+-- Файл оставлен на случай ручных запросов к старой таблице.
 -- Журнал просмотров страницы «Баланс» (снимок строки «Сейчас»).
 -- Выполнить в Supabase → SQL Editor → Run.
 CREATE TABLE IF NOT EXISTS balance_view_logs (
