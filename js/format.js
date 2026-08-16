@@ -55,12 +55,19 @@ export function formatAmount(val) {
   return decPart !== undefined ? `${withSpaces},${decPart}` : withSpaces;
 }
 
+/** Целое число рублей (как на странице «Баланс»): округление, не отсечение. */
+export function toWholeRublesNumber(val) {
+  const num = Number(val);
+  if (!Number.isFinite(num)) return 0;
+  return Math.round(num);
+}
+
 /** Целые рубли без дробной части (страница «Баланс»). */
 export function formatAmountWholeRubles(val) {
   if (val == null || val === "") return "";
   const num = Number(val);
   if (Number.isNaN(num)) return String(val);
-  return formatAmount(Math.round(num));
+  return formatAmount(toWholeRublesNumber(num));
 }
 
 /**

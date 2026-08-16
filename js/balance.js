@@ -1,6 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { isUserLite, isUserShop } from "./roles.js";
-import { formatAmountWholeRubles } from "./format.js";
+import { formatAmountWholeRubles, toWholeRublesNumber } from "./format.js";
 import { state } from "./state.js";
 import { persistBalanceOfflineView, readBalanceOfflineView, isOfflineDataMode } from "./offline-cache.js";
 import { isOfflineWorkModeEnabled } from "./config.js";
@@ -191,18 +191,13 @@ async function fetchAllCalculationsForBalance() {
   );
 }
 
-function toWholeRubles(val) {
-  const n = Number(val);
-  return Number.isFinite(n) ? Math.trunc(n) : 0;
-}
-
 /** Путь для site_access_logs: /balance-snapshot?d=&v=&k=&b= (Дима, Вова, Касса, Безнал). */
 function buildBalanceSnapshotPath(balances) {
   const q = new URLSearchParams({
-    d: String(toWholeRubles(balances["Дима"])),
-    v: String(toWholeRubles(balances["Вова"])),
-    k: String(toWholeRubles(balances["Касса"])),
-    b: String(toWholeRubles(balances["Безнал"])),
+    d: String(toWholeRublesNumber(balances["Дима"])),
+    v: String(toWholeRublesNumber(balances["Вова"])),
+    k: String(toWholeRublesNumber(balances["Касса"])),
+    b: String(toWholeRublesNumber(balances["Безнал"])),
   });
   return `${BALANCE_SNAPSHOT_PATH}?${q.toString()}`;
 }
