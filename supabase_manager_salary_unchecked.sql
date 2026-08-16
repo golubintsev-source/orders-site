@@ -2,6 +2,8 @@
 -- Ключ: manager_salary_unchecked_YYYY-MM
 -- Значение: JSON-массив id заказов, снятых с учёта (чекбокс снят), например: ["12","45"]
 -- Таблица app_settings уже существует (см. supabase_settings_table.sql); отдельная миграция схемы не нужна.
+--
+-- Запись в UI разрешена только ролям admin и user (canSaveManagerSalaryChecks в js/roles.js).
 -- Пример (опционально):
 -- INSERT INTO app_settings (key, value) VALUES ('manager_salary_unchecked_2026-08', '[]')
 --   ON CONFLICT (key) DO NOTHING;
