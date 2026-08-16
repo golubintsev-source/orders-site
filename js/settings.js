@@ -58,7 +58,9 @@ export function toggleAdjustmentSign(input) {
 
 export function syncAdjustmentSignButton(input) {
   if (!input?.id) return;
-  const btn = document.querySelector(`.settings-adj-sign-btn[data-adj-input="${input.id}"]`);
+  const btn = document.querySelector(
+    `.settings-adj-sign-btn[data-adj-input="${input.id}"], .excess-change-sign-btn[data-adj-input="${input.id}"]`,
+  );
   if (!btn) return;
   const negative = String(input.value ?? "").trim().startsWith("-");
   btn.setAttribute("aria-pressed", negative ? "true" : "false");

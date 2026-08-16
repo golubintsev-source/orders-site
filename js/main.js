@@ -87,7 +87,7 @@ async function initSecondarySections(opts = {}) {
       { initManagerSalarySection, loadManagerSalary },
     ] = await Promise.all([
       import("./calculations.js"),
-      import("./excess.js?v=36"),
+      import("./excess.js?v=37"),
       import("./route-sheet.js"),
       import("./tasks.js"),
       import("./all-changes.js"),
