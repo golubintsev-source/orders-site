@@ -293,6 +293,9 @@ function updateSaveButtonState() {
   btn.disabled = !canSave;
   btn.classList.toggle("manager-salary-save-btn-inactive", !canSave);
   btn.hidden = !allowed;
+  const saveRow = btn.closest(".manager-salary-save-row");
+  if (saveRow) saveRow.hidden = !allowed;
+  if (!allowed) setSaveMessage("");
 }
 
 /** Базовая часть зарплаты менеджера (руб.) + процент от стоимости. */
