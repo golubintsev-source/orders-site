@@ -1297,6 +1297,16 @@ async function softDeleteCalculationRow(id) {
   }
   const existing =
     calculationsRowsCache.find((r) => Number(r.id) === Number(id)) || null;
+  let rowForHistory = existing;
+  if (!rowForHistory) {
+    const { data: fetched, error: fetchErr } = await supabaseClient
+      .from("calculations")
+      .select("id, from_place, to_place, amount, comment")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!fetchErr && fetched) rowForHistory = fetched;
+  }
   const { error } = await supabaseClient
     .from("calculations")
     .update({ deleted_at: new Date().toISOString() })
@@ -1310,10 +1320,10 @@ async function softDeleteCalculationRow(id) {
   if (editingId === id) resetForm();
 
   let historyWriteFailed = false;
-  if (existing) {
+  if (rowForHistory) {
     const hist = await insertCalculationHistoryComments(
       id,
-      buildCalculationHistoryComments(existing, existing, "delete"),
+      buildCalculationHistoryComments(rowForHistory, rowForHistory, "delete"),
       currentUserEmail || state.currentUser?.email,
     );
     if (!hist.ok) historyWriteFailed = true;
