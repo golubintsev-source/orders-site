@@ -69,6 +69,11 @@ export function canSelectKassaBeznal() {
   return isAdmin() || state.currentRole === "user";
 }
 
+/** Сохранение выбора чекбоксов на «Зарплата менеджера» — только admin и user. */
+export function canSaveManagerSalaryChecks() {
+  return isAdmin() || state.currentRole === "user";
+}
+
 /** Разделы меню, закрытые для отдельных ролей. Настройки доступны всем (блок уведомлений). */
 export function canAccessSection(sectionId) {
   if (isUserShop()) {

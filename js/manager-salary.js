@@ -1,6 +1,11 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
-import { isOrderHiddenForCurrentRole, isOrderEditLockedForUserLite, isShopOrder } from "./roles.js";
+import {
+  canSaveManagerSalaryChecks,
+  isOrderHiddenForCurrentRole,
+  isOrderEditLockedForUserLite,
+  isShopOrder,
+} from "./roles.js";
 import { formatAmount, formatAmountWholeRubles, formatDateShortRU, formatOrderIdTypeChip } from "./format.js";
 
 /** Статусы с «Производство» и далее, включая «Заказ закрыт». */
@@ -279,13 +284,18 @@ function updateSaveButtonState() {
   const btn = document.getElementById("managerSalarySaveChecksBtn");
   if (!btn) return;
 
+  const allowed = canSaveManagerSalaryChecks();
   const orders = getManagerSalaryOrders();
   const visibleIds = new Set(orders.map(orderIdKey));
   const isDirty = !setsEqualForVisible(uncheckedOrderIds, savedUncheckedOrderIds, visibleIds);
-  const canSave = isDirty && !saveInFlight;
+  const canSave = allowed && isDirty && !saveInFlight;
 
   btn.disabled = !canSave;
   btn.classList.toggle("manager-salary-save-btn-inactive", !canSave);
+  btn.hidden = !allowed;
+  const saveRow = btn.closest(".manager-salary-save-row");
+  if (saveRow) saveRow.hidden = !allowed;
+  if (!allowed) setSaveMessage("");
 }
 
 /** Базовая часть зарплаты менеджера (руб.) + процент от стоимости. */
@@ -350,6 +360,7 @@ function buildRowHtml(order) {
   const statusDisplayText =
     order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом");
   const checked = isOrderChecked(order) ? " checked" : "";
+  const disabled = canSaveManagerSalaryChecks() ? "" : " disabled";
   const idAttr = escapeAttr(orderIdKey(order));
 
   return `
@@ -360,7 +371,7 @@ function buildRowHtml(order) {
           class="manager-salary-row-check"
           data-order-id="${idAttr}"
           aria-label="Учитывать заказ в расчёте"
-          ${checked}
+          ${checked}${disabled}
         />
       </td>
       <td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}" data-lock-edit-user-lite="${isOrderEditLockedForUserLite(order) ? "1" : "0"}">
@@ -441,6 +452,11 @@ async function loadUncheckedForMonth(monthKey) {
 
 async function saveUncheckedSelection() {
   if (saveInFlight) return;
+  if (!canSaveManagerSalaryChecks()) {
+    setSaveMessage("Сохранение доступно только ролям admin и user", true);
+    updateSaveButtonState();
+    return;
+  }
 
   const orders = getManagerSalaryOrders();
   const visibleIds = new Set(orders.map(orderIdKey));
@@ -534,6 +550,12 @@ async function onMonthChange(e) {
 function onTableChange(e) {
   const checkbox = e.target?.closest?.("input.manager-salary-row-check");
   if (!checkbox) return;
+  if (!canSaveManagerSalaryChecks()) {
+    // Вернуть визуально к сохранённому состоянию, если роль не может менять выбор.
+    const id = checkbox.getAttribute("data-order-id");
+    if (id) checkbox.checked = !uncheckedOrderIds.has(id);
+    return;
+  }
   const id = checkbox.getAttribute("data-order-id");
   if (!id) return;
   if (checkbox.checked) uncheckedOrderIds.delete(id);
