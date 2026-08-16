@@ -793,10 +793,25 @@ function sortExcessesRows(rows) {
   });
 }
 
+/** Пишет thead из того же порядка, что и строки — защита от рассинхрона HTML/кэша JS. */
+function ensureExcessesTableHead() {
+  const theadRow = document.querySelector("#excessesTable thead tr");
+  if (!theadRow) return;
+  theadRow.innerHTML = `
+    <th>Клиент</th>
+    <th>Время</th>
+    <th>Автор</th>
+    <th class="th-money">Сумма</th>
+    <th>Кому</th>
+    <th></th>
+  `;
+}
+
 function renderExcessesTable(rows) {
   const tbody = document.querySelector("#excessesTable tbody");
   if (!tbody) return;
   tbody.innerHTML = "";
+  ensureExcessesTableHead();
 
   if (!rows.length) {
     setTableMessage("Пока нет сохранённых излишков.");
@@ -804,27 +819,39 @@ function renderExcessesTable(rows) {
   }
   setTableMessage("");
 
+  // Единый порядок с thead: Клиент | Время | Автор | Сумма | Кому | действия
   for (const row of sortExcessesRows(rows)) {
     const tr = document.createElement("tr");
-    const author = shortLoginByEmail(row.created_by) || "—";
-    const amount =
+
+    const tdClient = document.createElement("td");
+    tdClient.textContent = row.client || "";
+
+    const tdTime = document.createElement("td");
+    tdTime.textContent = formatDateTime(row.created_at);
+
+    const tdAuthor = document.createElement("td");
+    tdAuthor.textContent = shortLoginByEmail(row.created_by) || "—";
+
+    const tdAmount = document.createElement("td");
+    tdAmount.className = "td-money";
+    tdAmount.textContent =
       row.amount != null && row.amount !== "" ? `${formatAmount(row.amount)}\u00A0₽` : "—";
-    const paidTo = row.paid_to ? String(row.paid_to) : "";
-    tr.innerHTML = `
-      <td class="td-client">${escapeHtml(row.client || "")}</td>
-      <td class="td-time">${escapeHtml(formatDateTime(row.created_at))}</td>
-      <td class="td-author">${escapeHtml(author)}</td>
-      <td class="td-money">${escapeHtml(amount)}</td>
-      <td class="td-who">${escapeHtml(paidTo)}</td>
-      <td class="td-actions">
-        <button type="button" class="btn-icon btn-edit excess-edit-btn" data-id="${escapeHtml(String(row.id))}" title="Редактировать" aria-label="Редактировать">
-          ${EXCESS_ICON_EDIT_SVG}
-        </button>
-        <button type="button" class="btn-icon btn-delete excess-delete-btn" data-id="${escapeHtml(String(row.id))}" title="Удалить" aria-label="Удалить">
-          ${EXCESS_ICON_DELETE_SVG}
-        </button>
-      </td>
+
+    const tdWho = document.createElement("td");
+    tdWho.textContent = row.paid_to ? String(row.paid_to) : "";
+
+    const tdActions = document.createElement("td");
+    tdActions.className = "td-actions";
+    tdActions.innerHTML = `
+      <button type="button" class="btn-icon btn-edit excess-edit-btn" data-id="${escapeHtml(String(row.id))}" title="Редактировать" aria-label="Редактировать">
+        ${EXCESS_ICON_EDIT_SVG}
+      </button>
+      <button type="button" class="btn-icon btn-delete excess-delete-btn" data-id="${escapeHtml(String(row.id))}" title="Удалить" aria-label="Удалить">
+        ${EXCESS_ICON_DELETE_SVG}
+      </button>
     `;
+
+    tr.append(tdClient, tdTime, tdAuthor, tdAmount, tdWho, tdActions);
     tbody.appendChild(tr);
   }
 }
@@ -907,6 +934,8 @@ export async function loadExcesses() {
 export function bindExcessSection() {
   if (excessesBound) return;
   excessesBound = true;
+
+  ensureExcessesTableHead();
 
   document.getElementById("excessAddClientBtn")?.addEventListener("click", () => {
     startWithClientRow();

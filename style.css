@@ -1809,6 +1809,9 @@ h2 {
 
 #section-excess .excess-table-wrap {
   margin-top: 8px;
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 #section-excess .excess-table-message {
@@ -1817,9 +1820,19 @@ h2 {
   color: #6b7280;
 }
 
+/*
+ * Не использовать table-layout:fixed + % ширины + nowrap:
+ * на фоне глобального table { min-width:900px } заголовки и значения
+ * визуально съезжают (Клиент/Время/Автор).
+ * Порядок колонок: Клиент | Время | Автор | Сумма | Кому | действия.
+ */
 #excessesTable {
-  table-layout: fixed;
   width: 100%;
+  max-width: 100%;
+  min-width: 0 !important;
+  table-layout: auto;
+  border-collapse: collapse;
+  border-spacing: 0;
 }
 
 #excessesTable th,
@@ -1827,42 +1840,39 @@ h2 {
   padding: 5px 6px;
   font-size: 12px;
   vertical-align: middle;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-#excessesTable .th-client,
-#excessesTable .td-client {
-  width: 28%;
+/* Узкие колонки — по содержимому; «Клиент» забирает остаток */
+#excessesTable th:nth-child(2),
+#excessesTable td:nth-child(2),
+#excessesTable th:nth-child(3),
+#excessesTable td:nth-child(3),
+#excessesTable th:nth-child(4),
+#excessesTable td:nth-child(4),
+#excessesTable th:nth-child(5),
+#excessesTable td:nth-child(5),
+#excessesTable th:nth-child(6),
+#excessesTable td:nth-child(6) {
+  width: 1%;
 }
 
-#excessesTable .th-time,
-#excessesTable .td-time {
-  width: 18%;
+#excessesTable th:nth-child(1),
+#excessesTable td:nth-child(1) {
+  width: auto;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-#excessesTable .th-author,
-#excessesTable .td-author {
-  width: 12%;
-}
-
-#excessesTable .th-money,
-#excessesTable .td-money {
-  width: 14%;
+#excessesTable th:nth-child(4),
+#excessesTable td:nth-child(4) {
   text-align: right;
 }
 
-#excessesTable .th-who,
-#excessesTable .td-who {
-  width: 14%;
-}
-
-#excessesTable .th-actions,
-#excessesTable .td-actions {
-  white-space: nowrap;
+#excessesTable th:nth-child(6),
+#excessesTable td:nth-child(6) {
   padding: 3px 2px;
-  width: 56px;
   overflow: visible;
   text-overflow: clip;
 }

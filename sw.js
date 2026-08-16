@@ -116,6 +116,26 @@ async function staleWhileRevalidate(request) {
   return new Response("Offline", { status: 503, statusText: "Offline" });
 }
 
+/** JS — network-first: иначе HTML уже новый, а модуль из кэша → колонки «плывут». */
+async function networkFirstStatic(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  try {
+    const res = await fetch(request, { cache: "no-cache" });
+    if (res && res.ok) {
+      void cache.put(request, res.clone());
+    }
+    return res;
+  } catch {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    return new Response("Offline", { status: 503, statusText: "Offline" });
+  }
+}
+
+function isJsAsset(url) {
+  return url.pathname.startsWith("/js/") || url.pathname.endsWith(".js");
+}
+
 async function networkFirstNavigate(request) {
   const cache = await caches.open(STATIC_CACHE);
   try {
@@ -153,7 +173,7 @@ self.addEventListener("fetch", (event) => {
   if (!isSameOrigin(url) || isApiPath(url.pathname)) return;
 
   if (isStaticAsset(url)) {
-    event.respondWith(staleWhileRevalidate(request));
+    event.respondWith(isJsAsset(url) ? networkFirstStatic(request) : staleWhileRevalidate(request));
     return;
   }
 
