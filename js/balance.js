@@ -217,6 +217,11 @@ async function recordBalanceViewSnapshot(balances) {
     const { error } = await supabaseClient.from("balance_view_logs").insert(row);
     if (error) {
       console.error("Не удалось записать просмотр баланса:", error);
+      const messageEl = document.getElementById("balanceMessage");
+      if (messageEl && !messageEl.textContent) {
+        const hint = error?.message ? ` ${error.message}` : "";
+        messageEl.textContent = `Просмотр баланса не записан в статистику.${hint}`;
+      }
     }
   } catch (e) {
     console.error("Не удалось записать просмотр баланса:", e);
