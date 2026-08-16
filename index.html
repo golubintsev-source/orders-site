@@ -103,6 +103,10 @@
               <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
               <span class="section-nav-dropdown-item-text">Статистика</span>
             </button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="statistics-balance">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 2 5-6"/></svg>
+              <span class="section-nav-dropdown-item-text">Статистика баланса</span>
+            </button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="settings">
               <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
               <span class="section-nav-dropdown-item-text">Настройки</span>
@@ -1716,6 +1720,61 @@
           </table>
         </div>
         <p id="statisticsMessage" class="order-tasks-hint"></p>
+      </div>
+    </section>
+
+    <section id="section-statistics-balance" class="content-section">
+      <div class="card order-tasks-card">
+        <div class="statistics-datetime-toolbar" aria-label="Период">
+          <div class="statistics-datetime-field">
+            <label for="statisticsBalanceDatetimeFrom" class="statistics-datetime-label">с</label>
+            <input
+              type="datetime-local"
+              id="statisticsBalanceDatetimeFrom"
+              class="statistics-datetime-input"
+              autocomplete="off"
+              aria-label="Дата и время с"
+            />
+          </div>
+          <div class="statistics-datetime-field">
+            <label for="statisticsBalanceDatetimeTo" class="statistics-datetime-label">по</label>
+            <input
+              type="datetime-local"
+              id="statisticsBalanceDatetimeTo"
+              class="statistics-datetime-input"
+              autocomplete="off"
+              aria-label="Дата и время по"
+            />
+          </div>
+          <button type="button" id="statisticsBalanceLoadBtn" class="statistics-load-btn">Показать</button>
+        </div>
+        <div class="statistics-search-toolbar">
+          <input
+            type="search"
+            id="statisticsBalanceSearchInput"
+            class="statistics-search-input"
+            placeholder="Поиск по таблице…"
+            autocomplete="off"
+            enterkeyhint="search"
+            aria-label="Поиск по таблице статистики баланса"
+          />
+        </div>
+        <div class="table-wrap statistics-table-wrap">
+          <table id="statisticsBalanceTable">
+            <thead>
+              <tr>
+                <th>Дата и время</th>
+                <th>Пользователь</th>
+                <th class="th-money">Дима</th>
+                <th class="th-money">Вова</th>
+                <th class="th-money">Касса</th>
+                <th class="th-money">Безнал</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="statisticsBalanceMessage" class="order-tasks-hint"></p>
       </div>
     </section>
 

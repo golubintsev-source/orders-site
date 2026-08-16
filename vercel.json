@@ -62,6 +62,7 @@
     { "source": "/route-sheet", "destination": "/index.html" },
     { "source": "/settings", "destination": "/index.html" },
     { "source": "/statistics", "destination": "/index.html" },
+    { "source": "/statistics-balance", "destination": "/index.html" },
     { "source": "/order-tasks", "destination": "/index.html" },
     { "source": "/messages", "destination": "/index.html" },
     { "source": "/voice", "destination": "/index.html" },
