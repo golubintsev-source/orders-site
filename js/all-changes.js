@@ -9,6 +9,7 @@ import {
   raceWithTimeout,
   isOfflineDataMode,
   OFFLINE_SUPABASE_WAIT_MS,
+  expandOrderHistoryCommentLines,
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 
@@ -126,13 +127,16 @@ function paintAllChangesFromBaseRows(startIso, endIso, baseRowsForMerge, opts) {
     const chip = formatOrderIdTypeChip(row.order_id, orderType);
     const oid = row.order_id != null ? String(row.order_id) : "";
     const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
-    lines.push(`
+    const commentLines = expandOrderHistoryCommentLines(row.comment);
+    for (const comment of commentLines) {
+      lines.push(`
     <tr class="all-changes-row${offlineCls}" data-order-id="${escapeHtml(oid)}">
       <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
       <td>${escapeHtml(formatLoginFive(row.user_email))}</td>
       <td>${escapeHtml(chip)}</td>
-      <td class="all-changes-text-cell">${escapeHtml(row.comment || "")}</td>
+      <td class="all-changes-text-cell">${escapeHtml(comment || "")}</td>
     </tr>`);
+    }
   }
   tbody.innerHTML = lines.join("");
 

@@ -127,7 +127,7 @@ export function getChangedOrderFieldKeys(prev, next) {
 function parseFieldKeysFromHistoryComment(comment) {
   if (!comment || typeof comment !== "string") return [];
   const keys = new Set();
-  for (const part of comment.split(";")) {
+  for (const part of expandOrderHistoryCommentLines(comment)) {
     const p = part.trim();
     if (!p || p === "Заказ создан" || p === "Сохранено без изменений" || p === "Заявка удалена") continue;
     const idx = p.indexOf(":");
@@ -137,6 +137,36 @@ function parseFieldKeysFromHistoryComment(comment) {
     if (key) keys.add(key);
   }
   return [...keys];
+}
+
+/**
+ * Старые записи истории могли склеивать несколько изменений через «; ».
+ * Для отображения разворачиваем их в отдельные строки таблицы.
+ * @param {string|null|undefined} comment
+ * @returns {string[]}
+ */
+export function expandOrderHistoryCommentLines(comment) {
+  const c = String(comment ?? "").trim();
+  if (!c) return [""];
+  if (!c.includes(";")) return [c];
+  const parts = c
+    .split(";")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) return [c];
+
+  const isHistoryEvent = (p) =>
+    p === "Заказ создан" || p === "Сохранено без изменений" || p === "Заявка удалена";
+  const isFieldDiffPart = (p) => {
+    if (isHistoryEvent(p)) return true;
+    const idx = p.indexOf(":");
+    if (idx <= 0) return false;
+    const label = p.slice(0, idx).trim();
+    return Boolean(HISTORY_LABEL_TO_KEY[label]) || /^.+: .+/.test(p);
+  };
+
+  if (parts.every(isFieldDiffPart)) return parts;
+  return [c];
 }
 
 /** Поле → время последнего изменения в order_history строго после afterIso. */
@@ -458,6 +488,7 @@ export function addOrAppendPendingServerOrderEdit({
   orderData,
   prevSnapshot,
   historyComment,
+  historyComments,
   user_email,
   changedAt,
   initialSums,
@@ -471,13 +502,16 @@ export function addOrAppendPendingServerOrderEdit({
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : `edit-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const comments = normalizePendingHistoryComments({ historyComment, historyComments });
   const editEntry = {
     editLocalId,
     changedAt: changedAt || new Date().toISOString(),
     user_email: user_email || "",
     orderData: { ...orderData },
     prevSnapshot: prevSnapshot ? { ...prevSnapshot } : null,
-    historyComment,
+    historyComments: comments,
+    // Старое поле — на случай очереди, собранной до обновления.
+    historyComment: comments.join("; "),
     initialSums: initialSums ?? null,
     initialParticipants: initialParticipants ?? null,
   };
@@ -501,16 +535,28 @@ export function addOrAppendPendingServerOrderEdit({
   return true;
 }
 
+/** Нормализует комментарии истории из очереди (массив или одна строка). */
+function normalizePendingHistoryComments(edit) {
+  if (Array.isArray(edit?.historyComments) && edit.historyComments.length > 0) {
+    return edit.historyComments.map((c) => String(c || "").trim()).filter(Boolean);
+  }
+  const single = String(edit?.historyComment || "").trim();
+  return single ? [single] : [];
+}
+
 export function pendingServerEditHistoryDisplayRows() {
   return readPendingOrderEditsQueue().flatMap((item) =>
-    (item.edits || []).map((e) => ({
-      created_at: e.changedAt,
-      user_email: e.user_email,
-      comment: e.historyComment,
-      order_id: item.orderId,
-      __offlinePendingSync: true,
-      __offlineLocalId: e.editLocalId,
-    })),
+    (item.edits || []).flatMap((e) => {
+      const comments = normalizePendingHistoryComments(e);
+      return comments.map((comment, idx) => ({
+        created_at: e.changedAt,
+        user_email: e.user_email,
+        comment,
+        order_id: item.orderId,
+        __offlinePendingSync: true,
+        __offlineLocalId: `${e.editLocalId}:${idx}`,
+      }));
+    }),
   );
 }
 
@@ -819,17 +865,21 @@ async function flushOnePendingServerOrderEdit(item) {
       if (remoteAfterEdit[key]) continue;
       patch[key] = edit.orderData[key];
     }
-    if (!edit.historyComment || edit.historyComment === "Сохранено без изменений") continue;
-    const { error: insErr } = await supabaseClient.from("order_history").insert([
-      {
-        order_id: orderId,
-        user_email: edit.user_email,
-        comment: edit.historyComment,
-        created_at: edit.changedAt,
-      },
-    ]);
+    const comments = normalizePendingHistoryComments(edit).filter(
+      (c) => c && c !== "Сохранено без изменений",
+    );
+    if (comments.length === 0) continue;
+    const rows = comments.map((comment) => ({
+      order_id: orderId,
+      user_email: edit.user_email,
+      comment,
+      created_at: edit.changedAt,
+    }));
+    const { error: insErr } = await supabaseClient.from("order_history").insert(rows);
     if (insErr) throw insErr;
-    remoteHistory.push({ created_at: edit.changedAt, comment: edit.historyComment });
+    for (const comment of comments) {
+      remoteHistory.push({ created_at: edit.changedAt, comment });
+    }
   }
 
   const updatePayload = insertPayloadFromFormData(patch);

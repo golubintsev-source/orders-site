@@ -1,7 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile, logout } from "./auth.js";
 import { isOrderHiddenForCurrentRole } from "./roles.js";
-import { mergeOrderHistoryRows } from "./offline-cache.js";
+import { mergeOrderHistoryRows, expandOrderHistoryCommentLines } from "./offline-cache.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import {
@@ -153,10 +153,13 @@ async function loadHistory() {
   rows.forEach((row) => {
     const createdAt = row.created_at ? formatTaskDateRu(row.created_at) : "—";
     const author = formatTaskAuthorShort(row.user_email || "");
-    const tr = document.createElement("tr");
-    if (row.__offlinePendingSync) tr.classList.add("tr-order-offline-pending");
-    tr.innerHTML = `<td>${escapeHtml(createdAt)}</td><td>${escapeHtml(author)}</td><td class="order-tasks-text-cell">${escapeHtml(row.comment || "")}</td>`;
-    tbody.appendChild(tr);
+    const commentLines = expandOrderHistoryCommentLines(row.comment);
+    for (const comment of commentLines) {
+      const tr = document.createElement("tr");
+      if (row.__offlinePendingSync) tr.classList.add("tr-order-offline-pending");
+      tr.innerHTML = `<td>${escapeHtml(createdAt)}</td><td>${escapeHtml(author)}</td><td class="order-tasks-text-cell">${escapeHtml(comment || "")}</td>`;
+      tbody.appendChild(tr);
+    }
   });
 }
 
