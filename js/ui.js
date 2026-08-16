@@ -456,9 +456,20 @@ export function bindUIEvents() {
   const settingsSaveAdjustmentsBtn = document.getElementById("settingsSaveAdjustmentsBtn");
   if (settingsSaveAdjustmentsBtn) {
     settingsSaveAdjustmentsBtn.addEventListener("click", async () => {
-      const ok = await saveBalanceAdjustments();
-      setMessage(ok ? "Корректировки сохранены" : "Ошибка сохранения корректировок", ok ? "" : "#d32f2f");
-      if (ok) await loadBalance();
+      const result = await saveBalanceAdjustments();
+      if (result?.ok) {
+        if (result.historyOk === false) {
+          setMessage(
+            "Корректировки сохранены, но история для «Все изменения» не записалась. Выполните supabase_settings_history_table.sql в Supabase.",
+            "#d32f2f",
+          );
+        } else {
+          setMessage("Корректировки сохранены");
+        }
+        await loadBalance();
+      } else {
+        setMessage("Ошибка сохранения корректировок", "#d32f2f");
+      }
     });
     for (const { inputId } of BALANCE_ADJ_FIELDS) {
       const adjInput = document.getElementById(inputId);

@@ -1,7 +1,7 @@
 import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
 import { isAdmin } from "./roles.js";
-import { tryParseRublesInteger } from "./format.js";
+import { tryParseRublesInteger, formatAmount } from "./format.js";
 import { readSnapshot, persistSettingsSnapshotFromRows } from "./offline-cache.js";
 
 const KEY_INSTALLER_RATE = "installer_rate_per_m2";
@@ -369,30 +369,92 @@ export async function saveEditors() {
   return true;
 }
 
-/** Сохранить корректировки баланса в БД и state. */
-export async function saveBalanceAdjustments() {
-  if (!isAdmin()) return false;
+/**
+ * Комментарии для settings_history: по одной строке на каждое изменение
+ * (как order_history / excess_history).
+ * @param {Record<string, number>} prev
+ * @param {Record<string, number>} next
+ * @returns {string[]}
+ */
+function buildBalanceAdjustmentHistoryComments(prev, next) {
+  const parts = [];
+  for (const { participant } of BALANCE_ADJ_FIELDS) {
+    const prevVal = Number(prev?.[participant] ?? 0);
+    const nextVal = Number(next?.[participant] ?? 0);
+    if (prevVal === nextVal) continue;
+    const prevLabel = formatAmount(prevVal) || "0";
+    const nextLabel = formatAmount(nextVal) || "0";
+    parts.push(`${participant}: ${prevLabel} -> ${nextLabel}`);
+  }
+  return parts;
+}
 
+/**
+ * Записать изменения корректировок в settings_history.
+ * @param {string[]} comments
+ * @param {string} [userEmail]
+ * @returns {Promise<{ ok: boolean, error?: unknown }>}
+ */
+async function insertSettingsHistoryComments(comments, userEmail) {
+  const list = (comments || []).map((c) => String(c || "").trim()).filter(Boolean);
+  if (list.length === 0) return { ok: true };
+  const email = String(userEmail || state.currentUser?.email || "").trim();
+  if (!email) {
+    console.error("Ошибка записи истории корректировок: нет email пользователя");
+    return { ok: false, error: { message: "Нет email пользователя для истории" } };
+  }
+  const rows = list.map((comment) => ({
+    setting_key: "balance_adjustments",
+    user_email: email,
+    comment,
+  }));
+  const { error } = await supabaseClient.from("settings_history").insert(rows);
+  if (error) {
+    console.error("Ошибка записи истории корректировок:", error);
+    return { ok: false, error };
+  }
+  return { ok: true };
+}
+
+/**
+ * Сохранить корректировки баланса в БД и state.
+ * @returns {Promise<{ ok: boolean, historyOk?: boolean }>}
+ */
+export async function saveBalanceAdjustments() {
+  if (!isAdmin()) return { ok: false };
+
+  const nextValues = {};
   const upsertRows = [];
   for (const { participant, settingKey, inputId } of BALANCE_ADJ_FIELDS) {
     const el = document.getElementById(inputId);
     const v = parseAdjustmentInt(el?.value);
-    if (Number.isNaN(v)) return false;
+    if (Number.isNaN(v)) return { ok: false };
+    nextValues[participant] = v;
     upsertRows.push({ key: settingKey, value: String(v) });
+  }
+
+  const prevValues = {};
+  for (const { participant } of BALANCE_ADJ_FIELDS) {
+    prevValues[participant] = state.balanceAdjustments[participant] ?? 0;
   }
 
   const { error } = await supabaseClient.from("app_settings").upsert(upsertRows, { onConflict: "key" });
 
-  if (error) return false;
+  if (error) return { ok: false };
 
-  for (const { participant, inputId } of BALANCE_ADJ_FIELDS) {
-    const el = document.getElementById(inputId);
-    const v = parseAdjustmentInt(el?.value);
-    state.balanceAdjustments[participant] = Number.isNaN(v) ? 0 : v;
+  for (const { participant } of BALANCE_ADJ_FIELDS) {
+    state.balanceAdjustments[participant] = nextValues[participant] ?? 0;
+  }
+
+  const comments = buildBalanceAdjustmentHistoryComments(prevValues, nextValues);
+  let historyOk = true;
+  if (comments.length > 0) {
+    const hist = await insertSettingsHistoryComments(comments);
+    historyOk = hist.ok;
   }
 
   updateAdjustmentsSaveButtonState();
-  return true;
+  return { ok: true, historyOk };
 }
 
 export function getDefaultInstallerRatePerM2() {
