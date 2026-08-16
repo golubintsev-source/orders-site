@@ -5,6 +5,7 @@ import { state } from "./state.js";
 import { persistBalanceOfflineView, readBalanceOfflineView, isOfflineDataMode } from "./offline-cache.js";
 import { isOfflineWorkModeEnabled } from "./config.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { displayNameByEmail } from "./user-names.js";
 
 const PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
 const MSK_TZ = "Europe/Moscow";
@@ -189,7 +190,44 @@ async function fetchAllCalculationsForBalance() {
   );
 }
 
-export async function loadBalance() {
+function toWholeRubles(val) {
+  const n = Number(val);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
+/**
+ * Сохраняет снимок строки «Сейчас» при открытии раздела «Баланс».
+ * Ошибки не блокируют показ таблицы.
+ */
+async function recordBalanceViewSnapshot(balances) {
+  const user = state.currentUser;
+  if (!user?.id || !balances) return;
+
+  const row = {
+    user_id: user.id,
+    user_email: user.email || null,
+    user_name: displayNameByEmail(user.email) || null,
+    amount_dima: toWholeRubles(balances["Дима"]),
+    amount_vova: toWholeRubles(balances["Вова"]),
+    amount_kassa: toWholeRubles(balances["Касса"]),
+    amount_beznal: toWholeRubles(balances["Безнал"]),
+  };
+
+  try {
+    const { error } = await supabaseClient.from("balance_view_logs").insert(row);
+    if (error) {
+      console.error("Не удалось записать просмотр баланса:", error);
+    }
+  } catch (e) {
+    console.error("Не удалось записать просмотр баланса:", e);
+  }
+}
+
+/**
+ * @param {{ recordView?: boolean }} [opts] — recordView: сохранить снимок «Сейчас» (вход в раздел).
+ */
+export async function loadBalance(opts = {}) {
+  const { recordView = false } = opts;
   const messageEl = document.getElementById("balanceMessage");
   const theadRow = document.querySelector("#balanceTable thead tr");
   const tbody = document.querySelector("#balanceTable tbody");
@@ -224,9 +262,13 @@ export async function loadBalance() {
   const metrics = computeBalanceMetricsFromCalcRows(calcRows);
   paintBalanceTable(metrics.balances, metrics.turnover, messageEl);
   persistBalanceOfflineView(metrics);
+
+  if (recordView) {
+    void recordBalanceViewSnapshot(metrics.balances);
+  }
 }
 
 export async function initBalanceSection() {
   if (isUserLite() || isUserShop()) return;
-  await loadBalance();
+  await loadBalance({ recordView: true });
 }

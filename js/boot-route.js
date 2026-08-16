@@ -16,6 +16,7 @@ const BOOT_LABELS = {
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
   statistics: "Статистика",
+  "statistics-balance": "Статистика баланса",
   "order-tasks": "Задачи",
   messages: "Чаты",
   voice: "Голосовое управление",
