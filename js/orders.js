@@ -2343,20 +2343,22 @@ function shouldIncludeFieldOnCreate(key, val) {
 }
 
 /**
- * Текст комментария для order_history: «Поле: старое -> новое; …».
+ * Комментарии для order_history: по одной строке на каждое изменение
+ * (как отдельная строка в «Расчётах» на каждую дельту).
  * @param {Record<string, unknown> | null} prev снимок до правок (null при создании)
  * @param {Record<string, unknown>} next данные сохранения (getFormData)
  * @param {boolean} wasEditing режим редактирования
+ * @returns {string[]}
  */
-function buildOrderHistoryComment(prev, next, wasEditing) {
+function buildOrderHistoryComments(prev, next, wasEditing) {
   if (!wasEditing) {
-    const fieldParts = [];
+    const comments = ["Заказ создан"];
     for (const { key, label } of ORDER_HISTORY_FIELDS) {
       const nv = next[key];
       if (!shouldIncludeFieldOnCreate(key, nv)) continue;
-      fieldParts.push(`${label}: — -> ${formatOrderHistoryValue(key, nv)}`);
+      comments.push(`${label}: — -> ${formatOrderHistoryValue(key, nv)}`);
     }
-    return fieldParts.length > 0 ? `Заказ создан; ${fieldParts.join("; ")}` : "Заказ создан";
+    return comments;
   }
 
   const parts = [];
@@ -2366,7 +2368,72 @@ function buildOrderHistoryComment(prev, next, wasEditing) {
     if (valuesEqualForOrderHistory(key, ov, nv)) continue;
     parts.push(`${label}: ${formatOrderHistoryValue(key, ov)} -> ${formatOrderHistoryValue(key, nv)}`);
   }
-  return parts.length > 0 ? parts.join("; ") : "Сохранено без изменений";
+  return parts.length > 0 ? parts : ["Сохранено без изменений"];
+}
+
+function isNoOpOrderHistoryComments(comments) {
+  return (
+    Array.isArray(comments) &&
+    comments.length === 1 &&
+    comments[0] === "Сохранено без изменений"
+  );
+}
+
+/** Одна строка через «; » — для совместимости со старым кодом/логами. */
+function buildOrderHistoryComment(prev, next, wasEditing) {
+  return buildOrderHistoryComments(prev, next, wasEditing).join("; ");
+}
+
+/**
+ * Записать каждое изменение отдельной строкой в order_history.
+ * @param {number|string} orderId
+ * @param {string[]} comments
+ * @param {{ created_at?: string }} [opts]
+ */
+async function insertOrderHistoryComments(orderId, comments, opts = {}) {
+  if (!orderId || !state.currentUser?.email) return;
+  const list = (comments || []).map((c) => String(c || "").trim()).filter(Boolean);
+  if (list.length === 0) return;
+  const rows = list.map((comment) => {
+    const row = {
+      order_id: orderId,
+      user_email: state.currentUser.email,
+      comment,
+    };
+    if (opts.created_at) row.created_at = opts.created_at;
+    return row;
+  });
+  const { error } = await supabaseClient.from("order_history").insert(rows);
+  if (error) {
+    console.error("Ошибка записи в историю изменений:", error);
+  }
+}
+
+/**
+ * Очередь офлайн-истории: по одной pending-записи на каждый комментарий.
+ */
+function queueOfflineOrderHistoryComments({
+  pending_order_local_id,
+  order_temp_id,
+  comments,
+  user_email,
+  created_at,
+}) {
+  const list = (comments || []).map((c) => String(c || "").trim()).filter(Boolean);
+  for (const comment of list) {
+    const localId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `hist-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    addPendingOfflineOrderHistory({
+      localId,
+      pending_order_local_id,
+      order_temp_id,
+      user_email: user_email || "",
+      comment,
+      created_at,
+    });
+  }
 }
 
 export function getFormData() {
@@ -3163,8 +3230,8 @@ export async function deleteOrder(orderId) {
  *  @returns {boolean} true — ушли с формы / сохранили в очередь; false — нечего сохранять. */
 function commitServerOrderEditToOfflineStorage(orderData) {
   const orderId = Number(state.editingOrderId);
-  const historyComment = buildOrderHistoryComment(state.initialOrderSnapshot, orderData, true);
-  if (historyComment === "Сохранено без изменений") {
+  const historyComments = buildOrderHistoryComments(state.initialOrderSnapshot, orderData, true);
+  if (isNoOpOrderHistoryComments(historyComments)) {
     setMessage("Нет изменений для сохранения", "");
     return false;
   }
@@ -3173,7 +3240,7 @@ function commitServerOrderEditToOfflineStorage(orderData) {
     orderId,
     orderData,
     prevSnapshot: state.initialOrderSnapshot,
-    historyComment,
+    historyComments,
     user_email: state.currentUser?.email || "",
     changedAt,
     initialSums: state.initialOrderSums,
@@ -3208,16 +3275,11 @@ function commitOrderFormToOfflineStorage(orderData, editingOffline) {
     const tempId = nextOfflineTempOrderId();
     const displayRow = buildDisplayRowForPendingOrder(orderData, tempId, localId);
     addPendingOfflineOrder({ localId, displayRow, insertPayload });
-    const histLocalId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `hist-${Date.now()}`;
-    addPendingOfflineOrderHistory({
-      localId: histLocalId,
+    queueOfflineOrderHistoryComments({
       pending_order_local_id: localId,
       order_temp_id: tempId,
       user_email: state.currentUser?.email || "",
-      comment: buildOrderHistoryComment(null, orderData, false),
+      comments: buildOrderHistoryComments(null, orderData, false),
     });
     highlightId = tempId;
   } else {
@@ -3229,17 +3291,15 @@ function commitOrderFormToOfflineStorage(orderData, editingOffline) {
     }
     const displayRow = buildDisplayRowForPendingOrder(orderData, state.editingOrderId, localId);
     updatePendingOfflineOrder(localId, displayRow, insertPayload);
-    const histLocalId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `hist-${Date.now()}`;
-    addPendingOfflineOrderHistory({
-      localId: histLocalId,
-      pending_order_local_id: localId,
-      order_temp_id: state.editingOrderId,
-      user_email: state.currentUser?.email || "",
-      comment: buildOrderHistoryComment(state.initialOrderSnapshot, orderData, true),
-    });
+    const historyComments = buildOrderHistoryComments(state.initialOrderSnapshot, orderData, true);
+    if (!isNoOpOrderHistoryComments(historyComments)) {
+      queueOfflineOrderHistoryComments({
+        pending_order_local_id: localId,
+        order_temp_id: state.editingOrderId,
+        user_email: state.currentUser?.email || "",
+        comments: historyComments,
+      });
+    }
     highlightId = state.editingOrderId;
   }
 
@@ -3531,14 +3591,12 @@ export async function submitOrderForm(event) {
   });
 
   if (savedOrderId && state.currentUser?.email) {
-    const historyComment = buildOrderHistoryComment(
+    const historyComments = buildOrderHistoryComments(
       wasEditing ? state.initialOrderSnapshot : null,
       orderData,
       wasEditing
     );
-    await supabaseClient.from("order_history").insert([
-      { order_id: savedOrderId, user_email: state.currentUser.email, comment: historyComment },
-    ]);
+    await insertOrderHistoryComments(savedOrderId, historyComments);
   }
 
   await leaveOrderFormAfterSave(savedOrderId);
@@ -3803,15 +3861,11 @@ export async function createOrderFromVoicePayload(draft) {
     const tempId = nextOfflineTempOrderId();
     const displayRow = buildDisplayRowForPendingOrder(orderData, tempId, localId);
     addPendingOfflineOrder({ localId, displayRow, insertPayload });
-    addPendingOfflineOrderHistory({
-      localId:
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `hist-${Date.now()}`,
+    queueOfflineOrderHistoryComments({
       pending_order_local_id: localId,
       order_temp_id: tempId,
       user_email: state.currentUser?.email || "",
-      comment: buildOrderHistoryComment(null, orderData, false),
+      comments: buildOrderHistoryComments(null, orderData, false),
     });
     queueOrderDeltaCalculationsForOffline({
       orderTempId: tempId,
@@ -3864,13 +3918,10 @@ export async function createOrderFromVoicePayload(draft) {
   });
 
   if (savedOrderId && state.currentUser?.email) {
-    await supabaseClient.from("order_history").insert([
-      {
-        order_id: savedOrderId,
-        user_email: state.currentUser.email,
-        comment: buildOrderHistoryComment(null, orderData, false),
-      },
-    ]);
+    await insertOrderHistoryComments(
+      savedOrderId,
+      buildOrderHistoryComments(null, orderData, false)
+    );
   }
 
   await loadOrders();
@@ -4122,8 +4173,8 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
   }
 
   const prevSnapshot = cloneOrderWithoutOfflineMeta(existing);
-  const historyComment = buildOrderHistoryComment(prevSnapshot, orderData, true);
-  if (historyComment === "Сохранено без изменений") {
+  const historyComments = buildOrderHistoryComments(prevSnapshot, orderData, true);
+  if (isNoOpOrderHistoryComments(historyComments)) {
     return { ok: false, message: "Нет изменений для сохранения" };
   }
 
@@ -4148,15 +4199,11 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
     const insertPayload = insertPayloadFromFormData(orderData);
     const displayRow = buildDisplayRowForPendingOrder(orderData, idNum, localId);
     updatePendingOfflineOrder(localId, displayRow, insertPayload);
-    addPendingOfflineOrderHistory({
-      localId:
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `hist-${Date.now()}`,
+    queueOfflineOrderHistoryComments({
       pending_order_local_id: localId,
       order_temp_id: idNum,
       user_email: state.currentUser?.email || "",
-      comment: historyComment,
+      comments: historyComments,
     });
     queueOrderDeltaCalculationsForOffline({
       orderTempId: idNum,
@@ -4183,7 +4230,7 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
       orderId: idNum,
       orderData,
       prevSnapshot,
-      historyComment,
+      historyComments,
       user_email: state.currentUser?.email || "",
       changedAt,
       initialSums,
@@ -4227,7 +4274,7 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
       orderId: idNum,
       orderData,
       prevSnapshot,
-      historyComment,
+      historyComments,
       user_email: state.currentUser?.email || "",
       changedAt,
       initialSums,
@@ -4267,13 +4314,7 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
   });
 
   if (savedOrderId && state.currentUser?.email) {
-    await supabaseClient.from("order_history").insert([
-      {
-        order_id: savedOrderId,
-        user_email: state.currentUser.email,
-        comment: historyComment,
-      },
-    ]);
+    await insertOrderHistoryComments(savedOrderId, historyComments);
   }
 
   await loadOrders();

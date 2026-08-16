@@ -65,6 +65,96 @@ function toComparableNumber(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function formatExcessHistoryAmount(v) {
+  if (v == null || v === "") return "—";
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? formatAmount(n) : "—";
+}
+
+function formatExcessHistoryPaidTo(v) {
+  const t = normRecipientSelect(v);
+  return t || "—";
+}
+
+function valuesEqualExcessHistory(a, b) {
+  const sa = a == null || a === "" ? null : String(a).trim();
+  const sb = b == null || b === "" ? null : String(b).trim();
+  if (sa == null && sb == null) return true;
+  if (sa == null || sb == null) return false;
+  return sa === sb;
+}
+
+function amountsEqualExcessHistory(a, b) {
+  return Math.abs(toComparableNumber(a) - toComparableNumber(b)) < 0.000001;
+}
+
+/**
+ * Комментарии для excess_history: по одной строке на каждое изменение
+ * (как order_history / отдельные строки расчётов).
+ * @param {Record<string, unknown>|null} prev
+ * @param {Record<string, unknown>} next
+ * @param {"create"|"edit"|"delete"} mode
+ * @returns {string[]}
+ */
+function buildExcessHistoryComments(prev, next, mode) {
+  if (mode === "delete") {
+    const client = String(prev?.client ?? next?.client ?? "").trim() || "—";
+    const amount = formatExcessHistoryAmount(prev?.amount ?? next?.amount);
+    const paidTo = formatExcessHistoryPaidTo(prev?.paid_to ?? next?.paid_to);
+    return [
+      "Излишек удалён",
+      `Клиент: ${client}`,
+      `Сумма: ${amount}`,
+      `Кому: ${paidTo}`,
+    ];
+  }
+
+  if (mode === "create") {
+    const comments = ["Излишек создан"];
+    const client = String(next?.client ?? "").trim();
+    if (client) comments.push(`Клиент: — -> ${client}`);
+    if (next?.amount != null && next.amount !== "") {
+      comments.push(`Сумма: — -> ${formatExcessHistoryAmount(next.amount)}`);
+    }
+    const paidTo = formatExcessHistoryPaidTo(next?.paid_to);
+    if (paidTo !== "—") comments.push(`Кому: — -> ${paidTo}`);
+    return comments;
+  }
+
+  const parts = [];
+  const prevClient = String(prev?.client ?? "").trim();
+  const nextClient = String(next?.client ?? "").trim();
+  if (!valuesEqualExcessHistory(prevClient, nextClient)) {
+    parts.push(`Клиент: ${prevClient || "—"} -> ${nextClient || "—"}`);
+  }
+  if (!amountsEqualExcessHistory(prev?.amount, next?.amount)) {
+    parts.push(
+      `Сумма: ${formatExcessHistoryAmount(prev?.amount)} -> ${formatExcessHistoryAmount(next?.amount)}`,
+    );
+  }
+  const prevPaid = formatExcessHistoryPaidTo(prev?.paid_to);
+  const nextPaid = formatExcessHistoryPaidTo(next?.paid_to);
+  if (prevPaid !== nextPaid) {
+    parts.push(`Кому: ${prevPaid} -> ${nextPaid}`);
+  }
+  return parts.length > 0 ? parts : ["Сохранено без изменений"];
+}
+
+async function insertExcessHistoryComments(excessId, comments) {
+  const list = (comments || []).map((c) => String(c || "").trim()).filter(Boolean);
+  if (list.length === 0) return;
+  if (!state.currentUser?.email) return;
+  const rows = list.map((comment) => ({
+    excess_id: excessId != null ? excessId : null,
+    user_email: state.currentUser.email,
+    comment,
+  }));
+  const { error } = await supabaseClient.from("excess_history").insert(rows);
+  if (error) {
+    console.error("Ошибка записи истории излишков:", error);
+  }
+}
+
 function normRecipientSelect(v) {
   const t = String(v ?? "").trim();
   return t === "—" ? "" : t;
@@ -532,7 +622,8 @@ async function saveExcessRows() {
       return;
     }
 
-    for (const item of payloads) {
+    const savedRows = Array.isArray(result?.data) ? result.data : [];
+    for (const item of savedRows.length > 0 ? savedRows : payloads) {
       await writeExcessDeltaCalculations({
         wasEditing: false,
         oldAmount: 0,
@@ -541,6 +632,10 @@ async function saveExcessRows() {
         newPaidTo: item.paid_to,
         client: item.client,
       });
+      await insertExcessHistoryComments(
+        item.id ?? null,
+        buildExcessHistoryComments(null, item, "create"),
+      );
     }
 
     resetFormToEmpty();
@@ -631,6 +726,16 @@ async function saveEditedExcess() {
       newPaidTo: payload.paid_to,
       client: existing.client || row.client,
     });
+
+    const historyNext = {
+      client: existing.client || row.client,
+      amount: payload.amount,
+      paid_to: payload.paid_to,
+    };
+    const historyComments = buildExcessHistoryComments(existing, historyNext, "edit");
+    if (!(historyComments.length === 1 && historyComments[0] === "Сохранено без изменений")) {
+      await insertExcessHistoryComments(id, historyComments);
+    }
 
     resetFormToEmpty();
     setFormMessage("Изменения сохранены.");
@@ -725,6 +830,7 @@ async function deleteExcess(id) {
         newPaidTo: "",
         client: existing.client || "",
       });
+      await insertExcessHistoryComments(n, buildExcessHistoryComments(existing, existing, "delete"));
     }
 
     if (editingExcessId === n) {

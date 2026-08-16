@@ -9,6 +9,7 @@ import {
   mergeOrderTasksRowsForAllTasks,
   mergeOrderTasksRowsForOrder,
   addPendingOfflineTask,
+  addPendingOfflineOrderHistory,
   nextOfflineTempTaskId,
   isOfflineClientOrderId,
   isOfflineDataMode,
@@ -43,6 +44,21 @@ function canAccessOrderTasksByOrderId(orderId) {
   const order = state.allOrders?.find((o) => Number(o.id) === Number(orderId));
   if (!order) return !(isUserLite() || isUserShop());
   return !isOrderHiddenForCurrentRole(order);
+}
+
+async function writeTaskChangeToHistory(orderId, taskBody) {
+  if (!orderId || !taskBody) return;
+  const userEmail = state.currentUser?.email;
+  if (!userEmail) return;
+  const text = String(taskBody).trim();
+  if (!text) return;
+  const comment = `Задача: ${text}`;
+  const { error } = await supabaseClient.from("order_history").insert([
+    { order_id: orderId, user_email: userEmail, comment },
+  ]);
+  if (error) {
+    console.error("Ошибка записи задачи в историю изменений:", error);
+  }
 }
 
 /** Красная подсветка чекбокса и строк таблицы на странице «Задачи по заказу». */
@@ -310,6 +326,21 @@ export async function createOrderTask() {
       body: text,
       created_at: new Date().toISOString(),
     });
+    const orderLocalId = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId))
+      ?.__offlineLocalId;
+    if (orderLocalId) {
+      const histLocalId =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `hist-task-${Date.now()}`;
+      addPendingOfflineOrderHistory({
+        localId: histLocalId,
+        pending_order_local_id: orderLocalId,
+        order_temp_id: state.tasksOrderId,
+        user_email: state.currentUser?.email || author,
+        comment: `Задача: ${text}`,
+      });
+    }
     const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
     if (o) o.tasks_highlight = true;
     const cb = document.getElementById("orderTaskHighlightCheckbox");
@@ -330,6 +361,8 @@ export async function createOrderTask() {
       }
       return;
     }
+
+    await writeTaskChangeToHistory(state.tasksOrderId, text);
 
     const { error: hlErr } = await supabaseClient
       .from("orders")
