@@ -140,19 +140,25 @@ function buildExcessHistoryComments(prev, next, mode) {
   return parts.length > 0 ? parts : ["Сохранено без изменений"];
 }
 
-async function insertExcessHistoryComments(excessId, comments) {
+async function insertExcessHistoryComments(excessId, comments, userEmail) {
   const list = (comments || []).map((c) => String(c || "").trim()).filter(Boolean);
-  if (list.length === 0) return;
-  if (!state.currentUser?.email) return;
+  if (list.length === 0) return { ok: true };
+  const email = String(userEmail || state.currentUser?.email || "").trim();
+  if (!email) {
+    console.error("Ошибка записи истории излишков: нет email пользователя");
+    return { ok: false, error: { message: "Нет email пользователя для истории" } };
+  }
   const rows = list.map((comment) => ({
-    excess_id: excessId != null ? excessId : null,
-    user_email: state.currentUser.email,
+    excess_id: excessId != null ? Number(excessId) : null,
+    user_email: email,
     comment,
   }));
   const { error } = await supabaseClient.from("excess_history").insert(rows);
   if (error) {
     console.error("Ошибка записи истории излишков:", error);
+    return { ok: false, error };
   }
+  return { ok: true };
 }
 
 function normRecipientSelect(v) {
@@ -623,6 +629,7 @@ async function saveExcessRows() {
     }
 
     const savedRows = Array.isArray(result?.data) ? result.data : [];
+    let historyWriteFailed = false;
     for (const item of savedRows.length > 0 ? savedRows : payloads) {
       await writeExcessDeltaCalculations({
         wasEditing: false,
@@ -632,14 +639,23 @@ async function saveExcessRows() {
         newPaidTo: item.paid_to,
         client: item.client,
       });
-      await insertExcessHistoryComments(
+      const hist = await insertExcessHistoryComments(
         item.id ?? null,
         buildExcessHistoryComments(null, item, "create"),
+        item.created_by || state.currentUser?.email,
       );
+      if (!hist.ok) historyWriteFailed = true;
     }
 
     resetFormToEmpty();
-    setFormMessage(`Сохранено записей: ${payloads.length}.`);
+    if (historyWriteFailed) {
+      setFormMessage(
+        `Сохранено записей: ${payloads.length}. Внимание: не удалось записать историю для «Все изменения». Выполните supabase_excess_history_table.sql в Supabase.`,
+        true,
+      );
+    } else {
+      setFormMessage(`Сохранено записей: ${payloads.length}.`);
+    }
     await loadExcesses();
   } catch (err) {
     console.error("excesses save:", err);
@@ -734,7 +750,19 @@ async function saveEditedExcess() {
     };
     const historyComments = buildExcessHistoryComments(existing, historyNext, "edit");
     if (!(historyComments.length === 1 && historyComments[0] === "Сохранено без изменений")) {
-      await insertExcessHistoryComments(id, historyComments);
+      const hist = await insertExcessHistoryComments(
+        id,
+        historyComments,
+        payload.created_by || state.currentUser?.email,
+      );
+      if (!hist.ok) {
+        setFormMessage(
+          "Изменения сохранены, но история для «Все изменения» не записалась. Выполните supabase_excess_history_table.sql в Supabase.",
+          true,
+        );
+        await loadExcesses();
+        return;
+      }
     }
 
     resetFormToEmpty();
@@ -830,7 +858,11 @@ async function deleteExcess(id) {
         newPaidTo: "",
         client: existing.client || "",
       });
-      await insertExcessHistoryComments(n, buildExcessHistoryComments(existing, existing, "delete"));
+      await insertExcessHistoryComments(
+        n,
+        buildExcessHistoryComments(existing, existing, "delete"),
+        existing.created_by || state.currentUser?.email,
+      );
     }
 
     if (editingExcessId === n) {

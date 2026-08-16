@@ -24,3 +24,10 @@ CREATE POLICY "Authenticated can insert excess_history"
   ON public.excess_history FOR INSERT
   TO authenticated
   WITH CHECK (true);
+
+-- Права для роли authenticated (без GRANT insert может молча не писаться)
+GRANT SELECT, INSERT ON TABLE public.excess_history TO authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+
+-- Обновить кэш схемы PostgREST, чтобы API сразу видел таблицу
+NOTIFY pgrst, 'reload schema';
