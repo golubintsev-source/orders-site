@@ -139,6 +139,8 @@ export function attachFieldAutocomplete({ input, list, wrap, field, onPick, clea
   let debounceTimer = null;
   let blurTimer = null;
   let highlightedIndex = -1;
+  /** После выбора из списка не показывать подсказки, пока значение поля не изменится. */
+  let suppressUntilValueChange = null;
 
   const hide = () => {
     list.hidden = true;
@@ -148,6 +150,19 @@ export function attachFieldAutocomplete({ input, list, wrap, field, onPick, clea
 
   const clearInvalid = () => {
     if (clearInvalidClass) input.classList.remove(clearInvalidClass);
+  };
+
+  const isSuppressed = () =>
+    suppressUntilValueChange !== null && input.value === suppressUntilValueChange;
+
+  const pickSuggestion = (value) => {
+    input.value = value;
+    clearInvalid();
+    suppressUntilValueChange = value;
+    hide();
+    input.focus();
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    if (typeof onPick === "function") onPick(value);
   };
 
   const renderAndShow = (items) => {
@@ -164,12 +179,7 @@ export function attachFieldAutocomplete({ input, list, wrap, field, onPick, clea
       li.innerHTML = `<span class="client-suggestion-text">${escapeHtml(item.name)}</span><span class="client-suggestion-count" aria-label="Заказов">${item.count}</span>`;
       li.addEventListener("mousedown", (e) => {
         e.preventDefault();
-        input.value = item.name;
-        clearInvalid();
-        hide();
-        input.focus();
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        if (typeof onPick === "function") onPick(item.name);
+        pickSuggestion(item.name);
       });
       list.appendChild(li);
     });
@@ -177,6 +187,10 @@ export function attachFieldAutocomplete({ input, list, wrap, field, onPick, clea
   };
 
   const refresh = () => {
+    if (isSuppressed()) {
+      hide();
+      return;
+    }
     const q = input.value;
     if (q.trim().length < MIN_CHARS) {
       hide();
@@ -187,11 +201,19 @@ export function attachFieldAutocomplete({ input, list, wrap, field, onPick, clea
 
   const onInput = () => {
     clearInvalid();
+    if (suppressUntilValueChange !== null && input.value !== suppressUntilValueChange) {
+      suppressUntilValueChange = null;
+    }
     clearTimeout(debounceTimer);
+    if (isSuppressed()) {
+      hide();
+      return;
+    }
     debounceTimer = setTimeout(refresh, DEBOUNCE_MS);
   };
 
   const onFocus = () => {
+    if (isSuppressed()) return;
     if (input.value.trim().length >= MIN_CHARS) {
       clearTimeout(debounceTimer);
       refresh();
