@@ -2617,7 +2617,7 @@ h2 {
 #balanceTable th,
 #balanceTable td {
   padding: 3px 1px;
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -2637,10 +2637,24 @@ h2 {
   text-align: right;
 }
 
+/* Первая строка («Сейчас»): синий цвет и отступ до следующей строки */
+#balanceTable tbody tr:first-child th,
+#balanceTable tbody tr:first-child td {
+  color: #1f6feb;
+  padding-bottom: 12px;
+}
+#balanceTable tbody tr:first-child td.td-money .status-value {
+  color: #1f6feb;
+}
+#balanceTable tbody tr:nth-child(2) th,
+#balanceTable tbody tr:nth-child(2) td {
+  padding-top: 8px;
+}
+
 /* Суммы — серая подложка как «Статус» в «Заказы» */
 #balanceTable td.td-money .status-value {
   padding: 3px 6px;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 /* Сальдо на странице расчётов: без глобального min-width:900px; шрифт как у #calculationsTable */
