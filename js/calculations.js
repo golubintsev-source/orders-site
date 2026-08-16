@@ -1218,6 +1218,63 @@ async function submitForm(e) {
   await loadCalculations();
 }
 
+function formatCalcHistoryAmount(v) {
+  if (v == null || v === "") return "—";
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? formatAmount(n) : "—";
+}
+
+function formatCalcHistoryPlace(v) {
+  const t = String(v ?? "").trim();
+  return t || "—";
+}
+
+/**
+ * Комментарии для calculation_history (страница «Все изменения»).
+ * @param {Record<string, unknown>|null} prev
+ * @param {Record<string, unknown>|null} next
+ * @param {"delete"} mode
+ * @returns {string[]}
+ */
+function buildCalculationHistoryComments(prev, next, mode) {
+  if (mode !== "delete") return [];
+  const row = prev || next || {};
+  const from = formatCalcHistoryPlace(row.from_place);
+  const to = formatCalcHistoryPlace(row.to_place);
+  const amount = formatCalcHistoryAmount(row.amount);
+  const comments = [
+    "Расчёт удалён",
+    `Откуда: ${from}`,
+    `Куда: ${to}`,
+    `Сумма: ${amount}`,
+  ];
+  const comment = String(row.comment ?? "").trim();
+  if (comment) comments.push(`Комментарий: ${comment}`);
+  return comments;
+}
+
+async function insertCalculationHistoryComments(calculationId, comments, userEmail) {
+  const list = (comments || []).map((c) => String(c || "").trim()).filter(Boolean);
+  if (list.length === 0) return { ok: true };
+  ensureCurrentUserEmail();
+  const email = String(userEmail || currentUserEmail || state.currentUser?.email || "").trim();
+  if (!email) {
+    console.error("Ошибка записи истории расчётов: нет email пользователя");
+    return { ok: false, error: { message: "Нет email пользователя для истории" } };
+  }
+  const rows = list.map((comment) => ({
+    calculation_id: calculationId != null ? Number(calculationId) : null,
+    user_email: email,
+    comment,
+  }));
+  const { error } = await supabaseClient.from("calculation_history").insert(rows);
+  if (error) {
+    console.error("Ошибка записи истории расчётов:", error);
+    return { ok: false, error };
+  }
+  return { ok: true };
+}
+
 /** Запись не удаляется из БД — только выставляется deleted_at. */
 async function softDeleteCalculationRow(id) {
   if (!isAdmin()) return;
@@ -1238,6 +1295,18 @@ async function softDeleteCalculationRow(id) {
   ) {
     return;
   }
+  const existing =
+    calculationsRowsCache.find((r) => Number(r.id) === Number(id)) || null;
+  let rowForHistory = existing;
+  if (!rowForHistory) {
+    const { data: fetched, error: fetchErr } = await supabaseClient
+      .from("calculations")
+      .select("id, from_place, to_place, amount, comment")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!fetchErr && fetched) rowForHistory = fetched;
+  }
   const { error } = await supabaseClient
     .from("calculations")
     .update({ deleted_at: new Date().toISOString() })
@@ -1249,7 +1318,25 @@ async function softDeleteCalculationRow(id) {
     return;
   }
   if (editingId === id) resetForm();
-  setMessage("Запись скрыта из списка.");
+
+  let historyWriteFailed = false;
+  if (rowForHistory) {
+    const hist = await insertCalculationHistoryComments(
+      id,
+      buildCalculationHistoryComments(rowForHistory, rowForHistory, "delete"),
+      currentUserEmail || state.currentUser?.email,
+    );
+    if (!hist.ok) historyWriteFailed = true;
+  }
+
+  if (historyWriteFailed) {
+    setMessage(
+      "Запись скрыта из списка, но история для «Все изменения» не записалась. Выполните supabase_calculation_history_table.sql в Supabase.",
+      true,
+    );
+  } else {
+    setMessage("Запись скрыта из списка.");
+  }
   await loadCalculations();
 }
 

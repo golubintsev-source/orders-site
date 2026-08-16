@@ -399,6 +399,16 @@ export function persistSettingsHistorySnapshot(rows) {
   });
 }
 
+export function persistCalculationHistorySnapshot(rows) {
+  const prev = readSnapshot() || { version: SNAP_VERSION };
+  writeJson(SNAP_KEY, {
+    ...prev,
+    version: SNAP_VERSION,
+    at: new Date().toISOString(),
+    calculation_history: rows || [],
+  });
+}
+
 /* ---------- pending: orders ---------- */
 
 function readPendingOrdersDoc() {
