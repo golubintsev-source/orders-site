@@ -516,54 +516,16 @@ function renderGroupParticipantReceiptsHtml(messageCreatedAt, memberIds, receipt
   return `<span class="message-item-group-receipts">${html}</span>`;
 }
 
-function groupChatReadsStorageKey(uid = getCurrentUserId()) {
-  return uid ? `messages:groupChatReads:${uid}` : null;
-}
-
-function readGroupChatReadsLocal(uid = getCurrentUserId()) {
-  const key = groupChatReadsStorageKey(uid);
-  if (!key) return new Map();
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return new Map();
-    const parsed = JSON.parse(raw);
-    const map = new Map();
-    if (parsed && typeof parsed === "object") {
-      for (const [chatId, at] of Object.entries(parsed)) {
-        if (chatId && typeof at === "string" && at) map.set(String(chatId), at);
-      }
-    }
-    return map;
-  } catch {
-    return new Map();
-  }
-}
-
-function writeGroupChatReadsLocal(map, uid = getCurrentUserId()) {
-  const key = groupChatReadsStorageKey(uid);
-  if (!key) return;
-  const obj = {};
-  for (const [chatId, at] of map.entries()) {
-    if (chatId && at) obj[String(chatId)] = String(at);
-  }
-  try {
-    localStorage.setItem(key, JSON.stringify(obj));
-  } catch {
-    /* ignore quota / private mode */
-  }
-}
-
 function mergeLaterReadAt(a, b) {
   if (!a) return b || null;
   if (!b) return a;
   return a >= b ? a : b;
 }
 
-/** last_read_at по chat_id: сервер + localStorage (берём более поздний). */
+/** last_read_at по chat_id: только сервер (Supabase). */
 async function fetchGroupChatReads(chatIds) {
   const uid = getCurrentUserId();
-  const local = readGroupChatReadsLocal(uid);
-  const result = new Map(local);
+  const result = new Map();
   if (!uid || !chatIds?.length) return result;
 
   if (groupChatReadsSupported === false) return result;
@@ -585,30 +547,23 @@ async function fetchGroupChatReads(chatIds) {
     const chatId = String(row.chat_id);
     const at = row.last_read_at ? String(row.last_read_at) : null;
     if (!chatId || !at) continue;
-    result.set(chatId, mergeLaterReadAt(result.get(chatId), at));
+    result.set(chatId, at);
   }
-  writeGroupChatReadsLocal(result, uid);
   return result;
 }
 
 async function markGroupChatRead(chatId, at = new Date().toISOString()) {
   const uid = getCurrentUserId();
   if (!uid || !chatId) return;
-
-  const local = readGroupChatReadsLocal(uid);
-  const nextAt = mergeLaterReadAt(local.get(String(chatId)), at) || at;
-  local.set(String(chatId), nextAt);
-  writeGroupChatReadsLocal(local, uid);
-
   if (groupChatReadsSupported === false) return;
 
   const payload = {
     chat_id: chatId,
     user_id: uid,
-    last_read_at: nextAt,
+    last_read_at: at,
   };
   if (groupDeliveredAtSupported !== false) {
-    payload.last_delivered_at = nextAt;
+    payload.last_delivered_at = at;
   }
 
   const { error } = await supabaseClient.from("group_chat_reads").upsert(payload, {
@@ -622,7 +577,7 @@ async function markGroupChatRead(chatId, at = new Date().toISOString()) {
         {
           chat_id: chatId,
           user_id: uid,
-          last_read_at: nextAt,
+          last_read_at: at,
         },
         { onConflict: "chat_id,user_id" },
       );

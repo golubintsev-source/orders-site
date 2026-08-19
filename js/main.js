@@ -3,8 +3,6 @@ import { state } from "./state.js";
 import { bindUIEvents, toggleOrderRowHighlightById } from "./ui.js";
 import {
   loadOrders,
-  paintOrdersFromSessionCacheIfAny,
-  paintOrdersFromLocalCacheIfAny,
   resetFormMode,
   editOrder,
   viewOrder,
@@ -203,9 +201,6 @@ async function init() {
     }
 
     hydrateCachedRoleFromStorage();
-    paintOrdersFromSessionCacheIfAny();
-    // Холодный старт PWA (iOS часто чистит sessionStorage) — мгновенная таблица из localStorage.
-    paintOrdersFromLocalCacheIfAny();
 
     const ordersPromise = loadOrders();
 
@@ -219,10 +214,17 @@ async function init() {
     applyRouteOnLoad();
     ensurePopstateRouting();
 
-    await ordersPromise;
+    const sectionNow = getCurrentSectionId();
+    const savedApp = readSavedPlaceForCurrentPage(user.id)?.app;
+    const skipAwaitOrders = sectionNow === "messages" || savedApp?.sectionId === "messages";
+    if (!skipAwaitOrders) {
+      await ordersPromise;
+    } else {
+      // Для страницы сообщений не блокируем рендер ожиданием загрузки orders — она нужна лишь для компоновщика/фильтров.
+      void ordersPromise;
+    }
 
     const orderIdFromUrl = getOrderIdFromUrl();
-    const savedApp = readSavedPlaceForCurrentPage(user.id)?.app;
     const savedOnOrderForm = savedApp?.sectionId == null || savedApp?.sectionId === "new";
     const restoringOrderForm =
       orderIdFromUrl != null ||
@@ -235,10 +237,7 @@ async function init() {
     applyPendingOrdersSearchFromHistory();
 
     // Не блокируем открытие заказа/restore на загрузке messages/voice/route-sheet.
-    const sectionNow = getCurrentSectionId();
     const waitSecondary =
-      sectionNow === "messages" ||
-      sectionNow === "voice" ||
       sectionNow === "order-tasks" ||
       sectionNow === "tasks-all" ||
       sectionNow === "calculations" ||
@@ -249,9 +248,7 @@ async function init() {
       sectionNow === "statistics-balance" ||
       sectionNow === "manager-salary" ||
       sectionNow === "balance" ||
-      savedApp?.sectionId === "order-tasks" ||
-      savedApp?.sectionId === "messages" ||
-      savedApp?.sectionId === "voice";
+      savedApp?.sectionId === "order-tasks";
     if (waitSecondary) {
       await initSecondarySections({ urgent: true });
     } else {

@@ -100,12 +100,6 @@ function mergedLocalOrdersForOfflineDisplay() {
   return mergedLocalOrdersForOfflineDisplayMeta().rows;
 }
 
-const SESSION_ORDERS_CACHE_KEY = "orders_site_session_orders_v1";
-const SESSION_FILES_COUNT_CACHE_KEY = "orders_site_session_files_count_v1";
-/** Долгоживущий кэш для мгновенного открытия PWA после убийства WebView (iOS). */
-const LOCAL_ORDERS_CACHE_KEY = "orders_site_local_orders_v1";
-const LOCAL_FILES_COUNT_CACHE_KEY = "orders_site_local_files_count_v1";
-
 /** 7 и +7 → 8 в phone (отображение и последующее сохранение). */
 function normalizeOrdersPhones(orders) {
   if (!Array.isArray(orders)) return orders;
@@ -115,21 +109,6 @@ function normalizeOrdersPhones(orders) {
     if (!phone || phone === o.phone) return o;
     return { ...o, phone };
   });
-}
-
-function persistOrdersSessionCache(orders, filesCountMap) {
-  try {
-    sessionStorage.setItem(SESSION_ORDERS_CACHE_KEY, JSON.stringify(orders));
-    sessionStorage.setItem(SESSION_FILES_COUNT_CACHE_KEY, JSON.stringify(filesCountMap || {}));
-  } catch {
-    /* ignore quota */
-  }
-  try {
-    localStorage.setItem(LOCAL_ORDERS_CACHE_KEY, JSON.stringify(orders));
-    localStorage.setItem(LOCAL_FILES_COUNT_CACHE_KEY, JSON.stringify(filesCountMap || {}));
-  } catch {
-    /* ignore quota */
-  }
 }
 
 function paintOrdersFromCacheRaw(ordersRaw, filesCountRaw) {
@@ -143,36 +122,10 @@ function paintOrdersFromCacheRaw(ordersRaw, filesCountRaw) {
   return true;
 }
 
-/** Мгновенная отрисовка таблицы из sessionStorage (stale-while-revalidate). */
-export function paintOrdersFromSessionCacheIfAny() {
-  try {
-    paintOrdersFromCacheRaw(
-      sessionStorage.getItem(SESSION_ORDERS_CACHE_KEY),
-      sessionStorage.getItem(SESSION_FILES_COUNT_CACHE_KEY),
-    );
-  } catch {
-    /* ignore */
-  }
-}
-
-/** Мгновенная отрисовка после холодного старта PWA, если sessionStorage пуст. */
-export function paintOrdersFromLocalCacheIfAny() {
-  if (state.allOrders?.length) return;
-  try {
-    paintOrdersFromCacheRaw(
-      localStorage.getItem(LOCAL_ORDERS_CACHE_KEY),
-      localStorage.getItem(LOCAL_FILES_COUNT_CACHE_KEY),
-    );
-  } catch {
-    /* ignore */
-  }
-}
-
 function refreshFilesCountMapInBackground() {
   void loadFilesCountMap().then(() => {
     if (!state.allOrders.length) return;
     applyFiltersAndRender();
-    persistOrdersSessionCache(state.allOrders, state.filesCountMap);
   });
 }
 
@@ -341,9 +294,6 @@ function commitOrdersToUi(rawOrders, { persistCache = true } = {}) {
   applyFiltersAndRender();
   updateSectionNavRicherStat();
   refreshOrdersDependentSections();
-  if (persistCache) {
-    persistOrdersSessionCache(state.allOrders, state.filesCountMap);
-  }
   refreshFilesCountMapInBackground();
 }
 
