@@ -189,7 +189,13 @@ export async function ensureTaskExecutorsInList(listEl, hintEl) {
 }
 
 /** @returns {Promise<{ error: Error | null }>} */
-export async function insertTask({ body, executorEmails, dueAt }) {
+export async function insertTask({
+  body,
+  executorEmails,
+  dueAt,
+  sourceMessageId,
+  sourceMessageKind,
+}) {
   if (!state.currentUser) {
     return { error: new Error("not authenticated") };
   }
@@ -206,6 +212,8 @@ export async function insertTask({ body, executorEmails, dueAt }) {
     executor_emails: Array.isArray(executorEmails) ? executorEmails : [],
     due_at: dueAt || null,
     is_completed: false,
+    source_message_id: sourceMessageId ?? null,
+    source_message_kind: sourceMessageKind || null,
   };
 
   if (isOfflineDataMode()) {
@@ -221,6 +229,8 @@ export async function insertTask({ body, executorEmails, dueAt }) {
       executor_emails: payload.executor_emails,
       due_at: payload.due_at,
       is_completed: false,
+      source_message_id: payload.source_message_id,
+      source_message_kind: payload.source_message_kind,
       created_at: new Date().toISOString(),
     });
     return { error: null };

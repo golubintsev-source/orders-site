@@ -639,6 +639,8 @@ export function addPendingOfflineTask({
   executor_emails,
   due_at,
   is_completed,
+  source_message_id,
+  source_message_kind,
 }) {
   const items = readPendingTasksQueue();
   items.push({
@@ -649,9 +651,15 @@ export function addPendingOfflineTask({
     executor_emails: Array.isArray(executor_emails) ? executor_emails : [],
     due_at: due_at || null,
     is_completed: is_completed === true,
+    source_message_id: source_message_id ?? null,
+    source_message_kind: source_message_kind || null,
     created_at: created_at || new Date().toISOString(),
   });
   writePendingTasksItems(items);
+}
+
+export function readPendingTasksQueueForMessageLinks() {
+  return readPendingTasksQueue();
 }
 
 export function updatePendingTaskCompleted(localId, isCompleted) {
@@ -680,6 +688,8 @@ export function pendingTaskDisplayRows() {
     executor_emails: Array.isArray(t.executor_emails) ? t.executor_emails : [],
     due_at: t.due_at || null,
     is_completed: t.is_completed === true,
+    source_message_id: t.source_message_id ?? null,
+    source_message_kind: t.source_message_kind || null,
     created_at: t.created_at,
     __offlinePendingSync: true,
     __offlineLocalId: t.localId,
@@ -869,6 +879,8 @@ async function syncPendingTasksToSupabase() {
       executor_emails: Array.isArray(t.executor_emails) ? t.executor_emails : [],
       due_at: t.due_at || null,
       is_completed: t.is_completed === true,
+      source_message_id: t.source_message_id ?? null,
+      source_message_kind: t.source_message_kind || null,
     });
     if (error) {
       console.error("offline sync task:", error);

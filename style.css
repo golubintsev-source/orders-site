@@ -7637,6 +7637,11 @@ th {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
 }
 
+.message-item--has-active-task {
+  border-top: 4px solid #dc2626;
+  padding-top: 4px;
+}
+
 .message-item--flash {
   animation: message-item-flash 1.2s ease;
 }

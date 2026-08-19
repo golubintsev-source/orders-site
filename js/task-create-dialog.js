@@ -8,6 +8,12 @@ import {
 } from "./task-form-shared.js";
 
 let dialogInited = false;
+/** @type {{ id: string | number, kind: string } | null} */
+let pendingSourceMessage = null;
+
+function clearPendingSourceMessage() {
+  pendingSourceMessage = null;
+}
 
 function getDialogEls() {
   return {
@@ -42,6 +48,7 @@ function resetDialogForm() {
   if (dueInput) dueInput.value = defaultTaskDueAtLocal();
   resetTaskExecutorsList(executorsList);
   setDialogError("");
+  clearPendingSourceMessage();
 }
 
 function closeTaskCreateDialog() {
@@ -65,7 +72,14 @@ async function submitTaskCreateDialog() {
 
   const executorEmails = getSelectedExecutorEmailsFrom(executorsList);
   const dueAt = datetimeLocalToIso(dueInput?.value);
-  const { error } = await insertTask({ body: text, executorEmails, dueAt });
+  const source = pendingSourceMessage;
+  const { error } = await insertTask({
+    body: text,
+    executorEmails,
+    dueAt,
+    sourceMessageId: source?.id ?? null,
+    sourceMessageKind: source?.kind ?? null,
+  });
 
   if (submitBtn) submitBtn.disabled = false;
 
@@ -83,11 +97,27 @@ async function submitTaskCreateDialog() {
     void m.loadAllTasks();
     void m.refreshMyTasksNavBadge();
   });
+  if (source?.id != null && source?.kind) {
+    void import("./message-task-links.js").then((m) => {
+      m.addActiveTaskMessageRef(source.kind, source.id);
+      m.applyMessageTaskHighlightsInFeed();
+    });
+  }
+  clearPendingSourceMessage();
 }
 
-export async function openTaskCreateDialog({ body = "" } = {}) {
+export async function openTaskCreateDialog({
+  body = "",
+  sourceMessageId = null,
+  sourceMessageKind = null,
+} = {}) {
   const { dialog, textInput, dueInput, executorsList, executorsHint } = getDialogEls();
   if (!dialog) return;
+
+  pendingSourceMessage =
+    sourceMessageId != null && sourceMessageKind
+      ? { id: sourceMessageId, kind: sourceMessageKind }
+      : null;
 
   await ensureTaskExecutorsInList(executorsList, executorsHint);
 

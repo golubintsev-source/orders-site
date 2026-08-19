@@ -12,6 +12,7 @@ import {
   uploadChatPhoto,
 } from "./files.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { messageHasActiveTask } from "./message-task-links.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 /** Максимальная высота поля ввода сообщения (как в CSS max-height). */
@@ -1170,8 +1171,10 @@ function renderMessageItem(row) {
     ? `<div class="message-item-body message-item-body-text">${bodyHtml}</div>`
     : "";
   const ownAttr = isOut ? ' data-own="1"' : ' data-own="0"';
+  const messageKind = isGroupChat() ? "group" : "user";
+  const taskClass = messageHasActiveTask(messageKind, row.id) ? " message-item--has-active-task" : "";
   return `
-    <article class="${messageItemClass(row)}" data-message-id="${row.id}"${statusAttr}${ownAttr}>
+    <article class="${messageItemClass(row)}${taskClass}" data-message-id="${row.id}" data-message-kind="${messageKind}"${statusAttr}${ownAttr}>
       ${headerHtml}
       ${replyHtml}
       ${attachmentHtml}
@@ -2374,6 +2377,8 @@ export async function loadMessages() {
 
     clearFeedMessageCache();
     rememberFeedMessages(rows);
+
+    await import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
 
     if (isGroupChat()) {
       const groupId = parseGroupId();
@@ -3831,8 +3836,15 @@ function runMessageAction(action, messageId) {
   if (action === "create-task") {
     const text = getMessageCopyText(row);
     if (!text) return false;
+    const messageKind = isGroupChat() ? "group" : "user";
     queueMicrotask(() => {
-      void import("./task-create-dialog.js").then((m) => m.openTaskCreateDialog({ body: text }));
+      void import("./task-create-dialog.js").then((m) =>
+        m.openTaskCreateDialog({
+          body: text,
+          sourceMessageId: row.id,
+          sourceMessageKind: messageKind,
+        }),
+      );
     });
     return true;
   }

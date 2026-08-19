@@ -226,6 +226,7 @@ async function onTaskCompletedCheckboxChange(checkbox) {
   await loadOrderTasks();
   void loadAllTasks();
   void refreshMyTasksNavBadge();
+  void import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
 }
 
 function bindTaskCompletedCheckboxDelegation(root) {
@@ -369,6 +370,7 @@ export async function createOrderTask() {
   await loadOrderTasks();
   void loadAllTasks();
   void refreshMyTasksNavBadge();
+  void import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
 }
 
 const MY_TASKS_BADGE_POLL_MS = 60_000;
