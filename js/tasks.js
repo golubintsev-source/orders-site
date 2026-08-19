@@ -6,14 +6,18 @@ import {
   formatTaskExecutors,
 } from "./format.js";
 import { displayNameByEmail } from "./user-names.js";
-import { loadUsersDirectory } from "./users-directory.js";
+import {
+  defaultTaskDueAtLocal,
+  datetimeLocalToIso,
+  ensureTaskExecutorsInList,
+  getSelectedExecutorEmailsFrom,
+  insertTask,
+  resetTaskExecutorsList,
+} from "./task-form-shared.js";
 import {
   persistOrderTasksSnapshot,
   mergeOrderTasksRowsForAllTasks,
-  addPendingOfflineTask,
   updatePendingTaskCompleted,
-  nextOfflineTempTaskId,
-  isOfflineDataMode,
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 
@@ -27,28 +31,6 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
-function pad2(n) {
-  return String(n).padStart(2, "0");
-}
-
-function toDatetimeLocalValue(d) {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-
-function defaultTaskDueAtLocal() {
-  const d = new Date();
-  d.setHours(d.getHours() + 3);
-  return toDatetimeLocalValue(d);
-}
-
-function datetimeLocalToIso(value) {
-  const trimmed = String(value || "").trim();
-  if (!trimmed) return null;
-  const d = new Date(trimmed);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
 function normalizeExecutorEmails(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) {
@@ -59,17 +41,6 @@ function normalizeExecutorEmails(raw) {
 
 function getCurrentUserEmail() {
   return (state.currentUser?.email || "").trim().toLowerCase();
-}
-
-function getAuthorLogin() {
-  const u = state.currentUser;
-  if (!u) return "—";
-  const email = (u.email || "").trim();
-  if (email) return email;
-  const meta = u.user_metadata || {};
-  if (meta.preferred_username) return String(meta.preferred_username).trim();
-  if (meta.name) return String(meta.name).trim();
-  return String(u.id || "—");
 }
 
 /** Задача доступна только автору или исполнителю. */
@@ -110,77 +81,17 @@ function resetTaskFormDefaults() {
   if (dueInput && !dueInput.disabled) {
     dueInput.value = defaultTaskDueAtLocal();
   }
-  const list = document.getElementById("orderTaskExecutorsList");
-  if (list) {
-    list.querySelectorAll(".order-tasks-executor-option").forEach((btn) => {
-      btn.setAttribute("aria-checked", "false");
-      const mark = btn.querySelector(".order-tasks-executor-checkbox");
-      if (mark) mark.classList.remove("order-tasks-executor-checkbox--checked");
-    });
-  }
+  resetTaskExecutorsList(document.getElementById("orderTaskExecutorsList"));
 }
 
 function getSelectedExecutorEmails() {
-  const list = document.getElementById("orderTaskExecutorsList");
-  if (!list) return [];
-  const emails = [];
-  list.querySelectorAll(".order-tasks-executor-option[aria-checked='true']").forEach((btn) => {
-    const email = btn.getAttribute("data-email");
-    if (email) emails.push(email);
-  });
-  return emails;
-}
-
-function renderOrderTaskExecutorsList(users) {
-  const list = document.getElementById("orderTaskExecutorsList");
-  const hint = document.getElementById("orderTaskExecutorsHint");
-  if (!list) return;
-
-  if (!users.length) {
-    list.innerHTML = "";
-    if (hint) {
-      hint.textContent = "Нет пользователей для выбора.";
-      hint.hidden = false;
-    }
-    return;
-  }
-
-  if (hint) hint.hidden = true;
-
-  list.innerHTML = users
-    .map(
-      (user) => `
-    <button
-      type="button"
-      class="order-tasks-executor-option"
-      role="checkbox"
-      aria-checked="false"
-      data-email="${escapeHtml(user.email)}"
-    >
-      <span class="order-tasks-executor-checkbox" aria-hidden="true"></span>
-      <span class="order-tasks-executor-name">${escapeHtml(displayNameByEmail(user.email))}</span>
-    </button>
-  `,
-    )
-    .join("");
-
-  list.querySelectorAll(".order-tasks-executor-option").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.disabled) return;
-      const on = btn.getAttribute("aria-checked") !== "true";
-      btn.setAttribute("aria-checked", on ? "true" : "false");
-      const mark = btn.querySelector(".order-tasks-executor-checkbox");
-      if (mark) mark.classList.toggle("order-tasks-executor-checkbox--checked", on);
-    });
-  });
+  return getSelectedExecutorEmailsFrom(document.getElementById("orderTaskExecutorsList"));
 }
 
 async function ensureOrderTaskExecutorsLoaded() {
   const list = document.getElementById("orderTaskExecutorsList");
-  if (!list || list.dataset.loaded === "1") return;
-  const users = await loadUsersDirectory();
-  renderOrderTaskExecutorsList(users);
-  list.dataset.loaded = "1";
+  const hint = document.getElementById("orderTaskExecutorsHint");
+  await ensureTaskExecutorsInList(list, hint);
 }
 
 function renderCompletedCheckboxCell(row) {
@@ -391,44 +302,17 @@ export async function createOrderTask() {
     return;
   }
 
-  const author = getAuthorLogin();
   const executorEmails = getSelectedExecutorEmails();
   const dueAt = datetimeLocalToIso(dueInput?.value);
+  const { error } = await insertTask({ body: text, executorEmails, dueAt });
 
-  const taskPayload = {
-    author_login: author,
-    body: text,
-    executor_emails: executorEmails,
-    due_at: dueAt,
-    is_completed: false,
-  };
-
-  if (isOfflineDataMode()) {
-    const localId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `task-${Date.now()}`;
-    addPendingOfflineTask({
-      localId,
-      tempTaskId: nextOfflineTempTaskId(),
-      author_login: author,
-      body: text,
-      executor_emails: executorEmails,
-      due_at: dueAt,
-      is_completed: false,
-      created_at: new Date().toISOString(),
-    });
-  } else {
-    const { error } = await supabaseClient.from("order_tasks").insert(taskPayload);
-
-    if (error) {
-      console.error("Ошибка создания задачи:", error);
-      if (msg) {
-        msg.textContent = "Не удалось сохранить задачу.";
-        msg.classList.add("order-tasks-message--error");
-      }
-      return;
+  if (error) {
+    console.error("Ошибка создания задачи:", error);
+    if (msg) {
+      msg.textContent = "Не удалось сохранить задачу.";
+      msg.classList.add("order-tasks-message--error");
     }
+    return;
   }
 
   input.value = "";

@@ -1053,6 +1053,54 @@
           </div>
         </dialog>
 
+        <dialog
+          id="taskCreateDialog"
+          class="task-create-dialog"
+          aria-labelledby="taskCreateDialogTitle"
+        >
+          <div class="task-create-dialog-panel">
+            <div class="task-create-dialog-header">
+              <h3 id="taskCreateDialogTitle" class="task-create-dialog-title">Новая задача</h3>
+              <button
+                type="button"
+                id="taskCreateDialogCloseBtn"
+                class="task-create-dialog-close"
+                aria-label="Закрыть"
+                title="Закрыть"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <label class="task-create-dialog-field">
+              <span class="task-create-dialog-label">Текст задачи</span>
+              <textarea
+                id="taskCreateDialogText"
+                class="task-create-dialog-text"
+                rows="3"
+                autocomplete="off"
+              ></textarea>
+            </label>
+            <div class="task-create-dialog-field">
+              <span class="task-create-dialog-label">Исполнители</span>
+              <div id="taskCreateDialogExecutors" class="order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>
+              <p id="taskCreateDialogExecutorsHint" class="order-tasks-executors-hint">Загрузка пользователей…</p>
+            </div>
+            <label class="task-create-dialog-field">
+              <span class="task-create-dialog-label">Срок выполнения</span>
+              <input type="datetime-local" id="taskCreateDialogDueAt" class="order-tasks-due-input task-create-dialog-due" />
+              <p class="order-tasks-due-hint">По умолчанию — через 3 часа. Очистите поле, если срок не нужен.</p>
+            </label>
+            <p id="taskCreateDialogError" class="task-create-dialog-error" hidden></p>
+            <div class="task-create-dialog-actions">
+              <button type="button" id="taskCreateDialogSubmitBtn" class="btn-primary task-create-dialog-submit">Создать</button>
+              <button type="button" id="taskCreateDialogCancelBtn" class="task-create-dialog-cancel">Отменить</button>
+            </div>
+          </div>
+        </dialog>
+
         <div id="messagesDialogView" class="messages-dialog-view" hidden>
           <header class="messages-dialog-header">
             <button
@@ -1141,6 +1189,7 @@
           >
             <button type="button" class="messages-action-menu-item" data-action="reply" role="menuitem">Ответить</button>
             <button type="button" class="messages-action-menu-item" data-action="copy" role="menuitem">Копировать</button>
+            <button type="button" class="messages-action-menu-item" data-action="create-task" role="menuitem">Создать задачу</button>
             <button type="button" class="messages-action-menu-item" data-action="edit" role="menuitem">Изменить</button>
             <button type="button" class="messages-action-menu-item" data-action="attach-to-order" role="menuitem" hidden>Прикрепить к заказу</button>
             <button type="button" class="messages-action-menu-item messages-action-menu-item--danger" data-action="delete" role="menuitem">Удалить</button>

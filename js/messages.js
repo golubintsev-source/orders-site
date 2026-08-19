@@ -3441,11 +3441,13 @@ function showMessageActionMenu(messageEl, clientX, clientY, { fromPhoto = false 
 
   const replyBtn = menu.querySelector('[data-action="reply"]');
   const copyBtn = menu.querySelector('[data-action="copy"]');
+  const createTaskBtn = menu.querySelector('[data-action="create-task"]');
   const editBtn = menu.querySelector('[data-action="edit"]');
   const attachBtn = menu.querySelector('[data-action="attach-to-order"]');
   const deleteBtn = menu.querySelector('[data-action="delete"]');
   if (replyBtn) replyBtn.hidden = false;
   if (copyBtn) copyBtn.hidden = !getMessageCopyText(row);
+  if (createTaskBtn) createTaskBtn.hidden = !getMessageCopyText(row);
   if (editBtn) editBtn.hidden = !isOwn;
   if (attachBtn) attachBtn.hidden = !(actionMenuFromPhoto && messageHasAttachment(row));
   if (deleteBtn) deleteBtn.hidden = !isOwn;
@@ -3824,6 +3826,14 @@ function runMessageAction(action, messageId) {
   }
   if (action === "copy") {
     void copyMessageText(row);
+    return true;
+  }
+  if (action === "create-task") {
+    const text = getMessageCopyText(row);
+    if (!text) return false;
+    queueMicrotask(() => {
+      void import("./task-create-dialog.js").then((m) => m.openTaskCreateDialog({ body: text }));
+    });
     return true;
   }
   if (action === "edit") {

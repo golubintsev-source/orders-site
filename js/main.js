@@ -110,6 +110,7 @@ async function initSecondarySections(opts = {}) {
       { initStatisticsBalanceSection },
       { initPushNotifications },
       { initMessagesSection },
+      { initTaskCreateDialog },
       { initVoiceSection },
       { initManagerSalarySection, loadManagerSalary },
     ] = await Promise.all([
@@ -122,12 +123,14 @@ async function initSecondarySections(opts = {}) {
       import("./statistics-balance.js"),
       import("./push-notifications.js"),
       import("./messages.js"),
+      import("./task-create-dialog.js"),
       import("./voice.js"),
       import("./manager-salary.js"),
     ]);
 
     void initPushNotifications();
     initOrderTasksSection();
+    initTaskCreateDialog();
     initMessagesSection();
     initVoiceSection();
     initManagerSalarySection();
