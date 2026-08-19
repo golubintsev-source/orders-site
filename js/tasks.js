@@ -2,8 +2,8 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import {
   formatTaskDateRu,
-  formatTaskAuthorShort,
   formatTaskExecutors,
+  formatOrderIdTypeChip,
 } from "./format.js";
 import { displayNameByEmail } from "./user-names.js";
 import {
@@ -22,12 +22,13 @@ import {
 import {
   persistOrderTasksSnapshot,
   mergeOrderTasksRowsForAllTasks,
+  mergeOrderTasksRowsForOrder,
   updatePendingTaskCompleted,
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 
 const TASK_SELECT_FIELDS =
-  "id, created_at, author_login, body, due_at, executor_emails, is_completed";
+  "id, created_at, author_login, body, due_at, executor_emails, is_completed, order_id";
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -42,16 +43,27 @@ function isActiveTask(row) {
   return row.is_completed !== true && row.is_completed !== 1 && row.is_completed !== "1";
 }
 
-function filterVisibleActiveTasks(rows) {
-  return (rows || []).filter((row) => canUserAccessTask(row) && isActiveTask(row));
-}
-
 function filterMyExecutorTasks(rows) {
   return (rows || []).filter((row) => isUserExecutorOfTask(row));
 }
 
 function filterMyAuthorTasks(rows) {
   return (rows || []).filter((row) => isUserAuthorOfTask(row));
+}
+
+function isStandaloneTask(row) {
+  const id = row?.order_id;
+  return id == null || id === "" || !Number.isFinite(Number(id)) || Number(id) <= 0;
+}
+
+function filterStandaloneTasks(rows) {
+  return (rows || []).filter((row) => isStandaloneTask(row));
+}
+
+function filterTasksForOrder(rows, orderId) {
+  const oid = Number(orderId);
+  if (!Number.isFinite(oid) || oid <= 0) return [];
+  return (rows || []).filter((row) => Number(row.order_id) === oid);
 }
 
 function sortTasksByDueAt(rows) {
@@ -142,6 +154,47 @@ async function fetchAllTasksFromServer() {
   return { data, error };
 }
 
+async function fetchTasksForOrderFromServer(orderId) {
+  const oid = Number(orderId);
+  if (!Number.isFinite(oid) || oid <= 0) {
+    return { data: [], error: null };
+  }
+  const { data, error } = await fetchAllSupabaseRows(() =>
+    supabaseClient.from("order_tasks").select(TASK_SELECT_FIELDS).eq("order_id", oid),
+  );
+  return { data, error };
+}
+
+function setOrderTasksPageTitle(orderId) {
+  const titleEl = document.getElementById("orderTasksPageTitle");
+  if (!titleEl) return;
+  const oid = Number(orderId);
+  if (!Number.isFinite(oid) || oid <= 0) {
+    titleEl.textContent = "Задачи заказа";
+    return;
+  }
+  const order = state.allOrders?.find((o) => Number(o.id) === oid);
+  const chip = formatOrderIdTypeChip(oid, order?.order_type) || `#${oid}`;
+  titleEl.textContent = `Задачи заказа ${chip}`;
+}
+
+function renderOrderTasksTables(merged, orderId, { executorMsg, authorMsg, executorTbody, authorTbody }) {
+  const forOrder = filterTasksForOrder(merged, orderId);
+  const executorRows = sortTasksByDueAt(filterMyExecutorTasks(forOrder));
+  const authorRows = sortTasksByDueAt(filterMyAuthorTasks(forOrder));
+
+  executorTbody.innerHTML = executorRows.map((row) => renderMyTasksRow(row)).join("");
+  authorTbody.innerHTML = authorRows.map((row) => renderMyAuthorTasksRow(row)).join("");
+
+  if (executorMsg) {
+    executorMsg.textContent =
+      executorRows.length === 0 ? "Нет задач по этому заказу, где вы исполнитель." : "";
+  }
+  if (authorMsg) {
+    authorMsg.textContent = authorRows.length === 0 ? "Нет задач по этому заказу, где вы автор." : "";
+  }
+}
+
 function setTaskFormDisabled(disabled) {
   const createBtn = document.getElementById("orderTaskCreateBtn");
   const textInput = document.getElementById("orderTaskTextInput");
@@ -176,53 +229,6 @@ async function ensureMyTasksExecutorsLoaded() {
 }
 
 export { ensureMyTasksExecutorsLoaded as ensureOrderTaskExecutorsLoaded };
-
-function renderCompletedCheckboxCell(row) {
-  const canToggle = canUserCompleteTask(row);
-  const checked = !isActiveTask(row);
-  const taskId = row.id != null ? String(row.id) : "";
-  const offlineLocalId = row.__offlineLocalId ? String(row.__offlineLocalId) : "";
-  return `
-    <td class="order-tasks-completed-cell">
-      <label class="order-tasks-completed-label">
-        <input
-          type="checkbox"
-          class="order-tasks-completed-cb"
-          data-task-id="${escapeHtml(taskId)}"
-          data-offline-local-id="${escapeHtml(offlineLocalId)}"
-          ${checked ? "checked" : ""}
-          ${canToggle ? "" : "disabled"}
-        />
-        <span class="order-tasks-completed-text">Выполнена</span>
-      </label>
-    </td>
-  `;
-}
-
-function renderTaskTableRowCells(row) {
-  const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
-  const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
-  return `
-      <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
-      <td>${escapeHtml(formatTaskAuthorShort(row.author_login))}</td>
-      <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
-      <td>${escapeHtml(due)}</td>
-      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
-      ${renderCompletedCheckboxCell(row)}
-  `;
-}
-
-async function fetchActiveTasksFromServer() {
-  const { data, error } = await fetchAllSupabaseRows(() =>
-    supabaseClient
-      .from("order_tasks")
-      .select(TASK_SELECT_FIELDS)
-      .eq("is_completed", false)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false }),
-  );
-  return { data, error };
-}
 
 async function setTaskCompleted(taskId, offlineLocalId, completed) {
   if (offlineLocalId) {
@@ -315,7 +321,7 @@ export async function loadAllTasks() {
   const baseRows = data || [];
   if (!error && data) persistOrderTasksSnapshot(data);
 
-  const merged = mergeOrderTasksRowsForAllTasks(baseRows);
+  const merged = filterStandaloneTasks(mergeOrderTasksRowsForAllTasks(baseRows));
   const executorRows = sortTasksByDueAt(filterMyExecutorTasks(merged));
   const authorRows = sortTasksByDueAt(filterMyAuthorTasks(merged));
 
@@ -323,59 +329,76 @@ export async function loadAllTasks() {
   authorTbody.innerHTML = authorRows.map((row) => renderMyAuthorTasksRow(row)).join("");
 
   if (executorRows.length === 0 && executorMsg) {
-    executorMsg.textContent = "Нет задач, где вы исполнитель.";
+    executorMsg.textContent = "Нет задач без привязки к заказу, где вы исполнитель.";
   }
   if (authorRows.length === 0 && authorMsg) {
-    authorMsg.textContent = "Нет задач, где вы автор.";
+    authorMsg.textContent = "Нет задач без привязки к заказу, где вы автор.";
   }
 
   void refreshMyTasksNavBadge();
 }
 
 export async function loadOrderTasks() {
-  const tbody = document.querySelector("#orderTasksTable tbody");
-  const msg = document.getElementById("orderTasksMessage");
-  if (!tbody) return;
+  const executorTbody = document.querySelector("#orderTasksExecutorTable tbody");
+  const authorTbody = document.querySelector("#orderTasksAuthorTable tbody");
+  const executorMsg = document.getElementById("orderTasksExecutorMessage");
+  const authorMsg = document.getElementById("orderTasksAuthorMessage");
+  if (!executorTbody || !authorTbody) return;
 
-  if (!state.currentUser) {
-    tbody.innerHTML = "";
+  const orderId = state.tasksOrderId;
+  setOrderTasksPageTitle(orderId);
+
+  for (const msg of [executorMsg, authorMsg]) {
     if (msg) {
-      msg.textContent = "Войдите в систему, чтобы работать с задачами.";
+      msg.textContent = "";
       msg.classList.remove("order-tasks-message--error");
     }
+  }
+
+  if (!state.currentUser) {
+    executorTbody.innerHTML = "";
+    authorTbody.innerHTML = "";
+    const text = "Войдите в систему, чтобы видеть задачи.";
+    if (executorMsg) executorMsg.textContent = text;
     return;
   }
 
-  if (msg) msg.textContent = "";
+  const oid = Number(orderId);
+  if (!Number.isFinite(oid) || oid <= 0) {
+    executorTbody.innerHTML = "";
+    authorTbody.innerHTML = "";
+    const text = "Откройте задачи через меню номера заказа.";
+    if (executorMsg) executorMsg.textContent = text;
+    return;
+  }
 
-  const { data, error } = await fetchActiveTasksFromServer();
+  const { data, error } = await fetchTasksForOrderFromServer(oid);
 
   if (error) {
-    console.error("Ошибка загрузки задач:", error);
-    if (msg) {
-      msg.textContent = "Ошибка загрузки задач.";
-      msg.classList.add("order-tasks-message--error");
+    console.error("Ошибка загрузки задач заказа:", error);
+    const errText = "Ошибка загрузки задач.";
+    if (executorMsg) {
+      executorMsg.textContent = errText;
+      executorMsg.classList.add("order-tasks-message--error");
     }
-    tbody.innerHTML = "";
+    if (authorMsg) {
+      authorMsg.textContent = errText;
+      authorMsg.classList.add("order-tasks-message--error");
+    }
+    executorTbody.innerHTML = "";
+    authorTbody.innerHTML = "";
     return;
   }
 
-  if (msg) msg.classList.remove("order-tasks-message--error");
+  const merged = mergeOrderTasksRowsForOrder(data || [], oid);
+  renderOrderTasksTables(merged, oid, {
+    executorTbody,
+    authorTbody,
+    executorMsg,
+    authorMsg,
+  });
 
-  const rows = filterVisibleActiveTasks(mergeOrderTasksRowsForAllTasks(data || []));
-  tbody.innerHTML = rows
-    .map(
-      (row) => `
-    <tr class="${row.__offlinePendingSync ? "tr-order-offline-pending" : ""}">
-      ${renderTaskTableRowCells(row)}
-    </tr>
-  `,
-    )
-    .join("");
-
-  if (rows.length === 0 && msg) {
-    msg.textContent = "Нет актуальных задач.";
-  }
+  void refreshMyTasksNavBadge();
 }
 
 export async function createOrderTask() {
@@ -497,7 +520,8 @@ export function initOrderTasksSection() {
   startMyTasksBadgePolling();
   void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
 
-  bindTaskCompletedCheckboxDelegation(document.getElementById("orderTasksTable"));
+  bindTaskCompletedCheckboxDelegation(document.getElementById("orderTasksExecutorTable"));
+  bindTaskCompletedCheckboxDelegation(document.getElementById("orderTasksAuthorTable"));
   bindTaskCompletedCheckboxDelegation(document.getElementById("allTasksTable"));
   bindTaskCompletedCheckboxDelegation(document.getElementById("myAuthorTasksTable"));
 }

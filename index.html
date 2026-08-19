@@ -969,22 +969,40 @@
 
     <section id="section-order-tasks" class="content-section">
       <div class="card order-tasks-card">
+        <h2 id="orderTasksPageTitle" class="order-tasks-page-title"></h2>
+
+        <h3 class="my-tasks-block-title">Где я исполнитель</h3>
         <div class="table-wrap">
-          <table id="orderTasksTable">
+          <table id="orderTasksExecutorTable">
             <thead>
               <tr>
-                <th>Дата время</th>
                 <th>Автор</th>
                 <th>Исполнители</th>
                 <th>Срок</th>
+                <th>Статус</th>
                 <th>Текст</th>
-                <th>Выполнена</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
-        <p id="orderTasksMessage" class="order-tasks-hint"></p>
+        <p id="orderTasksExecutorMessage" class="order-tasks-hint"></p>
+
+        <h3 class="my-tasks-block-title">Где я автор</h3>
+        <div class="table-wrap">
+          <table id="orderTasksAuthorTable">
+            <thead>
+              <tr>
+                <th>Исполнители</th>
+                <th>Срок</th>
+                <th>Статус</th>
+                <th>Текст</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="orderTasksAuthorMessage" class="order-tasks-hint"></p>
       </div>
     </section>
 

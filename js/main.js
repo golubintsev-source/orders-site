@@ -385,8 +385,8 @@ async function restoreSavedAppContext(userId) {
 
   if (app.sectionId === "order-tasks" && app.tasksOrderId != null) {
     state.tasksOrderId = app.tasksOrderId;
-    switchSection("tasks-all", { skipUrlSync: true });
-    await import("./tasks.js").then((m) => m.loadAllTasks());
+    switchSection("order-tasks", { skipUrlSync: true });
+    await import("./tasks.js").then((m) => m.loadOrderTasks());
     scheduleSaveUserPlace();
     return;
   }

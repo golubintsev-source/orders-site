@@ -181,6 +181,9 @@ function refreshOrdersDependentSections() {
   if (getCurrentSectionId() === "tasks-all") {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadAllTasks());
+  } else if (getCurrentSectionId() === "order-tasks") {
+    refreshSectionNavLabel();
+    void import("./tasks.js").then((m) => m.loadOrderTasks());
   } else if (getCurrentSectionId() === "changes-all") {
     void import("./all-changes.js").then((m) => m.loadAllChanges());
   } else if (getCurrentSectionId() === "route-sheet") {

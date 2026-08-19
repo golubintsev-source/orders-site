@@ -99,7 +99,7 @@ async function submitTaskCreateDialog() {
 
   void import("./tasks.js").then((m) => {
     void m.loadAllTasks();
-    void m.loadAllTasks();
+    if (sourceOrderId != null) void m.loadOrderTasks();
     void m.refreshMyTasksNavBadge();
   });
   if (source?.id != null && source?.kind) {

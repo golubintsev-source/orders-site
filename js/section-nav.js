@@ -317,9 +317,8 @@ function toggleSectionNavDropdown() {
  */
 export function switchSection(sectionId, opts = {}) {
   if (!sectionId) return;
-  if (sectionId === "order-tasks") {
-    switchSection("tasks-all", opts);
-    return;
+  if (sectionId === "tasks-all") {
+    state.tasksOrderId = null;
   }
   if (!canAccessSection(sectionId)) {
     sectionId = "all";
@@ -372,6 +371,10 @@ export function switchSection(sectionId, opts = {}) {
       m.loadAllTasks();
       void m.ensureOrderTaskExecutorsLoaded();
     });
+    void import("./push-notifications.js").then((m) => m.clearPushBadge());
+  }
+  if (sectionId === "order-tasks") {
+    void import("./tasks.js").then((m) => m.loadOrderTasks());
     void import("./push-notifications.js").then((m) => m.clearPushBadge());
   }
   if (sectionId === "changes-all") {

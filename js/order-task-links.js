@@ -1,5 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { readPendingTasksQueueForMessageLinks } from "./offline-cache.js";
+import { isUserAuthorOfTask, isUserExecutorOfTask } from "./task-form-shared.js";
 
 /** @type {Set<number>} */
 const activeTaskOrderIds = new Set();
@@ -19,10 +20,16 @@ export function removeActiveTaskOrderRef(orderId) {
   if (Number.isFinite(id) && id > 0) activeTaskOrderIds.delete(id);
 }
 
+function isActiveTaskRow(row) {
+  return row && row.is_completed !== true && row.is_completed !== 1 && row.is_completed !== "1";
+}
+
+function isMyActiveOrderTask(row) {
+  return isActiveTaskRow(row) && (isUserAuthorOfTask(row) || isUserExecutorOfTask(row));
+}
+
 function ingestTaskRow(row) {
-  if (!row || row.is_completed === true || row.is_completed === 1 || row.is_completed === "1") {
-    return;
-  }
+  if (!isMyActiveOrderTask(row)) return;
   const id = Number(row.order_id);
   if (!Number.isFinite(id) || id <= 0) return;
   activeTaskOrderIds.add(id);
@@ -42,7 +49,7 @@ export async function refreshActiveTaskOrderRefs(root = document) {
 
   const { data, error } = await supabaseClient
     .from("order_tasks")
-    .select("order_id, is_completed")
+    .select("order_id, is_completed, author_login, executor_emails")
     .not("order_id", "is", null)
     .eq("is_completed", false);
 

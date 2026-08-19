@@ -1007,7 +1007,8 @@ export function bindUIEvents() {
         window.editOrder?.(id);
       } else if (action === "tasks") {
         closeOrderIdActionsMenu();
-        switchSection("tasks-all");
+        state.tasksOrderId = id;
+        switchSection("order-tasks");
       } else if (action === "files") {
         closeOrderIdActionsMenu();
         window.openFilesModal?.(id);

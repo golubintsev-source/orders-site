@@ -2090,6 +2090,54 @@ h2 {
   margin-top: 8px;
 }
 
+.order-tasks-page-title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+#orderTasksExecutorTable,
+#orderTasksAuthorTable {
+  min-width: 320px;
+}
+#orderTasksExecutorTable tbody tr.my-tasks-row,
+#orderTasksAuthorTable tbody tr.my-tasks-row {
+  cursor: default;
+}
+#orderTasksExecutorTable th,
+#orderTasksExecutorTable td,
+#orderTasksAuthorTable th,
+#orderTasksAuthorTable td {
+  padding: 8px 10px;
+  font-size: 13px;
+  vertical-align: top;
+}
+#orderTasksExecutorTable .order-tasks-text-cell,
+#orderTasksAuthorTable .order-tasks-text-cell {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 420px;
+}
+#orderTasksExecutorTable tbody tr.my-tasks-row--pending,
+#orderTasksAuthorTable tbody tr.my-tasks-row--pending {
+  background-color: #fecaca;
+  color: #450a0a;
+}
+#orderTasksExecutorTable tbody tr.my-tasks-row--pending:hover,
+#orderTasksAuthorTable tbody tr.my-tasks-row--pending:hover {
+  background-color: #fca5a5;
+}
+#orderTasksExecutorTable tbody tr.my-tasks-row--completed,
+#orderTasksAuthorTable tbody tr.my-tasks-row--completed {
+  background-color: #e5e7eb;
+  color: #6b7280;
+}
+#orderTasksExecutorTable tbody tr.my-tasks-row--completed:hover,
+#orderTasksAuthorTable tbody tr.my-tasks-row--completed:hover {
+  background-color: #d1d5db;
+}
+
 .my-tasks-status-cell {
   white-space: nowrap;
 }
