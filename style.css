@@ -2490,6 +2490,76 @@ h2 {
   margin-bottom: 14px;
   max-width: 640px;
 }
+.order-tasks-executors-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  width: 100%;
+}
+.order-tasks-executor-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  color: #374151;
+}
+.order-tasks-executor-option:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+.order-tasks-executor-option:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.order-tasks-executor-checkbox {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1.5px solid #9ca3af;
+  border-radius: 4px;
+  background: #fff;
+  position: relative;
+}
+.order-tasks-executor-checkbox--checked {
+  border-color: #1f6feb;
+  background: #1f6feb;
+}
+.order-tasks-executor-checkbox--checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.order-tasks-executor-name {
+  white-space: nowrap;
+}
+.order-tasks-executors-hint,
+.order-tasks-due-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+.order-tasks-due-input {
+  max-width: 280px;
+}
+.order-tasks-executors-cell {
+  white-space: normal;
+  min-width: 80px;
+  max-width: 160px;
+}
 .order-tasks-form-stack .order-tasks-field {
   width: 100%;
   flex: none;

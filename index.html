@@ -843,6 +843,8 @@
                 <th>Заказ</th>
                 <th>Дата время</th>
                 <th>Автор</th>
+                <th>Исполнители</th>
+                <th>Срок</th>
                 <th>Текст</th>
               </tr>
             </thead>
@@ -922,6 +924,16 @@
               <button type="button" id="orderTaskCreateBtn" class="btn-primary order-tasks-create-btn">Создать</button>
             </div>
           </div>
+          <div class="field order-tasks-field">
+            <label>Исполнители</label>
+            <div id="orderTaskExecutorsList" class="order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>
+            <p id="orderTaskExecutorsHint" class="order-tasks-executors-hint">Загрузка пользователей…</p>
+          </div>
+          <div class="field order-tasks-field">
+            <label for="orderTaskDueAtInput">Срок выполнения</label>
+            <input type="datetime-local" id="orderTaskDueAtInput" class="order-tasks-due-input" />
+            <p class="order-tasks-due-hint">По умолчанию — через 3 часа. Очистите поле, если срок не нужен.</p>
+          </div>
           <label class="order-tasks-highlight-label">
             <input type="checkbox" id="orderTaskHighlightCheckbox" />
             <span>Выделить</span>
@@ -933,6 +945,8 @@
               <tr>
                 <th>Дата время</th>
                 <th>Автор</th>
+                <th>Исполнители</th>
+                <th>Срок</th>
                 <th>Текст</th>
               </tr>
             </thead>

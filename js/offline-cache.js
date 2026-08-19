@@ -630,7 +630,16 @@ function writePendingTasksItems(items) {
   writeJson(PENDING_TASKS_KEY, { version: PENDING_VERSION, items });
 }
 
-export function addPendingOfflineTask({ localId, tempTaskId, order_id, author_login, body, created_at }) {
+export function addPendingOfflineTask({
+  localId,
+  tempTaskId,
+  order_id,
+  author_login,
+  body,
+  created_at,
+  executor_emails,
+  due_at,
+}) {
   const items = readPendingTasksQueue();
   items.push({
     localId,
@@ -638,6 +647,8 @@ export function addPendingOfflineTask({ localId, tempTaskId, order_id, author_lo
     order_id,
     author_login,
     body,
+    executor_emails: Array.isArray(executor_emails) ? executor_emails : [],
+    due_at: due_at || null,
     created_at: created_at || new Date().toISOString(),
   });
   writePendingTasksItems(items);
@@ -653,6 +664,8 @@ export function pendingTaskDisplayRows() {
     order_id: t.order_id,
     author_login: t.author_login,
     body: t.body,
+    executor_emails: Array.isArray(t.executor_emails) ? t.executor_emails : [],
+    due_at: t.due_at || null,
     created_at: t.created_at,
     __offlinePendingSync: true,
     __offlineLocalId: t.localId,
@@ -845,6 +858,8 @@ async function syncPendingTasksToSupabase(negOrderIdToServerId) {
       order_id: sid,
       author_login: t.author_login,
       body: t.body,
+      executor_emails: Array.isArray(t.executor_emails) ? t.executor_emails : [],
+      due_at: t.due_at || null,
     });
     if (error) {
       console.error("offline sync task:", error);
