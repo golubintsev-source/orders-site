@@ -1,11 +1,14 @@
 /* eslint-disable no-restricted-globals */
 /**
  * Service worker: push/badge + кэш статики (JS/CSS/иконки) для быстрого открытия PWA.
- * HTML — network-first (чтобы не залипать на старой оболочке).
+ * HTML и JS — stale-while-revalidate: оболочка рисуется из кэша без сетевого round-trip,
+ * свежая версия подтягивается в фоне и применяется со следующего запуска. Раньше HTML был
+ * network-first, и на iPhone каждый холодный старт PWA ждал сеть до первого пикселя
+ * (плюс это давало рассинхрон: свежий HTML со скриптами из кэша).
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-const STATIC_CACHE = "orders-site-static-v18";
+const STATIC_CACHE = "orders-site-static-v19";
 const BADGE_COUNT_KEY = "/badge-count";
 
 const LEGACY_CACHE_PREFIXES = ["orders-site-static-"];
@@ -14,6 +17,8 @@ const PRECACHE_URLS = [
   "/",
   "/index.html",
   "/style.css",
+  "/js/chat-boot.js",
+  "/js/vendor/supabase.js",
   "/js/boot-route.js",
   "/js/main.js",
   "/js/config.js",
@@ -29,6 +34,11 @@ const PRECACHE_URLS = [
   "/js/files.js",
   "/js/manager-salary.js",
   "/js/register-sw.js",
+  // Раздел «Чаты» открывают чаще всего — держим его модули готовыми к первому кадру.
+  "/js/messages.js",
+  "/js/format.js",
+  "/js/user-names.js",
+  "/js/supabase-fetch.js",
   "/manifest.webmanifest",
   "/img/icon-192.png?v=20260803",
 ];
@@ -116,48 +126,81 @@ async function staleWhileRevalidate(request) {
   return new Response("Offline", { status: 503, statusText: "Offline" });
 }
 
-/** JS — network-first: иначе HTML уже новый, а модуль из кэша → колонки «плывут». */
-async function networkFirstStatic(request) {
+/** Пути, которые vercel.json переписывает на index.html (см. rewrites). */
+const APP_SHELL_PATHS = new Set([
+  "/",
+  "/all",
+  "/new",
+  "/calculations",
+  "/excess",
+  "/tasks-all",
+  "/changes-all",
+  "/balance",
+  "/manager-salary",
+  "/route-sheet",
+  "/settings",
+  "/statistics",
+  "/statistics-balance",
+  "/order-tasks",
+  "/messages",
+  "/voice",
+]);
+
+/** Отдельные страницы (login.html, history.html…) — не оболочка SPA. */
+function isAppShellNavigation(url) {
+  let p = url.pathname.replace(/\/index\.html$/i, "") || "/";
+  if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
+  return APP_SHELL_PATHS.has(p);
+}
+
+/**
+ * Оболочка приложения. Все её маршруты отдают один и тот же index.html,
+ * поэтому кэш-ключ общий — иначе каждый раздел ждал бы собственный ответ сети.
+ */
+async function staleWhileRevalidateShell(request) {
   const cache = await caches.open(STATIC_CACHE);
-  try {
-    const res = await fetch(request, { cache: "no-cache" });
-    if (res && res.ok) {
-      void cache.put(request, res.clone());
-    }
-    return res;
-  } catch {
-    const cached = await cache.match(request);
-    if (cached) return cached;
-    return new Response("Offline", { status: 503, statusText: "Offline" });
+  const cached = (await cache.match("/index.html")) || (await cache.match("/"));
+
+  const networkPromise = fetch(request)
+    .then((res) => {
+      if (res && res.ok) {
+        void cache.put("/", res.clone());
+        void cache.put("/index.html", res.clone());
+      }
+      return res;
+    })
+    .catch(() => null);
+
+  if (cached) {
+    void networkPromise;
+    return cached;
   }
+
+  const network = await networkPromise;
+  if (network) return network;
+  return offlineNavigationResponse();
 }
 
-function isJsAsset(url) {
-  return url.pathname.startsWith("/js/") || url.pathname.endsWith(".js");
-}
-
+/** Остальные HTML-страницы остаются network-first: они открываются редко. */
 async function networkFirstNavigate(request) {
   const cache = await caches.open(STATIC_CACHE);
   try {
     const res = await fetch(request);
-    if (res && res.ok) {
-      // Кладём оболочку под стабильные ключи.
-      void cache.put("/", res.clone());
-      void cache.put("/index.html", res.clone());
-    }
+    if (res && res.ok) void cache.put(request, res.clone());
     return res;
   } catch {
-    const fallback =
-      (await cache.match(request)) ||
-      (await cache.match("/index.html")) ||
-      (await cache.match("/"));
+    const fallback = await cache.match(request);
     if (fallback) return fallback;
-    return new Response("Нет сети", {
-      status: 503,
-      statusText: "Offline",
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    });
+    return offlineNavigationResponse();
   }
+}
+
+function offlineNavigationResponse() {
+  return new Response("Нет сети", {
+    status: 503,
+    statusText: "Offline",
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
 }
 
 self.addEventListener("fetch", (event) => {
@@ -180,7 +223,9 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isNavigationRequest(request)) {
-    event.respondWith(networkFirstNavigate(request));
+    event.respondWith(
+      isAppShellNavigation(url) ? staleWhileRevalidateShell(request) : networkFirstNavigate(request),
+    );
   }
 });
 
