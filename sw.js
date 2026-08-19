@@ -173,7 +173,9 @@ self.addEventListener("fetch", (event) => {
   if (!isSameOrigin(url) || isApiPath(url.pathname)) return;
 
   if (isStaticAsset(url)) {
-    event.respondWith(isJsAsset(url) ? networkFirstStatic(request) : staleWhileRevalidate(request));
+    // JS в PWA: не ждём сеть при нестабильном соединении (особенно на iOS/WebView),
+    // иначе динамические import'ы могут "залипать" до таймаутов браузера.
+    event.respondWith(staleWhileRevalidate(request));
     return;
   }
 

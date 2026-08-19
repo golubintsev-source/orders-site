@@ -1,13 +1,8 @@
 const { createClient } = window.supabase;
 
-/**
- * Режим офлайн-работы отключён по умолчанию (только сервер).
- * Включение: window.__OFFLINE_WORK_MODE_ENABLED__ = true до загрузки модулей.
- */
 export function isOfflineWorkModeEnabled() {
-  if (typeof window !== "undefined" && typeof window.__OFFLINE_WORK_MODE_ENABLED__ === "boolean") {
-    return window.__OFFLINE_WORK_MODE_ENABLED__;
-  }
+  // Жёстко отключено: приложение работает только с сервером/БД.
+  // (Раньше могла быть ручная активация через window.__OFFLINE_WORK_MODE_ENABLED__.)
   return false;
 }
 
