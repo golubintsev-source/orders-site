@@ -22,6 +22,8 @@ const FEED_POLL_MS = 15_000;
 const CHAT_LIST_POLL_MS = 20_000;
 /** Сколько недавних DM тянуть для превью списка чатов (не всю историю). */
 const CHAT_LIST_DM_PREVIEW_LIMIT = 800;
+/** Первый проход списка чатов: только недавние DM за MESSAGES_FAST_LOAD_DAYS. */
+const CHAT_LIST_FAST_PREVIEW_LIMIT = 200;
 /** Сколько последних сообщений диалога грузить сразу. */
 const DIALOG_MESSAGE_LIMIT = 400;
 /** Первая отрисовка списка/диалога: только сообщения за последние N дней. */
@@ -153,6 +155,16 @@ function withMessageActionColumns(base) {
 function messageSelectColumns() {
   const base = deliveredAtSupported === false ? MESSAGE_SELECT_BASIC : MESSAGE_SELECT_WITH_DELIVERED;
   return withMessageActionColumns(withAttachmentColumns(base));
+}
+
+/** Лёгкий набор колонок для превью в списке чатов (без вложений и метаданных ответов). */
+function chatListPreviewSelectColumns() {
+  const base =
+    deliveredAtSupported === false ? MESSAGE_SELECT_BASIC : MESSAGE_SELECT_WITH_DELIVERED;
+  let cols = base;
+  if (messageActionsSupported !== false) cols += ", deleted_at";
+  if (attachmentColumnsSupported !== false) cols += ", attachment_storage_path";
+  return cols;
 }
 
 function noteDeliveredAtSupport(error) {
@@ -1265,7 +1277,7 @@ async function fetchRecentUserMessagesForChatList({ sinceIso = null, limit = CHA
   const uid = getCurrentUserId();
   if (!uid) return { rows: [], error: null };
 
-  const { rows, error } = await fetchUserMessagesQuery((cols) => {
+  const runQuery = (cols) => {
     let q = supabaseClient
       .from("user_messages")
       .select(cols)
@@ -1274,10 +1286,33 @@ async function fetchRecentUserMessagesForChatList({ sinceIso = null, limit = CHA
       .limit(limit);
     if (sinceIso) q = q.gte("created_at", sinceIso);
     return q;
-  });
-  if (error) return { rows, error };
+  };
+
+  let cols = chatListPreviewSelectColumns();
+  let { data, error } = await runQuery(cols);
+
+  if (error && noteMessageActionsSupport(error)) {
+    cols = chatListPreviewSelectColumns();
+    ({ data, error } = await runQuery(cols));
+  }
+
+  if (error && noteAttachmentSupport(error)) {
+    cols = chatListPreviewSelectColumns();
+    ({ data, error } = await runQuery(cols));
+  }
+
+  if (error && noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
+    cols = chatListPreviewSelectColumns();
+    ({ data, error } = await runQuery(cols));
+  } else if (!error) {
+    deliveredAtSupported = deliveredAtSupported !== false;
+    if (attachmentColumnsSupported !== false) attachmentColumnsSupported = true;
+    if (messageActionsSupported !== false) messageActionsSupported = true;
+  }
+
+  if (error) return { rows: [], error };
   // buildChatListEntries ожидает хронологию; reverse дешёвый на ≤800 строк.
-  return { rows: rows.slice().reverse(), error: null };
+  return { rows: (data || []).slice().reverse(), error: null };
 }
 
 /** Только непрочитанные входящие — точный unread без полной истории. */
@@ -1285,7 +1320,7 @@ async function fetchUnreadIncomingDmMeta() {
   const uid = getCurrentUserId();
   if (!uid) return { rows: [], error: null };
 
-  let select = "id, sender_id, recipient_id, read_at";
+  let select = "sender_id, sender_email";
   if (messageActionsSupported !== false) select += ", deleted_at";
 
   const buildQuery = () => {
@@ -1303,10 +1338,11 @@ async function fetchUnreadIncomingDmMeta() {
 
   let { data, error } = await fetchAllSupabaseRows(buildQuery);
   if (error && noteMessageActionsSupport(error)) {
+    select = "sender_id, sender_email";
     ({ data, error } = await fetchAllSupabaseRows(() =>
       supabaseClient
         .from("user_messages")
-        .select("id, sender_id, recipient_id, read_at")
+        .select(select)
         .eq("recipient_id", uid)
         .is("read_at", null)
         .order("id", { ascending: true }),
@@ -1418,118 +1454,140 @@ async function fetchGroupMessages(chatId, { sinceIso = null, limit = DIALOG_MESS
   return { rows: (data || []).slice().reverse(), error: null };
 }
 
-/** Последнее сообщение по каждому чату — по 1 запросу с limit, без выгрузки всей истории. */
+/** Последнее сообщение по каждому чату — один batch-запрос вместо N+1. */
 async function fetchLastGroupMessagesByChat(chatIds) {
   if (!chatIds?.length || groupChatsSupported === false) {
     return { lastByChat: new Map() };
   }
 
   const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
+  let select =
+    messageActionsSupported !== false
+      ? `${selectBase}, deleted_at, attachment_storage_path`
+      : `${selectBase}, attachment_storage_path`;
+  const limit = Math.min(Math.max(chatIds.length * 4, 40), 400);
+
+  async function run(sel) {
+    return supabaseClient
+      .from("group_messages")
+      .select(sel)
+      .in("chat_id", chatIds)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+  }
+
+  let { data, error } = await run(select);
+
+  if (error && noteMessageActionsSupport(error)) {
+    select = `${selectBase}, attachment_storage_path`;
+    ({ data, error } = await run(select));
+  }
+
+  if (error && noteAttachmentSupport(error)) {
+    select = selectBase;
+    if (messageActionsSupported !== false) select += ", deleted_at";
+    ({ data, error } = await run(select));
+  }
+
+  if (error) {
+    if (noteGroupChatsSupport(error)) return { lastByChat: new Map() };
+    console.warn("Ошибка загрузки последних сообщений групп:", error);
+    return { lastByChat: new Map() };
+  }
+
+  groupChatsSupported = true;
+  if (attachmentColumnsSupported !== false) attachmentColumnsSupported = true;
+  if (messageActionsSupported !== false) messageActionsSupported = true;
+
   const lastByChat = new Map();
-
-  await Promise.all(
-    chatIds.map(async (chatId) => {
-      let select = withMessageActionColumns(withAttachmentColumns(selectBase));
-      let { data, error } = await supabaseClient
-        .from("group_messages")
-        .select(select)
-        .eq("chat_id", chatId)
-        .order("created_at", { ascending: false })
-        .limit(8);
-
-      if (error && noteMessageActionsSupport(error)) {
-        select = withMessageActionColumns(withAttachmentColumns(selectBase));
-        ({ data, error } = await supabaseClient
-          .from("group_messages")
-          .select(select)
-          .eq("chat_id", chatId)
-          .order("created_at", { ascending: false })
-          .limit(8));
-      }
-
-      if (error && noteAttachmentDimensionSupport(error)) {
-        select = withMessageActionColumns(withAttachmentColumns(selectBase));
-        ({ data, error } = await supabaseClient
-          .from("group_messages")
-          .select(select)
-          .eq("chat_id", chatId)
-          .order("created_at", { ascending: false })
-          .limit(8));
-      }
-
-      if (error && noteAttachmentSupport(error)) {
-        select = withMessageActionColumns(withAttachmentColumns(selectBase));
-        ({ data, error } = await supabaseClient
-          .from("group_messages")
-          .select(select)
-          .eq("chat_id", chatId)
-          .order("created_at", { ascending: false })
-          .limit(8));
-      }
-
-      if (error) {
-        if (noteGroupChatsSupport(error)) return;
-        console.warn("Ошибка загрузки последнего сообщения группы:", error);
-        return;
-      }
-
-      groupChatsSupported = true;
-      if (attachmentColumnsSupported !== false) attachmentColumnsSupported = true;
-      if (messageActionsSupported !== false) messageActionsSupported = true;
-
-      const row = (data || []).find((r) => !isMessageDeleted(r));
-      if (row) lastByChat.set(String(chatId), row);
-    }),
-  );
+  for (const row of data || []) {
+    const chatId = String(row.chat_id);
+    if (lastByChat.has(chatId)) continue;
+    if (isMessageDeleted(row)) continue;
+    lastByChat.set(chatId, row);
+  }
 
   return { lastByChat };
 }
 
-/** Точный unread групп через count (без тел сообщений). */
+/** Точный unread групп — один batch-запрос вместо N count-запросов. */
 async function fetchGroupUnreadCounts(chatIds, uid, lastReadByChat) {
   const unreadByChat = new Map();
   if (!chatIds?.length || groupChatsSupported === false || !uid) return unreadByChat;
 
-  await Promise.all(
-    chatIds.map(async (chatId) => {
-      let query = supabaseClient
-        .from("group_messages")
-        .select("id", { count: "exact", head: true })
-        .eq("chat_id", chatId)
-        .neq("sender_id", uid);
-      if (messageActionsSupported !== false) {
-        query = query.is("deleted_at", null);
-      }
-      const lastRead = lastReadByChat?.get(String(chatId)) || lastReadByChat?.get(chatId);
-      if (lastRead) {
-        query = query.gt("created_at", lastRead);
-      }
+  for (const chatId of chatIds) {
+    unreadByChat.set(String(chatId), 0);
+  }
 
-      let { count, error } = await query;
-      if (error && noteMessageActionsSupport(error)) {
-        query = supabaseClient
-          .from("group_messages")
-          .select("id", { count: "exact", head: true })
-          .eq("chat_id", chatId)
-          .neq("sender_id", uid);
-        if (lastRead) query = query.gt("created_at", lastRead);
-        ({ count, error } = await query);
-      }
-      if (error) {
-        if (!noteGroupChatsSupport(error)) {
-          console.warn("Ошибка подсчёта непрочитанных группы:", error);
-        }
-        unreadByChat.set(String(chatId), 0);
-        return;
-      }
-      unreadByChat.set(String(chatId), count || 0);
-    }),
-  );
+  let select = "id, chat_id, created_at, sender_id";
+  if (messageActionsSupported !== false) select += ", deleted_at";
+
+  let query = supabaseClient
+    .from("group_messages")
+    .select(select)
+    .in("chat_id", chatIds)
+    .neq("sender_id", uid);
+
+  let minLastRead = null;
+  for (const chatId of chatIds) {
+    const lastRead = lastReadByChat?.get(String(chatId)) || lastReadByChat?.get(chatId);
+    if (lastRead && (!minLastRead || lastRead < minLastRead)) {
+      minLastRead = lastRead;
+    }
+  }
+  if (minLastRead) {
+    query = query.gt("created_at", minLastRead);
+  }
+
+  let { data, error } = await query;
+
+  if (error && noteMessageActionsSupport(error)) {
+    select = "id, chat_id, created_at, sender_id";
+    query = supabaseClient
+      .from("group_messages")
+      .select(select)
+      .in("chat_id", chatIds)
+      .neq("sender_id", uid);
+    if (minLastRead) query = query.gt("created_at", minLastRead);
+    ({ data, error } = await query);
+  }
+
+  if (error) {
+    if (!noteGroupChatsSupport(error)) {
+      console.warn("Ошибка подсчёта непрочитанных группы:", error);
+    }
+    return unreadByChat;
+  }
+
+  for (const row of data || []) {
+    if (isMessageDeleted(row)) continue;
+    const chatId = String(row.chat_id);
+    const lastRead = lastReadByChat?.get(chatId);
+    if (lastRead && row.created_at <= lastRead) continue;
+    unreadByChat.set(chatId, (unreadByChat.get(chatId) || 0) + 1);
+  }
 
   return unreadByChat;
 }
 
-function buildChatListEntries(users, rows, groupChats, lastGroupMessages, groupUnreadByChat, dmUnreadByPeer) {
+function buildPeerInfoMap(rows, unreadRows, uid) {
+  const map = new Map();
+  for (const row of rows || []) {
+    const peerId = peerIdFromMessage(row, uid);
+    if (!peerId || map.has(peerId)) continue;
+    const isOut = String(row.sender_id) === String(uid);
+    const email = (isOut ? row.recipient_email : row.sender_email) || "";
+    map.set(peerId, { id: peerId, email });
+  }
+  for (const row of unreadRows || []) {
+    const peerId = String(row.sender_id || "");
+    if (!peerId || map.has(peerId)) continue;
+    map.set(peerId, { id: peerId, email: row.sender_email || "" });
+  }
+  return map;
+}
+
+function buildChatListEntries(peerInfo, rows, groupChats, lastGroupMessages, groupUnreadByChat, dmUnreadByPeer) {
   const uid = getCurrentUserId();
   const byPeer = new Map();
 
@@ -1548,27 +1606,32 @@ function buildChatListEntries(users, rows, groupChats, lastGroupMessages, groupU
     }
   }
 
-  const others = (users || []).filter((u) => String(u.id) !== String(uid));
-  const userEntries = others.map((user) => {
-    const peerKey = String(user.id);
+  const activePeerIds = new Set([...byPeer.keys(), ...(dmUnreadByPeer ? dmUnreadByPeer.keys() : [])]);
+  const userEntries = [];
+  for (const peerKey of activePeerIds) {
+    const info = peerInfo.get(peerKey);
     const bucket = byPeer.get(peerKey);
     const last = bucket?.last || null;
     const unreadCount = dmUnreadByPeer
       ? dmUnreadByPeer.get(peerKey) || 0
-      : (bucket?.messages || []).filter(
-          (m) => String(m.recipient_id) === String(uid) && !m.read_at
-        ).length;
-    const name = displayNameByEmail(user.email) || user.email || "—";
-    return {
+      : (bucket?.messages || []).filter((m) => String(m.recipient_id) === String(uid) && !m.read_at)
+          .length;
+    let email = info?.email || "";
+    if (!email && last) {
+      const isOut = String(last.sender_id) === String(uid);
+      email = (isOut ? last.recipient_email : last.sender_email) || "";
+    }
+    const name = displayNameByEmail(email) || email || "—";
+    userEntries.push({
       peerId: peerKey,
       kind: "user",
       name,
-      email: user.email,
+      email,
       unreadCount,
       last,
       sortAt: last?.created_at || "",
-    };
-  });
+    });
+  }
 
   const groupEntries = (groupChats || []).map((chat) => {
     const unreadCount = groupUnreadByChat?.get(chat.id) || 0;
@@ -1709,13 +1772,14 @@ async function preloadGroupAvatarUrls(groupChats) {
   await Promise.all(urls.map((url) => preloadImageUrl(url, groupAvatarImageReady)));
 }
 
-async function preloadChatListAvatars(groupChats, users) {
-  const uid = getCurrentUserId();
+async function preloadChatListAvatarsForEntries(entries) {
+  const groupChats = (entries || [])
+    .filter((entry) => entry.kind === "group" && entry.avatarStoragePath)
+    .map((entry) => ({ avatarStoragePath: entry.avatarStoragePath }));
   const staticUrls = new Set();
-  for (const user of users || []) {
-    if (String(user.id) === String(uid)) continue;
-    const name = displayNameByEmail(user.email) || user.email || "";
-    const logoUrl = avatarLogoUrl({ email: user.email, name });
+  for (const entry of entries || []) {
+    if (entry.kind !== "user") continue;
+    const logoUrl = avatarLogoUrl({ email: entry.email, name: entry.name });
     if (logoUrl) staticUrls.add(logoUrl);
   }
   await Promise.all([
@@ -1964,9 +2028,10 @@ function buildDmUnreadByPeer(unreadRows) {
   return dmUnreadByPeer;
 }
 
-async function paintChatListFromData(list, users, rows, unreadRows, groupChats) {
+async function paintChatListFromData(list, rows, unreadRows, groupChats) {
   const uid = getCurrentUserId();
   const dmUnreadByPeer = buildDmUnreadByPeer(unreadRows);
+  const peerInfo = buildPeerInfoMap(rows, unreadRows, uid);
   const chatIds = (groupChats || []).map((chat) => chat.id);
   const [{ lastByChat: lastGroupMessages }, lastReadByChat, groupReceiptsByChat] = await Promise.all([
     fetchLastGroupMessagesByChat(chatIds),
@@ -1974,10 +2039,9 @@ async function paintChatListFromData(list, users, rows, unreadRows, groupChats) 
     fetchGroupMemberReceiptsByChat(chatIds),
   ]);
   const groupUnreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
-  await preloadChatListAvatars(groupChats, users);
 
   const entries = buildChatListEntries(
-    users,
+    peerInfo,
     rows,
     groupChats,
     lastGroupMessages,
@@ -1989,6 +2053,7 @@ async function paintChatListFromData(list, users, rows, unreadRows, groupChats) 
   list.dataset.chatListSig = signature;
   syncChatListDom(list, entries, groupReceiptsByChat);
   void hydrateGroupAvatars(list);
+  void preloadChatListAvatarsForEntries(entries);
 }
 
 export async function loadChatList() {
@@ -2000,23 +2065,23 @@ export async function loadChatList() {
   if (!uid) return;
 
   const gen = ++loadChatListGeneration;
+  const sinceIso = getMessagesFastLoadSinceIso();
 
   if (msg) {
     msg.textContent = "";
     msg.classList.remove("messages-page-message--error");
   }
 
-  const [users, messagePack, unreadPack, groupPack] = await Promise.all([
-    loadUsersDirectory(),
-    fetchRecentUserMessagesForChatList({ sinceIso: null, limit: CHAT_LIST_DM_PREVIEW_LIMIT }),
+  const [recentPack, unreadPack, groupPack] = await Promise.all([
+    fetchRecentUserMessagesForChatList({ sinceIso, limit: CHAT_LIST_FAST_PREVIEW_LIMIT }),
     fetchUnreadIncomingDmMeta(),
     fetchMyGroupChats(),
   ]);
 
   if (gen !== loadChatListGeneration) return;
 
-  if (messagePack.error) {
-    console.error("Ошибка загрузки сообщений:", messagePack.error);
+  if (recentPack.error) {
+    console.error("Ошибка загрузки сообщений:", recentPack.error);
     if (msg) {
       msg.textContent = "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
       msg.classList.add("messages-page-message--error");
@@ -2032,11 +2097,26 @@ export async function loadChatList() {
 
   await paintChatListFromData(
     list,
-    users,
-    messagePack.rows,
+    recentPack.rows,
     unreadPack.rows,
     groupPack.chats || [],
   );
+
+  void (async () => {
+    const fuller = await fetchRecentUserMessagesForChatList({
+      sinceIso: null,
+      limit: CHAT_LIST_DM_PREVIEW_LIMIT,
+    });
+    if (gen !== loadChatListGeneration) return;
+    if (fuller.error || messagesView !== "list") return;
+    await paintChatListFromData(
+      list,
+      fuller.rows,
+      unreadPack.rows,
+      groupPack.chats || [],
+    );
+  })();
+
   void refreshMessagesUnreadBadge();
 }
 
@@ -4346,6 +4426,60 @@ async function saveCreateGroupChat() {
   await openMessagesDialog(toGroupPeerId(chat.id));
 }
 
+function closeNewMessageDialog() {
+  const dialog = document.getElementById("messagesNewMessageDialog");
+  if (!dialog) return;
+  if (typeof dialog.close === "function") {
+    dialog.close();
+  } else {
+    dialog.removeAttribute("open");
+  }
+}
+
+function renderNewMessageUserList(query = "") {
+  const listEl = document.getElementById("messagesNewMessageUsers");
+  if (!listEl) return;
+
+  const users = filterUsers(query, { limit: 0 });
+  if (!users.length) {
+    listEl.innerHTML = `<p class="messages-page-message">Никого не найдено.</p>`;
+    return;
+  }
+
+  listEl.innerHTML = users
+    .map((user) => {
+      const name = displayNameByEmail(user.email) || user.email || "—";
+      return `
+        <button
+          type="button"
+          class="messages-new-message-user-btn"
+          role="option"
+          data-peer-id="${escapeHtml(user.id)}"
+        >
+          ${escapeHtml(name)}
+        </button>
+      `;
+    })
+    .join("");
+}
+
+async function openNewMessageDialog() {
+  const dialog = document.getElementById("messagesNewMessageDialog");
+  const searchInput = document.getElementById("messagesNewMessageSearch");
+  if (!dialog) return;
+
+  await loadUsersDirectory();
+  if (searchInput) searchInput.value = "";
+  renderNewMessageUserList("");
+
+  if (typeof dialog.showModal === "function") {
+    dialog.showModal();
+  } else {
+    dialog.setAttribute("open", "");
+  }
+  searchInput?.focus();
+}
+
 let messagesSectionInited = false;
 
 export function initMessagesSection() {
@@ -4358,6 +4492,11 @@ export function initMessagesSection() {
   const chatList = document.getElementById("messagesChatList");
   const backBtn = document.getElementById("messagesBackBtn");
   const createGroupBtn = document.getElementById("messagesCreateGroupBtn");
+  const newMessageBtn = document.getElementById("messagesNewMessageBtn");
+  const newMessageDialog = document.getElementById("messagesNewMessageDialog");
+  const newMessageCloseBtn = document.getElementById("messagesNewMessageCloseBtn");
+  const newMessageSearch = document.getElementById("messagesNewMessageSearch");
+  const newMessageUsers = document.getElementById("messagesNewMessageUsers");
   const createGroupDialog = document.getElementById("messagesCreateGroupDialog");
   const createGroupSaveBtn = document.getElementById("messagesCreateGroupSaveBtn");
   const createGroupCancelBtn = document.getElementById("messagesCreateGroupCancelBtn");
@@ -4387,6 +4526,41 @@ export function initMessagesSection() {
   if (createGroupBtn) {
     createGroupBtn.addEventListener("click", () => {
       void openCreateGroupDialog();
+    });
+  }
+
+  if (newMessageBtn) {
+    newMessageBtn.addEventListener("click", () => {
+      void openNewMessageDialog();
+    });
+  }
+
+  if (newMessageCloseBtn) {
+    newMessageCloseBtn.addEventListener("click", () => {
+      closeNewMessageDialog();
+    });
+  }
+
+  if (newMessageDialog) {
+    newMessageDialog.addEventListener("click", (e) => {
+      if (e.target === newMessageDialog) closeNewMessageDialog();
+    });
+  }
+
+  if (newMessageSearch) {
+    newMessageSearch.addEventListener("input", () => {
+      renderNewMessageUserList(newMessageSearch.value);
+    });
+  }
+
+  if (newMessageUsers) {
+    newMessageUsers.addEventListener("click", (e) => {
+      const btn = e.target.closest(".messages-new-message-user-btn[data-peer-id]");
+      if (!btn) return;
+      const peerId = btn.getAttribute("data-peer-id");
+      if (!peerId) return;
+      closeNewMessageDialog();
+      void openMessagesDialog(peerId);
     });
   }
 
