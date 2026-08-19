@@ -10,6 +10,7 @@
 const BADGE_CACHE = "orders-site-badge-v1";
 const STATIC_CACHE = "orders-site-static-v19";
 const BADGE_COUNT_KEY = "/badge-count";
+const SHELL_UPDATED_KEY = "/shell-updated";
 
 const LEGACY_CACHE_PREFIXES = ["orders-site-static-"];
 
@@ -157,28 +158,59 @@ function isAppShellNavigation(url) {
  * Оболочка приложения. Все её маршруты отдают один и тот же index.html,
  * поэтому кэш-ключ общий — иначе каждый раздел ждал бы собственный ответ сети.
  */
-async function staleWhileRevalidateShell(request) {
+async function staleWhileRevalidateShell(request, event) {
   const cache = await caches.open(STATIC_CACHE);
   const cached = (await cache.match("/index.html")) || (await cache.match("/"));
+  // Клон снимаем до отдачи странице: после этого тело ответа уже читается браузером.
+  const cachedText = cached ? await cached.clone().text() : null;
 
   const networkPromise = fetch(request)
-    .then((res) => {
-      if (res && res.ok) {
-        void cache.put("/", res.clone());
-        void cache.put("/index.html", res.clone());
-      }
+    .then(async (res) => {
+      if (!res || !res.ok) return res;
+      const freshText = await res.clone().text();
+      await cache.put("/", res.clone());
+      await cache.put("/index.html", res.clone());
+      if (cachedText != null && freshText !== cachedText) await notifyShellUpdated();
       return res;
     })
     .catch(() => null);
 
   if (cached) {
-    void networkPromise;
+    // Без waitUntil обновление кэша может не успеть до остановки worker'а.
+    event?.waitUntil(networkPromise);
     return cached;
   }
 
   const network = await networkPromise;
   if (network) return network;
   return offlineNavigationResponse();
+}
+
+/**
+ * Страница показана из кэша, а на сервере уже другая версия — см. js/register-sw.js.
+ * Фоновая проверка часто заканчивается раньше, чем страница успеет подписаться на
+ * сообщения, поэтому факт обновления ещё и запоминается до запроса клиента.
+ */
+async function notifyShellUpdated() {
+  const cache = await caches.open(BADGE_CACHE);
+  await cache.put(SHELL_UPDATED_KEY, new Response("1"));
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of clients) {
+    client.postMessage({ type: "shell-updated" });
+  }
+}
+
+/** Читает и сразу гасит флаг: перезагрузка нужна ровно один раз. */
+async function consumeShellUpdatedFlag() {
+  try {
+    const cache = await caches.open(BADGE_CACHE);
+    const hit = await cache.match(SHELL_UPDATED_KEY);
+    if (!hit) return false;
+    await cache.delete(SHELL_UPDATED_KEY);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Остальные HTML-страницы остаются network-first: они открываются редко. */
@@ -224,7 +256,9 @@ self.addEventListener("fetch", (event) => {
 
   if (isNavigationRequest(request)) {
     event.respondWith(
-      isAppShellNavigation(url) ? staleWhileRevalidateShell(request) : networkFirstNavigate(request),
+      isAppShellNavigation(url)
+        ? staleWhileRevalidateShell(request, event)
+        : networkFirstNavigate(request),
     );
   }
 });
@@ -284,6 +318,14 @@ async function clearBadge() {
 self.addEventListener("message", (event) => {
   if (event.data?.type === "clear-badge") {
     event.waitUntil(clearBadge());
+    return;
+  }
+  if (event.data?.type === "get-shell-updated") {
+    event.waitUntil(
+      (async () => {
+        event.ports[0]?.postMessage({ updated: await consumeShellUpdatedFlag() });
+      })(),
+    );
     return;
   }
   if (event.data?.type === "get-badge-count") {
