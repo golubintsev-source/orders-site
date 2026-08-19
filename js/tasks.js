@@ -16,6 +16,7 @@ import {
   canUserAccessTask,
   canUserCompleteTask,
   normalizeExecutorEmails,
+  isUserExecutorOfTask,
 } from "./task-form-shared.js";
 import {
   persistOrderTasksSnapshot,
@@ -42,6 +43,74 @@ function isActiveTask(row) {
 
 function filterVisibleActiveTasks(rows) {
   return (rows || []).filter((row) => canUserAccessTask(row) && isActiveTask(row));
+}
+
+function filterMyExecutorTasks(rows) {
+  return (rows || []).filter((row) => isUserExecutorOfTask(row));
+}
+
+function sortTasksByDueAt(rows) {
+  return [...rows].sort((a, b) => {
+    const ta = a.due_at ? new Date(a.due_at).getTime() : Number.POSITIVE_INFINITY;
+    const tb = b.due_at ? new Date(b.due_at).getTime() : Number.POSITIVE_INFINITY;
+    if (ta !== tb) return ta - tb;
+    const ca = new Date(a.created_at || 0).getTime();
+    const cb = new Date(b.created_at || 0).getTime();
+    return cb - ca;
+  });
+}
+
+function renderMyTaskStatusCell(row) {
+  const completed = !isActiveTask(row);
+  const statusText = completed ? "Выполнена" : "Не выполнена";
+  const canToggle = canUserCompleteTask(row);
+  const taskId = row.id != null ? String(row.id) : "";
+  const offlineLocalId = row.__offlineLocalId ? String(row.__offlineLocalId) : "";
+  const checkboxHtml = canToggle
+    ? `
+      <label class="my-tasks-status-toggle" title="Отметить выполнение">
+        <input
+          type="checkbox"
+          class="order-tasks-completed-cb"
+          data-task-id="${escapeHtml(taskId)}"
+          data-offline-local-id="${escapeHtml(offlineLocalId)}"
+          ${completed ? "checked" : ""}
+        />
+      </label>
+    `
+    : "";
+  return `
+    <td class="my-tasks-status-cell">
+      <span class="my-tasks-status-text">${escapeHtml(statusText)}</span>
+      ${checkboxHtml}
+    </td>
+  `;
+}
+
+function renderMyTasksRow(row) {
+  const completed = !isActiveTask(row);
+  const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
+  const rowClass = completed
+    ? `my-tasks-row my-tasks-row--completed${offlineCls}`
+    : `my-tasks-row my-tasks-row--pending${offlineCls}`;
+  const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
+  const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
+  return `
+    <tr class="${rowClass}">
+      <td>${escapeHtml(formatTaskAuthorShort(row.author_login))}</td>
+      <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
+      <td>${escapeHtml(due)}</td>
+      ${renderMyTaskStatusCell(row)}
+      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
+    </tr>
+  `;
+}
+
+async function fetchAllTasksFromServer() {
+  const { data, error } = await fetchAllSupabaseRows(() =>
+    supabaseClient.from("order_tasks").select(TASK_SELECT_FIELDS),
+  );
+  return { data, error };
 }
 
 function setTaskFormDisabled(disabled) {
@@ -112,22 +181,6 @@ function renderTaskTableRowCells(row) {
   `;
 }
 
-function renderAllTasksRow(row) {
-  const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
-  const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
-  const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
-  return `
-    <tr class="all-tasks-row${offlineCls}">
-      <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
-      <td>${escapeHtml(formatTaskAuthorShort(row.author_login))}</td>
-      <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
-      <td>${escapeHtml(due)}</td>
-      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
-      ${renderCompletedCheckboxCell(row)}
-    </tr>
-  `;
-}
-
 async function fetchActiveTasksFromServer() {
   const { data, error } = await fetchAllSupabaseRows(() =>
     supabaseClient
@@ -193,7 +246,7 @@ export async function loadAllTasks() {
     return;
   }
 
-  const { data, error } = await fetchActiveTasksFromServer();
+  const { data, error } = await fetchAllTasksFromServer();
 
   if (error) {
     console.error("Ошибка загрузки задач:", error);
@@ -208,11 +261,11 @@ export async function loadAllTasks() {
   const baseRows = data || [];
   if (!error && data) persistOrderTasksSnapshot(data);
 
-  const rows = filterVisibleActiveTasks(mergeOrderTasksRowsForAllTasks(baseRows));
-  tbody.innerHTML = rows.map((row) => renderAllTasksRow(row)).join("");
+  const rows = sortTasksByDueAt(filterMyExecutorTasks(mergeOrderTasksRowsForAllTasks(baseRows)));
+  tbody.innerHTML = rows.map((row) => renderMyTasksRow(row)).join("");
 
   if (rows.length === 0 && msg) {
-    msg.textContent = "Нет актуальных задач.";
+    msg.textContent = "Нет задач, где вы исполнитель.";
   }
 }
 

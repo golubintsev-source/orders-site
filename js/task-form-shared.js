@@ -75,6 +75,14 @@ export function isSelfAssignedTask(row) {
   return executors.every((e) => e === author);
 }
 
+/** Текущий пользователь указан исполнителем (в т.ч. личная задача «я → я»). */
+export function isUserExecutorOfTask(row) {
+  const email = getCurrentUserEmail();
+  if (!email || !row) return false;
+  const executors = normalizeExecutorEmails(row.executor_emails).map(normalizeTaskEmail);
+  return executors.includes(email);
+}
+
 /** Задача доступна автору; иначе — исполнителям (кроме личной задачи). */
 export function canUserAccessTask(row) {
   const email = getCurrentUserEmail();

@@ -67,7 +67,7 @@ const SECTION_LABELS = {
   all: "Заказы",
   calculations: "Расчеты",
   excess: "Излишки",
-  "tasks-all": "Все задачи",
+  "tasks-all": "Мои задачи",
   "changes-all": "Все изменения",
   balance: "Баланс",
   "manager-salary": "Зарплата менеджера",

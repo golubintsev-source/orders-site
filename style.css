@@ -2017,8 +2017,8 @@ h2 {
 #allTasksTable {
   min-width: 320px;
 }
-#allTasksTable tbody tr.all-tasks-row {
-  cursor: pointer;
+#allTasksTable tbody tr.my-tasks-row {
+  cursor: default;
 }
 #allTasksTable th,
 #allTasksTable td {
@@ -2032,12 +2032,41 @@ h2 {
   max-width: 420px;
 }
 
-#allTasksTable tbody tr.all-tasks-row--highlight {
-  background-color: #fca5a5;
+#allTasksTable tbody tr.my-tasks-row--pending {
+  background-color: #fecaca;
   color: #450a0a;
 }
-#allTasksTable tbody tr.all-tasks-row--highlight:hover {
-  background-color: #f87171;
+#allTasksTable tbody tr.my-tasks-row--pending:hover {
+  background-color: #fca5a5;
+}
+
+#allTasksTable tbody tr.my-tasks-row--completed {
+  background-color: #e5e7eb;
+  color: #6b7280;
+}
+#allTasksTable tbody tr.my-tasks-row--completed:hover {
+  background-color: #d1d5db;
+}
+
+.my-tasks-status-cell {
+  white-space: nowrap;
+}
+.my-tasks-status-text {
+  display: inline-block;
+  margin-right: 6px;
+}
+.my-tasks-status-toggle {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin: 0;
+  cursor: pointer;
+}
+.my-tasks-status-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
 }
 
 /* Период и поиск над таблицей «Все изменения» */
