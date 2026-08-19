@@ -43,7 +43,7 @@ const PATH_TO_SECTION = new Map([
   ["/settings", "settings"],
   ["/statistics", "statistics"],
   ["/statistics-balance", "statistics-balance"],
-  ["/order-tasks", "order-tasks"],
+  ["/order-tasks", "tasks-all"],
   ["/messages", "messages"],
   ["/voice", "voice"],
 ]);

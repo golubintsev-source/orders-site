@@ -317,6 +317,10 @@ function toggleSectionNavDropdown() {
  */
 export function switchSection(sectionId, opts = {}) {
   if (!sectionId) return;
+  if (sectionId === "order-tasks") {
+    switchSection("tasks-all", opts);
+    return;
+  }
   if (!canAccessSection(sectionId)) {
     sectionId = "all";
   }
@@ -364,7 +368,10 @@ export function switchSection(sectionId, opts = {}) {
   }
 
   if (sectionId === "tasks-all") {
-    void import("./tasks.js").then((m) => m.loadAllTasks());
+    void import("./tasks.js").then((m) => {
+      m.loadAllTasks();
+      void m.ensureOrderTaskExecutorsLoaded();
+    });
     void import("./push-notifications.js").then((m) => m.clearPushBadge());
   }
   if (sectionId === "changes-all") {
@@ -381,13 +388,6 @@ export function switchSection(sectionId, opts = {}) {
   if (sectionId === "settings") {
     void import("./settings.js").then((m) => m.applySettingsAdminBlocksVisibility());
     void import("./push-notifications.js").then((m) => m.refreshPushNotificationsUi());
-  }
-  if (sectionId === "order-tasks") {
-    void import("./tasks.js").then((m) => {
-      m.loadOrderTasks();
-      void m.ensureOrderTaskExecutorsLoaded();
-    });
-    void import("./push-notifications.js").then((m) => m.clearPushBadge());
   }
   if (prevSectionId === "messages" && sectionId !== "messages") {
     void import("./messages.js").then((m) => m.stopMessagesPolling());

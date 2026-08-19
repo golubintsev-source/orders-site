@@ -2048,6 +2048,48 @@ h2 {
   background-color: #d1d5db;
 }
 
+#myAuthorTasksTable {
+  min-width: 320px;
+}
+#myAuthorTasksTable tbody tr.my-tasks-row {
+  cursor: default;
+}
+#myAuthorTasksTable th,
+#myAuthorTasksTable td {
+  padding: 8px 10px;
+  font-size: 13px;
+  vertical-align: top;
+}
+#myAuthorTasksTable .order-tasks-text-cell {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 420px;
+}
+#myAuthorTasksTable tbody tr.my-tasks-row--pending {
+  background-color: #fecaca;
+  color: #450a0a;
+}
+#myAuthorTasksTable tbody tr.my-tasks-row--pending:hover {
+  background-color: #fca5a5;
+}
+#myAuthorTasksTable tbody tr.my-tasks-row--completed {
+  background-color: #e5e7eb;
+  color: #6b7280;
+}
+#myAuthorTasksTable tbody tr.my-tasks-row--completed:hover {
+  background-color: #d1d5db;
+}
+
+.my-tasks-block-title {
+  margin: 20px 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+.order-tasks-form-stack + .order-tasks-hint + .my-tasks-block-title {
+  margin-top: 8px;
+}
+
 .my-tasks-status-cell {
   white-space: nowrap;
 }

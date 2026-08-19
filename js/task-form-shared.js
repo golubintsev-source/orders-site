@@ -102,6 +102,12 @@ export function canUserAccessTask(row) {
   return executors.includes(email);
 }
 
+export function isUserAuthorOfTask(row) {
+  const email = getCurrentUserEmail();
+  if (!email || !row) return false;
+  return normalizeTaskEmail(row.author_login) === email;
+}
+
 /** Отметить «Выполнена» может автор; для остальных — только если они исполнители. */
 export function canUserCompleteTask(row) {
   const email = getCurrentUserEmail();

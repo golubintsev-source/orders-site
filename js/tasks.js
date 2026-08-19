@@ -17,6 +17,7 @@ import {
   canUserCompleteTask,
   normalizeExecutorEmails,
   isUserExecutorOfTask,
+  isUserAuthorOfTask,
 } from "./task-form-shared.js";
 import {
   persistOrderTasksSnapshot,
@@ -47,6 +48,10 @@ function filterVisibleActiveTasks(rows) {
 
 function filterMyExecutorTasks(rows) {
   return (rows || []).filter((row) => isUserExecutorOfTask(row));
+}
+
+function filterMyAuthorTasks(rows) {
+  return (rows || []).filter((row) => isUserAuthorOfTask(row));
 }
 
 function sortTasksByDueAt(rows) {
@@ -84,6 +89,24 @@ function renderMyTaskStatusCell(row) {
       <span class="my-tasks-status-text">${escapeHtml(statusText)}</span>
       ${checkboxHtml}
     </td>
+  `;
+}
+
+function renderMyAuthorTasksRow(row) {
+  const completed = !isActiveTask(row);
+  const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
+  const rowClass = completed
+    ? `my-tasks-row my-tasks-row--completed${offlineCls}`
+    : `my-tasks-row my-tasks-row--pending${offlineCls}`;
+  const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
+  const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
+  return `
+    <tr class="${rowClass}">
+      <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
+      <td>${escapeHtml(due)}</td>
+      ${renderMyTaskStatusCell(row)}
+      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
+    </tr>
   `;
 }
 
@@ -146,13 +169,13 @@ function getSelectedExecutorEmails() {
   return getSelectedExecutorEmailsFrom(document.getElementById("orderTaskExecutorsList"));
 }
 
-async function ensureOrderTaskExecutorsLoaded() {
+async function ensureMyTasksExecutorsLoaded() {
   const list = document.getElementById("orderTaskExecutorsList");
   const hint = document.getElementById("orderTaskExecutorsHint");
   await ensureTaskExecutorsInList(list, hint);
 }
 
-export { ensureOrderTaskExecutorsLoaded };
+export { ensureMyTasksExecutorsLoaded as ensureOrderTaskExecutorsLoaded };
 
 function renderCompletedCheckboxCell(row) {
   const canToggle = canUserCompleteTask(row);
@@ -225,8 +248,8 @@ async function onTaskCompletedCheckboxChange(checkbox) {
     return;
   }
 
-  await loadOrderTasks();
-  void loadAllTasks();
+  await loadAllTasks();
+  void loadOrderTasks();
   void refreshMyTasksNavBadge();
   void import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
   void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
@@ -243,40 +266,67 @@ function bindTaskCompletedCheckboxDelegation(root) {
 }
 
 export async function loadAllTasks() {
-  const tbody = document.querySelector("#allTasksTable tbody");
-  const msg = document.getElementById("allTasksMessage");
-  if (!tbody) return;
-  if (msg) {
-    msg.textContent = "";
-    msg.classList.remove("order-tasks-message--error");
+  const executorTbody = document.querySelector("#allTasksTable tbody");
+  const authorTbody = document.querySelector("#myAuthorTasksTable tbody");
+  const executorMsg = document.getElementById("allTasksMessage");
+  const authorMsg = document.getElementById("myAuthorTasksMessage");
+  if (!executorTbody || !authorTbody) return;
+
+  void ensureMyTasksExecutorsLoaded();
+
+  for (const msg of [executorMsg, authorMsg]) {
+    if (msg) {
+      msg.textContent = "";
+      msg.classList.remove("order-tasks-message--error");
+    }
   }
 
   if (!state.currentUser) {
-    tbody.innerHTML = "";
-    if (msg) msg.textContent = "Войдите в систему, чтобы видеть задачи.";
+    executorTbody.innerHTML = "";
+    authorTbody.innerHTML = "";
+    setTaskFormDisabled(true);
+    if (executorMsg) executorMsg.textContent = "Войдите в систему, чтобы видеть задачи.";
     return;
+  }
+
+  setTaskFormDisabled(false);
+  if (!document.getElementById("orderTaskDueAtInput")?.value) {
+    resetTaskFormDefaults();
   }
 
   const { data, error } = await fetchAllTasksFromServer();
 
   if (error) {
     console.error("Ошибка загрузки задач:", error);
-    if (msg) {
-      msg.textContent = "Ошибка загрузки задач.";
-      msg.classList.add("order-tasks-message--error");
+    const errText = "Ошибка загрузки задач.";
+    if (executorMsg) {
+      executorMsg.textContent = errText;
+      executorMsg.classList.add("order-tasks-message--error");
     }
-    tbody.innerHTML = "";
+    if (authorMsg) {
+      authorMsg.textContent = errText;
+      authorMsg.classList.add("order-tasks-message--error");
+    }
+    executorTbody.innerHTML = "";
+    authorTbody.innerHTML = "";
     return;
   }
 
   const baseRows = data || [];
   if (!error && data) persistOrderTasksSnapshot(data);
 
-  const rows = sortTasksByDueAt(filterMyExecutorTasks(mergeOrderTasksRowsForAllTasks(baseRows)));
-  tbody.innerHTML = rows.map((row) => renderMyTasksRow(row)).join("");
+  const merged = mergeOrderTasksRowsForAllTasks(baseRows);
+  const executorRows = sortTasksByDueAt(filterMyExecutorTasks(merged));
+  const authorRows = sortTasksByDueAt(filterMyAuthorTasks(merged));
 
-  if (rows.length === 0 && msg) {
-    msg.textContent = "Нет задач, где вы исполнитель.";
+  executorTbody.innerHTML = executorRows.map((row) => renderMyTasksRow(row)).join("");
+  authorTbody.innerHTML = authorRows.map((row) => renderMyAuthorTasksRow(row)).join("");
+
+  if (executorRows.length === 0 && executorMsg) {
+    executorMsg.textContent = "Нет задач, где вы исполнитель.";
+  }
+  if (authorRows.length === 0 && authorMsg) {
+    authorMsg.textContent = "Нет задач, где вы автор.";
   }
 
   void refreshMyTasksNavBadge();
@@ -287,21 +337,13 @@ export async function loadOrderTasks() {
   const msg = document.getElementById("orderTasksMessage");
   if (!tbody) return;
 
-  void ensureOrderTaskExecutorsLoaded();
-
   if (!state.currentUser) {
     tbody.innerHTML = "";
-    setTaskFormDisabled(true);
     if (msg) {
       msg.textContent = "Войдите в систему, чтобы работать с задачами.";
       msg.classList.remove("order-tasks-message--error");
     }
     return;
-  }
-
-  setTaskFormDisabled(false);
-  if (!document.getElementById("orderTaskDueAtInput")?.value) {
-    resetTaskFormDefaults();
   }
 
   if (msg) msg.textContent = "";
@@ -339,7 +381,7 @@ export async function loadOrderTasks() {
 export async function createOrderTask() {
   const input = document.getElementById("orderTaskTextInput");
   const dueInput = document.getElementById("orderTaskDueAtInput");
-  const msg = document.getElementById("orderTasksMessage");
+  const msg = document.getElementById("myTasksFormMessage");
   if (!input || !state.currentUser) return;
 
   const text = (input.value || "").trim();
@@ -370,8 +412,8 @@ export async function createOrderTask() {
     msg.textContent = "";
     msg.classList.remove("order-tasks-message--error");
   }
-  await loadOrderTasks();
-  void loadAllTasks();
+  await loadAllTasks();
+  void loadOrderTasks();
   void refreshMyTasksNavBadge();
   void import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
   void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
@@ -451,10 +493,11 @@ export function initOrderTasksSection() {
     });
   }
 
-  void ensureOrderTaskExecutorsLoaded();
+  void ensureMyTasksExecutorsLoaded();
   startMyTasksBadgePolling();
   void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
 
   bindTaskCompletedCheckboxDelegation(document.getElementById("orderTasksTable"));
   bindTaskCompletedCheckboxDelegation(document.getElementById("allTasksTable"));
+  bindTaskCompletedCheckboxDelegation(document.getElementById("myAuthorTasksTable"));
 }
