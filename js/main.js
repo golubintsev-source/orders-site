@@ -196,8 +196,11 @@ async function init() {
       !savedPlace &&
       shouldRedirectToSavedPlace(captureHref(), readUserPlace(user.id)?.href)
     ) {
-      window.location.replace(getResumeHref(user.id, captureHref()));
-      return;
+      const resumeHref = getResumeHref(user.id, captureHref());
+      if (!tryResumeWithoutReload(resumeHref)) {
+        window.location.replace(resumeHref);
+        return;
+      }
     }
 
     hydrateCachedRoleFromStorage();
@@ -300,6 +303,21 @@ function ensurePopstateRouting() {
     if (!canAccessSection(sectionId)) sectionId = "all";
     switchSection(sectionId, { skipUrlSync: true });
   });
+}
+
+function tryResumeWithoutReload(resumeHref) {
+  if (!resumeHref) return false;
+  try {
+    const u = new URL(resumeHref, window.location.origin);
+    if (u.origin !== window.location.origin) return false;
+    if (u.pathname === window.location.pathname && u.search === window.location.search && u.hash === window.location.hash) {
+      return false;
+    }
+    window.history.replaceState({}, "", `${u.pathname}${u.search}${u.hash}`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function applyPendingOrdersSearchFromHistory() {

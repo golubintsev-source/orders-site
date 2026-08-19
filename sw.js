@@ -95,6 +95,8 @@ function isNavigationRequest(request) {
   return accept.includes("text/html");
 }
 
+const NAVIGATE_NETWORK_TIMEOUT_MS = 1200;
+
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(STATIC_CACHE);
   const cached = await cache.match(request);
@@ -138,8 +140,14 @@ function isJsAsset(url) {
 
 async function networkFirstNavigate(request) {
   const cache = await caches.open(STATIC_CACHE);
+  const networkWithTimeout = Promise.race([
+    fetch(request),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("navigate timeout")), NAVIGATE_NETWORK_TIMEOUT_MS);
+    }),
+  ]);
   try {
-    const res = await fetch(request);
+    const res = await networkWithTimeout;
     if (res && res.ok) {
       // Кладём оболочку под стабильные ключи.
       void cache.put("/", res.clone());
