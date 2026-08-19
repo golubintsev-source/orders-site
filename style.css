@@ -6644,13 +6644,6 @@ th {
   background: #fff;
 }
 
-.messages-chat-list-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
 .messages-chat-list-title {
   margin: 0;
   font-size: 20px;
@@ -6909,38 +6902,6 @@ th {
 }
 
 .messages-create-group-user:hover {
-  background: #f8fafc;
-}
-
-.messages-new-message-users {
-  max-height: min(50vh, 320px);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #fff;
-}
-
-.messages-new-message-user-btn {
-  display: block;
-  width: 100%;
-  margin: 0;
-  padding: 12px 14px;
-  border: none;
-  border-bottom: 1px solid #f1f5f9;
-  background: #fff;
-  color: #111827;
-  font: inherit;
-  font-size: 14px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.messages-new-message-user-btn:last-child {
-  border-bottom: none;
-}
-
-.messages-new-message-user-btn:hover {
   background: #f8fafc;
 }
 
