@@ -63,6 +63,9 @@ let groupAvatarSupported = null;
 /** @type {Map<string, { url: string, expiresAt: number }>} */
 const groupAvatarUrlCache = new Map();
 const GROUP_AVATAR_URL_CACHE_MS = 9 * 60 * 1000;
+/** URL групповых аватаров, уже загруженных в память браузера. */
+const groupAvatarImageReady = new Set();
+const staticAvatarImageReady = new Set();
 /** null = unknown, true/false after first probe — group_chat_reads table */
 let groupChatReadsSupported = null;
 /** null = unknown, true/false after first probe — last_delivered_at on group_chat_reads */
@@ -1632,6 +1635,29 @@ function renderChatListTicks(last, uid, entry = null, receiptsByUser = null) {
   return renderOutgoingTicksHtml({ ...state, status: "sent" });
 }
 
+function getChatAvatarKey(entry) {
+  if (entry.kind !== "group") {
+    const logoUrl = avatarLogoUrl({ email: entry.email, name: entry.name });
+    if (logoUrl) return `logo:${logoUrl}`;
+  }
+  if (entry.kind === "group" && entry.avatarStoragePath) {
+    return `group:${entry.avatarStoragePath}`;
+  }
+  return `initial:${entry.peerId}`;
+}
+
+function preloadImageUrl(url, readySet = staticAvatarImageReady) {
+  if (!url || readySet.has(url)) return Promise.resolve();
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = img.onerror = () => {
+      readySet.add(url);
+      resolve();
+    };
+    img.src = url;
+  });
+}
+
 function getCachedGroupAvatarUrl(storagePath) {
   const key = String(storagePath || "");
   if (!key) return null;
@@ -1652,7 +1678,10 @@ function setCachedGroupAvatarUrl(storagePath, url) {
 
 function invalidateGroupAvatarUrlCache(storagePath) {
   const key = String(storagePath || "");
-  if (key) groupAvatarUrlCache.delete(key);
+  if (!key) return;
+  const cachedUrl = getCachedGroupAvatarUrl(key);
+  if (cachedUrl) groupAvatarImageReady.delete(cachedUrl);
+  groupAvatarUrlCache.delete(key);
 }
 
 async function resolveGroupAvatarUrl(storagePath) {
@@ -1673,16 +1702,34 @@ async function preloadGroupAvatarUrls(groupChats) {
     ),
   ];
   const missing = paths.filter((path) => !getCachedGroupAvatarUrl(path));
-  if (!missing.length) return;
-  await Promise.all(missing.map((path) => resolveGroupAvatarUrl(path)));
+  if (missing.length) {
+    await Promise.all(missing.map((path) => resolveGroupAvatarUrl(path)));
+  }
+  const urls = paths.map((path) => getCachedGroupAvatarUrl(path)).filter(Boolean);
+  await Promise.all(urls.map((url) => preloadImageUrl(url, groupAvatarImageReady)));
 }
 
-function renderGroupAvatarHtml(groupAvatarPath, hue, initial) {
+async function preloadChatListAvatars(groupChats, users) {
+  const uid = getCurrentUserId();
+  const staticUrls = new Set();
+  for (const user of users || []) {
+    if (String(user.id) === String(uid)) continue;
+    const name = displayNameByEmail(user.email) || user.email || "";
+    const logoUrl = avatarLogoUrl({ email: user.email, name });
+    if (logoUrl) staticUrls.add(logoUrl);
+  }
+  await Promise.all([
+    preloadGroupAvatarUrls(groupChats),
+    ...[...staticUrls].map((url) => preloadImageUrl(url, staticAvatarImageReady)),
+  ]);
+}
+
+function renderGroupAvatarHtml(groupAvatarPath, avatarKey) {
   const cachedUrl = getCachedGroupAvatarUrl(groupAvatarPath);
   if (cachedUrl) {
-    return `<span class="messages-chat-avatar messages-chat-avatar--logo" aria-hidden="true"><img src="${escapeHtml(cachedUrl)}" alt="" width="48" height="48" decoding="async"></span>`;
+    return `<span class="messages-chat-avatar messages-chat-avatar--logo" data-avatar-key="${escapeHtml(avatarKey)}" aria-hidden="true"><img src="${escapeHtml(cachedUrl)}" alt="" width="48" height="48" decoding="sync"></span>`;
   }
-  return `<span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" data-avatar-path="${escapeHtml(groupAvatarPath)}" aria-hidden="true">${escapeHtml(initial)}</span>`;
+  return `<span class="messages-chat-avatar messages-chat-avatar--loading" data-avatar-path="${escapeHtml(groupAvatarPath)}" data-avatar-key="${escapeHtml(avatarKey)}" aria-hidden="true"></span>`;
 }
 
 function renderChatListItem(entry, groupReceiptsByChat = null) {
@@ -1706,14 +1753,15 @@ function renderChatListItem(entry, groupReceiptsByChat = null) {
     entry.kind === "group" ? null : avatarLogoUrl({ email: entry.email, name: entry.name });
   const groupAvatarPath =
     entry.kind === "group" && entry.avatarStoragePath ? String(entry.avatarStoragePath) : "";
+  const avatarKey = getChatAvatarKey(entry);
   const unread = unreadCount > 0;
   let avatarHtml;
   if (logoUrl) {
-    avatarHtml = `<span class="messages-chat-avatar messages-chat-avatar--logo" aria-hidden="true"><img src="${escapeHtml(logoUrl)}" alt="" width="48" height="48" decoding="async"></span>`;
+    avatarHtml = `<span class="messages-chat-avatar messages-chat-avatar--logo" data-avatar-key="${escapeHtml(avatarKey)}" aria-hidden="true"><img src="${escapeHtml(logoUrl)}" alt="" width="48" height="48" decoding="sync"></span>`;
   } else if (groupAvatarPath) {
-    avatarHtml = renderGroupAvatarHtml(groupAvatarPath, hue, initial);
+    avatarHtml = renderGroupAvatarHtml(groupAvatarPath, avatarKey);
   } else {
-    avatarHtml = `<span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" aria-hidden="true">${escapeHtml(initial)}</span>`;
+    avatarHtml = `<span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" data-avatar-key="${escapeHtml(avatarKey)}" aria-hidden="true">${escapeHtml(initial)}</span>`;
   }
 
   return `
@@ -1741,6 +1789,136 @@ function renderChatListItem(entry, groupReceiptsByChat = null) {
   `;
 }
 
+function buildChatListSignature(entries) {
+  return entries
+    .map((entry) => {
+      const last = entry.last;
+      const preview = last ? previewMessageBody(last.body, last.recipient_email, last) : "";
+      return `${entry.peerId}|${entry.sortAt}|${entry.unreadCount}|${entry.name}|${preview}`;
+    })
+    .join("\n");
+}
+
+function createChatListItemElement(entry, groupReceiptsByChat) {
+  const tpl = document.createElement("template");
+  tpl.innerHTML = renderChatListItem(entry, groupReceiptsByChat).trim();
+  return tpl.content.firstElementChild;
+}
+
+function updateChatListItemTicks(timeWrap, ticksHtml) {
+  if (!timeWrap) return;
+  const timeEl = timeWrap.querySelector(".messages-chat-item-time");
+  if (!timeEl) return;
+  for (const child of [...timeWrap.children]) {
+    if (child !== timeEl) child.remove();
+  }
+  if (ticksHtml) {
+    timeEl.insertAdjacentHTML("beforebegin", ticksHtml);
+  }
+}
+
+function updateChatListItemUnreadBadge(bottomEl, countLabel) {
+  if (!bottomEl) return;
+  let countEl = bottomEl.querySelector(".messages-chat-item-count");
+  if (countLabel) {
+    if (!countEl) {
+      countEl = document.createElement("span");
+      countEl.className = "messages-chat-item-count";
+      countEl.title = "Непрочитанных сообщений";
+      bottomEl.appendChild(countEl);
+    }
+    countEl.textContent = countLabel;
+  } else if (countEl) {
+    countEl.remove();
+  }
+}
+
+function replaceChatListItemAvatar(button, entry) {
+  const avatarKey = getChatAvatarKey(entry);
+  const avatarEl = button.querySelector(".messages-chat-avatar");
+  if (avatarEl && avatarEl.getAttribute("data-avatar-key") === avatarKey) return;
+
+  const hue = avatarHue(entry.kind === "group" ? entry.peerId : entry.email || entry.peerId);
+  const initial = avatarInitial(entry.name);
+  const logoUrl =
+    entry.kind === "group" ? null : avatarLogoUrl({ email: entry.email, name: entry.name });
+  const groupAvatarPath =
+    entry.kind === "group" && entry.avatarStoragePath ? String(entry.avatarStoragePath) : "";
+
+  let avatarHtml;
+  if (logoUrl) {
+    avatarHtml = `<span class="messages-chat-avatar messages-chat-avatar--logo" data-avatar-key="${escapeHtml(avatarKey)}" aria-hidden="true"><img src="${escapeHtml(logoUrl)}" alt="" width="48" height="48" decoding="sync"></span>`;
+  } else if (groupAvatarPath) {
+    avatarHtml = renderGroupAvatarHtml(groupAvatarPath, avatarKey);
+  } else {
+    avatarHtml = `<span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" data-avatar-key="${escapeHtml(avatarKey)}" aria-hidden="true">${escapeHtml(initial)}</span>`;
+  }
+
+  if (avatarEl) {
+    avatarEl.outerHTML = avatarHtml;
+  } else {
+    button.insertAdjacentHTML("afterbegin", avatarHtml);
+  }
+}
+
+function updateChatListItemEl(button, entry, groupReceiptsByChat) {
+  const uid = getCurrentUserId();
+  const last = entry.last;
+  const preview = last
+    ? previewMessageBody(last.body, last.recipient_email, last)
+    : "Нет сообщений";
+  const time = last ? formatChatListTime(last.created_at) : "";
+  const chatId = entry.kind === "group" ? parseGroupId(entry.peerId) : null;
+  const receiptsByUser =
+    entry.kind === "group" && chatId && groupReceiptsByChat
+      ? groupReceiptsByChat.get(String(chatId)) || new Map()
+      : null;
+  const ticks = renderChatListTicks(last, uid, entry, receiptsByUser);
+  const unreadCount = entry.unreadCount || 0;
+  const countLabel = unreadCount > 0 ? (unreadCount > 99 ? "99+" : String(unreadCount)) : "";
+
+  button.classList.toggle("messages-chat-item--unread", unreadCount > 0);
+  button.classList.toggle("messages-chat-item--group", entry.kind === "group");
+
+  const nameEl = button.querySelector(".messages-chat-item-name");
+  if (nameEl) nameEl.textContent = entry.name;
+
+  const timeEl = button.querySelector(".messages-chat-item-time");
+  if (timeEl) timeEl.textContent = time;
+
+  updateChatListItemTicks(button.querySelector(".messages-chat-item-time-wrap"), ticks);
+
+  const previewEl = button.querySelector(".messages-chat-item-preview");
+  if (previewEl) previewEl.textContent = preview || " ";
+
+  updateChatListItemUnreadBadge(button.querySelector(".messages-chat-item-bottom"), countLabel);
+
+  replaceChatListItemAvatar(button, entry);
+}
+
+function syncChatListDom(list, entries, groupReceiptsByChat) {
+  const existingByPeer = new Map();
+  for (const el of list.querySelectorAll(".messages-chat-item[data-peer-id]")) {
+    existingByPeer.set(el.getAttribute("data-peer-id") || "", el);
+  }
+
+  const seen = new Set();
+  for (const entry of entries) {
+    seen.add(entry.peerId);
+    let el = existingByPeer.get(entry.peerId);
+    if (el) {
+      updateChatListItemEl(el, entry, groupReceiptsByChat);
+    } else {
+      el = createChatListItemElement(entry, groupReceiptsByChat);
+    }
+    list.appendChild(el);
+  }
+
+  for (const [peerId, el] of existingByPeer) {
+    if (!seen.has(peerId)) el.remove();
+  }
+}
+
 async function hydrateGroupAvatars(root = document) {
   const nodes = [...root.querySelectorAll(".messages-chat-avatar[data-avatar-path]")];
   if (!nodes.length) return;
@@ -1751,6 +1929,9 @@ async function hydrateGroupAvatars(root = document) {
       try {
         const url = await resolveGroupAvatarUrl(storagePath);
         if (!url || !el.isConnected) return;
+        await preloadImageUrl(url, groupAvatarImageReady);
+        if (!el.isConnected) return;
+        el.classList.remove("messages-chat-avatar--loading");
         el.classList.add("messages-chat-avatar--logo");
         el.removeAttribute("style");
         el.textContent = "";
@@ -1759,7 +1940,7 @@ async function hydrateGroupAvatars(root = document) {
         img.alt = "";
         img.width = 48;
         img.height = 48;
-        img.decoding = "async";
+        img.decoding = "sync";
         el.appendChild(img);
         el.removeAttribute("data-avatar-path");
       } catch (err) {
@@ -1793,7 +1974,7 @@ async function paintChatListFromData(list, users, rows, unreadRows, groupChats) 
     fetchGroupMemberReceiptsByChat(chatIds),
   ]);
   const groupUnreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
-  await preloadGroupAvatarUrls(groupChats);
+  await preloadChatListAvatars(groupChats, users);
 
   const entries = buildChatListEntries(
     users,
@@ -1803,7 +1984,10 @@ async function paintChatListFromData(list, users, rows, unreadRows, groupChats) 
     groupUnreadByChat,
     dmUnreadByPeer,
   );
-  list.innerHTML = entries.map((entry) => renderChatListItem(entry, groupReceiptsByChat)).join("");
+  const signature = buildChatListSignature(entries);
+  if (list.dataset.chatListSig === signature) return;
+  list.dataset.chatListSig = signature;
+  syncChatListDom(list, entries, groupReceiptsByChat);
   void hydrateGroupAvatars(list);
 }
 
@@ -1822,25 +2006,23 @@ export async function loadChatList() {
     msg.classList.remove("messages-page-message--error");
   }
 
-  const sinceIso = getMessagesFastLoadSinceIso();
-
-  // Фаза 1: только сообщения за 3 дня — быстрый список.
-  const [users, recentPack, unreadPack, groupPack] = await Promise.all([
+  const [users, messagePack, unreadPack, groupPack] = await Promise.all([
     loadUsersDirectory(),
-    fetchRecentUserMessagesForChatList({ sinceIso }),
+    fetchRecentUserMessagesForChatList({ sinceIso: null, limit: CHAT_LIST_DM_PREVIEW_LIMIT }),
     fetchUnreadIncomingDmMeta(),
     fetchMyGroupChats(),
   ]);
 
   if (gen !== loadChatListGeneration) return;
 
-  if (recentPack.error) {
-    console.error("Ошибка загрузки сообщений:", recentPack.error);
+  if (messagePack.error) {
+    console.error("Ошибка загрузки сообщений:", messagePack.error);
     if (msg) {
       msg.textContent = "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
       msg.classList.add("messages-page-message--error");
     }
     list.innerHTML = "";
+    list.removeAttribute("data-chat-list-sig");
     return;
   }
 
@@ -1851,28 +2033,11 @@ export async function loadChatList() {
   await paintChatListFromData(
     list,
     users,
-    recentPack.rows,
+    messagePack.rows,
     unreadPack.rows,
     groupPack.chats || [],
   );
   void refreshMessagesUnreadBadge();
-
-  // Фаза 2: догрузка более старых превью в фоне.
-  void (async () => {
-    const fuller = await fetchRecentUserMessagesForChatList({
-      sinceIso: null,
-      limit: CHAT_LIST_DM_PREVIEW_LIMIT,
-    });
-    if (gen !== loadChatListGeneration) return;
-    if (fuller.error || messagesView !== "list") return;
-    await paintChatListFromData(
-      list,
-      usersCache || users,
-      fuller.rows,
-      unreadPack.rows,
-      groupPack.chats || [...groupChatsById.values()],
-    );
-  })();
 }
 
 function setMessagesView(view) {

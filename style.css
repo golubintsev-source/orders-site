@@ -7033,6 +7033,11 @@ th {
   padding: 0;
 }
 
+.messages-chat-avatar--loading {
+  background: hsl(var(--messages-avatar-hue, 210) 52% 48% / 0.35);
+  color: transparent;
+}
+
 .messages-chat-avatar--logo img {
   display: block;
   width: 100%;
