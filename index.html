@@ -840,12 +840,12 @@
           <table id="allTasksTable">
             <thead>
               <tr>
-                <th>Заказ</th>
                 <th>Дата время</th>
                 <th>Автор</th>
                 <th>Исполнители</th>
                 <th>Срок</th>
                 <th>Текст</th>
+                <th>Выполнена</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -934,10 +934,6 @@
             <input type="datetime-local" id="orderTaskDueAtInput" class="order-tasks-due-input" />
             <p class="order-tasks-due-hint">По умолчанию — через 3 часа. Очистите поле, если срок не нужен.</p>
           </div>
-          <label class="order-tasks-highlight-label">
-            <input type="checkbox" id="orderTaskHighlightCheckbox" />
-            <span>Выделить</span>
-          </label>
         </div>
         <div class="table-wrap">
           <table id="orderTasksTable">
@@ -948,6 +944,7 @@
                 <th>Исполнители</th>
                 <th>Срок</th>
                 <th>Текст</th>
+                <th>Выполнена</th>
               </tr>
             </thead>
             <tbody></tbody>

@@ -633,25 +633,39 @@ function writePendingTasksItems(items) {
 export function addPendingOfflineTask({
   localId,
   tempTaskId,
-  order_id,
   author_login,
   body,
   created_at,
   executor_emails,
   due_at,
+  is_completed,
 }) {
   const items = readPendingTasksQueue();
   items.push({
     localId,
     tempTaskId,
-    order_id,
     author_login,
     body,
     executor_emails: Array.isArray(executor_emails) ? executor_emails : [],
     due_at: due_at || null,
+    is_completed: is_completed === true,
     created_at: created_at || new Date().toISOString(),
   });
   writePendingTasksItems(items);
+}
+
+export function updatePendingTaskCompleted(localId, isCompleted) {
+  if (!localId) return;
+  const items = readPendingTasksQueue();
+  let changed = false;
+  for (const item of items) {
+    if (item.localId === localId) {
+      item.is_completed = isCompleted === true;
+      changed = true;
+      break;
+    }
+  }
+  if (changed) writePendingTasksItems(items);
 }
 
 export function removePendingTaskByLocalId(localId) {
@@ -661,11 +675,11 @@ export function removePendingTaskByLocalId(localId) {
 export function pendingTaskDisplayRows() {
   return readPendingTasksQueue().map((t) => ({
     id: t.tempTaskId,
-    order_id: t.order_id,
     author_login: t.author_login,
     body: t.body,
     executor_emails: Array.isArray(t.executor_emails) ? t.executor_emails : [],
     due_at: t.due_at || null,
+    is_completed: t.is_completed === true,
     created_at: t.created_at,
     __offlinePendingSync: true,
     __offlineLocalId: t.localId,
@@ -845,21 +859,16 @@ export function mergeCalculationRows(serverRows) {
   return merged;
 }
 
-async function syncPendingTasksToSupabase(negOrderIdToServerId) {
+async function syncPendingTasksToSupabase() {
   const items = readPendingTasksQueue();
   const remaining = [];
   for (const t of items) {
-    const sid = negOrderIdToServerId[t.order_id];
-    if (sid == null) {
-      remaining.push(t);
-      continue;
-    }
     const { error } = await supabaseClient.from("order_tasks").insert({
-      order_id: sid,
       author_login: t.author_login,
       body: t.body,
       executor_emails: Array.isArray(t.executor_emails) ? t.executor_emails : [],
       due_at: t.due_at || null,
+      is_completed: t.is_completed === true,
     });
     if (error) {
       console.error("offline sync task:", error);
@@ -988,7 +997,7 @@ export async function syncPendingOfflineDataToSupabase() {
   const orderItems = readPendingQueue();
   if (orderItems.length === 0) {
     const negMap = {};
-    await syncPendingTasksToSupabase(negMap);
+    await syncPendingTasksToSupabase();
     await syncPendingCalcsToSupabase(negMap);
     return { ordersSynced: 0, ordersFailed: 0 };
   }
@@ -1035,7 +1044,7 @@ export async function syncPendingOfflineDataToSupabase() {
   }
 
   writePendingOrderItems(remainingOrders);
-  await syncPendingTasksToSupabase(negOrderIdToServerId);
+  await syncPendingTasksToSupabase();
   await syncPendingCalcsToSupabase(negOrderIdToServerId);
 
   return { ordersSynced, ordersFailed };

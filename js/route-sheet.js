@@ -298,11 +298,6 @@ function orderIdCellHtml(order) {
   if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
   if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
   if (isOrderEditLockedForUserLite(order)) orderIdChipClasses.push("order-id-chip--lock-user-lite");
-  const tasksHighlight =
-    order.tasks_highlight === true ||
-    order.tasks_highlight === 1 ||
-    order.tasks_highlight === "1";
-  if (tasksHighlight) orderIdChipClasses.push("order-id-chip--highlight-tasks");
   const orderNumberDisplay =
     order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";
   return `<td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}" data-lock-edit-user-lite="${isOrderEditLockedForUserLite(order) ? "1" : "0"}">

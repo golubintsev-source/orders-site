@@ -1,30 +1,24 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import {
-  formatOrderIdTypeChip,
   formatTaskDateRu,
   formatTaskAuthorShort,
   formatTaskExecutors,
 } from "./format.js";
 import { displayNameByEmail } from "./user-names.js";
 import { loadUsersDirectory } from "./users-directory.js";
-import { applyFiltersAndRender } from "./orders.js";
-import { switchSection } from "./section-nav.js";
-import { isOrderHiddenForCurrentRole, isUserLite, isUserShop } from "./roles.js";
 import {
   persistOrderTasksSnapshot,
   mergeOrderTasksRowsForAllTasks,
-  mergeOrderTasksRowsForOrder,
   addPendingOfflineTask,
-  addPendingOfflineOrderHistory,
+  updatePendingTaskCompleted,
   nextOfflineTempTaskId,
-  isOfflineClientOrderId,
   isOfflineDataMode,
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 
-const TASK_SELECT_FIELDS = "id, created_at, author_login, body, order_id, due_at, executor_emails";
-const TASK_SELECT_FIELDS_ORDER = "id, created_at, author_login, body, due_at, executor_emails";
+const TASK_SELECT_FIELDS =
+  "id, created_at, author_login, body, due_at, executor_emails, is_completed";
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -63,6 +57,10 @@ function normalizeExecutorEmails(raw) {
   return [];
 }
 
+function getCurrentUserEmail() {
+  return (state.currentUser?.email || "").trim().toLowerCase();
+}
+
 function getAuthorLogin() {
   const u = state.currentUser;
   if (!u) return "—";
@@ -74,16 +72,22 @@ function getAuthorLogin() {
   return String(u.id || "—");
 }
 
-function orderTasksHighlightFromOrder(order) {
-  if (!order) return false;
-  const v = order.tasks_highlight;
-  return v === true || v === 1 || v === "1";
+/** Задача доступна только автору или исполнителю. */
+export function canUserAccessTask(row) {
+  const email = getCurrentUserEmail();
+  if (!email || !row) return false;
+  const author = String(row.author_login || "").trim().toLowerCase();
+  if (author === email) return true;
+  const executors = normalizeExecutorEmails(row.executor_emails).map((e) => e.toLowerCase());
+  return executors.includes(email);
 }
 
-function canAccessOrderTasksByOrderId(orderId) {
-  const order = state.allOrders?.find((o) => Number(o.id) === Number(orderId));
-  if (!order) return !(isUserLite() || isUserShop());
-  return !isOrderHiddenForCurrentRole(order);
+function isActiveTask(row) {
+  return row.is_completed !== true && row.is_completed !== 1 && row.is_completed !== "1";
+}
+
+function filterVisibleActiveTasks(rows) {
+  return (rows || []).filter((row) => canUserAccessTask(row) && isActiveTask(row));
 }
 
 function setTaskFormDisabled(disabled) {
@@ -179,6 +183,28 @@ async function ensureOrderTaskExecutorsLoaded() {
   list.dataset.loaded = "1";
 }
 
+function renderCompletedCheckboxCell(row) {
+  const canToggle = canUserAccessTask(row);
+  const checked = !isActiveTask(row);
+  const taskId = row.id != null ? String(row.id) : "";
+  const offlineLocalId = row.__offlineLocalId ? String(row.__offlineLocalId) : "";
+  return `
+    <td class="order-tasks-completed-cell">
+      <label class="order-tasks-completed-label">
+        <input
+          type="checkbox"
+          class="order-tasks-completed-cb"
+          data-task-id="${escapeHtml(taskId)}"
+          data-offline-local-id="${escapeHtml(offlineLocalId)}"
+          ${checked ? "checked" : ""}
+          ${canToggle ? "" : "disabled"}
+        />
+        <span class="order-tasks-completed-text">Выполнена</span>
+      </label>
+    </td>
+  `;
+}
+
 function renderTaskTableRowCells(row) {
   const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
   const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
@@ -188,104 +214,74 @@ function renderTaskTableRowCells(row) {
       <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
       <td>${escapeHtml(due)}</td>
       <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
+      ${renderCompletedCheckboxCell(row)}
   `;
 }
 
-async function writeTaskChangeToHistory(orderId, taskBody) {
-  if (!orderId || !taskBody) return;
-  const userEmail = state.currentUser?.email;
-  if (!userEmail) return;
-  const text = String(taskBody).trim();
-  if (!text) return;
-  const comment = `Задача: ${text}`;
-  const { error } = await supabaseClient.from("order_history").insert([
-    { order_id: orderId, user_email: userEmail, comment },
-  ]);
+function renderAllTasksRow(row) {
+  const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
+  const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
+  const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
+  return `
+    <tr class="all-tasks-row${offlineCls}">
+      <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
+      <td>${escapeHtml(formatTaskAuthorShort(row.author_login))}</td>
+      <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
+      <td>${escapeHtml(due)}</td>
+      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
+      ${renderCompletedCheckboxCell(row)}
+    </tr>
+  `;
+}
+
+async function fetchActiveTasksFromServer() {
+  const { data, error } = await fetchAllSupabaseRows(() =>
+    supabaseClient
+      .from("order_tasks")
+      .select(TASK_SELECT_FIELDS)
+      .eq("is_completed", false)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false }),
+  );
+  return { data, error };
+}
+
+async function setTaskCompleted(taskId, offlineLocalId, completed) {
+  if (offlineLocalId) {
+    updatePendingTaskCompleted(offlineLocalId, completed);
+    return { error: null };
+  }
+  if (taskId == null || taskId === "") return { error: new Error("missing task id") };
+  return supabaseClient.from("order_tasks").update({ is_completed: completed }).eq("id", taskId);
+}
+
+async function onTaskCompletedCheckboxChange(checkbox) {
+  if (!checkbox || checkbox.disabled) return;
+  const taskId = checkbox.getAttribute("data-task-id");
+  const offlineLocalId = checkbox.getAttribute("data-offline-local-id");
+  const completed = checkbox.checked;
+  checkbox.disabled = true;
+
+  const { error } = await setTaskCompleted(taskId, offlineLocalId || null, completed);
   if (error) {
-    console.error("Ошибка записи задачи в историю изменений:", error);
-  }
-}
-
-/** Красная подсветка чекбокса и строк таблицы на странице «Задачи по заказу». */
-function syncOrderTasksPageHighlightClass() {
-  const section = document.getElementById("section-order-tasks");
-  const cb = document.getElementById("orderTaskHighlightCheckbox");
-  if (!section || !cb) return;
-  const on = cb.checked && !cb.disabled;
-  section.classList.toggle("order-tasks-page--highlight", on);
-}
-
-function setHighlightCheckboxNoOrder() {
-  const cb = document.getElementById("orderTaskHighlightCheckbox");
-  if (!cb) return;
-  cb.checked = false;
-  cb.disabled = true;
-  syncOrderTasksPageHighlightClass();
-}
-
-async function applyHighlightCheckboxAfterTasksLoad(taskCount) {
-  const cb = document.getElementById("orderTaskHighlightCheckbox");
-  if (!cb) return;
-
-  try {
-    if (state.tasksOrderId == null) {
-      setHighlightCheckboxNoOrder();
-      return;
-    }
-
-    if (taskCount === 0) {
-      cb.disabled = true;
-      cb.checked = false;
-      const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
-      if (o && orderTasksHighlightFromOrder(o)) {
-        if (isOfflineClientOrderId(state.tasksOrderId)) {
-          o.tasks_highlight = false;
-          applyFiltersAndRender();
-          void loadAllTasks();
-        } else {
-          const { error } = await supabaseClient
-            .from("orders")
-            .update({ tasks_highlight: false })
-            .eq("id", state.tasksOrderId);
-          if (!error) {
-            o.tasks_highlight = false;
-            applyFiltersAndRender();
-            void loadAllTasks();
-          }
-        }
-      }
-      return;
-    }
-
-    cb.disabled = false;
-    const order = state.allOrders?.find((o) => Number(o.id) === Number(state.tasksOrderId));
-    cb.checked = orderTasksHighlightFromOrder(order);
-  } finally {
-    syncOrderTasksPageHighlightClass();
-  }
-}
-
-async function saveOrderTasksHighlight(checked) {
-  const cb = document.getElementById("orderTaskHighlightCheckbox");
-  if (state.tasksOrderId == null || !cb || cb.disabled) return;
-  const id = state.tasksOrderId;
-  if (isOfflineClientOrderId(id)) {
-    const o = state.allOrders?.find((x) => Number(x.id) === Number(id));
-    if (o) o.tasks_highlight = checked;
-    applyFiltersAndRender();
-    syncOrderTasksPageHighlightClass();
+    console.error("Ошибка обновления статуса задачи:", error);
+    checkbox.checked = !completed;
+    checkbox.disabled = false;
     return;
   }
-  const { error } = await supabaseClient.from("orders").update({ tasks_highlight: checked }).eq("id", id);
-  if (error) {
-    console.error("Ошибка сохранения выделения:", error);
-    void loadOrderTasks();
-    return;
-  }
-  const o = state.allOrders?.find((x) => Number(x.id) === Number(id));
-  if (o) o.tasks_highlight = checked;
-  applyFiltersAndRender();
-  syncOrderTasksPageHighlightClass();
+
+  await loadOrderTasks();
+  void loadAllTasks();
+}
+
+function bindTaskCompletedCheckboxDelegation(root) {
+  if (!root || root.dataset.taskCompletedBound === "1") return;
+  root.dataset.taskCompletedBound = "1";
+  root.addEventListener("change", (e) => {
+    const cb = e.target.closest(".order-tasks-completed-cb");
+    if (!cb || !root.contains(cb)) return;
+    void onTaskCompletedCheckboxChange(cb);
+  });
 }
 
 export async function loadAllTasks() {
@@ -297,13 +293,13 @@ export async function loadAllTasks() {
     msg.classList.remove("order-tasks-message--error");
   }
 
-  const { data, error } = await fetchAllSupabaseRows(() =>
-    supabaseClient
-      .from("order_tasks")
-      .select(TASK_SELECT_FIELDS)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false }),
-  );
+  if (!state.currentUser) {
+    tbody.innerHTML = "";
+    if (msg) msg.textContent = "Войдите в систему, чтобы видеть задачи.";
+    return;
+  }
+
+  const { data, error } = await fetchActiveTasksFromServer();
 
   if (error) {
     console.error("Ошибка загрузки задач:", error);
@@ -318,33 +314,11 @@ export async function loadAllTasks() {
   const baseRows = data || [];
   if (!error && data) persistOrderTasksSnapshot(data);
 
-  const rows = mergeOrderTasksRowsForAllTasks(baseRows);
-  tbody.innerHTML = rows
-    .map((row) => {
-      const order = state.allOrders?.find((o) => Number(o.id) === Number(row.order_id));
-      if (!canAccessOrderTasksByOrderId(row.order_id)) return "";
-      const chip = formatOrderIdTypeChip(row.order_id, order?.order_type);
-      const highlight = orderTasksHighlightFromOrder(order);
-      const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
-      const trClass = `${highlight ? "all-tasks-row all-tasks-row--highlight" : "all-tasks-row"}${offlineCls}`;
-      const oid = row.order_id != null ? String(row.order_id) : "";
-      const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
-      const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
-      return `
-    <tr class="${trClass}" data-order-id="${oid}">
-      <td>${escapeHtml(chip)}</td>
-      <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
-      <td>${escapeHtml(formatTaskAuthorShort(row.author_login))}</td>
-      <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
-      <td>${escapeHtml(due)}</td>
-      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
-    </tr>
-  `;
-    })
-    .join("");
+  const rows = filterVisibleActiveTasks(mergeOrderTasksRowsForAllTasks(baseRows));
+  tbody.innerHTML = rows.map((row) => renderAllTasksRow(row)).join("");
 
   if (rows.length === 0 && msg) {
-    msg.textContent = "Пока нет задач.";
+    msg.textContent = "Нет актуальных задач.";
   }
 }
 
@@ -353,45 +327,26 @@ export async function loadOrderTasks() {
   const msg = document.getElementById("orderTasksMessage");
   if (!tbody) return;
 
-  const textInput = document.getElementById("orderTaskTextInput");
-
   void ensureOrderTaskExecutorsLoaded();
 
-  if (state.tasksOrderId == null) {
+  if (!state.currentUser) {
     tbody.innerHTML = "";
     setTaskFormDisabled(true);
-    if (textInput) textInput.value = "";
-    lastTaskFormOrderId = null;
-    setHighlightCheckboxNoOrder();
     if (msg) {
-      msg.textContent =
-        "Выберите заказ: в таблице нажмите на номер заказа → Задачи.";
+      msg.textContent = "Войдите в систему, чтобы работать с задачами.";
       msg.classList.remove("order-tasks-message--error");
     }
     return;
   }
 
-  if (!canAccessOrderTasksByOrderId(state.tasksOrderId)) {
-    tbody.innerHTML = "";
-    setTaskFormDisabled(true);
-    setHighlightCheckboxNoOrder();
-    if (msg) {
-      msg.textContent = "Нет доступа к задачам этого заказа.";
-      msg.classList.add("order-tasks-message--error");
-    }
-    return;
-  }
-
   setTaskFormDisabled(false);
-  syncTaskFormForOrder(state.tasksOrderId);
+  if (!document.getElementById("orderTaskDueAtInput")?.value) {
+    resetTaskFormDefaults();
+  }
 
   if (msg) msg.textContent = "";
 
-  const { data, error } = await supabaseClient
-    .from("order_tasks")
-    .select(TASK_SELECT_FIELDS_ORDER)
-    .eq("order_id", state.tasksOrderId)
-    .order("created_at", { ascending: false });
+  const { data, error } = await fetchActiveTasksFromServer();
 
   if (error) {
     console.error("Ошибка загрузки задач:", error);
@@ -405,9 +360,7 @@ export async function loadOrderTasks() {
 
   if (msg) msg.classList.remove("order-tasks-message--error");
 
-  const baseRows = data || [];
-
-  const rows = mergeOrderTasksRowsForOrder(baseRows, state.tasksOrderId);
+  const rows = filterVisibleActiveTasks(mergeOrderTasksRowsForAllTasks(data || []));
   tbody.innerHTML = rows
     .map(
       (row) => `
@@ -419,17 +372,15 @@ export async function loadOrderTasks() {
     .join("");
 
   if (rows.length === 0 && msg) {
-    msg.textContent = "Пока нет задач по этому заказу.";
+    msg.textContent = "Нет актуальных задач.";
   }
-
-  await applyHighlightCheckboxAfterTasksLoad(rows.length);
 }
 
 export async function createOrderTask() {
   const input = document.getElementById("orderTaskTextInput");
   const dueInput = document.getElementById("orderTaskDueAtInput");
   const msg = document.getElementById("orderTasksMessage");
-  if (!input || state.tasksOrderId == null) return;
+  if (!input || !state.currentUser) return;
 
   const text = (input.value || "").trim();
   if (!text) {
@@ -444,32 +395,15 @@ export async function createOrderTask() {
   const executorEmails = getSelectedExecutorEmails();
   const dueAt = datetimeLocalToIso(dueInput?.value);
 
-  if (!canAccessOrderTasksByOrderId(state.tasksOrderId)) {
-    if (msg) {
-      msg.textContent = "Нет доступа к задачам этого заказа.";
-      msg.classList.add("order-tasks-message--error");
-    }
-    return;
-  }
-
-  if (isOfflineDataMode() && !isOfflineClientOrderId(state.tasksOrderId)) {
-    if (msg) {
-      msg.textContent =
-        "Без связи с базой задачи можно добавлять только к заявкам, созданным на этом устройстве без сети (жёлтая строка в списке заказов).";
-      msg.classList.add("order-tasks-message--error");
-    }
-    return;
-  }
-
   const taskPayload = {
-    order_id: state.tasksOrderId,
     author_login: author,
     body: text,
     executor_emails: executorEmails,
     due_at: dueAt,
+    is_completed: false,
   };
 
-  if (isOfflineClientOrderId(state.tasksOrderId)) {
+  if (isOfflineDataMode()) {
     const localId =
       typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
@@ -477,33 +411,13 @@ export async function createOrderTask() {
     addPendingOfflineTask({
       localId,
       tempTaskId: nextOfflineTempTaskId(),
-      order_id: state.tasksOrderId,
       author_login: author,
       body: text,
       executor_emails: executorEmails,
       due_at: dueAt,
+      is_completed: false,
       created_at: new Date().toISOString(),
     });
-    const orderLocalId = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId))
-      ?.__offlineLocalId;
-    if (orderLocalId) {
-      const histLocalId =
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `hist-task-${Date.now()}`;
-      addPendingOfflineOrderHistory({
-        localId: histLocalId,
-        pending_order_local_id: orderLocalId,
-        order_temp_id: state.tasksOrderId,
-        user_email: state.currentUser?.email || author,
-        comment: `Задача: ${text}`,
-      });
-    }
-    const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
-    if (o) o.tasks_highlight = true;
-    const cb = document.getElementById("orderTaskHighlightCheckbox");
-    if (cb) cb.checked = true;
-    applyFiltersAndRender();
   } else {
     const { error } = await supabaseClient.from("order_tasks").insert(taskPayload);
 
@@ -514,23 +428,6 @@ export async function createOrderTask() {
         msg.classList.add("order-tasks-message--error");
       }
       return;
-    }
-
-    await writeTaskChangeToHistory(state.tasksOrderId, text);
-
-    const { error: hlErr } = await supabaseClient
-      .from("orders")
-      .update({ tasks_highlight: true })
-      .eq("id", state.tasksOrderId);
-
-    if (hlErr) {
-      console.error("Ошибка выделения заказа:", hlErr);
-    } else {
-      const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
-      if (o) o.tasks_highlight = true;
-      const cb = document.getElementById("orderTaskHighlightCheckbox");
-      if (cb) cb.checked = true;
-      applyFiltersAndRender();
     }
   }
 
@@ -545,31 +442,12 @@ export async function createOrderTask() {
 }
 
 let orderTasksSectionInited = false;
-let lastTaskFormOrderId = null;
-
-function syncTaskFormForOrder(orderId) {
-  const dueInput = document.getElementById("orderTaskDueAtInput");
-  const orderChanged = lastTaskFormOrderId !== orderId;
-  lastTaskFormOrderId = orderId;
-
-  if (orderChanged) {
-    const textInput = document.getElementById("orderTaskTextInput");
-    if (textInput) textInput.value = "";
-    resetTaskFormDefaults();
-    return;
-  }
-
-  if (dueInput && !dueInput.disabled && !dueInput.value) {
-    dueInput.value = defaultTaskDueAtLocal();
-  }
-}
 
 export function initOrderTasksSection() {
   if (orderTasksSectionInited) return;
   orderTasksSectionInited = true;
   const createBtn = document.getElementById("orderTaskCreateBtn");
   const input = document.getElementById("orderTaskTextInput");
-  const highlightCb = document.getElementById("orderTaskHighlightCheckbox");
   if (createBtn) {
     createBtn.addEventListener("click", () => void createOrderTask());
   }
@@ -581,26 +459,9 @@ export function initOrderTasksSection() {
       }
     });
   }
-  if (highlightCb) {
-    highlightCb.addEventListener("change", () => {
-      syncOrderTasksPageHighlightClass();
-      void saveOrderTasksHighlight(highlightCb.checked);
-    });
-  }
 
   void ensureOrderTaskExecutorsLoaded();
 
-  const allTasksTable = document.getElementById("allTasksTable");
-  if (allTasksTable) {
-    allTasksTable.addEventListener("click", (e) => {
-      const tr = e.target.closest("tbody tr");
-      if (!tr || !allTasksTable.contains(tr)) return;
-      const raw = tr.getAttribute("data-order-id");
-      const id = raw ? Number(raw) : NaN;
-      if (Number.isNaN(id)) return;
-      if (!canAccessOrderTasksByOrderId(id)) return;
-      state.tasksOrderId = id;
-      switchSection("order-tasks");
-    });
-  }
+  bindTaskCompletedCheckboxDelegation(document.getElementById("orderTasksTable"));
+  bindTaskCompletedCheckboxDelegation(document.getElementById("allTasksTable"));
 }

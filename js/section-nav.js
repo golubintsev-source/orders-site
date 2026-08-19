@@ -127,13 +127,6 @@ function labelForSection(sectionId) {
     const chip = formatOrderIdTypeChip(state.editingOrderId, orderType);
     return `Редактирование ${chip}`;
   }
-  if (sectionId === "order-tasks" && state.tasksOrderId != null) {
-    const o = state.allOrders?.find((x) => Number(x.id) === Number(state.tasksOrderId));
-    if (o) {
-      const chip = formatOrderIdTypeChip(state.tasksOrderId, o.order_type);
-      return `Задачи ${chip}`;
-    }
-  }
   if (sectionId === "order-tasks") return "Задачи";
   return SECTION_LABELS[sectionId] || sectionId;
 }
