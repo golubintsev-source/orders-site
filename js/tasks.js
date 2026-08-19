@@ -13,6 +13,9 @@ import {
   getSelectedExecutorEmailsFrom,
   insertTask,
   resetTaskExecutorsList,
+  canUserAccessTask,
+  canUserCompleteTask,
+  normalizeExecutorEmails,
 } from "./task-form-shared.js";
 import {
   persistOrderTasksSnapshot,
@@ -31,27 +34,7 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
-function normalizeExecutorEmails(raw) {
-  if (!raw) return [];
-  if (Array.isArray(raw)) {
-    return raw.map((e) => String(e || "").trim()).filter(Boolean);
-  }
-  return [];
-}
-
-function getCurrentUserEmail() {
-  return (state.currentUser?.email || "").trim().toLowerCase();
-}
-
-/** Задача доступна только автору или исполнителю. */
-export function canUserAccessTask(row) {
-  const email = getCurrentUserEmail();
-  if (!email || !row) return false;
-  const author = String(row.author_login || "").trim().toLowerCase();
-  if (author === email) return true;
-  const executors = normalizeExecutorEmails(row.executor_emails).map((e) => e.toLowerCase());
-  return executors.includes(email);
-}
+export { canUserAccessTask } from "./task-form-shared.js";
 
 function isActiveTask(row) {
   return row.is_completed !== true && row.is_completed !== 1 && row.is_completed !== "1";
@@ -95,7 +78,7 @@ async function ensureOrderTaskExecutorsLoaded() {
 }
 
 function renderCompletedCheckboxCell(row) {
-  const canToggle = canUserAccessTask(row);
+  const canToggle = canUserCompleteTask(row);
   const checked = !isActiveTask(row);
   const taskId = row.id != null ? String(row.id) : "";
   const offlineLocalId = row.__offlineLocalId ? String(row.__offlineLocalId) : "";

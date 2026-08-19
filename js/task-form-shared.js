@@ -1,7 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { displayNameByEmail } from "./user-names.js";
-import { loadUsersDirectory } from "./users-directory.js";
+import { loadTaskExecutorPickerUsers } from "./users-directory.js";
 import {
   addPendingOfflineTask,
   nextOfflineTempTaskId,
@@ -37,6 +37,22 @@ export function datetimeLocalToIso(value) {
   return parsed.toISOString();
 }
 
+export function normalizeTaskEmail(raw) {
+  return String(raw || "").trim().toLowerCase();
+}
+
+export function normalizeExecutorEmails(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((e) => String(e || "").trim()).filter(Boolean);
+  }
+  return [];
+}
+
+export function getCurrentUserEmail() {
+  return normalizeTaskEmail(state.currentUser?.email);
+}
+
 function getAuthorLogin() {
   const u = state.currentUser;
   if (!u) return "";
@@ -46,6 +62,39 @@ function getAuthorLogin() {
   if (meta.preferred_username) return String(meta.preferred_username).trim();
   if (meta.name) return String(meta.name).trim();
   return String(u.id || "");
+}
+
+/** Личная задача: автор — единственный исполнитель. */
+export function isSelfAssignedTask(row) {
+  const author = normalizeTaskEmail(row?.author_login);
+  if (!author) return false;
+  const executors = normalizeExecutorEmails(row?.executor_emails)
+    .map(normalizeTaskEmail)
+    .filter(Boolean);
+  if (!executors.length) return false;
+  return executors.every((e) => e === author);
+}
+
+/** Задача доступна автору; иначе — исполнителям (кроме личной задачи). */
+export function canUserAccessTask(row) {
+  const email = getCurrentUserEmail();
+  if (!email || !row) return false;
+  const author = normalizeTaskEmail(row.author_login);
+  if (author === email) return true;
+  if (isSelfAssignedTask(row)) return false;
+  const executors = normalizeExecutorEmails(row.executor_emails).map(normalizeTaskEmail);
+  return executors.includes(email);
+}
+
+/** Отметить «Выполнена» может автор; для остальных — только если они исполнители. */
+export function canUserCompleteTask(row) {
+  const email = getCurrentUserEmail();
+  if (!email || !row) return false;
+  const author = normalizeTaskEmail(row.author_login);
+  if (author === email) return true;
+  if (isSelfAssignedTask(row)) return false;
+  const executors = normalizeExecutorEmails(row.executor_emails).map(normalizeTaskEmail);
+  return executors.includes(email);
 }
 
 export function getSelectedExecutorEmailsFrom(listEl) {
@@ -67,6 +116,11 @@ export function resetTaskExecutorsList(listEl) {
   });
 }
 
+function executorDisplayLabel(user) {
+  const name = displayNameByEmail(user.email);
+  return user.isSelf ? `${name} (я)` : name;
+}
+
 export function renderTaskExecutorsInto(listEl, hintEl, users) {
   if (!listEl) return;
 
@@ -74,25 +128,25 @@ export function renderTaskExecutorsInto(listEl, hintEl, users) {
     listEl.innerHTML = "";
     if (hintEl) {
       hintEl.textContent = "Нет пользователей для выбора.";
-      hintEl.hidden = false;
+      hint.hidden = false;
     }
     return;
   }
 
-  if (hintEl) hintEl.hidden = true;
+  if (hintEl) hint.hidden = true;
 
   listEl.innerHTML = users
     .map(
       (user) => `
     <button
       type="button"
-      class="order-tasks-executor-option"
+      class="order-tasks-executor-option${user.isSelf ? " order-tasks-executor-option--self" : ""}"
       role="checkbox"
       aria-checked="false"
       data-email="${escapeHtml(user.email)}"
     >
       <span class="order-tasks-executor-checkbox" aria-hidden="true"></span>
-      <span class="order-tasks-executor-name">${escapeHtml(displayNameByEmail(user.email))}</span>
+      <span class="order-tasks-executor-name">${escapeHtml(executorDisplayLabel(user))}</span>
     </button>
   `,
     )
@@ -120,7 +174,7 @@ export async function ensureTaskExecutorsInList(listEl, hintEl) {
     listEl.dataset.loaded = "1";
     return;
   }
-  const users = await loadUsersDirectory();
+  const users = await loadTaskExecutorPickerUsers(state.currentUser);
   executorsCacheByListId.set(cacheKey, users);
   renderTaskExecutorsInto(listEl, hintEl, users);
   listEl.dataset.loaded = "1";
