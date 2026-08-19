@@ -868,6 +868,12 @@ function hasInvalidOrderFormDateInput() {
   return false;
 }
 
+/** Дата заказа обязательна — поле не должно быть пустым. */
+function isOrderDateMissing() {
+  const raw = (document.getElementById("order_date")?.value || "").trim();
+  return !raw;
+}
+
 function dateFieldShouldValidate(textFieldId) {
   if (textFieldId === "installation_date") return Boolean(document.getElementById("installation")?.checked);
   if (textFieldId === "reveals_date") return Boolean(document.getElementById("reveals")?.checked);
@@ -2444,7 +2450,7 @@ export function getFormData() {
     order_type: document.getElementById("order_type")?.value.trim() || null,
     address: document.getElementById("address").value.trim() || null,
     payment_status: document.getElementById("payment_status").value.trim() || null,
-    order_date: syncOrderFormDateTimeFromDom(),
+    order_date: syncOrderFormDateTimeFromDom() ?? new Date().toISOString(),
     order_number: orderNumberEl ? (orderNumberEl.value.trim() || null) : null,
     description: document.getElementById("description").value.trim() || null,
     amount: parseRublesFieldFromDom("amount"),
@@ -3446,6 +3452,13 @@ export async function submitOrderForm(event) {
   if (phoneVal && !isValidOrderPhone(phoneVal)) {
     setMessage("Неверный формат телефона.", "#d32f2f");
     document.getElementById("phone")?.classList.add("phone-invalid");
+    return;
+  }
+
+  if (isOrderDateMissing()) {
+    setMessage("Не заполнена дата заказа", "#d32f2f");
+    document.getElementById("order_date")?.classList.add("date-input-invalid");
+    document.getElementById("order_date")?.focus();
     return;
   }
 
