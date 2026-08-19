@@ -4426,60 +4426,6 @@ async function saveCreateGroupChat() {
   await openMessagesDialog(toGroupPeerId(chat.id));
 }
 
-function closeNewMessageDialog() {
-  const dialog = document.getElementById("messagesNewMessageDialog");
-  if (!dialog) return;
-  if (typeof dialog.close === "function") {
-    dialog.close();
-  } else {
-    dialog.removeAttribute("open");
-  }
-}
-
-function renderNewMessageUserList(query = "") {
-  const listEl = document.getElementById("messagesNewMessageUsers");
-  if (!listEl) return;
-
-  const users = filterUsers(query, { limit: 0 });
-  if (!users.length) {
-    listEl.innerHTML = `<p class="messages-page-message">Никого не найдено.</p>`;
-    return;
-  }
-
-  listEl.innerHTML = users
-    .map((user) => {
-      const name = displayNameByEmail(user.email) || user.email || "—";
-      return `
-        <button
-          type="button"
-          class="messages-new-message-user-btn"
-          role="option"
-          data-peer-id="${escapeHtml(user.id)}"
-        >
-          ${escapeHtml(name)}
-        </button>
-      `;
-    })
-    .join("");
-}
-
-async function openNewMessageDialog() {
-  const dialog = document.getElementById("messagesNewMessageDialog");
-  const searchInput = document.getElementById("messagesNewMessageSearch");
-  if (!dialog) return;
-
-  await loadUsersDirectory();
-  if (searchInput) searchInput.value = "";
-  renderNewMessageUserList("");
-
-  if (typeof dialog.showModal === "function") {
-    dialog.showModal();
-  } else {
-    dialog.setAttribute("open", "");
-  }
-  searchInput?.focus();
-}
-
 let messagesSectionInited = false;
 
 export function initMessagesSection() {
@@ -4492,11 +4438,6 @@ export function initMessagesSection() {
   const chatList = document.getElementById("messagesChatList");
   const backBtn = document.getElementById("messagesBackBtn");
   const createGroupBtn = document.getElementById("messagesCreateGroupBtn");
-  const newMessageBtn = document.getElementById("messagesNewMessageBtn");
-  const newMessageDialog = document.getElementById("messagesNewMessageDialog");
-  const newMessageCloseBtn = document.getElementById("messagesNewMessageCloseBtn");
-  const newMessageSearch = document.getElementById("messagesNewMessageSearch");
-  const newMessageUsers = document.getElementById("messagesNewMessageUsers");
   const createGroupDialog = document.getElementById("messagesCreateGroupDialog");
   const createGroupSaveBtn = document.getElementById("messagesCreateGroupSaveBtn");
   const createGroupCancelBtn = document.getElementById("messagesCreateGroupCancelBtn");
@@ -4526,41 +4467,6 @@ export function initMessagesSection() {
   if (createGroupBtn) {
     createGroupBtn.addEventListener("click", () => {
       void openCreateGroupDialog();
-    });
-  }
-
-  if (newMessageBtn) {
-    newMessageBtn.addEventListener("click", () => {
-      void openNewMessageDialog();
-    });
-  }
-
-  if (newMessageCloseBtn) {
-    newMessageCloseBtn.addEventListener("click", () => {
-      closeNewMessageDialog();
-    });
-  }
-
-  if (newMessageDialog) {
-    newMessageDialog.addEventListener("click", (e) => {
-      if (e.target === newMessageDialog) closeNewMessageDialog();
-    });
-  }
-
-  if (newMessageSearch) {
-    newMessageSearch.addEventListener("input", () => {
-      renderNewMessageUserList(newMessageSearch.value);
-    });
-  }
-
-  if (newMessageUsers) {
-    newMessageUsers.addEventListener("click", (e) => {
-      const btn = e.target.closest(".messages-new-message-user-btn[data-peer-id]");
-      if (!btn) return;
-      const peerId = btn.getAttribute("data-peer-id");
-      if (!peerId) return;
-      closeNewMessageDialog();
-      void openMessagesDialog(peerId);
     });
   }
 
