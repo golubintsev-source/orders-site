@@ -81,6 +81,7 @@ async function submitTaskCreateDialog() {
   void import("./tasks.js").then((m) => {
     void m.loadOrderTasks();
     void m.loadAllTasks();
+    void m.refreshMyTasksNavBadge();
   });
 }
 

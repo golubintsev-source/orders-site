@@ -129,6 +129,21 @@
         </div>
         <div class="topbar-orders-type-tools">
           <button
+            id="myTasksNavBtn"
+            class="my-tasks-nav-btn"
+            type="button"
+            title="Мои задачи"
+            aria-label="Мои задачи"
+          >
+            <svg class="my-tasks-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="5" y="3" width="14" height="18" rx="2" stroke="currentColor" stroke-width="2" />
+              <path d="M9 8.5l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M9 14h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <path d="M9 17h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span id="myTasksPendingBadge" class="messages-unread-badge" hidden>0</span>
+          </button>
+          <button
             id="messagesNavBtn"
             class="messages-nav-btn"
             type="button"

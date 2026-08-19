@@ -225,6 +225,7 @@ async function onTaskCompletedCheckboxChange(checkbox) {
 
   await loadOrderTasks();
   void loadAllTasks();
+  void refreshMyTasksNavBadge();
 }
 
 function bindTaskCompletedCheckboxDelegation(root) {
@@ -273,6 +274,8 @@ export async function loadAllTasks() {
   if (rows.length === 0 && msg) {
     msg.textContent = "Нет задач, где вы исполнитель.";
   }
+
+  void refreshMyTasksNavBadge();
 }
 
 export async function loadOrderTasks() {
@@ -365,6 +368,56 @@ export async function createOrderTask() {
   }
   await loadOrderTasks();
   void loadAllTasks();
+  void refreshMyTasksNavBadge();
+}
+
+const MY_TASKS_BADGE_POLL_MS = 60_000;
+let myTasksBadgePollTimer = null;
+
+function countMyPendingExecutorTasks(rows) {
+  return (rows || []).filter((row) => isUserExecutorOfTask(row) && isActiveTask(row)).length;
+}
+
+export async function refreshMyTasksNavBadge() {
+  const badge = document.getElementById("myTasksPendingBadge");
+  const btn = document.getElementById("myTasksNavBtn");
+  if (!badge || !btn) return;
+
+  if (!state.currentUser) {
+    badge.hidden = true;
+    btn.classList.remove("my-tasks-nav-btn--has-pending");
+    return;
+  }
+
+  const { data, error } = await supabaseClient
+    .from("order_tasks")
+    .select("id, executor_emails, is_completed, created_at")
+    .eq("is_completed", false);
+
+  if (error) {
+    console.warn("Не удалось получить число невыполненных задач:", error);
+    badge.hidden = true;
+    btn.classList.remove("my-tasks-nav-btn--has-pending");
+    return;
+  }
+
+  const n = countMyPendingExecutorTasks(mergeOrderTasksRowsForAllTasks(data || []));
+  if (n > 0) {
+    badge.textContent = n > 99 ? "99+" : String(n);
+    badge.hidden = false;
+    btn.classList.add("my-tasks-nav-btn--has-pending");
+  } else {
+    badge.hidden = true;
+    btn.classList.remove("my-tasks-nav-btn--has-pending");
+  }
+}
+
+function startMyTasksBadgePolling() {
+  if (myTasksBadgePollTimer) return;
+  void refreshMyTasksNavBadge();
+  myTasksBadgePollTimer = window.setInterval(() => {
+    void refreshMyTasksNavBadge();
+  }, MY_TASKS_BADGE_POLL_MS);
 }
 
 let orderTasksSectionInited = false;
@@ -374,6 +427,7 @@ export function initOrderTasksSection() {
   orderTasksSectionInited = true;
   const createBtn = document.getElementById("orderTaskCreateBtn");
   const input = document.getElementById("orderTaskTextInput");
+  const myTasksNavBtn = document.getElementById("myTasksNavBtn");
   if (createBtn) {
     createBtn.addEventListener("click", () => void createOrderTask());
   }
@@ -385,8 +439,14 @@ export function initOrderTasksSection() {
       }
     });
   }
+  if (myTasksNavBtn) {
+    myTasksNavBtn.addEventListener("click", () => {
+      void import("./section-nav.js").then((m) => m.switchSection("tasks-all"));
+    });
+  }
 
   void ensureOrderTaskExecutorsLoaded();
+  startMyTasksBadgePolling();
 
   bindTaskCompletedCheckboxDelegation(document.getElementById("orderTasksTable"));
   bindTaskCompletedCheckboxDelegation(document.getElementById("allTasksTable"));
