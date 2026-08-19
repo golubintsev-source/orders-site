@@ -854,6 +854,12 @@ async function syncPendingTasksToSupabase(negOrderIdToServerId) {
   writePendingTasksItems(remaining);
 }
 
+function isUniqueViolationError(err) {
+  const code = err?.code;
+  const msg = String(err?.message || "");
+  return code === "23505" || /duplicate key|unique constraint|violates unique/i.test(msg);
+}
+
 async function syncPendingCalcsToSupabase(negOrderIdToServerId) {
   const items = readPendingCalcsQueue();
   const remaining = [];
@@ -869,6 +875,11 @@ async function syncPendingCalcsToSupabase(negOrderIdToServerId) {
     }
     const { error } = await supabaseClient.from("calculations").insert([payload]);
     if (error) {
+      if (isUniqueViolationError(error)) {
+        // Уже вставлено ранее (например, повторная попытка после таймаута).
+        // Убираем из очереди, чтобы не застрять на постоянных 23505.
+        continue;
+      }
       console.error("offline sync calculation:", error);
       remaining.push(c);
     }
@@ -910,7 +921,7 @@ async function flushOnePendingServerOrderEdit(item) {
       created_at: edit.changedAt,
     }));
     const { error: insErr } = await supabaseClient.from("order_history").insert(rows);
-    if (insErr) throw insErr;
+    if (insErr && !isUniqueViolationError(insErr)) throw insErr;
     for (const comment of comments) {
       remoteHistory.push({ created_at: edit.changedAt, comment });
     }

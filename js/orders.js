@@ -553,8 +553,10 @@ function buildOrderDeltaCalculationInsertRows({
 }) {
   if (!orderId) return [];
 
+  // created_at — это время фактической вставки, но для авто-комментариев в расчётах
+  // используем order_date, чтобы повторные попытки после таймаутов формировали одинаковый comment.
   const nowIso = new Date().toISOString();
-  const timeHHmm = formatTimeHHmmFromIso(nowIso);
+  const timeHHmm = formatTimeHHmmFromIso(orderData?.order_date || nowIso);
   const actorShort = shortLoginByEmail(state.currentUser?.email);
   const orderNumberStr = formatOrderIdTypeChip(orderId, orderData?.order_type) || `#${orderId}`;
   const clientStr = (orderData?.client && String(orderData.client).trim()) || CALC_COMMENT_EMPTY;

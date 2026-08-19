@@ -31,6 +31,10 @@ orders-site/
 
 Чтобы при повторных кликах по кнопке «Сохранить заказ» (например, после сетевых таймаутов) не создавались дубликаты строк в таблице `orders`, выполни SQL из файла **`supabase_orders_save_idempotency_key.sql`** в **Supabase → SQL Editor**.
 
+Чтобы также не плодились одинаковые записи в `order_history` и авто-дельты в `calculations`, дополнительно выполни:
+- **`supabase_order_history_dedup_unique.sql`**
+- **`supabase_calculations_dedup_unique_comment.sql`**
+
 ## Supabase: фото в сообщениях чата
 
 Чтобы прикреплять фото в чате, выполни SQL из файла **`supabase_message_attachments.sql`** в **Supabase → SQL Editor**. Фото сохраняются в bucket `order-files` по пути `{userId}/messages/…` с теми же правилами сжатия и миниатюр, что и файлы заявок.
