@@ -2158,8 +2158,13 @@ async function paintChatListFromData(list, rows, unreadRows, groupChats) {
   const signature = buildChatListSignature(entries);
   if (list.dataset.chatListSig === signature) return;
   list.dataset.chatListSig = signature;
+  // Снимок мог быть отрисован прошлой версией renderChatListItem — не достраиваем
+  // поверх него, а заменяем целиком; дальше syncChatListDom работает как обычно.
+  if (list.dataset.chatListFromSnapshot === "1") {
+    list.innerHTML = "";
+    delete list.dataset.chatListFromSnapshot;
+  }
   syncChatListDom(list, entries, groupReceiptsByChat);
-  delete list.dataset.chatListFromSnapshot;
   void hydrateGroupAvatars(list);
   void preloadChatListAvatarsForEntries(entries);
   document.dispatchEvent(new CustomEvent("chat-list-painted"));
