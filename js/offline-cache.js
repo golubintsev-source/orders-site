@@ -975,7 +975,11 @@ export async function syncPendingOfflineDataToSupabase() {
 
   for (const item of orderItems) {
     const payload = insertPayloadFromFormData(item.insertPayload || item.displayRow || {});
-    const { data, error } = await supabaseClient.from("orders").insert([payload]).select().single();
+    const q = supabaseClient.from("orders");
+    const insertPromise = payload.save_idempotency_key
+      ? q.upsert([payload], { onConflict: "save_idempotency_key" }).select().single()
+      : q.insert([payload]).select().single();
+    const { data, error } = await insertPromise;
 
     if (error || !data) {
       console.error("offline sync insert failed:", error);
