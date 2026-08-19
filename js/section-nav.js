@@ -383,7 +383,10 @@ export function switchSection(sectionId, opts = {}) {
     void import("./push-notifications.js").then((m) => m.refreshPushNotificationsUi());
   }
   if (sectionId === "order-tasks") {
-    void import("./tasks.js").then((m) => m.loadOrderTasks());
+    void import("./tasks.js").then((m) => {
+      m.loadOrderTasks();
+      void m.ensureOrderTaskExecutorsLoaded();
+    });
     void import("./push-notifications.js").then((m) => m.clearPushBadge());
   }
   if (prevSectionId === "messages" && sectionId !== "messages") {

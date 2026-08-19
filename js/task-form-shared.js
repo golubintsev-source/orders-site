@@ -116,8 +116,8 @@ export function canUserCompleteTask(row) {
 export function getSelectedExecutorEmailsFrom(listEl) {
   if (!listEl) return [];
   const emails = [];
-  listEl.querySelectorAll(".order-tasks-executor-option[aria-checked='true']").forEach((btn) => {
-    const email = btn.getAttribute("data-email");
+  listEl.querySelectorAll('input[type="checkbox"][data-email]:checked').forEach((input) => {
+    const email = input.getAttribute("data-email");
     if (email) emails.push(email);
   });
   return emails;
@@ -125,10 +125,8 @@ export function getSelectedExecutorEmailsFrom(listEl) {
 
 export function resetTaskExecutorsList(listEl) {
   if (!listEl) return;
-  listEl.querySelectorAll(".order-tasks-executor-option").forEach((btn) => {
-    btn.setAttribute("aria-checked", "false");
-    const mark = btn.querySelector(".order-tasks-executor-checkbox");
-    if (mark) mark.classList.remove("order-tasks-executor-checkbox--checked");
+  listEl.querySelectorAll('input[type="checkbox"][data-email]').forEach((input) => {
+    input.checked = false;
   });
 }
 
@@ -154,46 +152,60 @@ export function renderTaskExecutorsInto(listEl, hintEl, users) {
   listEl.innerHTML = users
     .map(
       (user) => `
-    <button
-      type="button"
-      class="order-tasks-executor-option${user.isSelf ? " order-tasks-executor-option--self" : ""}"
-      role="checkbox"
-      aria-checked="false"
-      data-email="${escapeHtml(user.email)}"
-    >
-      <span class="order-tasks-executor-checkbox" aria-hidden="true"></span>
-      <span class="order-tasks-executor-name">${escapeHtml(executorDisplayLabel(user))}</span>
-    </button>
+    <label class="messages-create-group-user order-tasks-executor-user${user.isSelf ? " order-tasks-executor-user--self" : ""}">
+      <input type="checkbox" data-email="${escapeHtml(user.email)}" value="${escapeHtml(user.id)}" />
+      <span class="messages-create-group-user-name">${escapeHtml(executorDisplayLabel(user))}</span>
+    </label>
   `,
     )
     .join("");
-
-  listEl.querySelectorAll(".order-tasks-executor-option").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.disabled) return;
-      const on = btn.getAttribute("aria-checked") !== "true";
-      btn.setAttribute("aria-checked", on ? "true" : "false");
-      const mark = btn.querySelector(".order-tasks-executor-checkbox");
-      if (mark) mark.classList.toggle("order-tasks-executor-checkbox--checked", on);
-    });
-  });
 }
 
 const executorsCacheByListId = new Map();
+let executorsUsersCachePromise = null;
+
+async function loadExecutorPickerUsersCached() {
+  if (executorsCacheByListId.has("__users__")) {
+    return executorsCacheByListId.get("__users__");
+  }
+  if (!executorsUsersCachePromise) {
+    executorsUsersCachePromise = loadTaskExecutorPickerUsers(state.currentUser).then((users) => {
+      executorsCacheByListId.set("__users__", users);
+      return users;
+    });
+  }
+  return executorsUsersCachePromise;
+}
 
 export async function ensureTaskExecutorsInList(listEl, hintEl) {
   if (!listEl) return;
   const cacheKey = listEl.id || "__anonymous__";
   if (listEl.dataset.loaded === "1") return;
+
+  if (hintEl) {
+    hintEl.textContent = "Загрузка пользователей…";
+    hintEl.hidden = false;
+  }
+
   if (executorsCacheByListId.has(cacheKey)) {
     renderTaskExecutorsInto(listEl, hintEl, executorsCacheByListId.get(cacheKey));
     listEl.dataset.loaded = "1";
     return;
   }
-  const users = await loadTaskExecutorPickerUsers(state.currentUser);
-  executorsCacheByListId.set(cacheKey, users);
-  renderTaskExecutorsInto(listEl, hintEl, users);
-  listEl.dataset.loaded = "1";
+
+  try {
+    const users = await loadExecutorPickerUsersCached();
+    executorsCacheByListId.set(cacheKey, users);
+    renderTaskExecutorsInto(listEl, hintEl, users);
+    listEl.dataset.loaded = "1";
+  } catch (err) {
+    console.error("Ошибка загрузки исполнителей:", err);
+    listEl.innerHTML = "";
+    if (hintEl) {
+      hintEl.textContent = "Не удалось загрузить список пользователей.";
+      hintEl.hidden = false;
+    }
+  }
 }
 
 /** @returns {Promise<{ error: Error | null }>} */

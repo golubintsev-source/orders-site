@@ -128,8 +128,8 @@ function setTaskFormDisabled(disabled) {
   if (textInput) textInput.disabled = disabled;
   if (dueInput) dueInput.disabled = disabled;
   if (executorsList) {
-    executorsList.querySelectorAll(".order-tasks-executor-option").forEach((btn) => {
-      btn.disabled = disabled;
+    executorsList.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.disabled = disabled;
     });
   }
 }
@@ -151,6 +151,8 @@ async function ensureOrderTaskExecutorsLoaded() {
   const hint = document.getElementById("orderTaskExecutorsHint");
   await ensureTaskExecutorsInList(list, hint);
 }
+
+export { ensureOrderTaskExecutorsLoaded };
 
 function renderCompletedCheckboxCell(row) {
   const canToggle = canUserCompleteTask(row);
