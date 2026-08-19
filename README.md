@@ -59,7 +59,9 @@ git push
 
 Чтобы также не плодились одинаковые записи в `order_history` и авто-дельты в `calculations`, дополнительно выполни:
 - **`supabase_order_history_dedup_unique.sql`**
-- **`supabase_calculations_dedup_unique_comment.sql`**
+- **`supabase_calculations_dedup_unique_comment.sql`** — только **мягкое** скрытие (`deleted_at`), не физический DELETE
+
+⚠️ Если вы уже запускали **старую** версию `supabase_calculations_dedup_unique_comment.sql` с `DELETE`, строки без бэкапа не восстановить по id. Используйте **`sql/calculations_dedup_recover_without_backup.sql`** (снимки баланса в `site_access_logs`).
 
 ## Supabase: фото в сообщениях чата
 
