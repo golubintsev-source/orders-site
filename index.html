@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <link rel="preconnect" href="https://yizwpogwabosuguakyzt.supabase.co" crossorigin>
+  <!-- Раздел «Чаты»: запрос списка уходит уже во время разбора HTML, до supabase-js и main.js. -->
+  <script src="./js/chat-boot.js"></script>
+  <!-- В <head>, чтобы скачивание шло параллельно разбору body: config.js требует window.supabase. -->
+  <script defer src="./js/vendor/supabase.js"></script>
   <script defer src="./js/register-sw.js"></script>
   <script defer src="./js/pull-to-refresh.js"></script>
   <title>ФАБРИКА ОКОН</title>
@@ -1924,8 +1929,7 @@
   </div>
 
   <!-- Тяжёлые CDN (Excel ~1MB, leaflet, cropper…) — лениво при экспорте/карте/обрезке фото. -->
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- ± в корректировках: в HTML (network-first), чтобы работало на iPhone даже при старом кэше JS. -->
+  <!-- ± в корректировках: прямо в HTML, чтобы работало на iPhone даже при старом кэше JS. -->
   <script>
     (function () {
       function toggleAdjSign(input) {

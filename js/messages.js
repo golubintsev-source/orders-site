@@ -24,6 +24,10 @@ const CHAT_LIST_POLL_MS = 20_000;
 const CHAT_LIST_DM_PREVIEW_LIMIT = 800;
 /** Первый проход списка чатов: только недавние DM за MESSAGES_FAST_LOAD_DAYS. */
 const CHAT_LIST_FAST_PREVIEW_LIMIT = 200;
+/** Снимок отрисованного списка: js/chat-boot.js показывает его до загрузки модулей. */
+const CHAT_LIST_SNAPSHOT_KEY = "orders_site_chat_list_snapshot_v1";
+/** Больше одного экрана не нужно — не раздуваем localStorage. */
+const CHAT_LIST_SNAPSHOT_MAX_ITEMS = 20;
 /** Сколько последних сообщений диалога грузить сразу. */
 const DIALOG_MESSAGE_LIMIT = 400;
 /** Первая отрисовка списка/диалога: только сообщения за последние N дней. */
@@ -567,6 +571,17 @@ async function fetchGroupChatReads(chatIds) {
     const at = row.last_read_at ? String(row.last_read_at) : null;
     if (!chatId || !at) continue;
     result.set(chatId, at);
+  }
+  return result;
+}
+
+/** Своя прочитанность из уже загруженных статусов участников — без отдельного запроса. */
+function ownReadsFromGroupReceipts(receiptsByChat, uid) {
+  const result = new Map();
+  if (!uid) return result;
+  for (const [chatId, byUser] of receiptsByChat || []) {
+    const at = byUser?.get(String(uid))?.lastReadAt;
+    if (at) result.set(String(chatId), String(at));
   }
   return result;
 }
@@ -1791,7 +1806,7 @@ async function preloadChatListAvatarsForEntries(entries) {
 function renderGroupAvatarHtml(groupAvatarPath, avatarKey) {
   const cachedUrl = getCachedGroupAvatarUrl(groupAvatarPath);
   if (cachedUrl) {
-    return `<span class="messages-chat-avatar messages-chat-avatar--logo" data-avatar-key="${escapeHtml(avatarKey)}" aria-hidden="true"><img src="${escapeHtml(cachedUrl)}" alt="" width="48" height="48" decoding="sync"></span>`;
+    return `<span class="messages-chat-avatar messages-chat-avatar--logo" data-avatar-path="${escapeHtml(groupAvatarPath)}" data-avatar-hydrated="1" data-avatar-key="${escapeHtml(avatarKey)}" aria-hidden="true"><img src="${escapeHtml(cachedUrl)}" alt="" width="48" height="48" decoding="sync"></span>`;
   }
   return `<span class="messages-chat-avatar messages-chat-avatar--loading" data-avatar-path="${escapeHtml(groupAvatarPath)}" data-avatar-key="${escapeHtml(avatarKey)}" aria-hidden="true"></span>`;
 }
@@ -1984,7 +1999,9 @@ function syncChatListDom(list, entries, groupReceiptsByChat) {
 }
 
 async function hydrateGroupAvatars(root = document) {
-  const nodes = [...root.querySelectorAll(".messages-chat-avatar[data-avatar-path]")];
+  const nodes = [
+    ...root.querySelectorAll(".messages-chat-avatar[data-avatar-path]:not([data-avatar-hydrated])"),
+  ];
   if (!nodes.length) return;
   await Promise.all(
     nodes.map(async (el) => {
@@ -2006,7 +2023,9 @@ async function hydrateGroupAvatars(root = document) {
         img.height = 48;
         img.decoding = "sync";
         el.appendChild(img);
-        el.removeAttribute("data-avatar-path");
+        // data-avatar-path оставляем: по нему снимок списка чатов сбрасывает
+        // просроченный подписанный URL обратно в заглушку.
+        el.dataset.avatarHydrated = "1";
       } catch (err) {
         console.warn("Не удалось загрузить аватар группы:", err);
       }
@@ -2016,6 +2035,93 @@ async function hydrateGroupAvatars(root = document) {
 
 let loadChatListGeneration = 0;
 let loadMessagesGeneration = 0;
+
+function whenIdle(timeout = 1500) {
+  return new Promise((resolve) => {
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(() => resolve(), { timeout });
+      return;
+    }
+    setTimeout(resolve, 1);
+  });
+}
+
+/**
+ * Пакет запросов от js/chat-boot.js: они ушли в сеть ещё во время разбора HTML,
+ * до supabase-js и графа main.js. Забираем один раз, дальше — обычные запросы.
+ */
+function takeChatBootPack() {
+  const boot = window.__chatBoot;
+  if (!boot) return null;
+  delete window.__chatBoot;
+  if (String(boot.uid) !== String(getCurrentUserId())) return null;
+  return boot;
+}
+
+/** chat-boot.js просит полный набор колонок: успешный ответ = все опциональные поля есть. */
+function noteFullMessageSchemaSupported() {
+  if (deliveredAtSupported !== false) deliveredAtSupported = true;
+  if (messageActionsSupported !== false) messageActionsSupported = true;
+  if (attachmentColumnsSupported !== false) attachmentColumnsSupported = true;
+}
+
+function adoptBootDmRows(pack, sinceIso) {
+  if (!pack?.rows) {
+    return fetchRecentUserMessagesForChatList({ sinceIso, limit: CHAT_LIST_FAST_PREVIEW_LIMIT });
+  }
+  noteFullMessageSchemaSupported();
+  return { rows: pack.rows, error: null };
+}
+
+function adoptBootUnreadRows(pack) {
+  if (!pack?.rows) return fetchUnreadIncomingDmMeta();
+  noteFullMessageSchemaSupported();
+  return { rows: pack.rows, error: null };
+}
+
+function adoptBootGroupChats(pack) {
+  if (!pack?.rows) return fetchMyGroupChats();
+  groupChatsSupported = true;
+  groupAvatarSupported = true;
+  const chats = pack.rows.map(mapGroupChatRow);
+  groupChatsById = new Map(chats.map((chat) => [chat.id, chat]));
+  return { chats, error: null };
+}
+
+/**
+ * Снимок для мгновенной отрисовки на следующем холодном старте (см. js/chat-boot.js).
+ * Подписанные URL аватаров групп живут минуты, поэтому сохраняем их заглушкой —
+ * hydrateGroupAvatars подставит свежие.
+ */
+function saveChatListSnapshot(list) {
+  const uid = getCurrentUserId();
+  if (!uid) return;
+
+  const items = [...list.querySelectorAll(".messages-chat-item[data-peer-id]")].slice(
+    0,
+    CHAT_LIST_SNAPSHOT_MAX_ITEMS,
+  );
+  if (!items.length) return;
+
+  const html = items
+    .map((item) => {
+      const clone = item.cloneNode(true);
+      for (const avatar of clone.querySelectorAll(".messages-chat-avatar[data-avatar-path]")) {
+        avatar.textContent = "";
+        avatar.removeAttribute("data-avatar-hydrated");
+        avatar.classList.remove("messages-chat-avatar--logo");
+        avatar.classList.add("messages-chat-avatar--loading");
+      }
+      return clone.outerHTML;
+    })
+    .join("");
+
+  try {
+    localStorage.setItem(CHAT_LIST_SNAPSHOT_KEY, JSON.stringify({ uid, html }));
+  } catch {
+    /* переполнение квоты — снимок не обязателен */
+  }
+}
 
 function buildDmUnreadByPeer(unreadRows) {
   const dmUnreadByPeer = new Map();
@@ -2033,11 +2139,12 @@ async function paintChatListFromData(list, rows, unreadRows, groupChats) {
   const dmUnreadByPeer = buildDmUnreadByPeer(unreadRows);
   const peerInfo = buildPeerInfoMap(rows, unreadRows, uid);
   const chatIds = (groupChats || []).map((chat) => chat.id);
-  const [{ lastByChat: lastGroupMessages }, lastReadByChat, groupReceiptsByChat] = await Promise.all([
+  const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat] = await Promise.all([
     fetchLastGroupMessagesByChat(chatIds),
-    fetchGroupChatReads(chatIds),
     fetchGroupMemberReceiptsByChat(chatIds),
   ]);
+  // Своя прочитанность — часть уже полученных статусов участников, отдельный запрос не нужен.
+  const lastReadByChat = ownReadsFromGroupReceipts(groupReceiptsByChat, uid);
   const groupUnreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
 
   const entries = buildChatListEntries(
@@ -2051,9 +2158,17 @@ async function paintChatListFromData(list, rows, unreadRows, groupChats) {
   const signature = buildChatListSignature(entries);
   if (list.dataset.chatListSig === signature) return;
   list.dataset.chatListSig = signature;
+  // Снимок мог быть отрисован прошлой версией renderChatListItem — не достраиваем
+  // поверх него, а заменяем целиком; дальше syncChatListDom работает как обычно.
+  if (list.dataset.chatListFromSnapshot === "1") {
+    list.innerHTML = "";
+    delete list.dataset.chatListFromSnapshot;
+  }
   syncChatListDom(list, entries, groupReceiptsByChat);
   void hydrateGroupAvatars(list);
   void preloadChatListAvatarsForEntries(entries);
+  document.dispatchEvent(new CustomEvent("chat-list-painted"));
+  saveChatListSnapshot(list);
 }
 
 export async function loadChatList() {
@@ -2072,10 +2187,13 @@ export async function loadChatList() {
     msg.classList.remove("messages-page-message--error");
   }
 
+  const boot = takeChatBootPack();
   const [recentPack, unreadPack, groupPack] = await Promise.all([
-    fetchRecentUserMessagesForChatList({ sinceIso, limit: CHAT_LIST_FAST_PREVIEW_LIMIT }),
-    fetchUnreadIncomingDmMeta(),
-    fetchMyGroupChats(),
+    boot
+      ? boot.dm.then((pack) => adoptBootDmRows(pack, sinceIso))
+      : fetchRecentUserMessagesForChatList({ sinceIso, limit: CHAT_LIST_FAST_PREVIEW_LIMIT }),
+    boot ? boot.unread.then(adoptBootUnreadRows) : fetchUnreadIncomingDmMeta(),
+    boot ? boot.groups.then(adoptBootGroupChats) : fetchMyGroupChats(),
   ]);
 
   if (gen !== loadChatListGeneration) return;
@@ -2102,7 +2220,11 @@ export async function loadChatList() {
     groupPack.chats || [],
   );
 
+  // Второй проход добирает переписки старше MESSAGES_FAST_LOAD_DAYS. Он не влияет на
+  // первый экран, поэтому ждём простоя: иначе 800 строк конкурируют с отрисовкой.
   void (async () => {
+    await whenIdle();
+    if (gen !== loadChatListGeneration || messagesView !== "list") return;
     const fuller = await fetchRecentUserMessagesForChatList({
       sinceIso: null,
       limit: CHAT_LIST_DM_PREVIEW_LIMIT,

@@ -64,9 +64,37 @@ function ensureBootOrFallback() {
   document.documentElement.setAttribute("data-route-boot", "1");
 }
 
+/** Простой главного потока; на iOS requestIdleCallback появился только в 16.4. */
+function whenIdle(timeout = 2500) {
+  return new Promise((resolve) => {
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(() => resolve(), { timeout });
+      return;
+    }
+    setTimeout(resolve, 1);
+  });
+}
+
+/**
+ * Первый отрисованный список чатов (или таймаут, если раздел не открывался).
+ * Вторичные модули весят ~600 КБ и на iPhone заметно отодвигают этот кадр.
+ */
+function whenChatListPainted(timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      document.removeEventListener("chat-list-painted", done);
+      resolve();
+    };
+    const timer = setTimeout(done, timeoutMs);
+    document.addEventListener("chat-list-painted", done, { once: true });
+  });
+}
+
 /**
  * Тяжёлые разделы вне критического пути заказов.
- * @param {{ urgent?: boolean }} [opts] urgent — ждать загрузки (сообщения/задачи и т.п.)
+ * @param {{ urgent?: boolean, after?: Promise<unknown> }} [opts]
+ *   urgent — ждать загрузки (сообщения/задачи и т.п.); after — чего дождаться перед стартом.
  */
 async function initSecondarySections(opts = {}) {
   const urgent = Boolean(opts.urgent);
@@ -137,13 +165,10 @@ async function initSecondarySections(opts = {}) {
   }
 
   // Заказы / новый / форма: не ждём ~400 КБ вторичных модулей.
-  const schedule =
-    typeof requestIdleCallback === "function"
-      ? (cb) => requestIdleCallback(cb, { timeout: 2500 })
-      : (cb) => setTimeout(cb, 1);
-  schedule(() => {
-    void run().catch((err) => console.error("Вторичная инициализация:", err));
-  });
+  void Promise.resolve(opts.after)
+    .then(() => whenIdle())
+    .then(run)
+    .catch((err) => console.error("Вторичная инициализация:", err));
 }
 
 async function init() {
@@ -202,7 +227,16 @@ async function init() {
 
     hydrateCachedRoleFromStorage();
 
-    const ordersPromise = loadOrders();
+    // «Чаты» доступны любой роли, поэтому раздел поднимаем до профиля, настроек и заказов:
+    // иначе первый запрос списка чатов ждёт лишние round-trip'ы к Supabase.
+    const messagesFirst = getRouteSectionFromUrl() === "messages";
+    if (messagesFirst) {
+      applyRouteOnLoad();
+      ensurePopstateRouting();
+    }
+
+    // На «Чатах» заказы нужны только компоновщику и фильтру упоминаний — не в первом кадре.
+    const ordersPromise = messagesFirst ? whenIdle().then(() => loadOrders()) : loadOrders();
 
     await Promise.all([loadProfile(), loadSettings()]);
     const { applySettingsAdminBlocksVisibility } = await import("./settings.js");
@@ -211,8 +245,10 @@ async function init() {
     populateOrderFormInstallerSelect();
     applyMoneyRecipientSelectsForRole();
     refreshSectionNavAfterProfile();
-    applyRouteOnLoad();
-    ensurePopstateRouting();
+    if (!messagesFirst) {
+      applyRouteOnLoad();
+      ensurePopstateRouting();
+    }
 
     const sectionNow = getCurrentSectionId();
     const savedApp = readSavedPlaceForCurrentPage(user.id)?.app;
@@ -252,7 +288,10 @@ async function init() {
     if (waitSecondary) {
       await initSecondarySections({ urgent: true });
     } else {
-      void initSecondarySections({ urgent: false });
+      void initSecondarySections({
+        urgent: false,
+        after: messagesFirst ? whenChatListPainted() : null,
+      });
     }
 
     if (orderIdFromUrl != null) {
