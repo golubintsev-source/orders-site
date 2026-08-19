@@ -82,7 +82,7 @@
             </button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="tasks-all">
               <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-              <span class="section-nav-dropdown-item-text">Все задачи</span>
+              <span class="section-nav-dropdown-item-text">Мои задачи</span>
             </button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="changes-all">
               <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
@@ -128,6 +128,21 @@
           </div>
         </div>
         <div class="topbar-orders-type-tools">
+          <button
+            id="myTasksNavBtn"
+            class="my-tasks-nav-btn"
+            type="button"
+            title="Мои задачи"
+            aria-label="Мои задачи"
+          >
+            <svg class="my-tasks-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="5" y="3" width="14" height="18" rx="2" stroke="currentColor" stroke-width="2" />
+              <path d="M9 8.5l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M9 14h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <path d="M9 17h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span id="myTasksPendingBadge" class="messages-unread-badge" hidden>0</span>
+          </button>
           <button
             id="messagesNavBtn"
             class="messages-nav-btn"
@@ -836,13 +851,37 @@
 
     <section id="section-tasks-all" class="content-section">
       <div class="card order-tasks-card">
+        <div class="order-tasks-form-stack">
+          <div class="field order-tasks-field">
+            <label for="orderTaskTextInput">Новая задача</label>
+            <div class="order-tasks-input-row">
+              <input type="text" id="orderTaskTextInput" class="order-tasks-input" placeholder="Текст задачи" autocomplete="off" />
+              <button type="button" id="orderTaskCreateBtn" class="btn-primary order-tasks-create-btn">Создать</button>
+            </div>
+          </div>
+          <div class="field order-tasks-field">
+            <label>Исполнители</label>
+            <div id="orderTaskExecutorsList" class="messages-create-group-users order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>
+            <p id="orderTaskExecutorsHint" class="order-tasks-executors-hint" hidden>Загрузка пользователей…</p>
+            <p class="order-tasks-executors-hint">Можно выбрать себя — личная задача будет видна только вам.</p>
+          </div>
+          <div class="field order-tasks-field">
+            <label for="orderTaskDueAtInput">Срок выполнения</label>
+            <input type="datetime-local" id="orderTaskDueAtInput" class="order-tasks-due-input" />
+            <p class="order-tasks-due-hint">По умолчанию — через 3 часа. Очистите поле, если срок не нужен.</p>
+          </div>
+        </div>
+        <p id="myTasksFormMessage" class="order-tasks-hint"></p>
+
+        <h3 class="my-tasks-block-title">Где я исполнитель</h3>
         <div class="table-wrap">
           <table id="allTasksTable">
             <thead>
               <tr>
-                <th>Заказ</th>
-                <th>Дата время</th>
                 <th>Автор</th>
+                <th>Исполнители</th>
+                <th>Срок</th>
+                <th>Статус</th>
                 <th>Текст</th>
               </tr>
             </thead>
@@ -850,6 +889,22 @@
           </table>
         </div>
         <p id="allTasksMessage" class="order-tasks-hint"></p>
+
+        <h3 class="my-tasks-block-title">Где я автор</h3>
+        <div class="table-wrap">
+          <table id="myAuthorTasksTable">
+            <thead>
+              <tr>
+                <th>Исполнители</th>
+                <th>Срок</th>
+                <th>Статус</th>
+                <th>Текст</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="myAuthorTasksMessage" class="order-tasks-hint"></p>
       </div>
     </section>
 
@@ -914,32 +969,40 @@
 
     <section id="section-order-tasks" class="content-section">
       <div class="card order-tasks-card">
-        <div class="order-tasks-form-stack">
-          <div class="field order-tasks-field">
-            <label for="orderTaskTextInput">Новая задача</label>
-            <div class="order-tasks-input-row">
-              <input type="text" id="orderTaskTextInput" class="order-tasks-input" placeholder="Текст задачи" autocomplete="off" />
-              <button type="button" id="orderTaskCreateBtn" class="btn-primary order-tasks-create-btn">Создать</button>
-            </div>
-          </div>
-          <label class="order-tasks-highlight-label">
-            <input type="checkbox" id="orderTaskHighlightCheckbox" />
-            <span>Выделить</span>
-          </label>
-        </div>
+        <h2 id="orderTasksPageTitle" class="order-tasks-page-title"></h2>
+
+        <h3 class="my-tasks-block-title">Где я исполнитель</h3>
         <div class="table-wrap">
-          <table id="orderTasksTable">
+          <table id="orderTasksExecutorTable">
             <thead>
               <tr>
-                <th>Дата время</th>
                 <th>Автор</th>
+                <th>Исполнители</th>
+                <th>Срок</th>
+                <th>Статус</th>
                 <th>Текст</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
-        <p id="orderTasksMessage" class="order-tasks-hint"></p>
+        <p id="orderTasksExecutorMessage" class="order-tasks-hint"></p>
+
+        <h3 class="my-tasks-block-title">Где я автор</h3>
+        <div class="table-wrap">
+          <table id="orderTasksAuthorTable">
+            <thead>
+              <tr>
+                <th>Исполнители</th>
+                <th>Срок</th>
+                <th>Статус</th>
+                <th>Текст</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="orderTasksAuthorMessage" class="order-tasks-hint"></p>
       </div>
     </section>
 
@@ -1042,6 +1105,55 @@
           </div>
         </dialog>
 
+        <dialog
+          id="taskCreateDialog"
+          class="task-create-dialog"
+          aria-labelledby="taskCreateDialogTitle"
+        >
+          <div class="task-create-dialog-panel">
+            <div class="task-create-dialog-header">
+              <h3 id="taskCreateDialogTitle" class="task-create-dialog-title">Новая задача</h3>
+              <button
+                type="button"
+                id="taskCreateDialogCloseBtn"
+                class="task-create-dialog-close"
+                aria-label="Закрыть"
+                title="Закрыть"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <label class="task-create-dialog-field">
+              <span class="task-create-dialog-label">Текст задачи</span>
+              <textarea
+                id="taskCreateDialogText"
+                class="task-create-dialog-text"
+                rows="3"
+                autocomplete="off"
+              ></textarea>
+            </label>
+            <div class="task-create-dialog-field">
+              <span class="task-create-dialog-label">Исполнители</span>
+              <div id="taskCreateDialogExecutors" class="messages-create-group-users order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>
+              <p id="taskCreateDialogExecutorsHint" class="order-tasks-executors-hint" hidden>Загрузка пользователей…</p>
+              <p class="order-tasks-executors-hint">Можно выбрать себя — личная задача будет видна только вам.</p>
+            </div>
+            <label class="task-create-dialog-field">
+              <span class="task-create-dialog-label">Срок выполнения</span>
+              <input type="datetime-local" id="taskCreateDialogDueAt" class="order-tasks-due-input task-create-dialog-due" />
+              <p class="order-tasks-due-hint">По умолчанию — через 3 часа. Очистите поле, если срок не нужен.</p>
+            </label>
+            <p id="taskCreateDialogError" class="task-create-dialog-error" hidden></p>
+            <div class="task-create-dialog-actions">
+              <button type="button" id="taskCreateDialogSubmitBtn" class="btn-primary task-create-dialog-submit">Создать</button>
+              <button type="button" id="taskCreateDialogCancelBtn" class="task-create-dialog-cancel">Отменить</button>
+            </div>
+          </div>
+        </dialog>
+
         <div id="messagesDialogView" class="messages-dialog-view" hidden>
           <header class="messages-dialog-header">
             <button
@@ -1130,6 +1242,7 @@
           >
             <button type="button" class="messages-action-menu-item" data-action="reply" role="menuitem">Ответить</button>
             <button type="button" class="messages-action-menu-item" data-action="copy" role="menuitem">Копировать</button>
+            <button type="button" class="messages-action-menu-item" data-action="create-task" role="menuitem">Создать задачу</button>
             <button type="button" class="messages-action-menu-item" data-action="edit" role="menuitem">Изменить</button>
             <button type="button" class="messages-action-menu-item" data-action="attach-to-order" role="menuitem" hidden>Прикрепить к заказу</button>
             <button type="button" class="messages-action-menu-item messages-action-menu-item--danger" data-action="delete" role="menuitem">Удалить</button>

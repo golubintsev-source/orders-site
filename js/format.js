@@ -117,6 +117,20 @@ export function formatTaskAuthorShort(raw) {
   return `${s.slice(0, 5)}...`;
 }
 
+/** Список исполнителей для таблицы задач. */
+export function formatTaskExecutors(emails, nameByEmail) {
+  const list = Array.isArray(emails) ? emails : [];
+  const names = list
+    .map((e) => {
+      const email = String(e || "").trim();
+      if (!email) return "";
+      return typeof nameByEmail === "function" ? nameByEmail(email) : email;
+    })
+    .filter(Boolean);
+  if (!names.length) return "—";
+  return names.join(", ");
+}
+
 /**
  * Цифры телефона с ведущей 7 → 8 (ввод «7…» и «+7…» дают одно и то же).
  * Обрезка до 11 цифр.

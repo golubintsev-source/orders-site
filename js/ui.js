@@ -159,15 +159,7 @@ export function openOrderIdActionsMenu(idTd) {
     ? `<button type="button" class="order-id-actions-menu-item" role="menuitem" data-action="edit">${edit}<span>Редактировать</span></button>`
     : "";
 
-  const tasksHighlight =
-    orderRow &&
-    (orderRow.tasks_highlight === true ||
-      orderRow.tasks_highlight === 1 ||
-      orderRow.tasks_highlight === "1");
-  const tasksItemClass = tasksHighlight
-    ? "order-id-actions-menu-item order-id-actions-menu-item--tasks-highlight"
-    : "order-id-actions-menu-item";
-  const tasksItem = `<button type="button" class="${tasksItemClass}" role="menuitem" data-action="tasks">${tasks}<span>Задачи</span></button>`;
+  const tasksItem = `<button type="button" class="order-id-actions-menu-item" role="menuitem" data-action="tasks">${tasks}<span>Задачи</span></button>`;
 
   const lockChecked = orderRow && isOrderEditLockedForUserLite(orderRow);
   const lockBlock =

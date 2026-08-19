@@ -85,6 +85,7 @@ import {
 } from "./offline-cache.js";
 import { shortLoginByEmail } from "./user-names.js";
 import { getEditors } from "./settings.js";
+import { orderHasActiveTask } from "./order-task-links.js";
 
 function mergedLocalOrdersForOfflineDisplayMeta() {
   const snap = readSnapshot();
@@ -180,11 +181,11 @@ function refreshOrdersDependentSections() {
   if (getCurrentSectionId() === "tasks-all") {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadAllTasks());
-  } else if (getCurrentSectionId() === "changes-all") {
-    void import("./all-changes.js").then((m) => m.loadAllChanges());
   } else if (getCurrentSectionId() === "order-tasks") {
     refreshSectionNavLabel();
     void import("./tasks.js").then((m) => m.loadOrderTasks());
+  } else if (getCurrentSectionId() === "changes-all") {
+    void import("./all-changes.js").then((m) => m.loadAllChanges());
   } else if (getCurrentSectionId() === "route-sheet") {
     void import("./route-sheet.js").then((m) => m.loadRouteSheet());
   }
@@ -220,7 +221,6 @@ const ORDERS_LIST_SELECT = [
   "order_type",
   "order_number",
   "lock_edit_for_user_lite",
-  "tasks_highlight",
   "coordinates",
 ].join(",");
 
@@ -1677,11 +1677,7 @@ function buildOrderMainFieldsCellsHtml(order) {
   if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
   if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
   if (isOrderEditLockedForUserLite(order)) orderIdChipClasses.push("order-id-chip--lock-user-lite");
-  const tasksHighlight =
-    order.tasks_highlight === true ||
-    order.tasks_highlight === 1 ||
-    order.tasks_highlight === "1";
-  if (tasksHighlight) orderIdChipClasses.push("order-id-chip--highlight-tasks");
+  if (orderHasActiveTask(order.id)) orderIdChipClasses.push("order-id-chip--highlight-tasks");
   /* Номер в таблице: 4 цифры + «_» + первая буква типа заказа (например 0112_О) */
   const orderNumberDisplay =
     order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";

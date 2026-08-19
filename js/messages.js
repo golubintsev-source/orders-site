@@ -12,6 +12,7 @@ import {
   uploadChatPhoto,
 } from "./files.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { messageHasActiveTask } from "./message-task-links.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 /** Максимальная высота поля ввода сообщения (как в CSS max-height). */
@@ -1170,8 +1171,10 @@ function renderMessageItem(row) {
     ? `<div class="message-item-body message-item-body-text">${bodyHtml}</div>`
     : "";
   const ownAttr = isOut ? ' data-own="1"' : ' data-own="0"';
+  const messageKind = isGroupChat() ? "group" : "user";
+  const taskClass = messageHasActiveTask(messageKind, row.id) ? " message-item--has-active-task" : "";
   return `
-    <article class="${messageItemClass(row)}" data-message-id="${row.id}"${statusAttr}${ownAttr}>
+    <article class="${messageItemClass(row)}${taskClass}" data-message-id="${row.id}" data-message-kind="${messageKind}"${statusAttr}${ownAttr}>
       ${headerHtml}
       ${replyHtml}
       ${attachmentHtml}
@@ -2375,6 +2378,8 @@ export async function loadMessages() {
     clearFeedMessageCache();
     rememberFeedMessages(rows);
 
+    await import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
+
     if (isGroupChat()) {
       const groupId = parseGroupId();
       if (groupId) await loadActiveGroupReceipts(groupId);
@@ -3441,11 +3446,13 @@ function showMessageActionMenu(messageEl, clientX, clientY, { fromPhoto = false 
 
   const replyBtn = menu.querySelector('[data-action="reply"]');
   const copyBtn = menu.querySelector('[data-action="copy"]');
+  const createTaskBtn = menu.querySelector('[data-action="create-task"]');
   const editBtn = menu.querySelector('[data-action="edit"]');
   const attachBtn = menu.querySelector('[data-action="attach-to-order"]');
   const deleteBtn = menu.querySelector('[data-action="delete"]');
   if (replyBtn) replyBtn.hidden = false;
   if (copyBtn) copyBtn.hidden = !getMessageCopyText(row);
+  if (createTaskBtn) createTaskBtn.hidden = !getMessageCopyText(row);
   if (editBtn) editBtn.hidden = !isOwn;
   if (attachBtn) attachBtn.hidden = !(actionMenuFromPhoto && messageHasAttachment(row));
   if (deleteBtn) deleteBtn.hidden = !isOwn;
@@ -3824,6 +3831,23 @@ function runMessageAction(action, messageId) {
   }
   if (action === "copy") {
     void copyMessageText(row);
+    return true;
+  }
+  if (action === "create-task") {
+    const text = getMessageCopyText(row);
+    if (!text) return false;
+    const messageKind = isGroupChat() ? "group" : "user";
+    queueMicrotask(() => {
+      void import("./task-create-dialog.js").then(async (m) => {
+        const { parseFirstOrderIdFromMessageBody } = await import("./task-form-shared.js");
+        m.openTaskCreateDialog({
+          body: text,
+          sourceMessageId: row.id,
+          sourceMessageKind: messageKind,
+          sourceOrderId: parseFirstOrderIdFromMessageBody(row.body),
+        });
+      });
+    });
     return true;
   }
   if (action === "edit") {

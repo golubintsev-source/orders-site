@@ -2017,8 +2017,8 @@ h2 {
 #allTasksTable {
   min-width: 320px;
 }
-#allTasksTable tbody tr.all-tasks-row {
-  cursor: pointer;
+#allTasksTable tbody tr.my-tasks-row {
+  cursor: default;
 }
 #allTasksTable th,
 #allTasksTable td {
@@ -2032,12 +2032,131 @@ h2 {
   max-width: 420px;
 }
 
-#allTasksTable tbody tr.all-tasks-row--highlight {
-  background-color: #fca5a5;
+#allTasksTable tbody tr.my-tasks-row--pending {
+  background-color: #fecaca;
   color: #450a0a;
 }
-#allTasksTable tbody tr.all-tasks-row--highlight:hover {
-  background-color: #f87171;
+#allTasksTable tbody tr.my-tasks-row--pending:hover {
+  background-color: #fca5a5;
+}
+
+#allTasksTable tbody tr.my-tasks-row--completed {
+  background-color: #e5e7eb;
+  color: #6b7280;
+}
+#allTasksTable tbody tr.my-tasks-row--completed:hover {
+  background-color: #d1d5db;
+}
+
+#myAuthorTasksTable {
+  min-width: 320px;
+}
+#myAuthorTasksTable tbody tr.my-tasks-row {
+  cursor: default;
+}
+#myAuthorTasksTable th,
+#myAuthorTasksTable td {
+  padding: 8px 10px;
+  font-size: 13px;
+  vertical-align: top;
+}
+#myAuthorTasksTable .order-tasks-text-cell {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 420px;
+}
+#myAuthorTasksTable tbody tr.my-tasks-row--pending {
+  background-color: #fecaca;
+  color: #450a0a;
+}
+#myAuthorTasksTable tbody tr.my-tasks-row--pending:hover {
+  background-color: #fca5a5;
+}
+#myAuthorTasksTable tbody tr.my-tasks-row--completed {
+  background-color: #e5e7eb;
+  color: #6b7280;
+}
+#myAuthorTasksTable tbody tr.my-tasks-row--completed:hover {
+  background-color: #d1d5db;
+}
+
+.my-tasks-block-title {
+  margin: 20px 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+.order-tasks-form-stack + .order-tasks-hint + .my-tasks-block-title {
+  margin-top: 8px;
+}
+
+.order-tasks-page-title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+#orderTasksExecutorTable,
+#orderTasksAuthorTable {
+  min-width: 320px;
+}
+#orderTasksExecutorTable tbody tr.my-tasks-row,
+#orderTasksAuthorTable tbody tr.my-tasks-row {
+  cursor: default;
+}
+#orderTasksExecutorTable th,
+#orderTasksExecutorTable td,
+#orderTasksAuthorTable th,
+#orderTasksAuthorTable td {
+  padding: 8px 10px;
+  font-size: 13px;
+  vertical-align: top;
+}
+#orderTasksExecutorTable .order-tasks-text-cell,
+#orderTasksAuthorTable .order-tasks-text-cell {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 420px;
+}
+#orderTasksExecutorTable tbody tr.my-tasks-row--pending,
+#orderTasksAuthorTable tbody tr.my-tasks-row--pending {
+  background-color: #fecaca;
+  color: #450a0a;
+}
+#orderTasksExecutorTable tbody tr.my-tasks-row--pending:hover,
+#orderTasksAuthorTable tbody tr.my-tasks-row--pending:hover {
+  background-color: #fca5a5;
+}
+#orderTasksExecutorTable tbody tr.my-tasks-row--completed,
+#orderTasksAuthorTable tbody tr.my-tasks-row--completed {
+  background-color: #e5e7eb;
+  color: #6b7280;
+}
+#orderTasksExecutorTable tbody tr.my-tasks-row--completed:hover,
+#orderTasksAuthorTable tbody tr.my-tasks-row--completed:hover {
+  background-color: #d1d5db;
+}
+
+.my-tasks-status-cell {
+  white-space: nowrap;
+}
+.my-tasks-status-text {
+  display: inline-block;
+  margin-right: 6px;
+}
+.my-tasks-status-toggle {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin: 0;
+  cursor: pointer;
+}
+.my-tasks-status-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
 }
 
 /* Период и поиск над таблицей «Все изменения» */
@@ -2489,6 +2608,56 @@ h2 {
   gap: 10px;
   margin-bottom: 14px;
   max-width: 640px;
+}
+.order-tasks-executors-list {
+  width: 100%;
+  max-width: 640px;
+}
+.order-tasks-executors-list.messages-create-group-users {
+  max-height: min(36vh, 240px);
+}
+.order-tasks-executor-user--self .messages-create-group-user-name {
+  font-weight: 600;
+}
+.order-tasks-executors-hint,
+.order-tasks-due-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+.order-tasks-due-input {
+  max-width: 280px;
+}
+.order-tasks-executors-cell {
+  white-space: normal;
+  min-width: 80px;
+  max-width: 160px;
+}
+.order-tasks-completed-cell {
+  white-space: nowrap;
+}
+.order-tasks-completed-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  user-select: none;
+}
+.order-tasks-completed-label input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+}
+.order-tasks-completed-label input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.order-tasks-completed-text {
+  white-space: nowrap;
 }
 .order-tasks-form-stack .order-tasks-field {
   width: 100%;
@@ -6609,6 +6778,85 @@ th {
   box-shadow: 0 2px 6px rgba(220, 38, 38, 0.45);
 }
 
+/* ——— Мои задачи (кнопка в шапке) ——— */
+.my-tasks-nav-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fb923c 0%, #ea580c 55%, #c2410c 100%);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow:
+    0 2px 10px rgba(234, 88, 12, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.my-tasks-nav-btn:hover {
+  filter: brightness(1.06);
+  box-shadow:
+    0 4px 14px rgba(234, 88, 12, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  transform: translateY(-1px);
+}
+
+.my-tasks-nav-btn:active {
+  transform: translateY(0);
+  box-shadow:
+    0 1px 6px rgba(234, 88, 12, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.my-tasks-nav-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(251, 146, 60, 0.45),
+    0 2px 10px rgba(234, 88, 12, 0.38);
+}
+
+.my-tasks-nav-btn--has-pending {
+  animation: my-tasks-nav-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes my-tasks-nav-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 2px 10px rgba(234, 88, 12, 0.38),
+      inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  }
+
+  50% {
+    box-shadow:
+      0 2px 10px rgba(234, 88, 12, 0.38),
+      0 0 0 4px rgba(251, 146, 60, 0.32),
+      inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .my-tasks-nav-btn--has-pending {
+    animation: none;
+  }
+}
+
+.my-tasks-nav-icon {
+  display: block;
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.12));
+}
+
 .messages-page {
   display: flex;
   flex-direction: column;
@@ -6754,6 +7002,136 @@ th {
 
 .messages-create-group-dialog-close svg {
   display: block;
+}
+
+.task-create-dialog {
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  max-width: min(100vw - 24px, 440px);
+  max-height: min(100dvh - 24px, 100vh - 24px);
+  width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
+}
+
+.task-create-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.task-create-dialog-panel {
+  padding: 14px 16px 16px;
+}
+
+.task-create-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.task-create-dialog-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.3;
+  padding-top: 4px;
+}
+
+.task-create-dialog-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #4b5563;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  font-family: inherit;
+  line-height: 0;
+}
+
+.task-create-dialog-close:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: #111827;
+}
+
+.task-create-dialog-field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.task-create-dialog-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.task-create-dialog-text {
+  display: block;
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.task-create-dialog-due {
+  max-width: 100%;
+}
+
+.task-create-dialog-error {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #b91c1c;
+}
+
+.task-create-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.task-create-dialog-submit {
+  flex: 1 1 auto;
+  min-width: 120px;
+}
+
+.task-create-dialog-cancel {
+  flex: 1 1 auto;
+  min-width: 120px;
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.task-create-dialog-cancel:hover {
+  background: #f9fafb;
 }
 
 .messages-create-group-field {
@@ -7301,6 +7679,11 @@ th {
 
 .message-item--menu-open {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+}
+
+.message-item--has-active-task {
+  border-top: 4px solid #dc2626;
+  padding-top: 4px;
 }
 
 .message-item--flash {
