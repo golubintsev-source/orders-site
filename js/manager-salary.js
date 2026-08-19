@@ -7,6 +7,7 @@ import {
   isShopOrder,
 } from "./roles.js";
 import { formatAmount, formatAmountWholeRubles, formatDateShortRU, formatOrderIdTypeChip } from "./format.js";
+import { orderHasActiveTask } from "./order-task-links.js";
 
 /** Статусы с «Производство» и далее, включая «Заказ закрыт». */
 const MANAGER_SALARY_STATUSES = new Set([
@@ -349,6 +350,7 @@ function buildRowHtml(order) {
   if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
   if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
   if (isOrderEditLockedForUserLite(order)) orderIdChipClasses.push("order-id-chip--lock-user-lite");
+  if (orderHasActiveTask(order.id)) orderIdChipClasses.push("order-id-chip--highlight-tasks");
 
   const orderNumberDisplay =
     order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";

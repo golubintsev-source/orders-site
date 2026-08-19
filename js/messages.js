@@ -3838,13 +3838,15 @@ function runMessageAction(action, messageId) {
     if (!text) return false;
     const messageKind = isGroupChat() ? "group" : "user";
     queueMicrotask(() => {
-      void import("./task-create-dialog.js").then((m) =>
+      void import("./task-create-dialog.js").then(async (m) => {
+        const { parseFirstOrderIdFromMessageBody } = await import("./task-form-shared.js");
         m.openTaskCreateDialog({
           body: text,
           sourceMessageId: row.id,
           sourceMessageKind: messageKind,
-        }),
-      );
+          sourceOrderId: parseFirstOrderIdFromMessageBody(row.body),
+        });
+      });
     });
     return true;
   }

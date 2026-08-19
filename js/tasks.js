@@ -227,6 +227,7 @@ async function onTaskCompletedCheckboxChange(checkbox) {
   void loadAllTasks();
   void refreshMyTasksNavBadge();
   void import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
+  void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
 }
 
 function bindTaskCompletedCheckboxDelegation(root) {
@@ -371,6 +372,7 @@ export async function createOrderTask() {
   void loadAllTasks();
   void refreshMyTasksNavBadge();
   void import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
+  void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
 }
 
 const MY_TASKS_BADGE_POLL_MS = 60_000;
@@ -449,6 +451,7 @@ export function initOrderTasksSection() {
 
   void ensureOrderTaskExecutorsLoaded();
   startMyTasksBadgePolling();
+  void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
 
   bindTaskCompletedCheckboxDelegation(document.getElementById("orderTasksTable"));
   bindTaskCompletedCheckboxDelegation(document.getElementById("allTasksTable"));

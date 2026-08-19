@@ -10,9 +10,12 @@ import {
 let dialogInited = false;
 /** @type {{ id: string | number, kind: string } | null} */
 let pendingSourceMessage = null;
+/** @type {number | null} */
+let pendingSourceOrderId = null;
 
 function clearPendingSourceMessage() {
   pendingSourceMessage = null;
+  pendingSourceOrderId = null;
 }
 
 function getDialogEls() {
@@ -73,12 +76,14 @@ async function submitTaskCreateDialog() {
   const executorEmails = getSelectedExecutorEmailsFrom(executorsList);
   const dueAt = datetimeLocalToIso(dueInput?.value);
   const source = pendingSourceMessage;
+  const sourceOrderId = pendingSourceOrderId;
   const { error } = await insertTask({
     body: text,
     executorEmails,
     dueAt,
     sourceMessageId: source?.id ?? null,
     sourceMessageKind: source?.kind ?? null,
+    orderId: sourceOrderId,
   });
 
   if (submitBtn) submitBtn.disabled = false;
@@ -103,6 +108,12 @@ async function submitTaskCreateDialog() {
       m.applyMessageTaskHighlightsInFeed();
     });
   }
+  if (sourceOrderId != null) {
+    void import("./order-task-links.js").then((m) => {
+      m.addActiveTaskOrderRef(sourceOrderId);
+      m.applyOrderTaskHighlightsInDom();
+    });
+  }
   clearPendingSourceMessage();
 }
 
@@ -110,6 +121,7 @@ export async function openTaskCreateDialog({
   body = "",
   sourceMessageId = null,
   sourceMessageKind = null,
+  sourceOrderId = null,
 } = {}) {
   const { dialog, textInput, dueInput, executorsList, executorsHint } = getDialogEls();
   if (!dialog) return;
@@ -117,6 +129,10 @@ export async function openTaskCreateDialog({
   pendingSourceMessage =
     sourceMessageId != null && sourceMessageKind
       ? { id: sourceMessageId, kind: sourceMessageKind }
+      : null;
+  pendingSourceOrderId =
+    sourceOrderId != null && Number.isFinite(Number(sourceOrderId)) && Number(sourceOrderId) > 0
+      ? Number(sourceOrderId)
       : null;
 
   await ensureTaskExecutorsInList(executorsList, executorsHint);

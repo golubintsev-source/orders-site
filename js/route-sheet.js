@@ -7,6 +7,7 @@ import {
 } from "./roles.js";
 import { formatOrderIdTypeChip, formatDateShortRU, formatAmount, tryParseRublesInteger } from "./format.js";
 import { isOrderPaid, loadOrders } from "./orders.js";
+import { orderHasActiveTask } from "./order-task-links.js";
 import { closeOrderIdActionsMenu, openOrderIdActionsMenu } from "./ui.js";
 import { setMessage } from "./dom.js";
 import { supabaseClient } from "./config.js";
@@ -298,6 +299,7 @@ function orderIdCellHtml(order) {
   if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
   if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
   if (isOrderEditLockedForUserLite(order)) orderIdChipClasses.push("order-id-chip--lock-user-lite");
+  if (orderHasActiveTask(order.id)) orderIdChipClasses.push("order-id-chip--highlight-tasks");
   const orderNumberDisplay =
     order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";
   return `<td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}" data-lock-edit-user-lite="${isOrderEditLockedForUserLite(order) ? "1" : "0"}">

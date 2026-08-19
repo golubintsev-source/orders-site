@@ -639,6 +639,7 @@ export function addPendingOfflineTask({
   executor_emails,
   due_at,
   is_completed,
+  order_id,
   source_message_id,
   source_message_kind,
 }) {
@@ -651,6 +652,7 @@ export function addPendingOfflineTask({
     executor_emails: Array.isArray(executor_emails) ? executor_emails : [],
     due_at: due_at || null,
     is_completed: is_completed === true,
+    order_id: order_id ?? null,
     source_message_id: source_message_id ?? null,
     source_message_kind: source_message_kind || null,
     created_at: created_at || new Date().toISOString(),
@@ -688,6 +690,7 @@ export function pendingTaskDisplayRows() {
     executor_emails: Array.isArray(t.executor_emails) ? t.executor_emails : [],
     due_at: t.due_at || null,
     is_completed: t.is_completed === true,
+    order_id: t.order_id ?? null,
     source_message_id: t.source_message_id ?? null,
     source_message_kind: t.source_message_kind || null,
     created_at: t.created_at,
@@ -879,6 +882,7 @@ async function syncPendingTasksToSupabase() {
       executor_emails: Array.isArray(t.executor_emails) ? t.executor_emails : [],
       due_at: t.due_at || null,
       is_completed: t.is_completed === true,
+      order_id: t.order_id ?? null,
       source_message_id: t.source_message_id ?? null,
       source_message_kind: t.source_message_kind || null,
     });

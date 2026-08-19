@@ -85,6 +85,7 @@ import {
 } from "./offline-cache.js";
 import { shortLoginByEmail } from "./user-names.js";
 import { getEditors } from "./settings.js";
+import { orderHasActiveTask } from "./order-task-links.js";
 
 function mergedLocalOrdersForOfflineDisplayMeta() {
   const snap = readSnapshot();
@@ -1676,6 +1677,7 @@ function buildOrderMainFieldsCellsHtml(order) {
   if (filesCount > 0) orderIdChipClasses.push("order-id-chip--has-files");
   if (hasPhone) orderIdChipClasses.push("order-id-chip--has-phone");
   if (isOrderEditLockedForUserLite(order)) orderIdChipClasses.push("order-id-chip--lock-user-lite");
+  if (orderHasActiveTask(order.id)) orderIdChipClasses.push("order-id-chip--highlight-tasks");
   /* Номер в таблице: 4 цифры + «_» + первая буква типа заказа (например 0112_О) */
   const orderNumberDisplay =
     order.id != null ? escapeHtml(formatOrderIdTypeChip(order.id, order.order_type)) : "";

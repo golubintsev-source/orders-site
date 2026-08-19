@@ -23,6 +23,14 @@ function toDatetimeLocalValue(d) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
+/** Первый номер заказа из тела сообщения ([[order:123]]). */
+export function parseFirstOrderIdFromMessageBody(body) {
+  const m = String(body || "").match(/\[\[order:(\d+)\]\]/);
+  if (!m) return null;
+  const id = Number(m[1]);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
 export function defaultTaskDueAtLocal() {
   const d = new Date();
   d.setHours(d.getHours() + 3);
@@ -195,6 +203,7 @@ export async function insertTask({
   dueAt,
   sourceMessageId,
   sourceMessageKind,
+  orderId,
 }) {
   if (!state.currentUser) {
     return { error: new Error("not authenticated") };
@@ -206,12 +215,18 @@ export async function insertTask({
     return { error: new Error("empty body") };
   }
 
+  const linkedOrderId =
+    orderId != null && Number.isFinite(Number(orderId)) && Number(orderId) > 0
+      ? Number(orderId)
+      : null;
+
   const payload = {
     author_login: author,
     body: text,
     executor_emails: Array.isArray(executorEmails) ? executorEmails : [],
     due_at: dueAt || null,
     is_completed: false,
+    order_id: linkedOrderId,
     source_message_id: sourceMessageId ?? null,
     source_message_kind: sourceMessageKind || null,
   };
@@ -229,6 +244,7 @@ export async function insertTask({
       executor_emails: payload.executor_emails,
       due_at: payload.due_at,
       is_completed: false,
+      order_id: payload.order_id,
       source_message_id: payload.source_message_id,
       source_message_kind: payload.source_message_kind,
       created_at: new Date().toISOString(),
