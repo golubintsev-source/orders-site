@@ -87,6 +87,12 @@ function renderMyTaskStatusCell(row) {
   `;
 }
 
+function formatTaskAuthorName(raw) {
+  if (raw == null || raw === "") return "—";
+  const name = displayNameByEmail(String(raw).trim());
+  return name || "—";
+}
+
 function renderMyTasksRow(row) {
   const completed = !isActiveTask(row);
   const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
@@ -97,7 +103,7 @@ function renderMyTasksRow(row) {
   const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
   return `
     <tr class="${rowClass}">
-      <td>${escapeHtml(formatTaskAuthorShort(row.author_login))}</td>
+      <td>${escapeHtml(formatTaskAuthorName(row.author_login))}</td>
       <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
       <td>${escapeHtml(due)}</td>
       ${renderMyTaskStatusCell(row)}
