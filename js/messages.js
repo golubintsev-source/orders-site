@@ -59,6 +59,10 @@ let deliveredAtSupported = null;
 let groupChatsSupported = null;
 /** null = unknown, true/false after first probe — avatar_storage_path on group_chats */
 let groupAvatarSupported = null;
+/** Кэш подписанных URL аватаров групп — один и тот же URL при перерисовке списка, без мигания буквы. */
+/** @type {Map<string, { url: string, expiresAt: number }>} */
+const groupAvatarUrlCache = new Map();
+const GROUP_AVATAR_URL_CACHE_MS = 9 * 60 * 1000;
 /** null = unknown, true/false after first probe — group_chat_reads table */
 let groupChatReadsSupported = null;
 /** null = unknown, true/false after first probe — last_delivered_at on group_chat_reads */
@@ -1628,6 +1632,59 @@ function renderChatListTicks(last, uid, entry = null, receiptsByUser = null) {
   return renderOutgoingTicksHtml({ ...state, status: "sent" });
 }
 
+function getCachedGroupAvatarUrl(storagePath) {
+  const key = String(storagePath || "");
+  if (!key) return null;
+  const entry = groupAvatarUrlCache.get(key);
+  if (!entry) return null;
+  if (Date.now() >= entry.expiresAt) {
+    groupAvatarUrlCache.delete(key);
+    return null;
+  }
+  return entry.url;
+}
+
+function setCachedGroupAvatarUrl(storagePath, url) {
+  const key = String(storagePath || "");
+  if (!key || !url) return;
+  groupAvatarUrlCache.set(key, { url, expiresAt: Date.now() + GROUP_AVATAR_URL_CACHE_MS });
+}
+
+function invalidateGroupAvatarUrlCache(storagePath) {
+  const key = String(storagePath || "");
+  if (key) groupAvatarUrlCache.delete(key);
+}
+
+async function resolveGroupAvatarUrl(storagePath) {
+  const cached = getCachedGroupAvatarUrl(storagePath);
+  if (cached) return cached;
+  const url = await getSignedFileUrl(storagePath);
+  if (url) setCachedGroupAvatarUrl(storagePath, url);
+  return url;
+}
+
+async function preloadGroupAvatarUrls(groupChats) {
+  const paths = [
+    ...new Set(
+      (groupChats || [])
+        .map((chat) => chat.avatarStoragePath)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ];
+  const missing = paths.filter((path) => !getCachedGroupAvatarUrl(path));
+  if (!missing.length) return;
+  await Promise.all(missing.map((path) => resolveGroupAvatarUrl(path)));
+}
+
+function renderGroupAvatarHtml(groupAvatarPath, hue, initial) {
+  const cachedUrl = getCachedGroupAvatarUrl(groupAvatarPath);
+  if (cachedUrl) {
+    return `<span class="messages-chat-avatar messages-chat-avatar--logo" aria-hidden="true"><img src="${escapeHtml(cachedUrl)}" alt="" width="48" height="48" decoding="async"></span>`;
+  }
+  return `<span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" data-avatar-path="${escapeHtml(groupAvatarPath)}" aria-hidden="true">${escapeHtml(initial)}</span>`;
+}
+
 function renderChatListItem(entry, groupReceiptsByChat = null) {
   const uid = getCurrentUserId();
   const last = entry.last;
@@ -1654,7 +1711,7 @@ function renderChatListItem(entry, groupReceiptsByChat = null) {
   if (logoUrl) {
     avatarHtml = `<span class="messages-chat-avatar messages-chat-avatar--logo" aria-hidden="true"><img src="${escapeHtml(logoUrl)}" alt="" width="48" height="48" decoding="async"></span>`;
   } else if (groupAvatarPath) {
-    avatarHtml = `<span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" data-avatar-path="${escapeHtml(groupAvatarPath)}" aria-hidden="true">${escapeHtml(initial)}</span>`;
+    avatarHtml = renderGroupAvatarHtml(groupAvatarPath, hue, initial);
   } else {
     avatarHtml = `<span class="messages-chat-avatar" style="--messages-avatar-hue: ${hue}" aria-hidden="true">${escapeHtml(initial)}</span>`;
   }
@@ -1692,7 +1749,7 @@ async function hydrateGroupAvatars(root = document) {
       const storagePath = el.getAttribute("data-avatar-path") || "";
       if (!storagePath) return;
       try {
-        const url = await getSignedFileUrl(storagePath);
+        const url = await resolveGroupAvatarUrl(storagePath);
         if (!url || !el.isConnected) return;
         el.classList.add("messages-chat-avatar--logo");
         el.removeAttribute("style");
@@ -1736,6 +1793,8 @@ async function paintChatListFromData(list, users, rows, unreadRows, groupChats) 
     fetchGroupMemberReceiptsByChat(chatIds),
   ]);
   const groupUnreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
+  await preloadGroupAvatarUrls(groupChats);
+
   const entries = buildChatListEntries(
     users,
     rows,
@@ -3822,7 +3881,7 @@ async function loadExistingGroupAvatarPreview(storagePath) {
   const clearBtn = document.getElementById("messagesCreateGroupAvatarClearBtn");
   if (!storagePath || !imgEl || !initialEl) return;
   try {
-    const url = await getSignedFileUrl(storagePath);
+    const url = await resolveGroupAvatarUrl(storagePath);
     if (!url) return;
     if (groupFormAvatarFile || groupFormAvatarRemoved || groupFormAvatarExistingPath !== storagePath) {
       return;
@@ -4053,11 +4112,18 @@ async function saveCreateGroupChat() {
       return;
     }
 
+    const previousAvatarPath = groupChatsById.get(groupId)?.avatarStoragePath || null;
     const chat = mapGroupChatRow(data || { id: groupId, name, created_by: uid, member_ids: memberIds, avatar_storage_path: avatarStoragePath });
     groupChatsById.set(chat.id, chat);
     groupChatsSupported = true;
     if (groupAvatarSupported !== false && Object.prototype.hasOwnProperty.call(payload, "avatar_storage_path")) {
       groupAvatarSupported = true;
+    }
+    if (previousAvatarPath && previousAvatarPath !== chat.avatarStoragePath) {
+      invalidateGroupAvatarUrlCache(previousAvatarPath);
+    }
+    if (chat.avatarStoragePath && chat.avatarStoragePath !== previousAvatarPath) {
+      invalidateGroupAvatarUrlCache(chat.avatarStoragePath);
     }
 
     closeCreateGroupDialog();
