@@ -943,16 +943,28 @@
         <div id="messagesChatListView" class="messages-chat-list-view">
           <header class="messages-chat-list-header">
             <h2 class="messages-chat-list-title">Чаты</h2>
-            <button
-              type="button"
-              id="messagesCreateGroupBtn"
-              class="messages-create-group-btn"
-              title="Создать групповой чат"
-              aria-label="Создать групповой чат"
-              aria-haspopup="dialog"
-            >
-              + групповой чат
-            </button>
+            <div class="messages-chat-list-actions">
+              <button
+                type="button"
+                id="messagesNewMessageBtn"
+                class="messages-create-group-btn"
+                title="Написать пользователю"
+                aria-label="Написать пользователю"
+                aria-haspopup="dialog"
+              >
+                Написать
+              </button>
+              <button
+                type="button"
+                id="messagesCreateGroupBtn"
+                class="messages-create-group-btn"
+                title="Создать групповой чат"
+                aria-label="Создать групповой чат"
+                aria-haspopup="dialog"
+              >
+                + групповой чат
+              </button>
+            </div>
           </header>
           <div id="messagesChatList" class="messages-chat-list" role="list" aria-label="Список чатов"></div>
           <p id="messagesChatListMessage" class="messages-page-message"></p>
@@ -1034,6 +1046,41 @@
               <button type="button" id="messagesCreateGroupSaveBtn" class="btn-primary messages-create-group-save-btn">Сохранить</button>
               <button type="button" id="messagesCreateGroupCancelBtn" class="messages-create-group-cancel-btn">Отменить</button>
             </div>
+          </div>
+        </dialog>
+
+        <dialog
+          id="messagesNewMessageDialog"
+          class="messages-create-group-dialog messages-new-message-dialog"
+          aria-labelledby="messagesNewMessageDialogTitle"
+        >
+          <div class="messages-create-group-dialog-panel">
+            <div class="messages-create-group-dialog-header">
+              <h3 id="messagesNewMessageDialogTitle" class="messages-create-group-dialog-title">Новое сообщение</h3>
+              <button
+                type="button"
+                id="messagesNewMessageCloseBtn"
+                class="messages-create-group-dialog-close"
+                aria-label="Закрыть"
+                title="Закрыть"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <label class="messages-create-group-field">
+              <span class="messages-create-group-label">Поиск</span>
+              <input
+                type="search"
+                id="messagesNewMessageSearch"
+                class="messages-create-group-input"
+                autocomplete="off"
+                placeholder="Имя или email"
+              />
+            </label>
+            <div id="messagesNewMessageUsers" class="messages-new-message-users" role="listbox" aria-label="Пользователи"></div>
           </div>
         </dialog>
 
