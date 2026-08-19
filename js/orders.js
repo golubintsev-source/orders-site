@@ -553,8 +553,10 @@ function buildOrderDeltaCalculationInsertRows({
 }) {
   if (!orderId) return [];
 
+  // created_at — это время фактической вставки, но для авто-комментариев в расчётах
+  // используем order_date, чтобы повторные попытки после таймаутов формировали одинаковый comment.
   const nowIso = new Date().toISOString();
-  const timeHHmm = formatTimeHHmmFromIso(nowIso);
+  const timeHHmm = formatTimeHHmmFromIso(orderData?.order_date || nowIso);
   const actorShort = shortLoginByEmail(state.currentUser?.email);
   const orderNumberStr = formatOrderIdTypeChip(orderId, orderData?.order_type) || `#${orderId}`;
   const clientStr = (orderData?.client && String(orderData.client).trim()) || CALC_COMMENT_EMPTY;
@@ -3018,6 +3020,7 @@ export function resetFormMode() {
   refreshSectionNavLabel();
   if (submitBtn) submitBtn.textContent = "Сохранить заказ";
   if (submitBtnTop) submitBtnTop.textContent = "Сохранить заказ";
+  clearOrderFormNewOrderIdempotencyKey();
   setOrderFormSaveButtonsBusy(false);
 
   if (formTitle) {
@@ -3334,6 +3337,27 @@ function commitOrderFormToOfflineStorage(orderData, editingOffline) {
 /** Флаг и UI-блокировка кнопок «Сохранить», чтобы не создавать дубликаты при повторных нажатиях. */
 let orderFormSaveInFlight = false;
 
+/**
+ * Идемпотентный ключ для создания нового заказа:
+ * при сетевых таймаутах клиент может считать, что запрос упал,
+ * но запись на сервере могла уже появиться — тогда повторный клик
+ * не должен создавать второй заказ.
+ */
+let orderFormNewOrderIdempotencyKey = null;
+
+function ensureOrderFormNewOrderIdempotencyKey() {
+  if (orderFormNewOrderIdempotencyKey) return orderFormNewOrderIdempotencyKey;
+  orderFormNewOrderIdempotencyKey =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `order-form-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return orderFormNewOrderIdempotencyKey;
+}
+
+function clearOrderFormNewOrderIdempotencyKey() {
+  orderFormNewOrderIdempotencyKey = null;
+}
+
 function setOrderFormSaveButtonsBusy(busy) {
   orderFormSaveInFlight = Boolean(busy);
   for (const btn of [submitBtn, submitBtnTop]) {
@@ -3514,6 +3538,10 @@ export async function submitOrderForm(event) {
   setMessage("Сохраняю...", "");
 
   const orderData = getFormData();
+  // Идемпотентный ключ нужен только для создания нового заказа.
+  if (!state.editingOrderId && orderData?.save_idempotency_key == null) {
+    orderData.save_idempotency_key = ensureOrderFormNewOrderIdempotencyKey();
+  }
 
   const saveLocalNew = !state.editingOrderId && shouldSaveNewOrderToLocalQueue();
   const saveLocalEdit = Boolean(state.editingOrderId && isOfflineClientOrderId(state.editingOrderId));
@@ -3537,6 +3565,7 @@ export async function submitOrderForm(event) {
   let error = null;
   let savedOrderId = state.editingOrderId;
   const wasEditing = Boolean(state.editingOrderId);
+  const saveIdempotencyKey = !wasEditing ? orderFormNewOrderIdempotencyKey : null;
 
   try {
     if (state.editingOrderId) {
@@ -3550,8 +3579,11 @@ export async function submitOrderForm(event) {
         savedOrderId = result.data.id;
       }
     } else {
+      const q = supabaseClient.from("orders");
       const result = await raceWithTimeout(
-        supabaseClient.from("orders").insert([orderData]).select().single(),
+        saveIdempotencyKey
+          ? q.upsert([orderData], { onConflict: "save_idempotency_key" }).select().single()
+          : q.insert([orderData]).select().single(),
       );
 
       error = result.error;
@@ -3562,6 +3594,27 @@ export async function submitOrderForm(event) {
     }
   } catch (e) {
     error = e;
+  }
+
+  // Восстановление после таймаутов:
+  // если клиент не получил ответ, но запись могла появиться на сервере,
+  // найдём её по save_idempotency_key.
+  if (error && !wasEditing && saveIdempotencyKey) {
+    try {
+      const existing = await raceWithTimeout(
+        supabaseClient
+          .from("orders")
+          .select("id")
+          .eq("save_idempotency_key", saveIdempotencyKey)
+          .maybeSingle(),
+      );
+      if (!existing.error && existing.data?.id != null) {
+        savedOrderId = existing.data.id;
+        error = null;
+      }
+    } catch {
+      // оставляем error как есть
+    }
   }
 
   if (error && !wasEditing && shouldFallbackSaveOrderToLocal(error)) {
@@ -3865,6 +3918,12 @@ export async function createOrderFromVoicePayload(draft) {
     installer_payment_by: null,
   };
 
+  const saveIdempotencyKey =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `voice-order-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  orderData.save_idempotency_key = saveIdempotencyKey;
+
   const saveVoiceOrderOffline = () => {
     const insertPayload = insertPayloadFromFormData(orderData);
     const localId =
@@ -3904,11 +3963,31 @@ export async function createOrderFromVoicePayload(draft) {
   let error = null;
   let savedOrderId = null;
   try {
-    const result = await raceWithTimeout(supabaseClient.from("orders").insert([orderData]).select().single());
+    const result = await raceWithTimeout(
+      supabaseClient.from("orders").upsert([orderData], { onConflict: "save_idempotency_key" }).select().single(),
+    );
     error = result.error;
     if (!error && result.data) savedOrderId = result.data.id;
   } catch (e) {
     error = e;
+  }
+
+  if (error && saveIdempotencyKey) {
+    try {
+      const existing = await raceWithTimeout(
+        supabaseClient
+          .from("orders")
+          .select("id")
+          .eq("save_idempotency_key", saveIdempotencyKey)
+          .maybeSingle(),
+      );
+      if (!existing.error && existing.data?.id != null) {
+        savedOrderId = existing.data.id;
+        error = null;
+      }
+    } catch {
+      // ignore
+    }
   }
 
   if (error && shouldFallbackSaveOrderToLocal(error)) {
