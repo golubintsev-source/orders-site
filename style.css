@@ -2049,21 +2049,79 @@ h2 {
 }
 
 #myAuthorTasksTable {
-  min-width: 320px;
+  min-width: 100%;
+  table-layout: fixed;
+  width: 100%;
 }
 #myAuthorTasksTable tbody tr.my-tasks-row {
   cursor: default;
 }
 #myAuthorTasksTable th,
 #myAuthorTasksTable td {
-  padding: 8px 10px;
+  padding: 4px 8px;
   font-size: 13px;
-  vertical-align: top;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+#myAuthorTasksTable th:nth-child(1),
+#myAuthorTasksTable td:nth-child(1) {
+  width: 72px;
+}
+#myAuthorTasksTable th:nth-child(2),
+#myAuthorTasksTable td:nth-child(2) {
+  width: 140px;
+}
+#myAuthorTasksTable th:nth-child(3),
+#myAuthorTasksTable td:nth-child(3) {
+  width: 110px;
+}
+#myAuthorTasksTable th:nth-child(4),
+#myAuthorTasksTable td:nth-child(4) {
+  width: 120px;
+}
+#myAuthorTasksTable .order-tasks-text-th,
+#myAuthorTasksTable .order-tasks-text-cell {
+  width: auto;
 }
 #myAuthorTasksTable .order-tasks-text-cell {
   white-space: normal;
   word-break: break-word;
-  max-width: 420px;
+  line-height: 1.25;
+}
+#myAuthorTasksTable .my-tasks-actions-th,
+#myAuthorTasksTable .my-tasks-actions-cell {
+  width: 36px;
+  padding-left: 2px;
+  padding-right: 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+#myAuthorTasksTable .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  vertical-align: middle;
+}
+#myAuthorTasksTable .btn-icon svg {
+  width: 16px;
+  height: 16px;
+}
+#myAuthorTasksTable .btn-icon:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+#myAuthorTasksTable .btn-delete:hover {
+  color: #d32f2f;
 }
 #myAuthorTasksTable tbody tr.my-tasks-row--pending {
   background-color: #fecaca;
@@ -2145,23 +2203,88 @@ h2 {
 #orderTasksAuthorTable {
   min-width: 320px;
 }
+#orderTasksAuthorTable {
+  min-width: 100%;
+  table-layout: fixed;
+  width: 100%;
+}
 #orderTasksExecutorTable tbody tr.my-tasks-row,
 #orderTasksAuthorTable tbody tr.my-tasks-row {
   cursor: default;
 }
 #orderTasksExecutorTable th,
-#orderTasksExecutorTable td,
-#orderTasksAuthorTable th,
-#orderTasksAuthorTable td {
+#orderTasksExecutorTable td {
   padding: 8px 10px;
   font-size: 13px;
   vertical-align: top;
 }
-#orderTasksExecutorTable .order-tasks-text-cell,
-#orderTasksAuthorTable .order-tasks-text-cell {
+#orderTasksAuthorTable th,
+#orderTasksAuthorTable td {
+  padding: 4px 8px;
+  font-size: 13px;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+#orderTasksExecutorTable .order-tasks-text-cell {
   white-space: normal;
   word-break: break-word;
   max-width: 420px;
+}
+#orderTasksAuthorTable th:nth-child(1),
+#orderTasksAuthorTable td:nth-child(1) {
+  width: 140px;
+}
+#orderTasksAuthorTable th:nth-child(2),
+#orderTasksAuthorTable td:nth-child(2) {
+  width: 110px;
+}
+#orderTasksAuthorTable th:nth-child(3),
+#orderTasksAuthorTable td:nth-child(3) {
+  width: 120px;
+}
+#orderTasksAuthorTable .order-tasks-text-th,
+#orderTasksAuthorTable .order-tasks-text-cell {
+  width: auto;
+}
+#orderTasksAuthorTable .order-tasks-text-cell {
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.25;
+}
+#orderTasksAuthorTable .my-tasks-actions-th,
+#orderTasksAuthorTable .my-tasks-actions-cell {
+  width: 36px;
+  padding-left: 2px;
+  padding-right: 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+#orderTasksAuthorTable .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  vertical-align: middle;
+}
+#orderTasksAuthorTable .btn-icon svg {
+  width: 16px;
+  height: 16px;
+}
+#orderTasksAuthorTable .btn-icon:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+#orderTasksAuthorTable .btn-delete:hover {
+  color: #d32f2f;
 }
 #orderTasksExecutorTable tbody tr.my-tasks-row--pending,
 #orderTasksAuthorTable tbody tr.my-tasks-row--pending {
