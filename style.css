@@ -2034,12 +2034,12 @@ h2 {
   line-height: 1.25;
   vertical-align: top;
 }
-#allTasksTable th:nth-child(1),
-#allTasksTable td:nth-child(1),
 #allTasksTable th:nth-child(2),
 #allTasksTable td:nth-child(2),
 #allTasksTable th:nth-child(3),
-#allTasksTable td:nth-child(3) {
+#allTasksTable td:nth-child(3),
+#allTasksTable th:nth-child(4),
+#allTasksTable td:nth-child(4) {
   white-space: nowrap;
 }
 #allTasksTable .my-tasks-order-cell {
@@ -2078,7 +2078,7 @@ h2 {
 }
 
 /*
- * Не table-layout:fixed + фиксированные px/%: на узком экране «Текст»
+ * Не table-layout:fixed + фиксированные px/%: на узком экране «Задача»
  * схлопывается и ломается посимвольно. Ширина по содержимому + скролл
  * в .table-wrap; у текста — min/max, чтобы строки читались нормально.
  */
@@ -2098,10 +2098,10 @@ h2 {
   line-height: 1.25;
   vertical-align: top;
 }
-#myAuthorTasksTable th:nth-child(1),
-#myAuthorTasksTable td:nth-child(1),
-#myAuthorTasksTable th:nth-child(3),
-#myAuthorTasksTable td:nth-child(3) {
+#myAuthorTasksTable th:nth-child(2),
+#myAuthorTasksTable td:nth-child(2),
+#myAuthorTasksTable th:nth-child(4),
+#myAuthorTasksTable td:nth-child(4) {
   white-space: nowrap;
 }
 #myAuthorTasksTable .my-tasks-order-cell {
