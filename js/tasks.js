@@ -104,7 +104,15 @@ function renderMyTaskStatusCell(row) {
   `;
 }
 
-function renderMyAuthorTasksRow(row) {
+function formatTaskOrderCell(row) {
+  if (isStandaloneTask(row)) return "—";
+  const oid = Number(row.order_id);
+  if (!Number.isFinite(oid) || oid <= 0) return "—";
+  const order = state.allOrders?.find((o) => Number(o.id) === oid);
+  return formatOrderIdTypeChip(oid, order?.order_type) || String(oid).padStart(4, "0");
+}
+
+function renderMyAuthorTasksRow(row, { showOrder = false } = {}) {
   const completed = !isActiveTask(row);
   const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
   const rowClass = completed
@@ -112,8 +120,12 @@ function renderMyAuthorTasksRow(row) {
     : `my-tasks-row my-tasks-row--pending${offlineCls}`;
   const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
   const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
+  const orderCell = showOrder
+    ? `<td class="my-tasks-order-cell">${escapeHtml(formatTaskOrderCell(row))}</td>`
+    : "";
   return `
     <tr class="${rowClass}">
+      ${orderCell}
       <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
       <td>${escapeHtml(due)}</td>
       ${renderMyTaskStatusCell(row)}
@@ -321,18 +333,19 @@ export async function loadAllTasks() {
   const baseRows = data || [];
   if (!error && data) persistOrderTasksSnapshot(data);
 
-  const merged = filterStandaloneTasks(mergeOrderTasksRowsForAllTasks(baseRows));
-  const executorRows = sortTasksByDueAt(filterMyExecutorTasks(merged));
-  const authorRows = sortTasksByDueAt(filterMyAuthorTasks(merged));
+  const mergedAll = mergeOrderTasksRowsForAllTasks(baseRows);
+  const standalone = filterStandaloneTasks(mergedAll);
+  const executorRows = sortTasksByDueAt(filterMyExecutorTasks(standalone));
+  const authorRows = sortTasksByDueAt(filterMyAuthorTasks(mergedAll));
 
   executorTbody.innerHTML = executorRows.map((row) => renderMyTasksRow(row)).join("");
-  authorTbody.innerHTML = authorRows.map((row) => renderMyAuthorTasksRow(row)).join("");
+  authorTbody.innerHTML = authorRows.map((row) => renderMyAuthorTasksRow(row, { showOrder: true })).join("");
 
   if (executorRows.length === 0 && executorMsg) {
     executorMsg.textContent = "Нет задач без привязки к заказу, где вы исполнитель.";
   }
   if (authorRows.length === 0 && authorMsg) {
-    authorMsg.textContent = "Нет задач без привязки к заказу, где вы автор.";
+    authorMsg.textContent = "Нет задач, где вы автор.";
   }
 
   void refreshMyTasksNavBadge();

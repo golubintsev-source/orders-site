@@ -849,8 +849,9 @@
       </div>
     </section>
 
-    <section id="section-tasks-all" class="content-section">
-      <div class="card order-tasks-card">
+    <section id="section-tasks-all" class="content-section my-tasks-page">
+      <div class="card order-tasks-card my-tasks-block my-tasks-block--create">
+        <h3 class="my-tasks-block-title">Создать задачу</h3>
         <div class="order-tasks-form-stack">
           <div class="field order-tasks-field">
             <label for="orderTaskTextInput">Новая задача</label>
@@ -872,8 +873,10 @@
           </div>
         </div>
         <p id="myTasksFormMessage" class="order-tasks-hint"></p>
+      </div>
 
-        <h3 class="my-tasks-block-title">Где я исполнитель</h3>
+      <div class="card order-tasks-card my-tasks-block my-tasks-block--executor">
+        <h3 class="my-tasks-block-title">Я исполнитель</h3>
         <div class="table-wrap">
           <table id="allTasksTable">
             <thead>
@@ -889,12 +892,15 @@
           </table>
         </div>
         <p id="allTasksMessage" class="order-tasks-hint"></p>
+      </div>
 
-        <h3 class="my-tasks-block-title">Где я автор</h3>
+      <div class="card order-tasks-card my-tasks-block my-tasks-block--author">
+        <h3 class="my-tasks-block-title">Я автор</h3>
         <div class="table-wrap">
           <table id="myAuthorTasksTable">
             <thead>
               <tr>
+                <th>Заказ</th>
                 <th>Исполнители</th>
                 <th>Срок</th>
                 <th>Статус</th>
