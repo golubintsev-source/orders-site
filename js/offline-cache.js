@@ -273,36 +273,40 @@ export function raceWithTimeout(promise, ms = OFFLINE_SUPABASE_WAIT_MS) {
 }
 
 /**
- * PostgREST генерирует ON CONFLICT (col) без WHERE — частичный unique-индекс
- * на save_idempotency_key для этого не подходит.
- */
-export function isMissingOnConflictConstraintError(error) {
-  const msg = String(error?.message || error?.details || error?.hint || "");
-  return /no unique or exclusion constraint matching the ON CONFLICT/i.test(msg);
-}
-
-/**
  * Создать заказ с идемпотентностью: upsert по save_idempotency_key.
- * Если в БД ещё нет подходящего unique-ограничения — обычный insert
- * (заказ сохранится; анти-дубликаты заработают после supabase_orders_save_idempotency_key.sql).
+ *
+ * Мы не обязаны использовать SQL ON CONFLICT: требование — не удалять строки.
+ * В базе настроен триггер, который отклоняет INSERT/UPDATE при повторе ключа
+ * (unique_violation 23505). В этом случае мы находим уже существующий заказ
+ * по save_idempotency_key и возвращаем его id.
  */
 export async function insertOrUpsertNewOrder(orderData, saveIdempotencyKey) {
   const q = supabaseClient.from("orders");
   if (!saveIdempotencyKey) {
     return q.insert([orderData]).select().single();
   }
-  const upsertResult = await q
-    .upsert([orderData], { onConflict: "save_idempotency_key" })
-    .select()
-    .single();
-  if (!upsertResult.error || !isMissingOnConflictConstraintError(upsertResult.error)) {
-    return upsertResult;
+
+  // 1) Пытаемся вставить.
+  const insertResult = await q.insert([orderData]).select().single();
+  if (!insertResult.error) return insertResult;
+
+  // 2) Если триггер отклонил повтор (unique_violation), возвращаем существующий id.
+  const code = insertResult?.error?.code;
+  const msg = String(insertResult?.error?.message || "");
+  if (code === "23505" || /duplicate save_idempotency_key/i.test(msg)) {
+    const existing = await q
+      .select("id")
+      .eq("save_idempotency_key", saveIdempotencyKey)
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (!existing.error && existing.data?.id != null) {
+      return { data: { id: existing.data.id }, error: null };
+    }
   }
-  console.warn(
-    "orders upsert ON CONFLICT недоступен (нет unique на save_idempotency_key); fallback insert. Выполните supabase_orders_save_idempotency_key.sql",
-    upsertResult.error,
-  );
-  return q.insert([orderData]).select().single();
+
+  // 3) Любая другая ошибка — пробрасываем как есть.
+  return insertResult;
 }
 
 export function readSnapshot() {
