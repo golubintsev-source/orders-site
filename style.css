@@ -2097,6 +2097,14 @@ h2 {
   color: #111827;
 }
 
+#section-order-tasks .my-tasks-block-title {
+  margin: 20px 0 10px;
+}
+
+#section-order-tasks .order-tasks-page-title + .my-tasks-block-title {
+  margin-top: 8px;
+}
+
 .my-tasks-block--create {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
