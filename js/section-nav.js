@@ -472,11 +472,47 @@ export function refreshSectionNavAfterProfile() {
 
 let sectionNavDocClickBound = false;
 
+/**
+ * Кнопки шапки (Мои задачи / Чаты / …) должны работать сразу после bindUIEvents,
+ * а не ждать отложенной вторичной инициализации (~600 КБ) — иначе на iPhone PWA
+ * тап по видимой кнопке «ничего не открывает».
+ * @param {string} elementId
+ * @param {string} sectionId
+ * @param {(id: string) => void} [onSectionItemSelect]
+ */
+function bindTopbarSectionNavButton(elementId, sectionId, onSectionItemSelect) {
+  const btn = document.getElementById(elementId);
+  if (!btn || btn.dataset.navBound === "1") return;
+  btn.dataset.navBound = "1";
+  let lastAt = 0;
+  const open = (e) => {
+    // На iPhone первый тап рядом с полями/после клавиатуры иногда не даёт click.
+    if (e.type === "touchstart" || e.type === "pointerdown") {
+      if (e.type === "pointerdown" && typeof e.button === "number" && e.button !== 0) return;
+      if (e.cancelable) e.preventDefault();
+    }
+    const now = Date.now();
+    if (now - lastAt < 350) return;
+    lastAt = now;
+    if (typeof onSectionItemSelect === "function") {
+      onSectionItemSelect(sectionId);
+    } else {
+      switchSection(sectionId);
+    }
+  };
+  btn.addEventListener("touchstart", open, { passive: false });
+  btn.addEventListener("pointerdown", open);
+  btn.addEventListener("click", open);
+}
+
 export function initSectionNavDropdown(options = {}) {
   const { onSectionItemSelect } = options;
 
   const currentBtn = document.getElementById("sectionNavCurrentBtn");
   const panel = document.getElementById("sectionNavDropdownPanel");
+
+  // Ранняя привязка: не зависит от import("./tasks.js") / idle.
+  bindTopbarSectionNavButton("myTasksNavBtn", "tasks-all", onSectionItemSelect);
 
   if (currentBtn) {
     currentBtn.addEventListener("click", (e) => {

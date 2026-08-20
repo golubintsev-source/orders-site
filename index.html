@@ -2093,7 +2093,39 @@
       }
     })();
   </script>
-  <script type="module" src="./js/main.js?v=37"></script>
+  <!-- Мои задачи: запасной обработчик в HTML (network/shell), если SPA-модули ещё старые из кэша PWA. -->
+  <script>
+    (function () {
+      var btn = document.getElementById("myTasksNavBtn");
+      if (!btn) return;
+      var lastAt = 0;
+      function openMyTasksFallback(e) {
+        // ui.js / section-nav уже повесили SPA-обработчик.
+        if (btn.getAttribute("data-nav-bound") === "1") return;
+        if (e.type === "touchstart" || e.type === "pointerdown") {
+          if (e.type === "pointerdown" && typeof e.button === "number" && e.button !== 0) return;
+          if (e.cancelable) e.preventDefault();
+        }
+        var now = Date.now();
+        if (now - lastAt < 350) return;
+        lastAt = now;
+        try {
+          if (window.location.protocol === "file:") {
+            window.location.hash = "tasks-all";
+            window.location.reload();
+            return;
+          }
+          window.location.assign("/tasks-all");
+        } catch (err) {
+          window.location.href = "/tasks-all";
+        }
+      }
+      btn.addEventListener("touchstart", openMyTasksFallback, { passive: false });
+      btn.addEventListener("pointerdown", openMyTasksFallback);
+      btn.addEventListener("click", openMyTasksFallback);
+    })();
+  </script>
+  <script type="module" src="./js/main.js?v=38"></script>
   <script type="module">
     /* HTML — network-first; /js/* может прийти из старого SW-кэша.
        Поднимаем раздел даже если section-nav ещё без обработчика. */
