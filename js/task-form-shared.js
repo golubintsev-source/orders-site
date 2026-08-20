@@ -148,12 +148,12 @@ export function renderTaskExecutorsInto(listEl, hintEl, users) {
     listEl.innerHTML = "";
     if (hintEl) {
       hintEl.textContent = "Нет пользователей для выбора.";
-      hint.hidden = false;
+      hintEl.hidden = false;
     }
     return;
   }
 
-  if (hintEl) hint.hidden = true;
+  if (hintEl) hintEl.hidden = true;
 
   listEl.innerHTML = users
     .map(
@@ -193,20 +193,20 @@ export async function ensureTaskExecutorsInList(listEl, hintEl) {
     hintEl.hidden = false;
   }
 
-  if (executorsCacheByListId.has(cacheKey)) {
-    renderTaskExecutorsInto(listEl, hintEl, executorsCacheByListId.get(cacheKey));
-    listEl.dataset.loaded = "1";
-    return;
-  }
-
   try {
-    const users = await loadExecutorPickerUsersCached();
-    executorsCacheByListId.set(cacheKey, users);
+    let users;
+    if (executorsCacheByListId.has(cacheKey)) {
+      users = executorsCacheByListId.get(cacheKey);
+    } else {
+      users = await loadExecutorPickerUsersCached();
+      executorsCacheByListId.set(cacheKey, users);
+    }
     renderTaskExecutorsInto(listEl, hintEl, users);
     listEl.dataset.loaded = "1";
   } catch (err) {
     console.error("Ошибка загрузки исполнителей:", err);
     listEl.innerHTML = "";
+    listEl.dataset.loaded = "";
     if (hintEl) {
       hintEl.textContent = "Не удалось загрузить список пользователей.";
       hintEl.hidden = false;
