@@ -272,6 +272,39 @@ export function raceWithTimeout(promise, ms = OFFLINE_SUPABASE_WAIT_MS) {
   });
 }
 
+/**
+ * PostgREST генерирует ON CONFLICT (col) без WHERE — частичный unique-индекс
+ * на save_idempotency_key для этого не подходит.
+ */
+export function isMissingOnConflictConstraintError(error) {
+  const msg = String(error?.message || error?.details || error?.hint || "");
+  return /no unique or exclusion constraint matching the ON CONFLICT/i.test(msg);
+}
+
+/**
+ * Создать заказ с идемпотентностью: upsert по save_idempotency_key.
+ * Если в БД ещё нет подходящего unique-ограничения — обычный insert
+ * (заказ сохранится; анти-дубликаты заработают после supabase_orders_save_idempotency_key.sql).
+ */
+export async function insertOrUpsertNewOrder(orderData, saveIdempotencyKey) {
+  const q = supabaseClient.from("orders");
+  if (!saveIdempotencyKey) {
+    return q.insert([orderData]).select().single();
+  }
+  const upsertResult = await q
+    .upsert([orderData], { onConflict: "save_idempotency_key" })
+    .select()
+    .single();
+  if (!upsertResult.error || !isMissingOnConflictConstraintError(upsertResult.error)) {
+    return upsertResult;
+  }
+  console.warn(
+    "orders upsert ON CONFLICT недоступен (нет unique на save_idempotency_key); fallback insert. Выполните supabase_orders_save_idempotency_key.sql",
+    upsertResult.error,
+  );
+  return q.insert([orderData]).select().single();
+}
+
 export function readSnapshot() {
   const o = readJson(SNAP_KEY, null);
   if (!o || o.version !== SNAP_VERSION) return null;
@@ -1026,11 +1059,7 @@ export async function syncPendingOfflineDataToSupabase() {
 
   for (const item of orderItems) {
     const payload = insertPayloadFromFormData(item.insertPayload || item.displayRow || {});
-    const q = supabaseClient.from("orders");
-    const insertPromise = payload.save_idempotency_key
-      ? q.upsert([payload], { onConflict: "save_idempotency_key" }).select().single()
-      : q.insert([payload]).select().single();
-    const { data, error } = await insertPromise;
+    const { data, error } = await insertOrUpsertNewOrder(payload, payload.save_idempotency_key);
 
     if (error || !data) {
       console.error("offline sync insert failed:", error);

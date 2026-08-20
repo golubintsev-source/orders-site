@@ -57,6 +57,10 @@ git push
 
 Чтобы при повторных кликах по кнопке «Сохранить заказ» (например, после сетевых таймаутов) не создавались дубликаты строк в таблице `orders`, выполни SQL из файла **`supabase_orders_save_idempotency_key.sql`** в **Supabase → SQL Editor**.
 
+Если при сохранении нового заказа появляется ошибка  
+`there is no unique or exclusion constraint matching the ON CONFLICT specification` —  
+перезапусти этот же SQL: нужен **полный** unique-индекс по `save_idempotency_key` (без `WHERE`). Частичный индекс PostgREST для `ON CONFLICT` не использует.
+
 Чтобы также не плодились одинаковые записи в `order_history` и авто-дельты в `calculations`, дополнительно выполни:
 - **`supabase_order_history_dedup_unique.sql`**
 - **`supabase_calculations_dedup_unique_comment.sql`** — только **мягкое** скрытие (`deleted_at`), не физический DELETE
