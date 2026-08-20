@@ -9,7 +9,7 @@
  */
 const BADGE_CACHE = "orders-site-badge-v1";
 // v22: повторный сброс — клиенты всё ещё держали старый orders.js с upsert ON CONFLICT.
-const STATIC_CACHE = "orders-site-static-v22";
+const STATIC_CACHE = "orders-site-static-v23";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 

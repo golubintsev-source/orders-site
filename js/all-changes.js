@@ -8,6 +8,7 @@ import {
   persistExcessHistorySnapshot,
   persistSettingsHistorySnapshot,
   persistCalculationHistorySnapshot,
+  persistTaskHistorySnapshot,
   mergeOrderHistoryRows,
   raceWithTimeout,
   isOfflineDataMode,
@@ -127,6 +128,7 @@ function sortAllChangesDisplayRows(rows) {
  * @param {unknown[]} excessesRows — сами записи излишков (fallback / дополнение)
  * @param {unknown[]} settingsHistoryRows
  * @param {unknown[]} calculationHistoryRows
+ * @param {unknown[]} taskHistoryRows
  * @param {{ error: unknown | null }} opts
  * @returns {number} число отрисованных строк
  */
@@ -138,6 +140,7 @@ function paintAllChangesFromBaseRows(
   excessesRows,
   settingsHistoryRows,
   calculationHistoryRows,
+  taskHistoryRows,
   opts,
 ) {
   const tbody = document.querySelector("#allChangesTable tbody");
@@ -241,6 +244,23 @@ function paintAllChangesFromBaseRows(
     }
   }
 
+  const taskHistRows = (taskHistoryRows || []).filter((r) =>
+    rowInCreatedAtRange(r, startIso, endIso),
+  );
+  for (const row of taskHistRows) {
+    for (const comment of expandOrderHistoryCommentLines(row.comment)) {
+      displayRows.push({
+        created_at: row.created_at,
+        user_email: row.user_email,
+        chip: "Задача",
+        order_id: "",
+        comment,
+        __offlinePendingSync: false,
+        id: row.id != null ? `th-${row.id}` : undefined,
+      });
+    }
+  }
+
   const sorted = sortAllChangesDisplayRows(displayRows);
   const lines = [];
   for (const row of sorted) {
@@ -334,6 +354,23 @@ async function fetchCalculationHistoryRows(startIso, endIso) {
   return { data: data || [], error: null };
 }
 
+async function fetchTaskHistoryRows(startIso, endIso) {
+  const { data, error } = await fetchAllSupabaseRows(() =>
+    supabaseClient
+      .from("task_history")
+      .select("id, created_at, user_email, comment, task_id")
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false }),
+  );
+  if (error) {
+    console.warn("История задач недоступна:", error.message || error);
+    return { data: [], error };
+  }
+  return { data: data || [], error: null };
+}
+
 function excessHistoryQuery(startIso, endIso) {
   return () =>
     supabaseClient
@@ -379,6 +416,17 @@ function calculationHistoryQuery(startIso, endIso) {
       .order("id", { ascending: false });
 }
 
+function taskHistoryQuery(startIso, endIso) {
+  return () =>
+    supabaseClient
+      .from("task_history")
+      .select("id, created_at, user_email, comment, task_id")
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+}
+
 export async function loadAllChanges() {
   const tbody = document.querySelector("#allChangesTable tbody");
   const msg = document.getElementById("allChangesMessage");
@@ -391,21 +439,23 @@ export async function loadAllChanges() {
   const { startIso, endIso } = readAllChangesDateRangeFromInputs();
 
   if (!isOfflineWorkModeEnabled()) {
-    const [histRes, excessHistRes, excessesRes, settingsHistRes, calcHistRes] = await Promise.all([
-      fetchAllSupabaseRows(() =>
-        supabaseClient
-          .from("order_history")
-          .select("created_at, user_email, comment, order_id")
-          .gte("created_at", startIso)
-          .lte("created_at", endIso)
-          .order("created_at", { ascending: false })
-          .order("id", { ascending: false }),
-      ),
-      fetchExcessHistoryRows(startIso, endIso),
-      fetchExcessesRows(startIso, endIso),
-      fetchSettingsHistoryRows(startIso, endIso),
-      fetchCalculationHistoryRows(startIso, endIso),
-    ]);
+    const [histRes, excessHistRes, excessesRes, settingsHistRes, calcHistRes, taskHistRes] =
+      await Promise.all([
+        fetchAllSupabaseRows(() =>
+          supabaseClient
+            .from("order_history")
+            .select("created_at, user_email, comment, order_id")
+            .gte("created_at", startIso)
+            .lte("created_at", endIso)
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: false }),
+        ),
+        fetchExcessHistoryRows(startIso, endIso),
+        fetchExcessesRows(startIso, endIso),
+        fetchSettingsHistoryRows(startIso, endIso),
+        fetchCalculationHistoryRows(startIso, endIso),
+        fetchTaskHistoryRows(startIso, endIso),
+      ]);
 
     if (histRes.error) {
       console.error("Ошибка загрузки истории изменений:", histRes.error);
@@ -413,7 +463,7 @@ export async function loadAllChanges() {
         msg.textContent = "Ошибка загрузки истории изменений.";
         msg.classList.add("order-tasks-message--error");
       }
-      paintAllChangesFromBaseRows(startIso, endIso, [], [], [], [], [], { error: histRes.error });
+      paintAllChangesFromBaseRows(startIso, endIso, [], [], [], [], [], [], { error: histRes.error });
       return;
     }
 
@@ -425,6 +475,7 @@ export async function loadAllChanges() {
       excessesRes.data || [],
       settingsHistRes.data || [],
       calcHistRes.data || [],
+      taskHistRes.data || [],
       { error: null },
     );
     return;
@@ -442,6 +493,9 @@ export async function loadAllChanges() {
     rowInCreatedAtRange(r, startIso, endIso),
   );
   const snapCalcHist = (readSnapshot()?.calculation_history || []).filter((r) =>
+    rowInCreatedAtRange(r, startIso, endIso),
+  );
+  const snapTaskHist = (readSnapshot()?.task_history || []).filter((r) =>
     rowInCreatedAtRange(r, startIso, endIso),
   );
 
@@ -463,13 +517,15 @@ export async function loadAllChanges() {
   let excessesData = snapExcesses;
   let settingsHistData = snapSettingsHist;
   let calcHistData = snapCalcHist;
+  let taskHistData = snapTaskHist;
 
   const hasSnap =
     snapFiltered.length > 0 ||
     snapExcessHist.length > 0 ||
     snapExcesses.length > 0 ||
     snapSettingsHist.length > 0 ||
-    snapCalcHist.length > 0;
+    snapCalcHist.length > 0 ||
+    snapTaskHist.length > 0;
 
   if (skipNetwork) {
     error = { message: "offline" };
@@ -483,12 +539,13 @@ export async function loadAllChanges() {
         snapExcesses,
         snapSettingsHist,
         snapCalcHist,
+        snapTaskHist,
         { error: null },
       );
     }
     try {
       const waitMs = hasSnap ? 1800 : OFFLINE_SUPABASE_WAIT_MS;
-      const [histRes, excessHistRes, excessesRes, settingsHistRes, calcHistRes] =
+      const [histRes, excessHistRes, excessesRes, settingsHistRes, calcHistRes, taskHistRes] =
         await raceWithTimeout(
           Promise.all([
             fetchAllSupabaseRows(historyQuery),
@@ -496,6 +553,7 @@ export async function loadAllChanges() {
             fetchAllSupabaseRows(excessesQuery(startIso, endIso)),
             fetchAllSupabaseRows(settingsHistoryQuery(startIso, endIso)),
             fetchAllSupabaseRows(calculationHistoryQuery(startIso, endIso)),
+            fetchAllSupabaseRows(taskHistoryQuery(startIso, endIso)),
           ]),
           waitMs,
         );
@@ -505,6 +563,7 @@ export async function loadAllChanges() {
       if (!excessesRes.error) excessesData = excessesRes.data || [];
       if (!settingsHistRes.error) settingsHistData = settingsHistRes.data || [];
       if (!calcHistRes.error) calcHistData = calcHistRes.data || [];
+      if (!taskHistRes.error) taskHistData = taskHistRes.data || [];
     } catch (e) {
       if (e?.code === "TIMEOUT") {
         data = null;
@@ -530,6 +589,7 @@ export async function loadAllChanges() {
   if (!error && Array.isArray(excessHistData)) persistExcessHistorySnapshot(excessHistData);
   if (!error && Array.isArray(settingsHistData)) persistSettingsHistorySnapshot(settingsHistData);
   if (!error && Array.isArray(calcHistData)) persistCalculationHistorySnapshot(calcHistData);
+  if (!error && Array.isArray(taskHistData)) persistTaskHistorySnapshot(taskHistData);
 
   paintAllChangesFromBaseRows(
     startIso,
@@ -539,6 +599,7 @@ export async function loadAllChanges() {
     error ? snapExcesses : excessesData || [],
     error ? snapSettingsHist : settingsHistData || [],
     error ? snapCalcHist : calcHistData || [],
+    error ? snapTaskHist : taskHistData || [],
     { error },
   );
 }

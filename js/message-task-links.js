@@ -50,7 +50,8 @@ export async function refreshActiveTaskMessageRefs() {
     .from("order_tasks")
     .select("source_message_id, source_message_kind, is_completed")
     .not("source_message_id", "is", null)
-    .eq("is_completed", false);
+    .eq("is_completed", false)
+    .is("deleted_at", null);
 
   if (!error && data) {
     for (const row of data) ingestTaskRow(row);

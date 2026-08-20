@@ -24,11 +24,15 @@ import {
   mergeOrderTasksRowsForAllTasks,
   mergeOrderTasksRowsForOrder,
   updatePendingTaskCompleted,
+  removePendingTaskByLocalId,
+  isOfflineDataMode,
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 
 const TASK_SELECT_FIELDS =
-  "id, created_at, author_login, body, due_at, executor_emails, is_completed, order_id";
+  "id, created_at, author_login, body, due_at, executor_emails, is_completed, order_id, deleted_at";
+
+const TASK_ICON_DELETE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -41,6 +45,14 @@ export { canUserAccessTask } from "./task-form-shared.js";
 
 function isActiveTask(row) {
   return row.is_completed !== true && row.is_completed !== 1 && row.is_completed !== "1";
+}
+
+function isNotDeletedTask(row) {
+  return row != null && (row.deleted_at == null || row.deleted_at === "");
+}
+
+function filterNotDeletedTasks(rows) {
+  return (rows || []).filter((row) => isNotDeletedTask(row));
 }
 
 function filterMyExecutorTasks(rows) {
@@ -112,6 +124,27 @@ function formatTaskOrderCell(row) {
   return formatOrderIdTypeChip(oid, order?.order_type) || String(oid).padStart(4, "0");
 }
 
+function renderAuthorTaskDeleteCell(row) {
+  if (!isUserAuthorOfTask(row)) return `<td class="my-tasks-actions-cell"></td>`;
+  const taskId = row.id != null ? String(row.id) : "";
+  const offlineLocalId = row.__offlineLocalId ? String(row.__offlineLocalId) : "";
+  const title = offlineLocalId
+    ? "Удалить локальную задачу (ещё не в базе)"
+    : "Скрыть задачу (в базе останется пометка удаления)";
+  return `
+    <td class="my-tasks-actions-cell">
+      <button
+        type="button"
+        class="btn-icon btn-delete btn-delete-task"
+        data-task-id="${escapeHtml(taskId)}"
+        data-offline-local-id="${escapeHtml(offlineLocalId)}"
+        title="${escapeHtml(title)}"
+        aria-label="Удалить задачу"
+      >${TASK_ICON_DELETE_SVG}</button>
+    </td>
+  `;
+}
+
 function renderMyAuthorTasksRow(row, { showOrder = false } = {}) {
   const completed = !isActiveTask(row);
   const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
@@ -130,6 +163,7 @@ function renderMyAuthorTasksRow(row, { showOrder = false } = {}) {
       <td>${escapeHtml(due)}</td>
       ${renderMyTaskStatusCell(row)}
       <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
+      ${renderAuthorTaskDeleteCell(row)}
     </tr>
   `;
 }
@@ -161,7 +195,7 @@ function renderMyTasksRow(row) {
 
 async function fetchAllTasksFromServer() {
   const { data, error } = await fetchAllSupabaseRows(() =>
-    supabaseClient.from("order_tasks").select(TASK_SELECT_FIELDS),
+    supabaseClient.from("order_tasks").select(TASK_SELECT_FIELDS).is("deleted_at", null),
   );
   return { data, error };
 }
@@ -172,7 +206,11 @@ async function fetchTasksForOrderFromServer(orderId) {
     return { data: [], error: null };
   }
   const { data, error } = await fetchAllSupabaseRows(() =>
-    supabaseClient.from("order_tasks").select(TASK_SELECT_FIELDS).eq("order_id", oid),
+    supabaseClient
+      .from("order_tasks")
+      .select(TASK_SELECT_FIELDS)
+      .eq("order_id", oid)
+      .is("deleted_at", null),
   );
   return { data, error };
 }
@@ -248,7 +286,129 @@ async function setTaskCompleted(taskId, offlineLocalId, completed) {
     return { error: null };
   }
   if (taskId == null || taskId === "") return { error: new Error("missing task id") };
-  return supabaseClient.from("order_tasks").update({ is_completed: completed }).eq("id", taskId);
+  return supabaseClient
+    .from("order_tasks")
+    .update({ is_completed: completed })
+    .eq("id", taskId)
+    .is("deleted_at", null);
+}
+
+function buildTaskHistoryDeleteComments(row) {
+  const comments = ["Задача удалена"];
+  const body = String(row?.body ?? "").trim();
+  if (body) comments.push(`Текст: ${body}`);
+  const oid = Number(row?.order_id);
+  if (Number.isFinite(oid) && oid > 0) {
+    comments.push(`Заказ: ${String(oid).padStart(4, "0")}`);
+  }
+  return comments;
+}
+
+async function insertTaskHistoryComments(taskId, comments, userEmail) {
+  const list = (comments || []).map((c) => String(c || "").trim()).filter(Boolean);
+  if (list.length === 0) return { ok: true };
+  const email = String(userEmail || state.currentUser?.email || "").trim();
+  if (!email) {
+    console.error("Ошибка записи истории задач: нет email пользователя");
+    return { ok: false, error: { message: "Нет email пользователя для истории" } };
+  }
+  const rows = list.map((comment) => ({
+    task_id: taskId != null && taskId !== "" ? Number(taskId) : null,
+    user_email: email,
+    comment,
+  }));
+  const { error } = await supabaseClient.from("task_history").insert(rows);
+  if (error) {
+    console.error("Ошибка записи истории задач:", error);
+    return { ok: false, error };
+  }
+  return { ok: true };
+}
+
+/** Запись не удаляется из БД — только выставляется deleted_at. Только автор. */
+async function softDeleteAuthorTask(taskId, offlineLocalId) {
+  if (!state.currentUser) return;
+
+  if (offlineLocalId) {
+    if (!confirm("Удалить локальную задачу? Она ещё не отправлена в базу.")) return;
+    removePendingTaskByLocalId(offlineLocalId);
+    await loadAllTasks();
+    void loadOrderTasks();
+    void refreshMyTasksNavBadge();
+    void import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
+    void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
+    return;
+  }
+
+  if (taskId == null || taskId === "") return;
+
+  if (isOfflineDataMode()) {
+    window.alert("Без связи с базой нельзя удалять задачи из базы.");
+    return;
+  }
+
+  if (
+    !confirm(
+      "Скрыть эту задачу из списка? В базе останется пометка удаления, строка не удаляется физически.",
+    )
+  ) {
+    return;
+  }
+
+  const { data: existing, error: fetchErr } = await supabaseClient
+    .from("order_tasks")
+    .select(TASK_SELECT_FIELDS)
+    .eq("id", taskId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (fetchErr) {
+    console.error("Ошибка загрузки задачи перед удалением:", fetchErr);
+    window.alert("Не удалось загрузить задачу.");
+    return;
+  }
+  if (!existing) {
+    window.alert("Задача уже удалена или недоступна.");
+    await loadAllTasks();
+    void loadOrderTasks();
+    return;
+  }
+  if (!isUserAuthorOfTask(existing)) {
+    window.alert("Удалять можно только свои задачи.");
+    return;
+  }
+
+  const { error } = await supabaseClient
+    .from("order_tasks")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", taskId)
+    .is("deleted_at", null);
+
+  if (error) {
+    console.error("Ошибка пометки удаления задачи:", error);
+    window.alert(
+      "Не удалось пометить задачу удалённой. Проверьте колонку deleted_at в таблице order_tasks.",
+    );
+    return;
+  }
+
+  const hist = await insertTaskHistoryComments(
+    taskId,
+    buildTaskHistoryDeleteComments(existing),
+    state.currentUser?.email,
+  );
+  if (!hist.ok) {
+    console.warn("Задача скрыта, но запись в историю не удалось сохранить.");
+  }
+
+  await loadAllTasks();
+  void loadOrderTasks();
+  void refreshMyTasksNavBadge();
+  void import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
+  void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
+  void import("./all-changes.js").then((m) => {
+    if (typeof m.loadAllChanges === "function") void m.loadAllChanges();
+  });
 }
 
 async function onTaskCompletedCheckboxChange(checkbox) {
@@ -280,6 +440,19 @@ function bindTaskCompletedCheckboxDelegation(root) {
     const cb = e.target.closest(".order-tasks-completed-cb");
     if (!cb || !root.contains(cb)) return;
     void onTaskCompletedCheckboxChange(cb);
+  });
+}
+
+function bindAuthorTaskDeleteDelegation(root) {
+  if (!root || root.dataset.taskDeleteBound === "1") return;
+  root.dataset.taskDeleteBound = "1";
+  root.addEventListener("click", (e) => {
+    const btn = e.target.closest(".btn-delete-task");
+    if (!btn || !root.contains(btn) || btn.disabled) return;
+    e.preventDefault();
+    const taskId = btn.getAttribute("data-task-id");
+    const offlineLocalId = btn.getAttribute("data-offline-local-id");
+    void softDeleteAuthorTask(taskId || null, offlineLocalId || null);
   });
 }
 
@@ -330,10 +503,10 @@ export async function loadAllTasks() {
     return;
   }
 
-  const baseRows = data || [];
-  if (!error && data) persistOrderTasksSnapshot(data);
+  const baseRows = filterNotDeletedTasks(data || []);
+  if (!error && data) persistOrderTasksSnapshot(baseRows);
 
-  const mergedAll = mergeOrderTasksRowsForAllTasks(baseRows);
+  const mergedAll = filterNotDeletedTasks(mergeOrderTasksRowsForAllTasks(baseRows));
   const standalone = filterStandaloneTasks(mergedAll);
   const executorRows = sortTasksByDueAt(filterMyExecutorTasks(standalone));
   const authorRows = sortTasksByDueAt(filterMyAuthorTasks(mergedAll));
@@ -403,7 +576,7 @@ export async function loadOrderTasks() {
     return;
   }
 
-  const merged = mergeOrderTasksRowsForOrder(data || [], oid);
+  const merged = filterNotDeletedTasks(mergeOrderTasksRowsForOrder(data || [], oid));
   renderOrderTasksTables(merged, oid, {
     executorTbody,
     authorTbody,
@@ -476,7 +649,8 @@ export async function refreshMyTasksNavBadge() {
   const { data, error } = await supabaseClient
     .from("order_tasks")
     .select("id, executor_emails, is_completed, created_at")
-    .eq("is_completed", false);
+    .eq("is_completed", false)
+    .is("deleted_at", null);
 
   if (error) {
     console.warn("Не удалось получить число невыполненных задач:", error);
@@ -532,4 +706,6 @@ export function initOrderTasksSection() {
   bindTaskCompletedCheckboxDelegation(document.getElementById("orderTasksAuthorTable"));
   bindTaskCompletedCheckboxDelegation(document.getElementById("allTasksTable"));
   bindTaskCompletedCheckboxDelegation(document.getElementById("myAuthorTasksTable"));
+  bindAuthorTaskDeleteDelegation(document.getElementById("myAuthorTasksTable"));
+  bindAuthorTaskDeleteDelegation(document.getElementById("orderTasksAuthorTable"));
 }

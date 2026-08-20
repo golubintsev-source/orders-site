@@ -442,6 +442,16 @@ export function persistCalculationHistorySnapshot(rows) {
   });
 }
 
+export function persistTaskHistorySnapshot(rows) {
+  const prev = readSnapshot() || { version: SNAP_VERSION };
+  writeJson(SNAP_KEY, {
+    ...prev,
+    version: SNAP_VERSION,
+    at: new Date().toISOString(),
+    task_history: rows || [],
+  });
+}
+
 /* ---------- pending: orders ---------- */
 
 function readPendingOrdersDoc() {
