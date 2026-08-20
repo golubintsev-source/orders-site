@@ -2083,7 +2083,7 @@ h2 {
 .my-tasks-page {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .my-tasks-block {
@@ -2652,6 +2652,15 @@ h2 {
   gap: 10px;
   margin-bottom: 14px;
   max-width: 640px;
+  width: 100%;
+}
+.order-tasks-create-actions {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+}
+.order-tasks-create-actions .order-tasks-create-btn {
+  min-width: 120px;
 }
 .order-tasks-executors-list {
   width: 100%;
@@ -2774,6 +2783,20 @@ h2 {
 .order-tasks-create-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .my-tasks-page .order-tasks-form-stack {
+    max-width: none;
+    width: 100%;
+  }
+
+  .my-tasks-page .order-tasks-input,
+  .my-tasks-page .order-tasks-due-input,
+  .my-tasks-page .order-tasks-executors-list {
+    max-width: none;
+    width: 100%;
+  }
 }
 #orderTasksTable {
   min-width: 280px;
