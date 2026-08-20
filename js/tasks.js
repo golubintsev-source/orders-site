@@ -154,11 +154,11 @@ function renderMyAuthorTasksRow(row, { showOrder = false } = {}) {
     : "";
   return `
     <tr class="${rowClass}">
+      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
       ${orderCell}
       <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
       <td>${escapeHtml(due)}</td>
       ${renderMyTaskStatusCell(row)}
-      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
       ${renderAuthorTaskDeleteCell(row)}
     </tr>
   `;
@@ -187,12 +187,12 @@ function renderMyTasksRow(row, { showOrder = false, showExecutors = true } = {})
     : "";
   return `
     <tr class="${rowClass}">
+      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
       ${orderCell}
       <td>${escapeHtml(formatTaskAuthorName(row.author_login))}</td>
       ${executorsCell}
       <td>${escapeHtml(due)}</td>
       ${renderMyTaskStatusCell(row)}
-      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
     </tr>
   `;
 }
