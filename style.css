@@ -2048,10 +2048,16 @@ h2 {
   background-color: #d1d5db;
 }
 
+/*
+ * Не table-layout:fixed + фиксированные px/%: на узком экране «Текст»
+ * схлопывается и ломается посимвольно. Ширина по содержимому + скролл
+ * в .table-wrap; у текста — min/max, чтобы строки читались нормально.
+ */
 #myAuthorTasksTable {
-  min-width: 100%;
-  table-layout: fixed;
-  width: 100%;
+  width: max-content;
+  min-width: 0 !important;
+  max-width: none;
+  table-layout: auto;
 }
 #myAuthorTasksTable tbody tr.my-tasks-row {
   cursor: default;
@@ -2061,40 +2067,47 @@ h2 {
   padding: 4px 8px;
   font-size: 13px;
   line-height: 1.25;
-  vertical-align: middle;
+  vertical-align: top;
 }
 #myAuthorTasksTable th:nth-child(1),
-#myAuthorTasksTable td:nth-child(1) {
-  width: 72px;
-}
-#myAuthorTasksTable th:nth-child(2),
-#myAuthorTasksTable td:nth-child(2) {
-  width: 140px;
-}
+#myAuthorTasksTable td:nth-child(1),
 #myAuthorTasksTable th:nth-child(3),
 #myAuthorTasksTable td:nth-child(3) {
-  width: 110px;
+  white-space: nowrap;
 }
-#myAuthorTasksTable th:nth-child(4),
-#myAuthorTasksTable td:nth-child(4) {
-  width: 120px;
+#myAuthorTasksTable .my-tasks-order-cell {
+  white-space: nowrap;
+}
+#myAuthorTasksTable .order-tasks-executors-cell {
+  white-space: normal;
+  max-width: 140px;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+#myAuthorTasksTable .my-tasks-status-cell {
+  white-space: nowrap;
 }
 #myAuthorTasksTable .order-tasks-text-th,
 #myAuthorTasksTable .order-tasks-text-cell {
-  width: auto;
+  width: 280px;
+  min-width: 220px;
+  max-width: 360px;
 }
 #myAuthorTasksTable .order-tasks-text-cell {
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
   line-height: 1.25;
 }
 #myAuthorTasksTable .my-tasks-actions-th,
 #myAuthorTasksTable .my-tasks-actions-cell {
-  width: 36px;
+  width: 1%;
+  min-width: 36px;
   padding-left: 2px;
   padding-right: 4px;
   text-align: center;
   white-space: nowrap;
+  vertical-align: middle;
 }
 #myAuthorTasksTable .btn-icon {
   display: inline-flex;
@@ -2146,6 +2159,14 @@ h2 {
 
 .my-tasks-block {
   margin-bottom: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.my-tasks-block .table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .my-tasks-block-title {
@@ -2199,14 +2220,14 @@ h2 {
   color: #111827;
 }
 
-#orderTasksExecutorTable,
-#orderTasksAuthorTable {
+#orderTasksExecutorTable {
   min-width: 320px;
 }
 #orderTasksAuthorTable {
-  min-width: 100%;
-  table-layout: fixed;
-  width: 100%;
+  width: max-content;
+  min-width: 0 !important;
+  max-width: none;
+  table-layout: auto;
 }
 #orderTasksExecutorTable tbody tr.my-tasks-row,
 #orderTasksAuthorTable tbody tr.my-tasks-row {
@@ -2223,7 +2244,7 @@ h2 {
   padding: 4px 8px;
   font-size: 13px;
   line-height: 1.25;
-  vertical-align: middle;
+  vertical-align: top;
 }
 #orderTasksExecutorTable .order-tasks-text-cell {
   white-space: normal;
@@ -2231,33 +2252,41 @@ h2 {
   max-width: 420px;
 }
 #orderTasksAuthorTable th:nth-child(1),
-#orderTasksAuthorTable td:nth-child(1) {
-  width: 140px;
-}
+#orderTasksAuthorTable td:nth-child(1),
 #orderTasksAuthorTable th:nth-child(2),
 #orderTasksAuthorTable td:nth-child(2) {
-  width: 110px;
+  white-space: nowrap;
 }
-#orderTasksAuthorTable th:nth-child(3),
-#orderTasksAuthorTable td:nth-child(3) {
-  width: 120px;
+#orderTasksAuthorTable .order-tasks-executors-cell {
+  white-space: normal;
+  max-width: 140px;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+#orderTasksAuthorTable .my-tasks-status-cell {
+  white-space: nowrap;
 }
 #orderTasksAuthorTable .order-tasks-text-th,
 #orderTasksAuthorTable .order-tasks-text-cell {
-  width: auto;
+  width: 280px;
+  min-width: 220px;
+  max-width: 360px;
 }
 #orderTasksAuthorTable .order-tasks-text-cell {
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
   line-height: 1.25;
 }
 #orderTasksAuthorTable .my-tasks-actions-th,
 #orderTasksAuthorTable .my-tasks-actions-cell {
-  width: 36px;
+  width: 1%;
+  min-width: 36px;
   padding-left: 2px;
   padding-right: 4px;
   text-align: center;
   white-space: nowrap;
+  vertical-align: middle;
 }
 #orderTasksAuthorTable .btn-icon {
   display: inline-flex;
