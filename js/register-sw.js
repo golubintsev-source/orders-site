@@ -9,18 +9,9 @@
 
   /**
    * Оболочка отдаётся из кэша, поэтому сразу после выкатки открывается прошлая версия.
-   * Перезагружаем её сами, но только пока пользователь ничего не начал делать —
-   * иначе перезагрузка оборвёт набор сообщения или заполнение формы.
+   * После критичных фиксов (сохранение заказа) перезагружаем сразу, иначе в памяти
+   * остаётся старый JS с upsert ON CONFLICT.
    */
-  const GRACE_MS = 12_000;
-  const startedAt = Date.now();
-  let interacted = false;
-  const markInteracted = () => {
-    interacted = true;
-  };
-  for (const type of ["pointerdown", "keydown", "touchstart", "wheel"]) {
-    window.addEventListener(type, markInteracted, { once: true, passive: true, capture: true });
-  }
 
   /** Запрос гасит флаг в service worker, поэтому «да» получит ровно один вызов. */
   function consumeShellUpdated(worker) {
@@ -38,9 +29,9 @@
 
   let reloading = false;
   async function reloadIfShellUpdated(worker) {
-    if (reloading || interacted || Date.now() - startedAt > GRACE_MS) return;
+    if (reloading) return;
     if (!(await consumeShellUpdated(worker))) return;
-    if (reloading || interacted) return;
+    if (reloading) return;
     reloading = true;
     window.location.reload();
   }

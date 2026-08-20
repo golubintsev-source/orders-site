@@ -273,12 +273,10 @@ export function raceWithTimeout(promise, ms = OFFLINE_SUPABASE_WAIT_MS) {
 }
 
 /**
- * Создать заказ с идемпотентностью: upsert по save_idempotency_key.
+ * Создать заказ с идемпотентностью (только INSERT, без ON CONFLICT / upsert).
  *
- * Мы не обязаны использовать SQL ON CONFLICT: требование — не удалять строки.
- * В базе настроен триггер, который отклоняет INSERT/UPDATE при повторе ключа
- * (unique_violation 23505). В этом случае мы находим уже существующий заказ
- * по save_idempotency_key и возвращаем его id.
+ * Требование: не удалять строки из БД. В базе триггер отклоняет повтор ключа
+ * (unique_violation 23505) — тогда возвращаем id уже существующего заказа.
  */
 export async function insertOrUpsertNewOrder(orderData, saveIdempotencyKey) {
   const q = supabaseClient.from("orders");
@@ -286,11 +284,10 @@ export async function insertOrUpsertNewOrder(orderData, saveIdempotencyKey) {
     return q.insert([orderData]).select().single();
   }
 
-  // 1) Пытаемся вставить.
+  // Строго INSERT: upsert генерирует ON CONFLICT и падает без unique-constraint.
   const insertResult = await q.insert([orderData]).select().single();
   if (!insertResult.error) return insertResult;
 
-  // 2) Если триггер отклонил повтор (unique_violation), возвращаем существующий id.
   const code = insertResult?.error?.code;
   const msg = String(insertResult?.error?.message || "");
   if (code === "23505" || /duplicate save_idempotency_key/i.test(msg)) {
@@ -305,7 +302,6 @@ export async function insertOrUpsertNewOrder(orderData, saveIdempotencyKey) {
     }
   }
 
-  // 3) Любая другая ошибка — пробрасываем как есть.
   return insertResult;
 }
 
