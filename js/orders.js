@@ -82,6 +82,7 @@ import {
   readPendingOrderEditsQueue,
   addOrAppendPendingServerOrderEdit,
   raceWithTimeout,
+  insertOrUpsertNewOrder,
 } from "./offline-cache.js";
 import { shortLoginByEmail } from "./user-names.js";
 import { getEditors } from "./settings.js";
@@ -3525,12 +3526,7 @@ export async function submitOrderForm(event) {
         savedOrderId = result.data.id;
       }
     } else {
-      const q = supabaseClient.from("orders");
-      const result = await raceWithTimeout(
-        saveIdempotencyKey
-          ? q.upsert([orderData], { onConflict: "save_idempotency_key" }).select().single()
-          : q.insert([orderData]).select().single(),
-      );
+      const result = await raceWithTimeout(insertOrUpsertNewOrder(orderData, saveIdempotencyKey));
 
       error = result.error;
 
@@ -3909,9 +3905,7 @@ export async function createOrderFromVoicePayload(draft) {
   let error = null;
   let savedOrderId = null;
   try {
-    const result = await raceWithTimeout(
-      supabaseClient.from("orders").upsert([orderData], { onConflict: "save_idempotency_key" }).select().single(),
-    );
+    const result = await raceWithTimeout(insertOrUpsertNewOrder(orderData, saveIdempotencyKey));
     error = result.error;
     if (!error && result.data) savedOrderId = result.data.id;
   } catch (e) {
