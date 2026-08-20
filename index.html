@@ -982,6 +982,38 @@
       <div class="card order-tasks-card">
         <h2 id="orderTasksPageTitle" class="order-tasks-page-title"></h2>
 
+        <div id="orderPageTaskCreateBlock" class="order-tasks-create-block">
+          <h3
+            id="orderPageTaskCreateTitle"
+            class="my-tasks-block-title order-tasks-create-block-title"
+          >Создать задачу</h3>
+          <div class="order-tasks-form-stack">
+            <div class="field order-tasks-field">
+              <input
+                type="text"
+                id="orderPageTaskTextInput"
+                class="order-tasks-input"
+                placeholder="Текст задачи"
+                autocomplete="off"
+                aria-label="Текст задачи"
+              />
+            </div>
+            <div class="field order-tasks-field">
+              <label>Исполнители</label>
+              <div id="orderPageTaskExecutorsList" class="messages-create-group-users order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>
+              <p id="orderPageTaskExecutorsHint" class="order-tasks-executors-hint" hidden>Загрузка пользователей…</p>
+            </div>
+            <div class="field order-tasks-field">
+              <label for="orderPageTaskDueAtInput">Срок выполнения</label>
+              <input type="datetime-local" id="orderPageTaskDueAtInput" class="order-tasks-due-input" />
+            </div>
+            <div class="field order-tasks-field order-tasks-create-actions">
+              <button type="button" id="orderPageTaskCreateBtn" class="btn-primary order-tasks-create-btn">Создать</button>
+            </div>
+          </div>
+          <p id="orderPageTaskFormMessage" class="order-tasks-hint"></p>
+        </div>
+
         <h3 class="my-tasks-block-title">Где я исполнитель</h3>
         <div class="table-wrap">
           <table id="orderTasksExecutorTable">

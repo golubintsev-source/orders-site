@@ -232,6 +232,137 @@ function setOrderTasksPageTitle(orderId) {
   titleEl.textContent = `Задачи заказа ${chip}`;
 }
 
+function getOrderPageTaskFormEls() {
+  return {
+    textInput: document.getElementById("orderPageTaskTextInput"),
+    dueInput: document.getElementById("orderPageTaskDueAtInput"),
+    executorsList: document.getElementById("orderPageTaskExecutorsList"),
+    executorsHint: document.getElementById("orderPageTaskExecutorsHint"),
+    createBtn: document.getElementById("orderPageTaskCreateBtn"),
+    titleEl: document.getElementById("orderPageTaskCreateTitle"),
+    msgEl: document.getElementById("orderPageTaskFormMessage"),
+  };
+}
+
+let orderPageTaskMessageTimer = null;
+
+function setOrderPageTaskFormMessage(text, { isError = false, autoClearMs = 0 } = {}) {
+  const { msgEl } = getOrderPageTaskFormEls();
+  if (!msgEl) return;
+  if (orderPageTaskMessageTimer) {
+    window.clearTimeout(orderPageTaskMessageTimer);
+    orderPageTaskMessageTimer = null;
+  }
+  msgEl.textContent = String(text || "");
+  msgEl.classList.toggle("order-tasks-message--error", Boolean(text) && isError);
+  if (text && autoClearMs > 0) {
+    orderPageTaskMessageTimer = window.setTimeout(() => {
+      orderPageTaskMessageTimer = null;
+      msgEl.textContent = "";
+      msgEl.classList.remove("order-tasks-message--error");
+    }, autoClearMs);
+  }
+}
+
+function setOrderPageTaskFormDisabled(disabled) {
+  const { textInput, dueInput, executorsList, createBtn } = getOrderPageTaskFormEls();
+  if (textInput) textInput.disabled = disabled;
+  if (dueInput) dueInput.disabled = disabled;
+  if (createBtn) createBtn.disabled = disabled;
+  if (executorsList) {
+    executorsList.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.disabled = disabled;
+    });
+  }
+}
+
+function setOrderPageTaskCreateTitle(orderId) {
+  const { titleEl } = getOrderPageTaskFormEls();
+  if (!titleEl) return;
+  const oid = Number(orderId);
+  if (!Number.isFinite(oid) || oid <= 0) {
+    titleEl.textContent = "Создать задачу";
+    return;
+  }
+  const order = state.allOrders?.find((o) => Number(o.id) === oid);
+  const chip = formatOrderIdTypeChip(oid, order?.order_type) || String(oid).padStart(4, "0");
+  titleEl.textContent = `Создать задачу по заказу ${chip}`;
+}
+
+async function ensureOrderPageTaskExecutorsLoaded() {
+  const { executorsList, executorsHint } = getOrderPageTaskFormEls();
+  await ensureTaskExecutorsInList(executorsList, executorsHint);
+}
+
+function resetOrderPageTaskFormFields() {
+  const { textInput, dueInput, executorsList } = getOrderPageTaskFormEls();
+  if (textInput) textInput.value = "";
+  if (dueInput && !dueInput.disabled) dueInput.value = defaultTaskDueAtLocal();
+  resetTaskExecutorsList(executorsList);
+}
+
+/** Задача с этой страницы всегда привязана к открытому заказу. */
+export async function createOrderPageTask() {
+  const { textInput, dueInput, executorsList, createBtn } = getOrderPageTaskFormEls();
+  if (!textInput) return;
+
+  if (!state.currentUser) {
+    setOrderPageTaskFormMessage("Войдите в систему, чтобы создавать задачи.", { isError: true });
+    return;
+  }
+
+  const oid = Number(state.tasksOrderId);
+  if (!Number.isFinite(oid) || oid <= 0) {
+    setOrderPageTaskFormMessage("Откройте задачи через меню номера заказа.", { isError: true });
+    return;
+  }
+
+  const text = (textInput.value || "").trim();
+  if (!text) {
+    setOrderPageTaskFormMessage("Введите текст задачи.", { isError: true });
+    return;
+  }
+
+  setOrderPageTaskFormMessage("");
+  if (createBtn) createBtn.disabled = true;
+
+  const executorEmails = getSelectedExecutorEmailsFrom(executorsList);
+  const dueAt = datetimeLocalToIso(dueInput?.value);
+  const { error } = await insertTask({ body: text, executorEmails, dueAt, orderId: oid });
+
+  if (createBtn) createBtn.disabled = false;
+
+  if (error) {
+    console.error("Ошибка создания задачи по заказу:", error);
+    setOrderPageTaskFormMessage("Не удалось сохранить задачу.", { isError: true });
+    return;
+  }
+
+  resetOrderPageTaskFormFields();
+  setOrderPageTaskFormMessage("Задача создана.", { autoClearMs: 4000 });
+
+  await loadOrderTasks();
+  void loadAllTasks();
+  void refreshMyTasksNavBadge();
+  void import("./order-task-links.js").then((m) => {
+    m.addActiveTaskOrderRef(oid);
+    m.applyOrderTaskHighlightsInDom();
+  });
+}
+
+function syncOrderPageTaskForm(orderId) {
+  setOrderPageTaskCreateTitle(orderId);
+
+  const oid = Number(orderId);
+  const canCreate = Boolean(state.currentUser) && Number.isFinite(oid) && oid > 0;
+  setOrderPageTaskFormDisabled(!canCreate);
+  void ensureOrderPageTaskExecutorsLoaded().then(() => setOrderPageTaskFormDisabled(!canCreate));
+  if (!canCreate) return;
+
+  const { dueInput } = getOrderPageTaskFormEls();
+  if (dueInput && !dueInput.value) dueInput.value = defaultTaskDueAtLocal();
+}
+
 function renderOrderTasksTables(merged, orderId, { executorMsg, authorMsg, executorTbody, authorTbody }) {
   const forOrder = filterTasksForOrder(merged, orderId);
   const executorRows = sortTasksByDueAt(filterMyExecutorTasks(forOrder));
@@ -538,6 +669,7 @@ export async function loadOrderTasks() {
 
   const orderId = state.tasksOrderId;
   setOrderTasksPageTitle(orderId);
+  syncOrderPageTaskForm(orderId);
 
   for (const msg of [executorMsg, authorMsg]) {
     if (msg) {
@@ -703,7 +835,22 @@ export function initOrderTasksSection() {
   }
   // Клик по #myTasksNavBtn — в initSectionNavDropdown (ранний путь шапки).
 
+  const orderPageCreateBtn = document.getElementById("orderPageTaskCreateBtn");
+  const orderPageInput = document.getElementById("orderPageTaskTextInput");
+  if (orderPageCreateBtn) {
+    orderPageCreateBtn.addEventListener("click", () => void createOrderPageTask());
+  }
+  if (orderPageInput) {
+    orderPageInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        void createOrderPageTask();
+      }
+    });
+  }
+
   void ensureMyTasksExecutorsLoaded();
+  void ensureOrderPageTaskExecutorsLoaded();
   startMyTasksBadgePolling();
   void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
 
