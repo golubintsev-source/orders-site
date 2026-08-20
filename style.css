@@ -2151,7 +2151,14 @@ h2 {
   background-color: #d1d5db;
 }
 
+/* display:flex только у .active — иначе перебивает .content-section { display:none }
+   и «Мои задачи» остаются видны на сообщениях, новом заказе и остальных разделах */
 .my-tasks-page {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.content-section.my-tasks-page.active {
   display: flex;
   flex-direction: column;
   gap: 10px;
