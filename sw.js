@@ -8,7 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-const STATIC_CACHE = "orders-site-static-v20";
+// v21: сброс кэша после фикса сохранения заказа (upsert ON CONFLICT → insert).
+const STATIC_CACHE = "orders-site-static-v21";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 
@@ -26,6 +27,7 @@ const PRECACHE_URLS = [
   "/js/state.js",
   "/js/auth.js",
   "/js/orders.js",
+  "/js/offline-cache.js",
   "/js/dom.js",
   "/js/ui.js",
   "/js/section-nav.js",
@@ -67,7 +69,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(
+      const deletedLegacy = await Promise.all(
         keys
           .filter(
             (k) =>
@@ -78,6 +80,9 @@ self.addEventListener("activate", (event) => {
           .map((k) => caches.delete(k)),
       );
       await self.clients.claim();
+      // После смены STATIC_CACHE старый JS мог остаться в памяти вкладки —
+      // просим оболочку перезагрузиться (register-sw.js учтёт grace/interaction).
+      if (deletedLegacy.some(Boolean)) await notifyShellUpdated();
       const count = await getBadgeCount();
       if (count > 0) await applyAppBadge(count);
     })(),
