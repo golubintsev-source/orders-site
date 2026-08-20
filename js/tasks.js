@@ -68,10 +68,6 @@ function isStandaloneTask(row) {
   return id == null || id === "" || !Number.isFinite(Number(id)) || Number(id) <= 0;
 }
 
-function filterStandaloneTasks(rows) {
-  return (rows || []).filter((row) => isStandaloneTask(row));
-}
-
 function filterTasksForOrder(rows, orderId) {
   const oid = Number(orderId);
   if (!Number.isFinite(oid) || oid <= 0) return [];
@@ -174,18 +170,26 @@ function formatTaskAuthorName(raw) {
   return name || "—";
 }
 
-function renderMyTasksRow(row) {
+function renderMyTasksRow(row, { showOrder = false, showExecutors = true } = {}) {
   const completed = !isActiveTask(row);
   const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
   const rowClass = completed
     ? `my-tasks-row my-tasks-row--completed${offlineCls}`
     : `my-tasks-row my-tasks-row--pending${offlineCls}`;
-  const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
   const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
+  const orderCell = showOrder
+    ? `<td class="my-tasks-order-cell">${escapeHtml(formatTaskOrderCell(row))}</td>`
+    : "";
+  const executorsCell = showExecutors
+    ? `<td class="order-tasks-executors-cell">${escapeHtml(
+        formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail),
+      )}</td>`
+    : "";
   return `
     <tr class="${rowClass}">
+      ${orderCell}
       <td>${escapeHtml(formatTaskAuthorName(row.author_login))}</td>
-      <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
+      ${executorsCell}
       <td>${escapeHtml(due)}</td>
       ${renderMyTaskStatusCell(row)}
       <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
@@ -507,15 +511,16 @@ export async function loadAllTasks() {
   if (!error && data) persistOrderTasksSnapshot(baseRows);
 
   const mergedAll = filterNotDeletedTasks(mergeOrderTasksRowsForAllTasks(baseRows));
-  const standalone = filterStandaloneTasks(mergedAll);
-  const executorRows = sortTasksByDueAt(filterMyExecutorTasks(standalone));
+  const executorRows = sortTasksByDueAt(filterMyExecutorTasks(mergedAll));
   const authorRows = sortTasksByDueAt(filterMyAuthorTasks(mergedAll));
 
-  executorTbody.innerHTML = executorRows.map((row) => renderMyTasksRow(row)).join("");
+  executorTbody.innerHTML = executorRows
+    .map((row) => renderMyTasksRow(row, { showOrder: true, showExecutors: false }))
+    .join("");
   authorTbody.innerHTML = authorRows.map((row) => renderMyAuthorTasksRow(row, { showOrder: true })).join("");
 
   if (executorRows.length === 0 && executorMsg) {
-    executorMsg.textContent = "Нет задач без привязки к заказу, где вы исполнитель.";
+    executorMsg.textContent = "Нет задач, где вы исполнитель.";
   }
   if (authorRows.length === 0 && authorMsg) {
     authorMsg.textContent = "Нет задач, где вы автор.";
