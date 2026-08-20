@@ -2658,7 +2658,18 @@ h2 {
   max-width: 640px;
 }
 .order-tasks-executors-list.messages-create-group-users {
-  max-height: min(36vh, 240px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  max-height: none;
+  overflow: visible;
+}
+.order-tasks-executors-list .messages-create-group-user {
+  gap: 6px;
+  padding: 5px 8px;
+  min-width: 0;
+}
+.order-tasks-executors-list .messages-create-group-user-name {
+  font-size: 13px;
 }
 .order-tasks-executor-user--self .messages-create-group-user-name {
   font-weight: 600;
