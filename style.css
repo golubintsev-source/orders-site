@@ -2307,10 +2307,11 @@ h2 {
   line-height: 1.25;
   vertical-align: top;
 }
-#orderTasksExecutorTable th:nth-child(1),
-#orderTasksExecutorTable td:nth-child(1),
-#orderTasksExecutorTable th:nth-child(3),
-#orderTasksExecutorTable td:nth-child(3) {
+/* nowrap только у «Автор» и «Срок»; «Задача» и «Исполнители» переносятся */
+#orderTasksExecutorTable th:nth-child(2),
+#orderTasksExecutorTable td:nth-child(2),
+#orderTasksExecutorTable th:nth-child(4),
+#orderTasksExecutorTable td:nth-child(4) {
   white-space: nowrap;
 }
 #orderTasksExecutorTable .order-tasks-executors-cell {
@@ -2328,16 +2329,15 @@ h2 {
   min-width: 220px;
   max-width: 360px;
 }
-#orderTasksExecutorTable .order-tasks-text-cell {
+#orderTasksExecutorTable td.order-tasks-text-cell {
   white-space: normal;
   overflow-wrap: break-word;
   word-break: normal;
   line-height: 1.25;
 }
-#orderTasksAuthorTable th:nth-child(1),
-#orderTasksAuthorTable td:nth-child(1),
-#orderTasksAuthorTable th:nth-child(2),
-#orderTasksAuthorTable td:nth-child(2) {
+/* nowrap только у «Срок»; «Задача» и «Исполнители» переносятся */
+#orderTasksAuthorTable th:nth-child(3),
+#orderTasksAuthorTable td:nth-child(3) {
   white-space: nowrap;
 }
 #orderTasksAuthorTable .order-tasks-executors-cell {
@@ -2355,7 +2355,7 @@ h2 {
   min-width: 220px;
   max-width: 360px;
 }
-#orderTasksAuthorTable .order-tasks-text-cell {
+#orderTasksAuthorTable td.order-tasks-text-cell {
   white-space: normal;
   overflow-wrap: break-word;
   word-break: normal;
