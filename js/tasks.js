@@ -106,8 +106,8 @@ function renderMyTaskStatusCell(row) {
     : "";
   return `
     <td class="my-tasks-status-cell">
-      <span class="my-tasks-status-text">${escapeHtml(statusText)}</span>
       ${checkboxHtml}
+      <span class="my-tasks-status-text">${escapeHtml(statusText)}</span>
     </td>
   `;
 }
