@@ -2220,6 +2220,32 @@ h2 {
   margin-top: 8px;
 }
 
+.order-tasks-create-block {
+  margin: 10px 0 4px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+#section-order-tasks .order-tasks-create-block-title {
+  margin: 0 0 10px;
+}
+
+.order-tasks-create-block .order-tasks-form-stack {
+  margin-bottom: 0;
+}
+
+@media (max-width: 480px) {
+  .order-tasks-create-block .order-tasks-form-stack,
+  .order-tasks-create-block .order-tasks-input,
+  .order-tasks-create-block .order-tasks-due-input,
+  .order-tasks-create-block .order-tasks-executors-list {
+    max-width: none;
+    width: 100%;
+  }
+}
+
 .my-tasks-block--create {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
