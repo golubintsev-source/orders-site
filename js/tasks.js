@@ -498,7 +498,6 @@ export function initOrderTasksSection() {
   orderTasksSectionInited = true;
   const createBtn = document.getElementById("orderTaskCreateBtn");
   const input = document.getElementById("orderTaskTextInput");
-  const myTasksNavBtn = document.getElementById("myTasksNavBtn");
   if (createBtn) {
     createBtn.addEventListener("click", () => void createOrderTask());
   }
@@ -510,11 +509,7 @@ export function initOrderTasksSection() {
       }
     });
   }
-  if (myTasksNavBtn) {
-    myTasksNavBtn.addEventListener("click", () => {
-      void import("./section-nav.js").then((m) => m.switchSection("tasks-all"));
-    });
-  }
+  // Клик по #myTasksNavBtn — в initSectionNavDropdown (ранний путь шапки).
 
   void ensureMyTasksExecutorsLoaded();
   startMyTasksBadgePolling();
