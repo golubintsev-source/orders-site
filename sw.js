@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v25: период дат вместо месяца на «Зарплата менеджера».
-const STATIC_CACHE = "orders-site-static-v25";
+// v26: номер заказа в таблицах «Мои задачи» стал ссылкой на просмотр заказа.
+const STATIC_CACHE = "orders-site-static-v26";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 
