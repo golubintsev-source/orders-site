@@ -29,6 +29,7 @@ import {
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { buildOrderViewUrl } from "./app-routes.js";
+import { showFloatingCellTooltip, hideFloatingCellTooltip } from "./cell-tooltip.js";
 
 const TASK_SELECT_FIELDS =
   "id, created_at, author_login, body, due_at, executor_emails, is_completed, order_id, deleted_at";
@@ -134,6 +135,28 @@ function renderTaskOrderCellHtml(row) {
   `;
 }
 
+/**
+ * Текст задачи. Если задача привязана к заказу, по клику показываем те же поля заказа,
+ * что и попап по дате заказа в таблице «Заказы».
+ */
+function renderTaskTextCellHtml(row, { orderPopup = false } = {}) {
+  const text = escapeHtml(row.body || "");
+  if (!orderPopup || isStandaloneTask(row)) {
+    return `<td class="order-tasks-text-cell">${text}</td>`;
+  }
+  const oid = Number(row.order_id);
+  const label = formatTaskOrderLabel(oid);
+  return `
+    <td
+      class="order-tasks-text-cell order-tasks-text-cell--order-popup"
+      data-order-id="${escapeHtml(String(oid))}"
+      role="button"
+      tabindex="0"
+      title="Показать все поля заказа ${escapeHtml(label)}"
+    >${text}</td>
+  `;
+}
+
 function renderAuthorTaskDeleteCell(row) {
   if (!isUserAuthorOfTask(row)) return `<td class="my-tasks-actions-cell"></td>`;
   const taskId = row.id != null ? String(row.id) : "";
@@ -155,7 +178,7 @@ function renderAuthorTaskDeleteCell(row) {
   `;
 }
 
-function renderMyAuthorTasksRow(row, { showOrder = false } = {}) {
+function renderMyAuthorTasksRow(row, { showOrder = false, orderPopup = false } = {}) {
   const completed = !isActiveTask(row);
   const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
   const rowClass = completed
@@ -166,7 +189,7 @@ function renderMyAuthorTasksRow(row, { showOrder = false } = {}) {
   const orderCell = showOrder ? renderTaskOrderCellHtml(row) : "";
   return `
     <tr class="${rowClass}">
-      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
+      ${renderTaskTextCellHtml(row, { orderPopup })}
       ${orderCell}
       <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
       <td>${escapeHtml(due)}</td>
@@ -182,7 +205,7 @@ function formatTaskAuthorName(raw) {
   return name || "—";
 }
 
-function renderMyTasksRow(row, { showOrder = false, showExecutors = true } = {}) {
+function renderMyTasksRow(row, { showOrder = false, showExecutors = true, orderPopup = false } = {}) {
   const completed = !isActiveTask(row);
   const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
   const rowClass = completed
@@ -197,7 +220,7 @@ function renderMyTasksRow(row, { showOrder = false, showExecutors = true } = {})
     : "";
   return `
     <tr class="${rowClass}">
-      <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
+      ${renderTaskTextCellHtml(row, { orderPopup })}
       ${orderCell}
       <td>${escapeHtml(formatTaskAuthorName(row.author_login))}</td>
       ${executorsCell}
@@ -601,6 +624,40 @@ function bindAuthorTaskDeleteDelegation(root) {
   });
 }
 
+async function showTaskOrderFullTooltip(cell) {
+  const oid = Number(cell.getAttribute("data-order-id"));
+  if (!Number.isFinite(oid) || oid <= 0) return;
+  const orders = await import("./orders.js");
+  const order = await orders.getOrderRowForFullTooltip(oid);
+  if (!order) {
+    hideFloatingCellTooltip();
+    return;
+  }
+  showFloatingCellTooltip(cell, orders.buildOrderRowFullTooltipHtml(order), {
+    html: true,
+    tooltipClass: "cell-tooltip--order-row-wide",
+  });
+}
+
+/** Текст задачи с привязанным заказом открывает попап со всеми полями этого заказа. */
+function bindTaskOrderPopupDelegation(root) {
+  if (!root || root.dataset.taskOrderPopupBound === "1") return;
+  root.dataset.taskOrderPopupBound = "1";
+  const openFromEvent = (e) => {
+    const cell = e.target.closest("td.order-tasks-text-cell--order-popup");
+    if (!cell || !root.contains(cell)) return;
+    if (e.target.closest("button, a, .btn-icon, input, select, textarea, label")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void showTaskOrderFullTooltip(cell);
+  };
+  root.addEventListener("click", openFromEvent);
+  root.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    openFromEvent(e);
+  });
+}
+
 /** Номер заказа в таблицах задач открывает просмотр заказа без перезагрузки страницы. */
 function bindTaskOrderLinkDelegation(root) {
   if (!root || root.dataset.taskOrderLinkBound === "1") return;
@@ -671,9 +728,11 @@ export async function loadAllTasks() {
   const authorRows = sortTasksByDueAt(filterMyAuthorTasks(mergedAll));
 
   executorTbody.innerHTML = executorRows
-    .map((row) => renderMyTasksRow(row, { showOrder: true, showExecutors: false }))
+    .map((row) => renderMyTasksRow(row, { showOrder: true, showExecutors: false, orderPopup: true }))
     .join("");
-  authorTbody.innerHTML = authorRows.map((row) => renderMyAuthorTasksRow(row, { showOrder: true })).join("");
+  authorTbody.innerHTML = authorRows
+    .map((row) => renderMyAuthorTasksRow(row, { showOrder: true, orderPopup: true }))
+    .join("");
 
   if (executorRows.length === 0 && executorMsg) {
     executorMsg.textContent = "Нет задач, где вы исполнитель.";
@@ -887,4 +946,6 @@ export function initOrderTasksSection() {
   bindAuthorTaskDeleteDelegation(document.getElementById("orderTasksAuthorTable"));
   bindTaskOrderLinkDelegation(document.getElementById("allTasksTable"));
   bindTaskOrderLinkDelegation(document.getElementById("myAuthorTasksTable"));
+  bindTaskOrderPopupDelegation(document.getElementById("allTasksTable"));
+  bindTaskOrderPopupDelegation(document.getElementById("myAuthorTasksTable"));
 }

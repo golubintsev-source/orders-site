@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v26: номер заказа в таблицах «Мои задачи» стал ссылкой на просмотр заказа.
-const STATIC_CACHE = "orders-site-static-v26";
+// v27: клик по тексту задачи в «Мои задачи» открывает попап со всеми полями заказа.
+const STATIC_CACHE = "orders-site-static-v27";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 
@@ -30,6 +30,7 @@ const PRECACHE_URLS = [
   "/js/offline-cache.js",
   "/js/dom.js",
   "/js/ui.js",
+  "/js/cell-tooltip.js",
   "/js/section-nav.js",
   "/js/app-routes.js",
   "/js/settings.js",

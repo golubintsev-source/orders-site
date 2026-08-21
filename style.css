@@ -2286,6 +2286,26 @@ h2 {
   text-decoration: underline;
 }
 
+/* Задача с привязанным заказом: клик по тексту открывает попап со всеми полями заказа */
+#allTasksTable .order-tasks-text-cell--order-popup,
+#myAuthorTasksTable .order-tasks-text-cell--order-popup {
+  cursor: pointer;
+  text-decoration: underline dotted rgba(31, 111, 235, 0.55);
+  text-underline-offset: 2px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#allTasksTable .order-tasks-text-cell--order-popup:hover,
+#myAuthorTasksTable .order-tasks-text-cell--order-popup:hover {
+  text-decoration-color: #1f6feb;
+}
+
+#allTasksTable .order-tasks-text-cell--order-popup:focus-visible,
+#myAuthorTasksTable .order-tasks-text-cell--order-popup:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: -2px;
+}
+
 .order-tasks-page-title {
   margin: 0 0 4px;
   font-size: 18px;
