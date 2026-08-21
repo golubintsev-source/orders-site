@@ -63,7 +63,9 @@ git push
 
 Чтобы также не плодились одинаковые записи в `order_history` и авто-дельты в `calculations`, дополнительно выполни:
 - **`supabase_order_history_dedup_unique.sql`**
-- **`supabase_calculations_dedup_unique_comment.sql`** — только **мягкое** скрытие (`deleted_at`), не физический DELETE
+- **`supabase_calculations_dedup_unique_comment.sql`** — снимает широкий `UNIQUE(comment)` (он ломал ручное добавление на «Расчеты») и ставит уникальность **только** на авто-комментарии `[AUTO_ORDER_DELTA]` / `[AUTO_EXCESS_DELTA]`; дубликаты авто-строк скрываются через `deleted_at`, не физический DELETE
+
+Если при добавлении строки на «Расчеты» видите «Ошибка при добавлении» на обычный комментарий (например повтор «Протект»), в базе ещё висит старый индекс `calculations_comment_uq` — выполните **`sql/calculations_dedup_drop_comment_unique.sql`**, затем обновлённый **`supabase_calculations_dedup_unique_comment.sql`**.
 
 ⚠️ Если вы уже запускали **старую** версию `supabase_calculations_dedup_unique_comment.sql` с `DELETE`, строки без бэкапа не восстановить по id. Используйте **`sql/calculations_dedup_recover_without_backup.sql`** (снимки баланса в `site_access_logs`).
 

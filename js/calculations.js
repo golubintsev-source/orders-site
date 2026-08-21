@@ -1209,7 +1209,20 @@ async function submitForm(e) {
     const { error } = await supabaseClient.from("calculations").insert([insertPayload]);
     if (error) {
       console.error("Ошибка добавления:", error);
-      setMessage("Ошибка при добавлении.", true);
+      const code = error?.code;
+      const msg = String(error?.message || "");
+      const isUnique =
+        code === "23505" || /duplicate key|unique constraint|violates unique/i.test(msg);
+      if (isUnique && /comment/i.test(msg)) {
+        setMessage(
+          "Ошибка при добавлении: в базе ещё действует уникальность комментария. Выполните sql/calculations_dedup_drop_comment_unique.sql в Supabase.",
+          true
+        );
+      } else if (isUnique) {
+        setMessage("Ошибка при добавлении: такая запись уже есть.", true);
+      } else {
+        setMessage("Ошибка при добавлении.", true);
+      }
       return;
     }
     setMessage("");
