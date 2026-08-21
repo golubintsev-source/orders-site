@@ -483,7 +483,7 @@ export async function createCalculationFromVoicePayload(draft) {
       return {
         ok: false,
         message:
-          "Не удалось записать расход: в базе ещё уникальность комментария. Выполните sql/calculations_dedup_drop_comment_unique.sql в Supabase.",
+          "Не удалось записать расход: в базе ещё уникальность комментария. Выполните sql/calculations_dedup_drop_comment_unique.sql в Supabase (только DROP INDEX, строки не удаляет).",
       };
     }
     return { ok: false, message: "Не удалось записать расход в расчёты" };
@@ -1226,7 +1226,7 @@ async function submitForm(e) {
         code === "23505" || /duplicate key|unique constraint|violates unique/i.test(msg);
       if (isUnique && /comment/i.test(msg)) {
         setMessage(
-          "Ошибка при добавлении: в базе ещё действует уникальность комментария. Выполните sql/calculations_dedup_drop_comment_unique.sql в Supabase.",
+          "Ошибка при добавлении: в базе ещё действует уникальность комментария. Выполните sql/calculations_dedup_drop_comment_unique.sql в Supabase (только DROP INDEX, строки не удаляет).",
           true
         );
       } else if (isUnique) {

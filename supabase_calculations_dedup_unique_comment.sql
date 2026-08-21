@@ -1,44 +1,17 @@
--- Идемпотентность авто-записей в calculations (дельты заказов / излишков).
+-- Исправление: широкий UNIQUE(comment) ломал ручное добавление на «Расчеты».
 --
--- ⚠️  Раньше здесь создавался UNIQUE по ВСЕМ comment (calculations_comment_uq).
--- Это ломало ручное добавление на странице «Расчеты»: повторный текст вроде
--- «Протект» у того же автора давал comment «Протект; Лена» и ошибку 23505
--- («Ошибка при добавлении.»). Ручные комментарии не должны быть уникальными.
+-- Этот скрипт ТОЛЬКО снимает вредный индекс.
+--
+-- Гарантии по данным:
+--   ✅ DROP INDEX — удаляется только индекс, строки calculations не трогаются
+--   ❌ Нет DELETE / TRUNCATE / DROP TABLE
+--   ❌ Нет UPDATE строк (в т.ч. deleted_at)
 --
 -- Скрипт можно выполнять повторно.
--- 1) Снимаем вредный широкий индекс.
--- 2) Мягко скрываем дубликаты только среди авто-комментариев.
--- 3) Ставим UNIQUE только на авто-строки (префиксы [AUTO_ORDER_DELTA] /
---    [AUTO_EXCESS_DELTA]), чтобы повтор после таймаута не плодил дельты.
-
--- ⚠️  В приложении расчёты НИКОГДА не удаляются физически — только deleted_at
--- (см. softDeleteCalculationRow в js/calculations.js).
+-- Для исправления ошибки добавления достаточно этого файла
+-- (или sql/calculations_dedup_drop_comment_unique.sql — то же самое).
+--
+-- Опционально (антидубли авто-дельт через soft-delete + узкий UNIQUE):
+--   sql/calculations_auto_comment_unique_optional.sql
 
 DROP INDEX IF EXISTS calculations_comment_uq;
-
-WITH ranked AS (
-  SELECT
-    id,
-    ROW_NUMBER() OVER (PARTITION BY comment ORDER BY id ASC) AS rn
-  FROM calculations
-  WHERE deleted_at IS NULL
-    AND comment IS NOT NULL
-    AND (
-      comment LIKE '[AUTO_ORDER_DELTA]%'
-      OR comment LIKE '[AUTO_EXCESS_DELTA]%'
-    )
-)
-UPDATE calculations c
-SET deleted_at = now()
-FROM ranked r
-WHERE c.id = r.id
-  AND r.rn > 1
-  AND c.deleted_at IS NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS calculations_auto_comment_uq
-  ON calculations(comment)
-  WHERE deleted_at IS NULL
-    AND (
-      comment LIKE '[AUTO_ORDER_DELTA]%'
-      OR comment LIKE '[AUTO_EXCESS_DELTA]%'
-    );
