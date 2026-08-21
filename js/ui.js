@@ -73,6 +73,11 @@ import {
 import { loadBalance } from "./balance.js";
 import { canMutateOrders, isOrderEditLockedForUserLite, isUserLite, isUserShop } from "./roles.js";
 import { formatPhoneValue, isValidOrderPhone, refreshRublesIntegerInputState } from "./format.js";
+import {
+  showFloatingCellTooltip,
+  hideFloatingCellTooltip,
+  isFloatingCellTooltipVisible,
+} from "./cell-tooltip.js";
 
 export function toggleOrderRowHighlightById(orderId) {
   if (!ordersTable || orderId == null) return;
@@ -649,9 +654,6 @@ export function bindUIEvents() {
     });
   }
 
-  let tooltipHideClick = null;
-  let tooltipHideKey = null;
-
   function decodeDataFulltext(raw) {
     if (!raw) return "";
     const decodeEl = document.createElement("div");
@@ -692,95 +694,6 @@ export function bindUIEvents() {
     if (!full) return;
     showFloatingCellTooltip(anchorEl, full);
     void copyTextToClipboard(full);
-  }
-
-  function showFloatingCellTooltip(anchorEl, text, opts) {
-    opts = opts || {};
-    const useHtml = Boolean(opts.html);
-    if (!cellTooltip || !anchorEl || (!text && !useHtml)) return;
-    if (tooltipHideClick) {
-      document.removeEventListener("click", tooltipHideClick);
-      document.removeEventListener("touchend", tooltipHideClick);
-      document.removeEventListener("keydown", tooltipHideKey);
-      tooltipHideClick = tooltipHideKey = null;
-    }
-    cellTooltip.classList.remove("cell-tooltip--order-row-wide");
-    if (opts.tooltipClass) {
-      opts.tooltipClass
-        .split(/\s+/)
-        .filter(Boolean)
-        .forEach((c) => cellTooltip.classList.add(c));
-    }
-    if (useHtml) {
-      cellTooltip.innerHTML = text;
-    } else {
-      cellTooltip.textContent = text;
-    }
-    cellTooltip.classList.add("visible");
-    cellTooltip.setAttribute("aria-hidden", "false");
-    /*
-     * Позиция как у попапа комментария в «Расчётах»: сначала под якорем, иначе над ним; не уезжает за край экрана.
-     * Раньше: translateY(-100%) от верха ячейки — на iPhone подсказка часто оказывалась за пределами viewport.
-     */
-    cellTooltip.style.transform = "none";
-    cellTooltip.style.visibility = "hidden";
-    cellTooltip.style.left = "0";
-    cellTooltip.style.top = "0";
-    cellTooltip.style.zIndex = "10050";
-
-    function layoutTooltip() {
-      const rect = anchorEl.getBoundingClientRect();
-      const margin = 8;
-      const tw = cellTooltip.offsetWidth;
-      const th = cellTooltip.offsetHeight;
-      let left = rect.left;
-      if (left + tw > window.innerWidth - margin) left = window.innerWidth - margin - tw;
-      if (left < margin) left = margin;
-      let top = rect.bottom + margin;
-      if (top + th > window.innerHeight - margin) {
-        top = Math.max(margin, rect.top - th - margin);
-      }
-      cellTooltip.style.left = `${Math.round(left)}px`;
-      cellTooltip.style.top = `${Math.round(top)}px`;
-      cellTooltip.style.visibility = "visible";
-    }
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(layoutTooltip);
-    });
-
-    function hide() {
-      cellTooltip.classList.remove("visible");
-      cellTooltip.setAttribute("aria-hidden", "true");
-      cellTooltip.textContent = "";
-      cellTooltip.innerHTML = "";
-      cellTooltip.classList.remove("cell-tooltip--order-row-wide");
-      if (opts.tooltipClass) {
-        opts.tooltipClass
-          .split(/\s+/)
-          .filter(Boolean)
-          .forEach((c) => cellTooltip.classList.remove(c));
-      }
-      cellTooltip.style.visibility = "";
-      cellTooltip.style.left = "";
-      cellTooltip.style.top = "";
-      cellTooltip.style.transform = "";
-      cellTooltip.style.zIndex = "";
-      document.removeEventListener("click", tooltipHideClick);
-      document.removeEventListener("touchend", tooltipHideClick);
-      document.removeEventListener("keydown", tooltipHideKey);
-      tooltipHideClick = tooltipHideKey = null;
-    }
-    tooltipHideClick = hide;
-    tooltipHideKey = (ev) => {
-      if (ev.key === "Escape") hide();
-    };
-    /* Как в calculations.js: слушатель «снаружи» после текущего клика, без задержки 150ms. */
-    setTimeout(() => {
-      document.addEventListener("click", tooltipHideClick);
-      document.addEventListener("touchend", tooltipHideClick);
-      document.addEventListener("keydown", tooltipHideKey);
-    }, 0);
   }
 
   /** Чип внутри ячейки может не отражать обрезку (inline-block в колонке таблицы); дублируем проверку по `td`. */
@@ -872,8 +785,7 @@ export function bindUIEvents() {
         return;
       }
 
-      if (cellTooltip && cellTooltip.classList.contains("visible") && tooltipHideClick) {
-        tooltipHideClick();
+      if (isFloatingCellTooltipVisible() && hideFloatingCellTooltip()) {
         return;
       }
 
