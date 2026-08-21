@@ -205,6 +205,17 @@ export function initOrdersTableStickyHeader() {
           e.stopPropagation();
           e.stopImmediatePropagation();
           document.getElementById("orderDateFilterBtn")?.click();
+          return;
+        }
+      }
+      const deliveryDateTh = e.target.closest("th.th-delivery-date-header");
+      if (deliveryDateTh && wrap.contains(deliveryDateTh)) {
+        const deliveryDateBtn = deliveryDateTh.querySelector(".orders-filter-heading-btn");
+        if (deliveryDateBtn && (e.target === deliveryDateBtn || deliveryDateBtn.contains(e.target))) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          document.getElementById("deliveryDateFilterBtn")?.click();
         }
       }
     },

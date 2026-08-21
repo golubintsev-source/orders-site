@@ -34,6 +34,7 @@ import {
   initOrderTypeFilter,
   initPaidFilter,
   initOrderDateFilter,
+  initDeliveryDateFilter,
   resetFormMode,
   leaveOrderFormOnCancel,
   leaveOrderFormToSection,
@@ -586,6 +587,7 @@ export function bindUIEvents() {
   initOrderTypeFilter();
   initPaidFilter();
   initOrderDateFilter();
+  initDeliveryDateFilter();
 
   if (selectFilesBtn) {
     selectFilesBtn.addEventListener("click", () => {

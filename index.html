@@ -608,6 +608,22 @@
           </div>
         </div>
       </div>
+      <div id="deliveryDateFilterDropdown" class="status-filter-dropdown order-date-filter-dropdown" role="dialog" aria-label="Фильтр по дате доставки" style="display: none;">
+        <div class="status-filter-dropdown-inner order-date-filter-dropdown-inner">
+          <div class="order-date-filter-field">
+            <label class="order-date-filter-label" for="deliveryDateFilterFromInput">С</label>
+            <input type="date" id="deliveryDateFilterFromInput" class="order-date-filter-input" />
+          </div>
+          <div class="order-date-filter-field">
+            <label class="order-date-filter-label" for="deliveryDateFilterToInput">По</label>
+            <input type="date" id="deliveryDateFilterToInput" class="order-date-filter-input" />
+          </div>
+          <div class="order-date-filter-actions">
+            <button type="button" class="order-date-filter-action-btn order-date-filter-action-btn--primary" id="deliveryDateFilterApplyBtn">Выбрать</button>
+            <button type="button" class="order-date-filter-action-btn" id="deliveryDateFilterResetBtn">Сбросить</button>
+          </div>
+        </div>
+      </div>
       <div id="ordersTableScrollTop" class="orders-table-scroll-top" aria-hidden="true">
         <div id="ordersTableScrollSpacer" class="orders-table-scroll-spacer"></div>
       </div>
@@ -667,7 +683,11 @@
               <th class="th-money">Остаток</th>
               <th>Кому</th>
               <th>Отправка</th>
-              <th class="th-delivery-date">Дата</th>
+              <th class="th-delivery-date th-delivery-date-header">
+                <button type="button" class="orders-filter-heading-btn" id="deliveryDateFilterBtn" title="Фильтр по дате доставки" aria-haspopup="true" aria-expanded="false">
+                  <span class="orders-filter-heading-label">Дата</span>
+                </button>
+              </th>
               <th class="th-installation-date">Монтаж</th>
               <th class="th-area-m2">м2</th>
               <th class="th-money th-money-header-right">з/п</th>
