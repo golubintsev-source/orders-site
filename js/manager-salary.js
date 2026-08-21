@@ -17,45 +17,54 @@ const MANAGER_SALARY_STATUSES = new Set([
   "Заказ закрыт",
 ]);
 
-const MONTH_NAMES_RU = [
-  "Январь",
-  "Февраль",
-  "Март",
-  "Апрель",
-  "Май",
-  "Июнь",
-  "Июль",
-  "Август",
-  "Сентябрь",
-  "Октябрь",
-  "Ноябрь",
-  "Декабрь",
-];
-
-/** Префикс ключа в app_settings: manager_salary_unchecked_YYYY-MM */
+/** Префикс ключа в app_settings: manager_salary_unchecked_YYYY-MM-DD_YYYY-MM-DD */
 const SETTINGS_KEY_PREFIX = "manager_salary_unchecked_";
 
-/** Выбранный месяц YYYY-MM; по умолчанию — текущий. */
-let selectedMonthKey = currentMonthKey();
+/** YYYY-MM-DD в локальной календарной дате. */
+function ymdLocal(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Первое число текущего месяца (локально). */
+function defaultDateFromYmd() {
+  const now = new Date();
+  return ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1));
+}
+
+/** Сегодняшняя дата (локально). */
+function defaultDateToYmd() {
+  return ymdLocal(new Date());
+}
+
+/** Выбранный период YYYY-MM-DD; по умолчанию — с 1-го числа текущего месяца по сегодня. */
+let selectedDateFrom = defaultDateFromYmd();
+let selectedDateTo = defaultDateToYmd();
 
 /** id заказов, снятых с учёта (чекбокс снят). По умолчанию все учтены. */
 const uncheckedOrderIds = new Set();
 
-/** Последнее сохранённое в БД состояние снятых чекбоксов для текущего месяца. */
+/** Последнее сохранённое в БД состояние снятых чекбоксов для текущего периода. */
 const savedUncheckedOrderIds = new Set();
 
-/** Месяц, для которого уже загружены сохранённые чекбоксы. */
-let loadedMonthKey = null;
+/** Ключ периода, для которого уже загружены сохранённые чекбоксы. */
+let loadedPeriodKey = null;
 
 let bound = false;
 let saveInFlight = false;
 let loadToken = 0;
 
-function currentMonthKey() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+function periodKey(fromYmd, toYmd) {
+  return `${fromYmd}_${toYmd}`;
 }
 
+function settingsKeyForPeriod(fromYmd, toYmd) {
+  return `${SETTINGS_KEY_PREFIX}${periodKey(fromYmd, toYmd)}`;
+}
+
+/** Старый ключ по месяцу (обратная совместимость при чтении). */
 function settingsKeyForMonth(monthKey) {
   return `${SETTINGS_KEY_PREFIX}${monthKey}`;
 }
@@ -143,74 +152,67 @@ function paidBadge(order) {
   return '<span class="status-value">нет</span>';
 }
 
-function monthKeyFromYmd(ymd) {
-  if (!ymd || ymd.length < 7) return null;
-  return ymd.slice(0, 7);
+function formatYmdRu(ymd) {
+  if (!ymd || ymd.length < 10) return String(ymd || "");
+  const [y, m, d] = ymd.slice(0, 10).split("-");
+  if (!y || !m || !d) return String(ymd);
+  return `${d}.${m}.${y}`;
 }
 
-function formatMonthLabel(monthKey) {
-  const [y, m] = String(monthKey).split("-").map(Number);
-  if (!y || !m || m < 1 || m > 12) return String(monthKey);
-  return `${MONTH_NAMES_RU[m - 1]} ${y}`;
+function formatPeriodLabel(fromYmd, toYmd) {
+  return `${formatYmdRu(fromYmd)}–${formatYmdRu(toYmd)}`;
 }
 
-/** Список месяцев для выбора: от заказов + минимум 36 месяцев назад до текущего. */
-function buildMonthOptions() {
-  const keys = new Set();
-  const current = currentMonthKey();
-  keys.add(current);
-
-  for (const order of state.allOrders || []) {
-    if (isOrderHiddenForCurrentRole(order)) continue;
-    const ymd = getOrderCalendarYmd(order);
-    const mk = monthKeyFromYmd(ymd);
-    if (mk) keys.add(mk);
-  }
-
-  const now = new Date();
-  for (let i = 0; i < 36; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    keys.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-  }
-
-  return Array.from(keys).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+function isValidYmd(s) {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
 }
 
-function fillMonthSelect() {
-  const select = document.getElementById("managerSalaryMonthSelect");
-  if (!select) return;
+function syncDateInputs() {
+  const fromEl = document.getElementById("managerSalaryDateFrom");
+  const toEl = document.getElementById("managerSalaryDateTo");
+  if (fromEl) fromEl.value = selectedDateFrom;
+  if (toEl) toEl.value = selectedDateTo;
+}
 
-  const options = buildMonthOptions();
-  if (!options.includes(selectedMonthKey)) {
-    selectedMonthKey = currentMonthKey();
+/**
+ * Читает даты из инпутов, нормализует (пустые → дефолт, from > to → swap)
+ * и обновляет selectedDateFrom / selectedDateTo.
+ */
+function readAndNormalizeDateRange() {
+  const fromEl = document.getElementById("managerSalaryDateFrom");
+  const toEl = document.getElementById("managerSalaryDateTo");
+  let fromYmd = (fromEl?.value || "").trim();
+  let toYmd = (toEl?.value || "").trim();
+
+  if (!isValidYmd(fromYmd)) fromYmd = defaultDateFromYmd();
+  if (!isValidYmd(toYmd)) toYmd = defaultDateToYmd();
+
+  if (fromYmd > toYmd) {
+    const tmp = fromYmd;
+    fromYmd = toYmd;
+    toYmd = tmp;
   }
 
-  const prev = select.value;
-  select.innerHTML = "";
-  for (const key of options) {
-    const opt = document.createElement("option");
-    opt.value = key;
-    opt.textContent = formatMonthLabel(key);
-    if (key === selectedMonthKey) opt.selected = true;
-    select.appendChild(opt);
-  }
-
-  if (prev && options.includes(prev) && prev === selectedMonthKey) {
-    select.value = prev;
-  } else {
-    select.value = selectedMonthKey;
-  }
+  selectedDateFrom = fromYmd;
+  selectedDateTo = toYmd;
+  syncDateInputs();
+  return { fromYmd, toYmd };
 }
 
 function getManagerSalaryOrders() {
+  const fromYmd = selectedDateFrom;
+  const toYmd = selectedDateTo;
   const list = (state.allOrders || []).filter((order) => {
     if (isOrderHiddenForCurrentRole(order)) return false;
     if (isShopOrder(order)) return false;
     const status = normalizeStatus(order.payment_status);
     if (!MANAGER_SALARY_STATUSES.has(status)) return false;
     const ymd = getOrderCalendarYmd(order);
-    const mk = monthKeyFromYmd(ymd);
-    return mk === selectedMonthKey;
+    if (!ymd) return false;
+    return ymd >= fromYmd && ymd <= toYmd;
   });
 
   return list.slice().sort((a, b) => {
@@ -421,28 +423,59 @@ function applyUncheckedIds(ids) {
   }
 }
 
-async function loadUncheckedForMonth(monthKey) {
-  const token = ++loadToken;
-  const key = settingsKeyForMonth(monthKey);
-
+async function fetchUncheckedValue(key) {
   const { data, error } = await supabaseClient
     .from("app_settings")
     .select("value")
     .eq("key", key)
     .maybeSingle();
+  return { data, error };
+}
 
-  if (token !== loadToken || monthKey !== selectedMonthKey) return;
+/**
+ * Можно ли подставить сохранённый выбор за месяц целиком:
+ * период начинается с 1-го числа и не выходит за пределы одного месяца.
+ */
+function monthFallbackKey(fromYmd, toYmd) {
+  if (!isValidYmd(fromYmd) || !isValidYmd(toYmd)) return null;
+  if (fromYmd.slice(0, 7) !== toYmd.slice(0, 7)) return null;
+  if (fromYmd.slice(8, 10) !== "01") return null;
+  return fromYmd.slice(0, 7);
+}
+
+async function loadUncheckedForPeriod(fromYmd, toYmd) {
+  const token = ++loadToken;
+  const pKey = periodKey(fromYmd, toYmd);
+  const key = settingsKeyForPeriod(fromYmd, toYmd);
+
+  let { data, error } = await fetchUncheckedValue(key);
+
+  if (token !== loadToken || periodKey(selectedDateFrom, selectedDateTo) !== pKey) return;
 
   if (error) {
     applyUncheckedIds([]);
-    loadedMonthKey = monthKey;
+    loadedPeriodKey = pKey;
     setSaveMessage("Не удалось загрузить сохранённый выбор", true);
     updateSaveButtonState();
     return;
   }
 
-  applyUncheckedIds(parseUncheckedIds(data?.value));
-  loadedMonthKey = monthKey;
+  let ids = parseUncheckedIds(data?.value);
+
+  // Обратная совместимость: старые ключи manager_salary_unchecked_YYYY-MM
+  if (ids.length === 0 && (data?.value == null || data?.value === "")) {
+    const monthKey = monthFallbackKey(fromYmd, toYmd);
+    if (monthKey) {
+      const legacy = await fetchUncheckedValue(settingsKeyForMonth(monthKey));
+      if (token !== loadToken || periodKey(selectedDateFrom, selectedDateTo) !== pKey) return;
+      if (!legacy.error) {
+        ids = parseUncheckedIds(legacy.data?.value);
+      }
+    }
+  }
+
+  applyUncheckedIds(ids);
+  loadedPeriodKey = pKey;
   setSaveMessage("");
   updateSaveButtonState();
 }
@@ -463,8 +496,10 @@ async function saveUncheckedSelection() {
   }
 
   const ids = visibleUncheckedIds(visibleIds);
-  const monthKey = selectedMonthKey;
-  const key = settingsKeyForMonth(monthKey);
+  const fromYmd = selectedDateFrom;
+  const toYmd = selectedDateTo;
+  const pKey = periodKey(fromYmd, toYmd);
+  const key = settingsKeyForPeriod(fromYmd, toYmd);
   const value = JSON.stringify(ids);
 
   saveInFlight = true;
@@ -477,7 +512,7 @@ async function saveUncheckedSelection() {
 
   saveInFlight = false;
 
-  if (monthKey !== selectedMonthKey) {
+  if (periodKey(selectedDateFrom, selectedDateTo) !== pKey) {
     updateSaveButtonState();
     return;
   }
@@ -495,8 +530,14 @@ async function saveUncheckedSelection() {
 }
 
 export function renderManagerSalary() {
-  if (!selectedMonthKey) selectedMonthKey = currentMonthKey();
-  fillMonthSelect();
+  if (!isValidYmd(selectedDateFrom)) selectedDateFrom = defaultDateFromYmd();
+  if (!isValidYmd(selectedDateTo)) selectedDateTo = defaultDateToYmd();
+  if (selectedDateFrom > selectedDateTo) {
+    const tmp = selectedDateFrom;
+    selectedDateFrom = selectedDateTo;
+    selectedDateTo = tmp;
+  }
+  syncDateInputs();
 
   const tbody = document.querySelector("#managerSalaryTable tbody");
   const emptyEl = document.getElementById("managerSalaryEmpty");
@@ -512,7 +553,7 @@ export function renderManagerSalary() {
     tbody.innerHTML = "";
     if (emptyEl) {
       emptyEl.hidden = false;
-      emptyEl.textContent = `Нет заказов за ${formatMonthLabel(selectedMonthKey)} со статусом «Производство» и далее (включая закрытые).`;
+      emptyEl.textContent = `Нет заказов за период ${formatPeriodLabel(selectedDateFrom, selectedDateTo)} со статусом «Производство» и далее (включая закрытые).`;
     }
     updateSummary([]);
     updateSaveButtonState();
@@ -529,18 +570,17 @@ export function renderManagerSalary() {
 
 export async function loadManagerSalary() {
   initManagerSalarySection();
-  if (!selectedMonthKey) selectedMonthKey = currentMonthKey();
-  if (loadedMonthKey !== selectedMonthKey) {
-    await loadUncheckedForMonth(selectedMonthKey);
+  readAndNormalizeDateRange();
+  const pKey = periodKey(selectedDateFrom, selectedDateTo);
+  if (loadedPeriodKey !== pKey) {
+    await loadUncheckedForPeriod(selectedDateFrom, selectedDateTo);
   }
   renderManagerSalary();
 }
 
-async function onMonthChange(e) {
-  const value = e.target?.value;
-  if (!value) return;
-  selectedMonthKey = value;
-  await loadUncheckedForMonth(selectedMonthKey);
+async function onPeriodChange() {
+  readAndNormalizeDateRange();
+  await loadUncheckedForPeriod(selectedDateFrom, selectedDateTo);
   renderManagerSalary();
 }
 
@@ -566,12 +606,17 @@ export function initManagerSalarySection() {
   if (bound) return;
   bound = true;
 
-  const select = document.getElementById("managerSalaryMonthSelect");
-  if (select) {
-    select.addEventListener("change", (e) => {
-      void onMonthChange(e);
-    });
-  }
+  const fromEl = document.getElementById("managerSalaryDateFrom");
+  const toEl = document.getElementById("managerSalaryDateTo");
+  if (fromEl && !fromEl.value) fromEl.value = defaultDateFromYmd();
+  if (toEl && !toEl.value) toEl.value = defaultDateToYmd();
+  readAndNormalizeDateRange();
+
+  const onChange = () => {
+    void onPeriodChange();
+  };
+  if (fromEl) fromEl.addEventListener("change", onChange);
+  if (toEl) toEl.addEventListener("change", onChange);
 
   const table = document.getElementById("managerSalaryTable");
   if (table) {
