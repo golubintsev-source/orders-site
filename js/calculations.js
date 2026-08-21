@@ -475,6 +475,17 @@ export async function createCalculationFromVoicePayload(draft) {
   const { error } = await supabaseClient.from("calculations").insert([insertPayload]);
   if (error) {
     console.error("voice calc insert:", error);
+    const code = error?.code;
+    const msg = String(error?.message || "");
+    const isUnique =
+      code === "23505" || /duplicate key|unique constraint|violates unique/i.test(msg);
+    if (isUnique && /comment/i.test(msg)) {
+      return {
+        ok: false,
+        message:
+          "Не удалось записать расход: в базе ещё уникальность комментария. Выполните sql/calculations_dedup_drop_comment_unique.sql в Supabase (только DROP INDEX, строки не удаляет).",
+      };
+    }
     return { ok: false, message: "Не удалось записать расход в расчёты" };
   }
 
@@ -1209,7 +1220,20 @@ async function submitForm(e) {
     const { error } = await supabaseClient.from("calculations").insert([insertPayload]);
     if (error) {
       console.error("Ошибка добавления:", error);
-      setMessage("Ошибка при добавлении.", true);
+      const code = error?.code;
+      const msg = String(error?.message || "");
+      const isUnique =
+        code === "23505" || /duplicate key|unique constraint|violates unique/i.test(msg);
+      if (isUnique && /comment/i.test(msg)) {
+        setMessage(
+          "Ошибка при добавлении: в базе ещё действует уникальность комментария. Выполните sql/calculations_dedup_drop_comment_unique.sql в Supabase (только DROP INDEX, строки не удаляет).",
+          true
+        );
+      } else if (isUnique) {
+        setMessage("Ошибка при добавлении: такая запись уже есть.", true);
+      } else {
+        setMessage("Ошибка при добавлении.", true);
+      }
       return;
     }
     setMessage("");

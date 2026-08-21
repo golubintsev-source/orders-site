@@ -63,9 +63,11 @@ git push
 
 Чтобы также не плодились одинаковые записи в `order_history` и авто-дельты в `calculations`, дополнительно выполни:
 - **`supabase_order_history_dedup_unique.sql`**
-- **`supabase_calculations_dedup_unique_comment.sql`** — только **мягкое** скрытие (`deleted_at`), не физический DELETE
+- **`supabase_calculations_dedup_unique_comment.sql`** — **только** `DROP INDEX` вредного широкого `UNIQUE(comment)` (строки таблицы не трогает). Опционально антидубли авто-дельт: **`sql/calculations_auto_comment_unique_optional.sql`** (только soft-delete через `deleted_at`, без физического DELETE)
 
-⚠️ Если вы уже запускали **старую** версию `supabase_calculations_dedup_unique_comment.sql` с `DELETE`, строки без бэкапа не восстановить по id. Используйте **`sql/calculations_dedup_recover_without_backup.sql`** (снимки баланса в `site_access_logs`).
+Если при добавлении строки на «Расчеты» видите «Ошибка при добавлении» на обычный комментарий (например повтор «Протект»), в базе ещё висит старый индекс `calculations_comment_uq` — выполните **один** скрипт **`sql/calculations_dedup_drop_comment_unique.sql`** (или тот же `DROP INDEX` в `supabase_calculations_dedup_unique_comment.sql`). Он удаляет только индекс, данные не меняет.
+
+⚠️ Если вы уже запускали **старую** версию `supabase_calculations_dedup_unique_comment.sql` с физическим `DELETE`, строки без бэкапа не восстановить по id. Используйте **`sql/calculations_dedup_recover_without_backup.sql`** (снимки баланса в `site_access_logs`). Текущие скрипты физического удаления строк **не делают**.
 
 ## Supabase: фото в сообщениях чата
 

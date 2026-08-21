@@ -1,34 +1,17 @@
--- Идемпотентность побочных эффектов: уникальные записи расчётов в calculations
--- (анти-дубликаты при повторных кликах/таймаутах).
+-- Исправление: широкий UNIQUE(comment) ломал ручное добавление на «Расчеты».
 --
--- ⚠️  ВАЖНО: в приложении расчёты НИКОГДА не удаляются физически — только deleted_at
--- (см. softDeleteCalculationRow в js/calculations.js). Этот скрипт тоже только
--- помечает дубликаты, не DELETE.
+-- Этот скрипт ТОЛЬКО снимает вредный индекс.
+--
+-- Гарантии по данным:
+--   ✅ DROP INDEX — удаляется только индекс, строки calculations не трогаются
+--   ❌ Нет DELETE / TRUNCATE / DROP TABLE
+--   ❌ Нет UPDATE строк (в т.ч. deleted_at)
 --
 -- Скрипт можно выполнять повторно.
+-- Для исправления ошибки добавления достаточно этого файла
+-- (или sql/calculations_dedup_drop_comment_unique.sql — то же самое).
 --
--- comment у расчётов формируется клиентом (включая порядок/детали).
--- Чтобы повторные попытки после таймаутов не создавали ещё одну строку,
--- фиксируем уникальность активных (deleted_at IS NULL) комментариев.
---
--- ВАЖНО: если дубликаты уже есть, CREATE UNIQUE INDEX упадёт.
--- Поэтому сначала мягко скрываем лишние активные строки (оставляем rn = 1).
+-- Опционально (антидубли авто-дельт через soft-delete + узкий UNIQUE):
+--   sql/calculations_auto_comment_unique_optional.sql
 
-WITH ranked AS (
-  SELECT
-    id,
-    ROW_NUMBER() OVER (PARTITION BY comment ORDER BY id ASC) AS rn
-  FROM calculations
-  WHERE deleted_at IS NULL
-    AND comment IS NOT NULL
-)
-UPDATE calculations c
-SET deleted_at = now()
-FROM ranked r
-WHERE c.id = r.id
-  AND r.rn > 1
-  AND c.deleted_at IS NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS calculations_comment_uq
-  ON calculations(comment)
-  WHERE deleted_at IS NULL;
+DROP INDEX IF EXISTS calculations_comment_uq;
