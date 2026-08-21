@@ -2054,6 +2054,54 @@ function getFilterDropdownAnchorRect(originalBtn, cloneButtonSelector) {
   return br;
 }
 
+/**
+ * Показ fixed-попапа фильтра в пределах viewport.
+ * Переносим в body, чтобы overflow:hidden у карточки заказов не обрезал попап
+ * (колонка «Дата» доставки справа часто у края экрана).
+ */
+function placeFilterDropdown(dropdown, anchorRect) {
+  if (!dropdown) return;
+  if (dropdown.parentNode !== document.body) {
+    document.body.appendChild(dropdown);
+  }
+  dropdown.style.position = "fixed";
+  dropdown.style.zIndex = "1200";
+  dropdown.style.display = "block";
+  dropdown.style.visibility = "hidden";
+
+  const box = dropdown.getBoundingClientRect();
+  const width = box.width || 260;
+  const height = box.height || 160;
+  const margin = 8;
+  const vv = window.visualViewport;
+  const vw = vv?.width ?? window.innerWidth;
+  const vh = vv?.height ?? window.innerHeight;
+  const offsetLeft = vv?.offsetLeft ?? 0;
+  const offsetTop = vv?.offsetTop ?? 0;
+
+  let left = anchorRect.left;
+  if (left + width > offsetLeft + vw - margin) {
+    left = offsetLeft + vw - width - margin;
+  }
+  left = Math.min(
+    Math.max(left, offsetLeft + margin),
+    Math.max(offsetLeft + margin, offsetLeft + vw - width - margin)
+  );
+
+  let top = anchorRect.bottom + 4;
+  if (top + height > offsetTop + vh - margin) {
+    const above = anchorRect.top - height - 4;
+    top =
+      above >= offsetTop + margin
+        ? above
+        : Math.max(offsetTop + margin, offsetTop + vh - height - margin);
+  }
+
+  dropdown.style.left = `${Math.round(left)}px`;
+  dropdown.style.top = `${Math.round(top)}px`;
+  dropdown.style.visibility = "";
+}
+
 export function initOrderDateFilter() {
   const btn = document.getElementById("orderDateFilterBtn");
   const dropdown = document.getElementById("orderDateFilterDropdown");
@@ -2076,11 +2124,7 @@ export function initOrderDateFilter() {
         btn,
         "#ordersTableStickyHeadTable thead th.th-order-date-header .orders-filter-heading-btn"
       );
-      dropdown.style.position = "fixed";
-      dropdown.style.zIndex = "1200";
-      dropdown.style.top = rect.bottom + 4 + "px";
-      dropdown.style.left = rect.left + "px";
-      dropdown.style.display = "block";
+      placeFilterDropdown(dropdown, rect);
       btn.setAttribute("aria-expanded", "true");
     }
   });
@@ -2139,11 +2183,7 @@ export function initDeliveryDateFilter() {
         btn,
         "#ordersTableStickyHeadTable thead th.th-delivery-date-header .orders-filter-heading-btn"
       );
-      dropdown.style.position = "fixed";
-      dropdown.style.zIndex = "1200";
-      dropdown.style.top = rect.bottom + 4 + "px";
-      dropdown.style.left = rect.left + "px";
-      dropdown.style.display = "block";
+      placeFilterDropdown(dropdown, rect);
       btn.setAttribute("aria-expanded", "true");
     }
   });
@@ -2200,11 +2240,7 @@ export function initStatusFilter() {
         btn,
         "#ordersTableStickyHeadTable thead th.th-status-header .orders-filter-heading-btn"
       );
-      dropdown.style.position = "fixed";
-      dropdown.style.zIndex = "1200";
-      dropdown.style.top = rect.bottom + 4 + "px";
-      dropdown.style.left = rect.left + "px";
-      dropdown.style.display = "block";
+      placeFilterDropdown(dropdown, rect);
       btn.setAttribute("aria-expanded", "true");
     }
   });
@@ -2234,11 +2270,7 @@ export function initOrderTypeFilter() {
         btn,
         "#ordersTableStickyHeadTable thead button.order-type-filter-btn"
       );
-      dropdown.style.position = "fixed";
-      dropdown.style.zIndex = "1200";
-      dropdown.style.top = rect.bottom + 4 + "px";
-      dropdown.style.left = rect.left + "px";
-      dropdown.style.display = "block";
+      placeFilterDropdown(dropdown, rect);
       btn.setAttribute("aria-expanded", "true");
     }
   });
@@ -2268,11 +2300,7 @@ export function initPaidFilter() {
         btn,
         "#ordersTableStickyHeadTable thead button.paid-filter-btn"
       );
-      dropdown.style.position = "fixed";
-      dropdown.style.zIndex = "1200";
-      dropdown.style.top = rect.bottom + 4 + "px";
-      dropdown.style.left = rect.left + "px";
-      dropdown.style.display = "block";
+      placeFilterDropdown(dropdown, rect);
       btn.setAttribute("aria-expanded", "true");
     }
   });

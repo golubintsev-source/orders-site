@@ -216,6 +216,7 @@ export function initOrdersTableStickyHeader() {
           e.stopPropagation();
           e.stopImmediatePropagation();
           document.getElementById("deliveryDateFilterBtn")?.click();
+          return;
         }
       }
     },
