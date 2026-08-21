@@ -1338,12 +1338,17 @@ export function getFilteredOrders() {
     list = list.filter((order) => orderMatchesOrderDateRange(order, df, dt));
   }
 
+  const ddf = state.deliveryDateFilterFrom;
+  const ddt = state.deliveryDateFilterTo;
+  if (ddf || ddt) {
+    list = list.filter((order) => orderMatchesDeliveryDateRange(order, ddf, ddt));
+  }
+
   return sortOrdersWithOfflinePendingFirst(list);
 }
 
-/** Календарная дата заказа YYYY-MM-DD в локальной зоне (для сравнения с input type=date). */
-function getOrderCalendarYmd(order) {
-  const raw = order.order_date;
+/** Календарная дата YYYY-MM-DD в локальной зоне (для сравнения с input type=date). */
+function getCalendarYmdFromRaw(raw) {
   if (raw == null || raw === "") return null;
   const s = String(raw).trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
@@ -1357,8 +1362,16 @@ function getOrderCalendarYmd(order) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function orderMatchesOrderDateRange(order, fromYmd, toYmd) {
-  const ymd = getOrderCalendarYmd(order);
+/** Календарная дата заказа YYYY-MM-DD в локальной зоне (для сравнения с input type=date). */
+function getOrderCalendarYmd(order) {
+  return getCalendarYmdFromRaw(order.order_date);
+}
+
+function getDeliveryCalendarYmd(order) {
+  return getCalendarYmdFromRaw(order.delivery_date);
+}
+
+function orderMatchesDateRange(ymd, fromYmd, toYmd) {
   if (!ymd) return false;
   let from = fromYmd || null;
   let to = toYmd || null;
@@ -1370,6 +1383,14 @@ function orderMatchesOrderDateRange(order, fromYmd, toYmd) {
   if (from && ymd < from) return false;
   if (to && ymd > to) return false;
   return true;
+}
+
+function orderMatchesOrderDateRange(order, fromYmd, toYmd) {
+  return orderMatchesDateRange(getOrderCalendarYmd(order), fromYmd, toYmd);
+}
+
+function orderMatchesDeliveryDateRange(order, fromYmd, toYmd) {
+  return orderMatchesDateRange(getDeliveryCalendarYmd(order), fromYmd, toYmd);
 }
 
 function rebaselineAllOrdersFromStateAndPendingQueue() {
@@ -1868,11 +1889,25 @@ function closeOrderDateFilterDropdown() {
   if (btn) btn.setAttribute("aria-expanded", "false");
 }
 
+function closeDeliveryDateFilterDropdown() {
+  const btn = document.getElementById("deliveryDateFilterBtn");
+  const dropdown = document.getElementById("deliveryDateFilterDropdown");
+  if (dropdown) dropdown.style.display = "none";
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
 function syncOrderDateFilterInputsFromState() {
   const fromEl = document.getElementById("orderDateFilterFromInput");
   const toEl = document.getElementById("orderDateFilterToInput");
   if (fromEl) fromEl.value = state.orderDateFilterFrom || "";
   if (toEl) toEl.value = state.orderDateFilterTo || "";
+}
+
+function syncDeliveryDateFilterInputsFromState() {
+  const fromEl = document.getElementById("deliveryDateFilterFromInput");
+  const toEl = document.getElementById("deliveryDateFilterToInput");
+  if (fromEl) fromEl.value = state.deliveryDateFilterFrom || "";
+  if (toEl) toEl.value = state.deliveryDateFilterTo || "";
 }
 
 function syncOrdersFilterHeadingButtonsState() {
@@ -1881,6 +1916,13 @@ function syncOrdersFilterHeadingButtonsState() {
     dateBtn.classList.toggle(
       "orders-filter-heading-btn--active",
       Boolean(state.orderDateFilterFrom || state.orderDateFilterTo)
+    );
+  }
+  const deliveryDateBtn = document.getElementById("deliveryDateFilterBtn");
+  if (deliveryDateBtn) {
+    deliveryDateBtn.classList.toggle(
+      "orders-filter-heading-btn--active",
+      Boolean(state.deliveryDateFilterFrom || state.deliveryDateFilterTo)
     );
   }
   const typeBtn = document.getElementById("orderTypeFilterBtn");
@@ -1948,6 +1990,7 @@ function bindTableFilterDocClose() {
     closeOrderTypeFilterDropdown();
     closePaidFilterDropdown();
     closeOrderDateFilterDropdown();
+    closeDeliveryDateFilterDropdown();
   });
 }
 
@@ -2027,6 +2070,7 @@ export function initOrderDateFilter() {
       closeStatusFilterDropdown();
       closeOrderTypeFilterDropdown();
       closePaidFilterDropdown();
+      closeDeliveryDateFilterDropdown();
       syncOrderDateFilterInputsFromState();
       const rect = getFilterDropdownAnchorRect(
         btn,
@@ -2073,6 +2117,69 @@ export function initOrderDateFilter() {
   syncOrdersFilterHeadingButtonsState();
 }
 
+export function initDeliveryDateFilter() {
+  const btn = document.getElementById("deliveryDateFilterBtn");
+  const dropdown = document.getElementById("deliveryDateFilterDropdown");
+  const applyBtn = document.getElementById("deliveryDateFilterApplyBtn");
+  const resetBtn = document.getElementById("deliveryDateFilterResetBtn");
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = dropdown.style.display === "block";
+    if (isOpen) {
+      closeDeliveryDateFilterDropdown();
+    } else {
+      closeStatusFilterDropdown();
+      closeOrderTypeFilterDropdown();
+      closePaidFilterDropdown();
+      closeOrderDateFilterDropdown();
+      syncDeliveryDateFilterInputsFromState();
+      const rect = getFilterDropdownAnchorRect(
+        btn,
+        "#ordersTableStickyHeadTable thead th.th-delivery-date-header .orders-filter-heading-btn"
+      );
+      dropdown.style.position = "fixed";
+      dropdown.style.zIndex = "1200";
+      dropdown.style.top = rect.bottom + 4 + "px";
+      dropdown.style.left = rect.left + "px";
+      dropdown.style.display = "block";
+      btn.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  bindTableFilterDocClose();
+
+  dropdown.addEventListener("click", (e) => e.stopPropagation());
+
+  if (applyBtn) {
+    applyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const fromEl = document.getElementById("deliveryDateFilterFromInput");
+      const toEl = document.getElementById("deliveryDateFilterToInput");
+      const fromVal = (fromEl?.value || "").trim() || null;
+      const toVal = (toEl?.value || "").trim() || null;
+      state.deliveryDateFilterFrom = fromVal;
+      state.deliveryDateFilterTo = toVal;
+      closeDeliveryDateFilterDropdown();
+      applyFiltersAndRender();
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.deliveryDateFilterFrom = null;
+      state.deliveryDateFilterTo = null;
+      syncDeliveryDateFilterInputsFromState();
+      closeDeliveryDateFilterDropdown();
+      applyFiltersAndRender();
+    });
+  }
+
+  syncOrdersFilterHeadingButtonsState();
+}
+
 export function initStatusFilter() {
   const btn = document.getElementById("statusFilterBtn");
   const dropdown = document.getElementById("statusFilterDropdown");
@@ -2087,6 +2194,7 @@ export function initStatusFilter() {
       closeOrderTypeFilterDropdown();
       closePaidFilterDropdown();
       closeOrderDateFilterDropdown();
+      closeDeliveryDateFilterDropdown();
       renderStatusFilterDropdown();
       const rect = getFilterDropdownAnchorRect(
         btn,
@@ -2120,6 +2228,7 @@ export function initOrderTypeFilter() {
       closeStatusFilterDropdown();
       closePaidFilterDropdown();
       closeOrderDateFilterDropdown();
+      closeDeliveryDateFilterDropdown();
       renderOrderTypeFilterDropdown();
       const rect = getFilterDropdownAnchorRect(
         btn,
@@ -2153,6 +2262,7 @@ export function initPaidFilter() {
       closeStatusFilterDropdown();
       closeOrderTypeFilterDropdown();
       closeOrderDateFilterDropdown();
+      closeDeliveryDateFilterDropdown();
       renderPaidFilterDropdown();
       const rect = getFilterDropdownAnchorRect(
         btn,

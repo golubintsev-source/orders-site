@@ -5854,11 +5854,13 @@ th {
   background: #f3f4f6;
 }
 
-#orderDateFilterResetBtn {
+#orderDateFilterResetBtn,
+#deliveryDateFilterResetBtn {
   color: #6b7280;
 }
 
-#orderDateFilterResetBtn:hover {
+#orderDateFilterResetBtn:hover,
+#deliveryDateFilterResetBtn:hover {
   color: #4b5563;
 }
 
@@ -5944,11 +5946,23 @@ th {
   white-space: nowrap;
 }
 
+#ordersTableStickyHeadTable th.th-delivery-date {
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
 #ordersTable th.th-delivery-date,
 #ordersTable td.td-delivery-date {
   min-width: 0;
   width: 1%;
   white-space: nowrap;
+  padding: 3px 2px;
+}
+
+#ordersTable th.th-delivery-date-header,
+#ordersTableStickyHeadTable th.th-delivery-date-header {
+  padding: 0 2px;
+  vertical-align: middle;
 }
 
 #ordersTable th.th-phone,
@@ -6768,6 +6782,15 @@ th {
   }
 
   #ordersTable th.th-order-date-header {
+    padding: 0 2px;
+  }
+
+  #ordersTable th.th-delivery-date,
+  #ordersTable td.td-delivery-date {
+    padding: 3px 2px;
+  }
+
+  #ordersTable th.th-delivery-date-header {
     padding: 0 2px;
   }
 

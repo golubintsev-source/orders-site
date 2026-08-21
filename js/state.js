@@ -27,6 +27,9 @@ export const state = {
   /** фильтр колонки «Дата» заказа: YYYY-MM-DD или null; границы включительно */
   orderDateFilterFrom: null,
   orderDateFilterTo: null,
+  /** фильтр колонки «Дата» доставки: YYYY-MM-DD или null; границы включительно */
+  deliveryDateFilterFrom: null,
+  deliveryDateFilterTo: null,
   /** оплата монтажнику уже проведена по этой заявке — поля суммы и «кто оплатил» не включать */
   installerPaymentDone: false,
   /** стоимость монтажа 1м² по умолчанию (из настроек) */
