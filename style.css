@@ -2695,7 +2695,7 @@ h2 {
 }
 
 /* Зарплата менеджера */
-#section-manager-salary .manager-salary-month-toolbar {
+#section-manager-salary .manager-salary-period-toolbar {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -2705,25 +2705,29 @@ h2 {
   width: 100%;
   min-width: 0;
 }
-#section-manager-salary .manager-salary-month-label {
+#section-manager-salary .manager-salary-period-field {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+#section-manager-salary .manager-salary-period-label {
   font-size: 14px;
   font-weight: 600;
   color: #374151;
   flex-shrink: 0;
 }
-#section-manager-salary .manager-salary-month-select {
+#section-manager-salary .manager-salary-period-input {
   box-sizing: border-box;
   height: 36px;
-  min-width: 180px;
-  max-width: 100%;
-  padding: 0 10px;
-  font-size: 15px;
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 14px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   background: #fff;
   color: #111827;
-  -webkit-appearance: menulist;
-  appearance: auto;
 }
 #section-manager-salary .manager-salary-summary {
   display: flex;
