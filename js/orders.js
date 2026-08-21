@@ -1642,6 +1642,27 @@ export function buildOrderRowFullTooltipHtml(order) {
     .join(" | ");
 }
 
+/**
+ * Строка заказа для попапа со всеми полями. Полный список заказов догружается фоном,
+ * поэтому для старого заказа делаем одиночный запрос.
+ */
+export async function getOrderRowForFullTooltip(orderId) {
+  const idNum = Number(orderId);
+  if (!Number.isFinite(idNum) || idNum <= 0) return null;
+  const fromList = state.allOrders?.find((o) => Number(o.id) === idNum);
+  if (fromList) return isOrderHiddenForCurrentRole(fromList) ? null : fromList;
+  if (isOfflineDataMode() || isOfflineClientOrderId(idNum)) return null;
+  try {
+    const res = await raceWithTimeout(
+      supabaseClient.from("orders").select(ORDERS_LIST_SELECT).eq("id", idNum).maybeSingle(),
+    );
+    if (res.error || !res.data) return null;
+    return isOrderHiddenForCurrentRole(res.data) ? null : res.data;
+  } catch {
+    return null;
+  }
+}
+
 function sumOrderNumericField(orders, fieldName) {
   let sum = 0;
   for (const order of orders) {
