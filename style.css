@@ -2275,6 +2275,17 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 
+.my-tasks-order-link {
+  color: #1f6feb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.my-tasks-order-link:hover,
+.my-tasks-order-link:focus-visible {
+  text-decoration: underline;
+}
+
 .order-tasks-page-title {
   margin: 0 0 4px;
   font-size: 18px;

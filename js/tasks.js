@@ -28,6 +28,7 @@ import {
   isOfflineDataMode,
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { buildOrderViewUrl } from "./app-routes.js";
 
 const TASK_SELECT_FIELDS =
   "id, created_at, author_login, body, due_at, executor_emails, is_completed, order_id, deleted_at";
@@ -112,12 +113,25 @@ function renderMyTaskStatusCell(row) {
   `;
 }
 
-function formatTaskOrderCell(row) {
-  if (isStandaloneTask(row)) return "—";
+function formatTaskOrderLabel(orderId) {
+  const order = state.allOrders?.find((o) => Number(o.id) === orderId);
+  return formatOrderIdTypeChip(orderId, order?.order_type) || String(orderId).padStart(4, "0");
+}
+
+function renderTaskOrderCellHtml(row) {
+  if (isStandaloneTask(row)) return `<td class="my-tasks-order-cell">—</td>`;
   const oid = Number(row.order_id);
-  if (!Number.isFinite(oid) || oid <= 0) return "—";
-  const order = state.allOrders?.find((o) => Number(o.id) === oid);
-  return formatOrderIdTypeChip(oid, order?.order_type) || String(oid).padStart(4, "0");
+  const label = formatTaskOrderLabel(oid);
+  return `
+    <td class="my-tasks-order-cell">
+      <a
+        class="my-tasks-order-link"
+        href="${escapeHtml(buildOrderViewUrl(oid))}"
+        data-order-id="${escapeHtml(String(oid))}"
+        title="Открыть заказ ${escapeHtml(label)}"
+      >${escapeHtml(label)}</a>
+    </td>
+  `;
 }
 
 function renderAuthorTaskDeleteCell(row) {
@@ -149,9 +163,7 @@ function renderMyAuthorTasksRow(row, { showOrder = false } = {}) {
     : `my-tasks-row my-tasks-row--pending${offlineCls}`;
   const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
   const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
-  const orderCell = showOrder
-    ? `<td class="my-tasks-order-cell">${escapeHtml(formatTaskOrderCell(row))}</td>`
-    : "";
+  const orderCell = showOrder ? renderTaskOrderCellHtml(row) : "";
   return `
     <tr class="${rowClass}">
       <td class="order-tasks-text-cell">${escapeHtml(row.body || "")}</td>
@@ -177,9 +189,7 @@ function renderMyTasksRow(row, { showOrder = false, showExecutors = true } = {})
     ? `my-tasks-row my-tasks-row--completed${offlineCls}`
     : `my-tasks-row my-tasks-row--pending${offlineCls}`;
   const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
-  const orderCell = showOrder
-    ? `<td class="my-tasks-order-cell">${escapeHtml(formatTaskOrderCell(row))}</td>`
-    : "";
+  const orderCell = showOrder ? renderTaskOrderCellHtml(row) : "";
   const executorsCell = showExecutors
     ? `<td class="order-tasks-executors-cell">${escapeHtml(
         formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail),
@@ -591,6 +601,21 @@ function bindAuthorTaskDeleteDelegation(root) {
   });
 }
 
+/** Номер заказа в таблицах задач открывает просмотр заказа без перезагрузки страницы. */
+function bindTaskOrderLinkDelegation(root) {
+  if (!root || root.dataset.taskOrderLinkBound === "1") return;
+  root.dataset.taskOrderLinkBound = "1";
+  root.addEventListener("click", (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const link = e.target.closest(".my-tasks-order-link");
+    if (!link || !root.contains(link)) return;
+    const oid = Number(link.getAttribute("data-order-id"));
+    if (!Number.isFinite(oid) || oid <= 0) return;
+    e.preventDefault();
+    void import("./orders.js").then((m) => m.viewOrder(oid));
+  });
+}
+
 export async function loadAllTasks() {
   const executorTbody = document.querySelector("#allTasksTable tbody");
   const authorTbody = document.querySelector("#myAuthorTasksTable tbody");
@@ -860,4 +885,6 @@ export function initOrderTasksSection() {
   bindTaskCompletedCheckboxDelegation(document.getElementById("myAuthorTasksTable"));
   bindAuthorTaskDeleteDelegation(document.getElementById("myAuthorTasksTable"));
   bindAuthorTaskDeleteDelegation(document.getElementById("orderTasksAuthorTable"));
+  bindTaskOrderLinkDelegation(document.getElementById("allTasksTable"));
+  bindTaskOrderLinkDelegation(document.getElementById("myAuthorTasksTable"));
 }
