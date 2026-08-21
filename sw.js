@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v24: сброс после фикса .my-tasks-page (секция задач светилась на других страницах).
-const STATIC_CACHE = "orders-site-static-v24";
+// v25: период дат вместо месяца на «Зарплата менеджера».
+const STATIC_CACHE = "orders-site-static-v25";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 

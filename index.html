@@ -1761,22 +1761,27 @@
 
     <section id="section-manager-salary" class="content-section">
       <div class="card">
-        <div class="manager-salary-month-toolbar" aria-label="Месяц">
-          <label for="managerSalaryMonthSelect" class="manager-salary-month-label">Месяц</label>
-          <select id="managerSalaryMonthSelect" class="manager-salary-month-select" aria-label="Выбор месяца">
-            <option value="2026-08" selected>Август 2026</option>
-            <option value="2026-07">Июль 2026</option>
-            <option value="2026-06">Июнь 2026</option>
-            <option value="2026-05">Май 2026</option>
-            <option value="2026-04">Апрель 2026</option>
-            <option value="2026-03">Март 2026</option>
-            <option value="2026-02">Февраль 2026</option>
-            <option value="2026-01">Январь 2026</option>
-            <option value="2025-12">Декабрь 2025</option>
-            <option value="2025-11">Ноябрь 2025</option>
-            <option value="2025-10">Октябрь 2025</option>
-            <option value="2025-09">Сентябрь 2025</option>
-          </select>
+        <div class="manager-salary-period-toolbar" aria-label="Период">
+          <div class="manager-salary-period-field">
+            <label for="managerSalaryDateFrom" class="manager-salary-period-label">с</label>
+            <input
+              type="date"
+              id="managerSalaryDateFrom"
+              class="manager-salary-period-input"
+              autocomplete="off"
+              aria-label="Дата с"
+            />
+          </div>
+          <div class="manager-salary-period-field">
+            <label for="managerSalaryDateTo" class="manager-salary-period-label">по</label>
+            <input
+              type="date"
+              id="managerSalaryDateTo"
+              class="manager-salary-period-input"
+              autocomplete="off"
+              aria-label="Дата по"
+            />
+          </div>
         </div>
         <div class="manager-salary-summary" role="status" aria-live="polite" aria-label="Расчёт по отмеченным заказам">
           <div class="manager-salary-summary-item">
