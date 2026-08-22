@@ -1749,6 +1749,17 @@
       <div class="card">
         <div class="manager-salary-period-toolbar" aria-label="Период">
           <div class="manager-salary-period-field">
+            <label for="managerSalaryManager" class="manager-salary-period-label">Менеджер</label>
+            <select
+              id="managerSalaryManager"
+              class="manager-salary-period-input manager-salary-manager-select"
+              aria-label="Менеджер"
+            >
+              <option value="kristina">Кристина</option>
+              <option value="andrey">Андрей</option>
+            </select>
+          </div>
+          <div class="manager-salary-period-field">
             <label for="managerSalaryDateFrom" class="manager-salary-period-label">с</label>
             <input
               type="date"
@@ -1783,7 +1794,7 @@
             <span class="manager-salary-summary-value" id="managerSalaryPaidSum">—</span>
           </div>
           <div class="manager-salary-formula" id="managerSalaryFormula" aria-label="Формула зарплаты">
-            Зарплата = 22&nbsp;000 + Стоимость × 1,5% =
+            <span id="managerSalaryFormulaText">Зарплата = 22&nbsp;000 + Стоимость × 1,5% =</span>
             <span class="manager-salary-summary-value" id="managerSalaryResult">—</span>
           </div>
         </div>
@@ -2025,6 +2036,68 @@
           </div>
         </div>
         <button type="button" id="settingsSaveAdjustmentsBtn" class="btn-primary settings-save-adjustments-btn settings-save-btn-inactive" disabled>Сохранить</button>
+      </div>
+      <div class="card settings-salary-card settings-admin-only" hidden>
+        <h3 class="settings-salary-title">Параметры зарплаты</h3>
+        <div class="settings-salary-people">
+          <div class="settings-salary-person">
+            <h4 class="settings-salary-person-name">Кристина</h4>
+            <div class="settings-salary-fields">
+              <div class="settings-salary-field">
+                <label for="settings_salary_kristina_base">Фиксированная сумма, руб</label>
+                <input
+                  type="text"
+                  inputmode="numeric"
+                  id="settings_salary_kristina_base"
+                  title="Только целые рубли"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="settings-salary-field">
+                <label for="settings_salary_kristina_percent">Процент от стоимости, 0–100%</label>
+                <div class="settings-salary-percent-wrap">
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    id="settings_salary_kristina_percent"
+                    title="Число от 0 до 100, можно дробь (например 1,5)"
+                    autocomplete="off"
+                  />
+                  <span class="settings-salary-percent-suffix" aria-hidden="true">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="settings-salary-person">
+            <h4 class="settings-salary-person-name">Андрей</h4>
+            <div class="settings-salary-fields">
+              <div class="settings-salary-field">
+                <label for="settings_salary_andrey_base">Фиксированная сумма, руб</label>
+                <input
+                  type="text"
+                  inputmode="numeric"
+                  id="settings_salary_andrey_base"
+                  title="Только целые рубли"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="settings-salary-field">
+                <label for="settings_salary_andrey_percent">Процент от стоимости, 0–100%</label>
+                <div class="settings-salary-percent-wrap">
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    id="settings_salary_andrey_percent"
+                    title="Число от 0 до 100, можно дробь (например 1,5)"
+                    autocomplete="off"
+                  />
+                  <span class="settings-salary-percent-suffix" aria-hidden="true">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button type="button" id="settingsSaveSalaryParamsBtn" class="btn-primary settings-save-salary-btn settings-save-btn-inactive" disabled>Сохранить</button>
       </div>
       <div id="loginLinksCard" class="card login-links-card settings-admin-only" hidden>
         <h3 class="login-links-title">Персональные ссылки для входа</h3>

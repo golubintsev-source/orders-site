@@ -281,6 +281,7 @@ function getMessageReactionsSetupHint() {
   return "Реакции на сообщения не настроены. Выполните supabase_message_reactions.sql в Supabase.";
 }
 
+
 /** Минимальные данные сообщения для меню, если строки ещё нет в feedMessagesById (старые сообщения после prepend). */
 function getMessageRowForMenu(messageEl, messageId) {
   const cached = feedMessagesById.get(String(messageId));
