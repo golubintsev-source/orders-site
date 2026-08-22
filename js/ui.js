@@ -61,14 +61,18 @@ import {
   saveDriverName,
   saveEditors,
   saveBalanceAdjustments,
+  saveManagerSalaryParams,
   updateSettingsSaveButtonState,
   updateDriverSaveButtonState,
   updateEditorsSaveButtonState,
   updateAdjustmentsSaveButtonState,
+  updateManagerSalaryParamsSaveButtonState,
   addEditorField,
   BALANCE_ADJ_FIELDS,
+  MANAGER_SALARY_PARAM_FIELDS,
   toggleAdjustmentSign,
   syncAdjustmentSignButton,
+  refreshPercentInputState,
 } from "./settings.js";
 import { loadBalance } from "./balance.js";
 import { canMutateOrders, isOrderEditLockedForUserLite, isUserLite, isUserShop } from "./roles.js";
@@ -504,6 +508,36 @@ export function bindUIEvents() {
       btn.addEventListener("pointerdown", activate);
       btn.addEventListener("click", activate);
     });
+  }
+
+  const settingsSaveSalaryParamsBtn = document.getElementById("settingsSaveSalaryParamsBtn");
+  if (settingsSaveSalaryParamsBtn) {
+    settingsSaveSalaryParamsBtn.addEventListener("click", async () => {
+      const ok = await saveManagerSalaryParams();
+      setMessage(ok ? "Параметры зарплаты сохранены" : "Ошибка сохранения или неверное значение", ok ? "" : "#d32f2f");
+    });
+    for (const { baseInputId, percentInputId } of MANAGER_SALARY_PARAM_FIELDS) {
+      const baseEl = document.getElementById(baseInputId);
+      const percentEl = document.getElementById(percentInputId);
+      if (baseEl) {
+        const onBase = () => {
+          refreshRublesIntegerInputState(baseEl, baseEl.value);
+          updateManagerSalaryParamsSaveButtonState();
+        };
+        baseEl.addEventListener("input", onBase);
+        baseEl.addEventListener("change", onBase);
+        baseEl.addEventListener("blur", onBase);
+      }
+      if (percentEl) {
+        const onPercent = () => {
+          refreshPercentInputState(percentEl, percentEl.value);
+          updateManagerSalaryParamsSaveButtonState();
+        };
+        percentEl.addEventListener("input", onPercent);
+        percentEl.addEventListener("change", onPercent);
+        percentEl.addEventListener("blur", onPercent);
+      }
+    }
   }
 
   const ordersSearchOpenBtn = document.getElementById("ordersSearchOpenBtn");

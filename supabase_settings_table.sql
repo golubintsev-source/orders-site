@@ -24,6 +24,14 @@ INSERT INTO app_settings (key, value) VALUES
   ('balance_adj_beznal', '0')
 ON CONFLICT (key) DO NOTHING;
 
+-- Параметры формулы зарплаты менеджера (фиксированная сумма + процент от стоимости)
+INSERT INTO app_settings (key, value) VALUES
+  ('manager_salary_kristina_base', '22000'),
+  ('manager_salary_kristina_percent', '1.5'),
+  ('manager_salary_andrey_base', '22000'),
+  ('manager_salary_andrey_percent', '1.5')
+ON CONFLICT (key) DO NOTHING;
+
 -- RLS: разрешить чтение и обновление для анонимных/авторизованных (подстройте под вашу политику)
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 

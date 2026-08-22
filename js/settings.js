@@ -8,6 +8,8 @@ const KEY_INSTALLER_RATE = "installer_rate_per_m2";
 const KEY_DRIVER_NAME = "driver_name";
 const KEY_EDITORS = "editors";
 const DEFAULT_RATE = 1400;
+const DEFAULT_MANAGER_SALARY_BASE = 22000;
+const DEFAULT_MANAGER_SALARY_PERCENT = 1.5;
 
 const EDITOR_REMOVE_BTN_HTML =
   '<span aria-hidden="true">×</span>';
@@ -20,6 +22,29 @@ export const BALANCE_ADJ_FIELDS = [
   { participant: "Безнал", settingKey: "balance_adj_beznal", inputId: "settings_adj_beznal" },
 ];
 
+/** Поля параметров зарплаты менеджера: фиксированная сумма и процент 0…100. */
+export const MANAGER_SALARY_PARAM_FIELDS = [
+  {
+    managerId: "kristina",
+    name: "Кристина",
+    baseKey: "manager_salary_kristina_base",
+    percentKey: "manager_salary_kristina_percent",
+    baseInputId: "settings_salary_kristina_base",
+    percentInputId: "settings_salary_kristina_percent",
+  },
+  {
+    managerId: "andrey",
+    name: "Андрей",
+    baseKey: "manager_salary_andrey_base",
+    percentKey: "manager_salary_andrey_percent",
+    baseInputId: "settings_salary_andrey_base",
+    percentInputId: "settings_salary_andrey_percent",
+  },
+];
+
+const MANAGER_SALARY_PERCENT_INVALID_TITLE =
+  "Процент — число от 0 до 100. Можно указать дробь, например 1,5.";
+
 /** 0 для пустого/частичного ввода; NaN при недопустимом формате (дробь, буквы и т.д.). */
 export function parseAdjustmentInt(raw) {
   const s = String(raw ?? "").trim();
@@ -27,6 +52,92 @@ export function parseAdjustmentInt(raw) {
   const r = tryParseRublesInteger(raw, { allowSign: true });
   if (r.invalidFormat) return NaN;
   return r.value ?? 0;
+}
+
+/** Разбор фиксированной суммы з/п: целые рубли ≥ 0; пусто = 0; NaN при ошибке. */
+export function parseManagerSalaryBase(raw) {
+  const r = tryParseRublesInteger(raw);
+  if (r.invalidFormat) return NaN;
+  const n = r.value ?? 0;
+  return n >= 0 ? n : NaN;
+}
+
+/**
+ * Разбор процента з/п: 0…100, дробь через точку или запятую.
+ * Пусто = 0; NaN при ошибке формата или вне диапазона.
+ */
+export function parseManagerSalaryPercent(raw) {
+  const s = String(raw ?? "").trim();
+  if (s === "" || s === "." || s === ",") return 0;
+  const compact = s.replace(/[\s\u00A0\u202F]/g, "").replace(",", ".");
+  if (!/^\d+(\.\d*)?$/.test(compact)) return NaN;
+  const n = Number(compact);
+  if (!Number.isFinite(n) || n < 0 || n > 100) return NaN;
+  return n;
+}
+
+function formatPercentSettingValue(n) {
+  if (!Number.isFinite(n)) return "";
+  return String(n).replace(".", ",");
+}
+
+function normalizeSalaryPercent(n) {
+  if (!Number.isFinite(n)) return DEFAULT_MANAGER_SALARY_PERCENT;
+  return Math.round(n * 10000) / 10000;
+}
+
+function parseStoredSalaryBase(raw) {
+  if (raw == null || raw === "") return DEFAULT_MANAGER_SALARY_BASE;
+  const n = parseInt(String(raw).trim(), 10);
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_MANAGER_SALARY_BASE;
+}
+
+function parseStoredSalaryPercent(raw) {
+  if (raw == null || raw === "") return DEFAULT_MANAGER_SALARY_PERCENT;
+  const n = Number(String(raw).trim().replace(",", "."));
+  if (!Number.isFinite(n) || n < 0 || n > 100) return DEFAULT_MANAGER_SALARY_PERCENT;
+  return normalizeSalaryPercent(n);
+}
+
+export function refreshPercentInputState(el, raw) {
+  if (!el) return;
+  const s = String(raw ?? "").trim();
+  if (!s) {
+    el.classList.remove("sum-input-invalid");
+    el.removeAttribute("title");
+    el.removeAttribute("aria-invalid");
+    return;
+  }
+  if (Number.isNaN(parseManagerSalaryPercent(raw))) {
+    el.classList.add("sum-input-invalid");
+    el.title = MANAGER_SALARY_PERCENT_INVALID_TITLE;
+    el.setAttribute("aria-invalid", "true");
+    return;
+  }
+  el.classList.remove("sum-input-invalid");
+  el.removeAttribute("title");
+  el.removeAttribute("aria-invalid");
+}
+
+function defaultManagerSalaryParams() {
+  return {
+    kristina: { base: DEFAULT_MANAGER_SALARY_BASE, percent: DEFAULT_MANAGER_SALARY_PERCENT },
+    andrey: { base: DEFAULT_MANAGER_SALARY_BASE, percent: DEFAULT_MANAGER_SALARY_PERCENT },
+  };
+}
+
+export function getManagerSalaryParams(managerId) {
+  const id = managerId === "andrey" ? "andrey" : "kristina";
+  const saved = state.managerSalaryParams?.[id];
+  return {
+    base: Number.isFinite(saved?.base) ? saved.base : DEFAULT_MANAGER_SALARY_BASE,
+    percent: Number.isFinite(saved?.percent) ? normalizeSalaryPercent(saved.percent) : DEFAULT_MANAGER_SALARY_PERCENT,
+  };
+}
+
+function notifyManagerSalaryParamsChanged() {
+  if (typeof document === "undefined") return;
+  document.dispatchEvent(new CustomEvent("manager-salary-params-updated"));
 }
 
 /** На мобильной numeric-клавиатуре часто нет «−» — переключаем знак кнопкой ±. */
@@ -191,6 +302,15 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
     state.balanceAdjustments[participant] = Number.isFinite(n) ? n : 0;
   }
 
+  const nextSalaryParams = defaultManagerSalaryParams();
+  for (const { managerId, baseKey, percentKey } of MANAGER_SALARY_PARAM_FIELDS) {
+    nextSalaryParams[managerId] = {
+      base: parseStoredSalaryBase(byKey[baseKey]),
+      percent: parseStoredSalaryPercent(byKey[percentKey]),
+    };
+  }
+  state.managerSalaryParams = nextSalaryParams;
+
   const rateInput = document.getElementById("installer_rate_per_m2");
   if (rateInput) rateInput.value = String(state.defaultInstallerRatePerM2);
 
@@ -211,10 +331,20 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
     }
   }
 
+  for (const { managerId, baseInputId, percentInputId } of MANAGER_SALARY_PARAM_FIELDS) {
+    const params = state.managerSalaryParams[managerId] || defaultManagerSalaryParams()[managerId];
+    const baseEl = document.getElementById(baseInputId);
+    const percentEl = document.getElementById(percentInputId);
+    if (baseEl) baseEl.value = String(params.base);
+    if (percentEl) percentEl.value = formatPercentSettingValue(params.percent);
+  }
+
   updateSettingsSaveButtonState();
   updateDriverSaveButtonState();
   updateEditorsSaveButtonState();
   updateAdjustmentsSaveButtonState();
+  updateManagerSalaryParamsSaveButtonState();
+  notifyManagerSalaryParamsChanged();
 }
 
 /** Загрузить настройки из БД и обновить state и поля на странице. */
@@ -230,6 +360,7 @@ export async function loadSettings() {
     KEY_DRIVER_NAME,
     KEY_EDITORS,
     ...BALANCE_ADJ_FIELDS.map((f) => f.settingKey),
+    ...MANAGER_SALARY_PARAM_FIELDS.flatMap((f) => [f.baseKey, f.percentKey]),
   ];
   const { data: rows, error } = await supabaseClient.from("app_settings").select("key, value").in("key", keys);
   let effectiveRows = rows || [];
@@ -296,6 +427,31 @@ export function updateAdjustmentsSaveButtonState() {
     }
     const saved = state.balanceAdjustments[participant] ?? 0;
     if (current !== saved) {
+      isDirty = true;
+      break;
+    }
+  }
+  btn.disabled = !isDirty;
+  btn.classList.toggle("settings-save-btn-inactive", !isDirty);
+}
+
+/** Кнопка «Сохранить» у блока параметров з/п: активна при отличии или неверном вводе. */
+export function updateManagerSalaryParamsSaveButtonState() {
+  const btn = document.getElementById("settingsSaveSalaryParamsBtn");
+  if (!btn) return;
+  let isDirty = false;
+  for (const { managerId, baseInputId, percentInputId } of MANAGER_SALARY_PARAM_FIELDS) {
+    const baseEl = document.getElementById(baseInputId);
+    const percentEl = document.getElementById(percentInputId);
+    if (!baseEl || !percentEl) continue;
+    const currentBase = parseManagerSalaryBase(baseEl.value);
+    const currentPercent = parseManagerSalaryPercent(percentEl.value);
+    if (Number.isNaN(currentBase) || Number.isNaN(currentPercent)) {
+      isDirty = true;
+      break;
+    }
+    const saved = getManagerSalaryParams(managerId);
+    if (currentBase !== saved.base || normalizeSalaryPercent(currentPercent) !== saved.percent) {
       isDirty = true;
       break;
     }
@@ -455,6 +611,39 @@ export async function saveBalanceAdjustments() {
 
   updateAdjustmentsSaveButtonState();
   return { ok: true, historyOk };
+}
+
+/** Сохранить параметры формулы зарплаты менеджера в БД и state. */
+export async function saveManagerSalaryParams() {
+  if (!isAdmin()) return false;
+
+  const nextValues = {};
+  const upsertRows = [];
+  for (const { managerId, baseKey, percentKey, baseInputId, percentInputId } of MANAGER_SALARY_PARAM_FIELDS) {
+    const base = parseManagerSalaryBase(document.getElementById(baseInputId)?.value);
+    const percent = parseManagerSalaryPercent(document.getElementById(percentInputId)?.value);
+    if (Number.isNaN(base) || Number.isNaN(percent)) return false;
+    const normalizedPercent = normalizeSalaryPercent(percent);
+    nextValues[managerId] = { base, percent: normalizedPercent };
+    upsertRows.push({ key: baseKey, value: String(base) });
+    upsertRows.push({ key: percentKey, value: String(normalizedPercent) });
+  }
+
+  const { error } = await supabaseClient.from("app_settings").upsert(upsertRows, { onConflict: "key" });
+  if (error) return false;
+
+  state.managerSalaryParams = nextValues;
+  for (const { managerId, baseInputId, percentInputId } of MANAGER_SALARY_PARAM_FIELDS) {
+    const params = nextValues[managerId];
+    const baseEl = document.getElementById(baseInputId);
+    const percentEl = document.getElementById(percentInputId);
+    if (baseEl) baseEl.value = String(params.base);
+    if (percentEl) percentEl.value = formatPercentSettingValue(params.percent);
+  }
+
+  updateManagerSalaryParamsSaveButtonState();
+  notifyManagerSalaryParamsChanged();
+  return true;
 }
 
 export function getDefaultInstallerRatePerM2() {

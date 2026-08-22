@@ -8,6 +8,7 @@ import {
 } from "./roles.js";
 import { formatAmount, formatAmountWholeRubles, formatDateShortRU, formatOrderIdTypeChip } from "./format.js";
 import { orderHasActiveTask } from "./order-task-links.js";
+import { getManagerSalaryParams } from "./settings.js";
 
 /** Статусы с «Производство» и далее, включая «Заказ закрыт». */
 const MANAGER_SALARY_STATUSES = new Set([
@@ -318,16 +319,34 @@ function updateSaveButtonState() {
   if (!allowed) setSaveMessage("");
 }
 
-/** Базовая часть зарплаты менеджера (руб.) + процент от стоимости. */
-const MANAGER_SALARY_BASE = 22000;
-const MANAGER_SALARY_COST_RATE = 0.015;
+function formatPercentForFormula(percent) {
+  const n = Number(percent);
+  if (!Number.isFinite(n)) return "0%";
+  const rounded = Math.round(n * 10000) / 10000;
+  return `${String(rounded).replace(".", ",")}%`;
+}
+
+function updateFormulaDisplay(base, percent, resultText) {
+  const formulaTextEl = document.getElementById("managerSalaryFormulaText");
+  const salaryResultEl = document.getElementById("managerSalaryResult");
+  const baseLabel = formatAmountWholeRubles(base);
+  const percentLabel = formatPercentForFormula(percent);
+  if (formulaTextEl) {
+    formulaTextEl.textContent = `Зарплата = ${baseLabel} + Стоимость × ${percentLabel} =`;
+  }
+  if (salaryResultEl) {
+    salaryResultEl.textContent = resultText;
+  }
+}
 
 function updateSummary(orders) {
   const countEl = document.getElementById("managerSalaryCount");
   const sumEl = document.getElementById("managerSalarySum");
   const paidSumEl = document.getElementById("managerSalaryPaidSum");
-  const salaryResultEl = document.getElementById("managerSalaryResult");
   if (!countEl || !sumEl) return;
+
+  const { base, percent } = getManagerSalaryParams(selectedManagerId);
+  const rate = percent / 100;
 
   let count = 0;
   let sum = 0;
@@ -348,14 +367,10 @@ function updateSummary(orders) {
   if (paidSumEl) {
     paidSumEl.textContent = paidSum > 0 ? `${formatAmountWholeRubles(paidSum)}\u00A0₽` : "—";
   }
-  if (salaryResultEl) {
-    if (count) {
-      const salary = MANAGER_SALARY_BASE + sum * MANAGER_SALARY_COST_RATE;
-      salaryResultEl.textContent = `${formatAmountWholeRubles(salary)}\u00A0₽`;
-    } else {
-      salaryResultEl.textContent = "—";
-    }
-  }
+  const resultText = count
+    ? `${formatAmountWholeRubles(base + sum * rate)}\u00A0₽`
+    : "—";
+  updateFormulaDisplay(base, percent, resultText);
 }
 
 function buildRowHtml(order) {
@@ -656,4 +671,5 @@ export function initManagerSalarySection() {
 
   document.addEventListener("orders-filters-updated", refreshIfActive);
   document.addEventListener("orders-table-will-render", refreshIfActive);
+  document.addEventListener("manager-salary-params-updated", refreshIfActive);
 }
