@@ -2760,6 +2760,11 @@ h2 {
   background: #fff;
   color: #111827;
 }
+#section-manager-salary .manager-salary-manager-select {
+  min-width: 140px;
+  padding-right: 6px;
+  cursor: pointer;
+}
 #section-manager-salary .manager-salary-summary {
   display: flex;
   flex-wrap: wrap;
