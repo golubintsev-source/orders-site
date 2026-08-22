@@ -281,6 +281,21 @@ function getMessageReactionsSetupHint() {
   return "Реакции на сообщения не настроены. Выполните supabase_message_reactions.sql в Supabase.";
 }
 
+/** Минимальные данные сообщения для меню, если строки ещё нет в feedMessagesById (старые сообщения после prepend). */
+function getMessageRowForMenu(messageEl, messageId) {
+  const cached = feedMessagesById.get(String(messageId));
+  if (cached && !isMessageDeleted(cached)) return cached;
+
+  const attachmentEl = messageEl.querySelector(".message-item-attachment[data-storage-path]");
+  return {
+    id: Number(messageId) || messageId,
+    sender_id: messageEl.getAttribute("data-own") === "1" ? getCurrentUserId() : null,
+    body: messageEl.querySelector(".message-item-body-text")?.textContent?.trim() || "",
+    attachment_storage_path: attachmentEl?.getAttribute("data-storage-path") || null,
+    deleted_at: null,
+  };
+}
+
 function clearFeedReactionsCache() {
   feedReactionsByMessageKey = new Map();
 }
@@ -2527,8 +2542,13 @@ export async function loadMessages() {
       return;
     }
     if (fuller.error) return;
-    if (fuller.rows.length <= fast.rows.length) return;
     rememberFeedMessages(fuller.rows);
+
+    const fastIds = new Set(fast.rows.map((row) => String(row.id)));
+    const hasOlderNotShown = fuller.rows.some(
+      (row) => !isMessageDeleted(row) && !fastIds.has(String(row.id)),
+    );
+    if (!hasOlderNotShown) return;
     prependOlderMessagesToFeed(fuller.rows);
   })();
 }
@@ -2582,6 +2602,8 @@ function prependOlderMessagesToFeed(rows) {
   // rows приходят ascending (старые → новые); для prepend нужен тот же порядок.
   const html = olderRows.map(renderMessageItem).join("");
   if (!html) return;
+
+  rememberFeedMessages(olderRows);
 
   const prevHeight = feed.scrollHeight;
   const prevTop = feed.scrollTop;
@@ -3499,18 +3521,27 @@ async function fetchReactionsForMessageIds(messageKind, ids) {
   const uniqueIds = [...new Set(ids.map((id) => Number(id)).filter((id) => Number.isFinite(id)))];
   if (!uniqueIds.length) return [];
 
-  const { data, error } = await supabaseClient
-    .from("message_reactions")
-    .select("message_id, user_id, emoji")
-    .eq("message_kind", messageKind)
-    .in("message_id", uniqueIds);
+  const chunkSize = 80;
+  /** @type {Array<{ message_id: number, user_id: string, emoji: string }>} */
+  const allRows = [];
 
-  if (error) {
-    noteMessageReactionsSupport(error);
-    return [];
+  for (let offset = 0; offset < uniqueIds.length; offset += chunkSize) {
+    const chunk = uniqueIds.slice(offset, offset + chunkSize);
+    const { data, error } = await supabaseClient
+      .from("message_reactions")
+      .select("message_id, user_id, emoji")
+      .eq("message_kind", messageKind)
+      .in("message_id", chunk);
+
+    if (error) {
+      noteMessageReactionsSupport(error);
+      return allRows;
+    }
+    if (data?.length) allRows.push(...data);
   }
+
   messageReactionsSupported = messageReactionsSupported !== false;
-  return data || [];
+  return allRows;
 }
 
 function applyReactionsToCache(messageKind, ids, reactionRows) {
@@ -3532,7 +3563,7 @@ function updateMessageReactionsDom(messageKind, messageId) {
     `[data-message-id="${messageId}"][data-message-kind="${messageKind}"]`,
   );
   if (!el) return;
-  const row = feedMessagesById.get(String(messageId));
+  const row = getMessageRowForMenu(el, messageId);
   if (!row || isMessageDeleted(row)) return;
   const html = renderMessageReactionsHtml(row, messageKind);
   const existing = el.querySelector(".message-item-reactions");
@@ -3680,7 +3711,7 @@ function showMessageActionMenu(messageEl, clientX, clientY, { fromPhoto = false 
   const messageId = messageEl.getAttribute("data-message-id");
   if (!messageId) return;
 
-  const row = feedMessagesById.get(String(messageId));
+  const row = getMessageRowForMenu(messageEl, messageId);
   if (!row || isMessageDeleted(row)) return;
 
   const isOwn = messageEl.getAttribute("data-own") === "1";
@@ -3715,36 +3746,37 @@ function showMessageActionMenu(messageEl, clientX, clientY, { fromPhoto = false 
   if (attachBtn) attachBtn.hidden = !(actionMenuFromPhoto && messageHasAttachment(row));
   if (deleteBtn) deleteBtn.hidden = !isOwn;
 
-  const showReactions = messageReactionsSupported !== false;
   if (picker) {
-    picker.hidden = !showReactions;
-    if (showReactions) {
-      for (const btn of picker.querySelectorAll("[data-emoji]")) {
-        const emoji = btn.getAttribute("data-emoji");
-        const mine = (feedReactionsByMessageKey.get(messageReactionKey(messageKind, messageId)) || []).some(
-          (item) => String(item.user_id) === String(getCurrentUserId()) && item.emoji === emoji,
-        );
-        btn.classList.toggle("messages-reaction-picker-btn--active", mine);
-      }
+    picker.hidden = false;
+    for (const btn of picker.querySelectorAll("[data-emoji]")) {
+      const emoji = btn.getAttribute("data-emoji");
+      const mine = (feedReactionsByMessageKey.get(messageReactionKey(messageKind, messageId)) || []).some(
+        (item) => String(item.user_id) === String(getCurrentUserId()) && item.emoji === emoji,
+      );
+      btn.classList.toggle("messages-reaction-picker-btn--active", mine);
     }
   }
 
   menu.hidden = false;
+  if (picker) void picker.offsetHeight;
 
   const pad = 8;
   const gap = 8;
+  const msgRect = messageEl.getBoundingClientRect();
+  const anchorX = Math.max(msgRect.left + 16, Math.min(clientX, msgRect.right - 16));
+  const anchorY = Math.max(msgRect.top + 12, Math.min(clientY, msgRect.bottom - 12));
   const menuRect = menu.getBoundingClientRect();
-  const pickerRect = picker && !picker.hidden ? picker.getBoundingClientRect() : { width: 0, height: 0 };
+  const pickerRect = picker ? picker.getBoundingClientRect() : { width: 0, height: 0 };
   const stackHeight = menuRect.height + (pickerRect.height ? pickerRect.height + gap : 0);
-  let left = clientX - Math.max(menuRect.width, pickerRect.width || menuRect.width) / 2;
-  let top = clientY - stackHeight - 12;
+  let left = anchorX - Math.max(menuRect.width, pickerRect.width || menuRect.width) / 2;
+  let top = anchorY - stackHeight - 12;
   const stackWidth = Math.max(menuRect.width, pickerRect.width || 0);
   left = Math.max(pad, Math.min(left, window.innerWidth - stackWidth - pad));
-  if (top < pad) top = clientY + 12;
+  if (top < pad) top = anchorY + 12;
   top = Math.max(pad, Math.min(top, window.innerHeight - stackHeight - pad));
 
-  if (picker && !picker.hidden) {
-    const pickerLeft = clientX - pickerRect.width / 2;
+  if (picker) {
+    const pickerLeft = anchorX - pickerRect.width / 2;
     picker.style.left = `${Math.max(pad, Math.min(pickerLeft, window.innerWidth - pickerRect.width - pad))}px`;
     picker.style.top = `${top}px`;
     top += pickerRect.height + gap;
