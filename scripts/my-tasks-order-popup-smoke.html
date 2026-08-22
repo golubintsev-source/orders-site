@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>My tasks: order popup smoke test</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <p id="out">running…</p>
+
+  <div id="cellTooltip" class="cell-tooltip" aria-hidden="true"></div>
+
+  <table id="allTasksTable">
+    <thead>
+      <tr>
+        <th class="order-tasks-text-th">Задача</th>
+        <th>Заказ</th>
+        <th>Автор</th>
+        <th>Срок</th>
+        <th>Статус</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <p id="allTasksMessage"></p>
+
+  <table id="myAuthorTasksTable">
+    <thead>
+      <tr>
+        <th class="order-tasks-text-th">Задача</th>
+        <th>Заказ</th>
+        <th>Исполнители</th>
+        <th>Срок</th>
+        <th>Статус</th>
+        <th class="my-tasks-actions-th"></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <p id="myAuthorTasksMessage"></p>
+
+  <div id="orderTaskExecutorsList"></div>
+  <p id="orderTaskExecutorsHint" hidden></p>
+
+  <script>
+    /* Заглушка supabase-js: config.js читает window.supabase при загрузке модуля. */
+    window.__MOCK_TABLES__ = {};
+    const CHAIN_METHODS = [
+      "select", "insert", "update", "upsert", "delete", "eq", "neq", "gt", "gte", "lt", "lte",
+      "like", "ilike", "is", "in", "contains", "overlaps", "not", "or", "filter", "match",
+      "order", "limit", "abortSignal", "returns",
+    ];
+    window.supabase = {
+      createClient() {
+        return {
+          from(table) {
+            let single = false;
+            const result = () => {
+              const res = window.__MOCK_TABLES__[table] || { data: [], error: null };
+              if (!single) return res;
+              return { data: (res.data || [])[0] ?? null, error: res.error };
+            };
+            const q = {};
+            for (const name of CHAIN_METHODS) q[name] = () => q;
+            q.single = q.maybeSingle = () => {
+              single = true;
+              return q;
+            };
+            q.range = () => Promise.resolve(result());
+            q.then = (onOk, onErr) => Promise.resolve(result()).then(onOk, onErr);
+            return q;
+          },
+          auth: {
+            getSession: async () => ({ data: { session: null }, error: null }),
+            getUser: async () => ({ data: { user: null }, error: null }),
+            onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+          },
+          channel: () => ({ on() { return this; }, subscribe() { return this; } }),
+          removeChannel: () => {},
+          storage: { from: () => ({ getPublicUrl: () => ({ data: { publicUrl: "" } }) }) },
+        };
+      },
+    };
+  </script>
+
+  <script type="module">
+    import { state } from "/js/state.js";
+    import { initOrderTasksSection, loadAllTasks } from "/js/tasks.js";
+    import { buildOrderRowFullTooltipHtml } from "/js/orders.js";
+    import { showFloatingCellTooltip, isFloatingCellTooltipVisible } from "/js/cell-tooltip.js";
+    import { bindUIEvents } from "/js/ui.js";
+
+    const out = document.getElementById("out");
+    const failures = [];
+    function check(cond, msg) {
+      if (!cond) failures.push(msg);
+    }
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    /* Подсказка вешает слушатель «клика снаружи» через setTimeout(0) — даём ему встать. */
+    const settleTooltip = () => sleep(60);
+    async function waitUntil(fn, timeoutMs = 3000) {
+      const deadline = Date.now() + timeoutMs;
+      for (;;) {
+        if (fn()) return true;
+        if (Date.now() > deadline) return false;
+        await sleep(25);
+      }
+    }
+
+    /* Браузер нормализует HTML при innerHTML (например U+00A0 → &nbsp;) — сравниваем после прогона через DOM. */
+    const scratch = document.createElement("div");
+    function normalizeHtml(html) {
+      scratch.innerHTML = html;
+      return scratch.innerHTML;
+    }
+
+    try {
+      const ME = "me@example.com";
+      const ORDER = {
+        id: 112,
+        order_type: "Окна",
+        order_date: "2026-08-14T10:00:00",
+        client: "Иванов И.И.",
+        address: "ул. Ленина, 5",
+        description: "Два окна в зал",
+        payment_status: "Производство",
+        amount: 120000,
+        prepayment: 50000,
+        prepayment_to: "Касса",
+        remaining_amount: 70000,
+        remaining_to: "",
+        delivery: "Самовывоз",
+        delivery_date: "2026-08-20",
+        installation: true,
+        installation_date: "2026-08-22",
+        area_m2: 4.5,
+        installer_payment_amount: 4500,
+        installer_payment_by: "",
+        reveals: false,
+        reveals_date: null,
+        mosquito_nets: 2,
+        construction_count: 2,
+        phone: "89991234567",
+      };
+
+      state.currentUser = { id: "u1", email: ME };
+      state.currentRole = "user";
+      state.allOrders = [ORDER];
+
+      window.__MOCK_TABLES__ = {
+        orders: { data: [ORDER], error: null },
+        order_tasks: {
+          data: [
+            {
+              id: 1,
+              created_at: "2026-08-14T09:00:00Z",
+              author_login: "boss@example.com",
+              body: "Задача с заказом (исполнитель)",
+              due_at: "2026-08-15T09:00:00Z",
+              executor_emails: [ME],
+              is_completed: false,
+              order_id: 112,
+              deleted_at: null,
+            },
+            {
+              id: 2,
+              created_at: "2026-08-14T09:05:00Z",
+              author_login: "boss@example.com",
+              body: "Задача без заказа (исполнитель)",
+              due_at: "2026-08-16T09:00:00Z",
+              executor_emails: [ME],
+              is_completed: false,
+              order_id: null,
+              deleted_at: null,
+            },
+            {
+              id: 3,
+              created_at: "2026-08-14T09:10:00Z",
+              author_login: ME,
+              body: "Задача с заказом (автор)",
+              due_at: "2026-08-15T12:00:00Z",
+              executor_emails: ["other@example.com"],
+              is_completed: false,
+              order_id: 112,
+              deleted_at: null,
+            },
+            {
+              id: 4,
+              created_at: "2026-08-14T09:15:00Z",
+              author_login: ME,
+              body: "Задача без заказа (автор)",
+              due_at: "2026-08-17T12:00:00Z",
+              executor_emails: ["other@example.com"],
+              is_completed: false,
+              order_id: null,
+              deleted_at: null,
+            },
+          ],
+          error: null,
+        },
+        profiles: { data: [], error: null },
+      };
+
+      check(typeof bindUIEvents === "function", "ui.js не экспортирует bindUIEvents");
+
+      initOrderTasksSection();
+      await loadAllTasks();
+
+      const expected = normalizeHtml(buildOrderRowFullTooltipHtml(ORDER));
+      check(expected.includes("Иванов И.И."), "в попапе нет клиента");
+      check(expected.includes("89991234567"), "в попапе нет телефона");
+      check(expected.includes("orders-order-date-tooltip-warn"), "в попапе нет красных полей");
+
+      const tooltip = document.getElementById("cellTooltip");
+      const clickOutside = () =>
+        document.body.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+      for (const [tableId, withOrder, withoutOrder] of [
+        ["allTasksTable", "Задача с заказом (исполнитель)", "Задача без заказа (исполнитель)"],
+        ["myAuthorTasksTable", "Задача с заказом (автор)", "Задача без заказа (автор)"],
+      ]) {
+        const cells = [...document.querySelectorAll(`#${tableId} tbody td.order-tasks-text-cell`)];
+        const linked = cells.find((td) => td.textContent.trim() === withOrder);
+        const plain = cells.find((td) => td.textContent.trim() === withoutOrder);
+        check(Boolean(linked), `${tableId}: нет строки «${withOrder}»`);
+        check(Boolean(plain), `${tableId}: нет строки «${withoutOrder}»`);
+        if (!linked || !plain) continue;
+
+        check(
+          linked.classList.contains("order-tasks-text-cell--order-popup"),
+          `${tableId}: у задачи с заказом нет класса попапа`,
+        );
+        check(linked.getAttribute("data-order-id") === "112", `${tableId}: неверный data-order-id`);
+        check(
+          !plain.classList.contains("order-tasks-text-cell--order-popup"),
+          `${tableId}: у задачи без заказа появился класс попапа`,
+        );
+
+        linked.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        const shown = await waitUntil(() => isFloatingCellTooltipVisible());
+        check(shown, `${tableId}: попап не открылся`);
+        if (shown) {
+          check(
+            tooltip.classList.contains("cell-tooltip--order-row-wide"),
+            `${tableId}: у попапа нет широкого класса`,
+          );
+          check(
+            tooltip.innerHTML === expected,
+            `${tableId}: содержимое попапа отличается: [${tooltip.innerHTML}] вместо [${expected}]`,
+          );
+        }
+
+        await settleTooltip();
+        clickOutside();
+        const hidden = await waitUntil(() => !isFloatingCellTooltipVisible());
+        check(hidden, `${tableId}: попап не закрылся по клику снаружи`);
+        check(
+          !tooltip.classList.contains("cell-tooltip--order-row-wide"),
+          `${tableId}: широкий класс не снялся после закрытия`,
+        );
+
+        plain.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        await sleep(400);
+        check(!isFloatingCellTooltipVisible(), `${tableId}: попап открылся у задачи без заказа`);
+        clickOutside();
+        await sleep(50);
+      }
+
+      showFloatingCellTooltip(document.getElementById("allTasksTable"), "простой текст");
+      check(await waitUntil(() => isFloatingCellTooltipVisible()), "текстовая подсказка не открылась");
+      check(tooltip.textContent === "простой текст", "текстовая подсказка с неверным текстом");
+      check(
+        !tooltip.classList.contains("cell-tooltip--order-row-wide"),
+        "текстовая подсказка получила широкий класс",
+      );
+      await settleTooltip();
+      clickOutside();
+      check(
+        await waitUntil(() => !isFloatingCellTooltipVisible()),
+        "текстовая подсказка не закрылась",
+      );
+
+      if (failures.length) {
+        out.textContent = "FAIL: " + failures.join(" ||| ");
+        out.dataset.status = "fail";
+      } else {
+        out.textContent = "OK";
+        out.dataset.status = "ok";
+      }
+    } catch (e) {
+      out.textContent = "FAIL: " + (e && e.stack ? e.stack : e);
+      out.dataset.status = "fail";
+    }
+  </script>
+</body>
+</html>

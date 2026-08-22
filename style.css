@@ -2275,6 +2275,37 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 
+.my-tasks-order-link {
+  color: #1f6feb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.my-tasks-order-link:hover,
+.my-tasks-order-link:focus-visible {
+  text-decoration: underline;
+}
+
+/* Задача с привязанным заказом: клик по тексту открывает попап со всеми полями заказа */
+#allTasksTable .order-tasks-text-cell--order-popup,
+#myAuthorTasksTable .order-tasks-text-cell--order-popup {
+  cursor: pointer;
+  text-decoration: underline dotted rgba(31, 111, 235, 0.55);
+  text-underline-offset: 2px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#allTasksTable .order-tasks-text-cell--order-popup:hover,
+#myAuthorTasksTable .order-tasks-text-cell--order-popup:hover {
+  text-decoration-color: #1f6feb;
+}
+
+#allTasksTable .order-tasks-text-cell--order-popup:focus-visible,
+#myAuthorTasksTable .order-tasks-text-cell--order-popup:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: -2px;
+}
+
 .order-tasks-page-title {
   margin: 0 0 4px;
   font-size: 18px;
@@ -2700,35 +2731,34 @@ h2 {
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px 16px;
+  gap: 10px 14px;
   margin-bottom: 14px;
   width: 100%;
   min-width: 0;
 }
-#section-manager-salary .manager-salary-date-field {
+#section-manager-salary .manager-salary-period-field {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
-#section-manager-salary .manager-salary-date-label {
+#section-manager-salary .manager-salary-period-label {
   font-size: 14px;
   font-weight: 600;
   color: #374151;
   flex-shrink: 0;
 }
-#section-manager-salary .manager-salary-date-input {
+#section-manager-salary .manager-salary-period-input {
   box-sizing: border-box;
   height: 36px;
+  min-width: 0;
   padding: 0 8px;
-  font-size: 15px;
+  font-size: 14px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   background: #fff;
   color: #111827;
-  min-width: 0;
-  max-width: 100%;
 }
 #section-manager-salary .manager-salary-summary {
   display: flex;
@@ -8375,6 +8405,122 @@ th {
 .messages-composer-context-close:hover {
   background: #e2e8f0;
   color: #0f172a;
+}
+
+.messages-reaction-picker {
+  position: fixed;
+  z-index: 81;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow:
+    0 8px 28px rgba(15, 23, 42, 0.18),
+    0 1px 3px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.messages-reaction-picker[hidden] {
+  display: none !important;
+}
+
+.messages-reaction-picker-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.messages-reaction-picker-btn:focus-visible {
+  background: #f1f5f9;
+  outline: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .messages-reaction-picker-btn:hover {
+    background: #f1f5f9;
+    transform: scale(1.12);
+  }
+}
+
+@media (hover: none) {
+  .messages-reaction-picker-btn:active {
+    background: #f1f5f9;
+    transform: scale(1.12);
+  }
+}
+
+.messages-reaction-picker-btn--active {
+  background: rgba(219, 234, 254, 0.95);
+}
+
+.message-item-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.message-item-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 24px;
+  padding: 2px 7px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.message-item--out .message-item-reaction {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.message-item-reaction--mine {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(219, 234, 254, 0.85);
+}
+
+.message-item--out .message-item-reaction--mine {
+  background: rgba(191, 219, 254, 0.75);
+}
+
+.message-item-reaction-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.message-item-reaction-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.message-item-reaction--mine .message-item-reaction-count {
+  color: #1d4ed8;
 }
 
 .messages-action-menu {
