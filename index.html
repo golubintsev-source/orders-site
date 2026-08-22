@@ -2080,6 +2080,9 @@
                   id="settings_salary_kristina_base"
                   title="Только целые рубли"
                   autocomplete="off"
+                  value="22000"
+                  data-saved-value="22000"
+                  oninput="window.updateManagerSalaryParamsSaveButtonState&&window.updateManagerSalaryParamsSaveButtonState()"
                 />
               </div>
               <div class="settings-salary-field">
@@ -2091,6 +2094,9 @@
                     id="settings_salary_kristina_percent"
                     title="Число от 0 до 100, можно дробь (например 1,5)"
                     autocomplete="off"
+                    value="1,5"
+                    data-saved-value="1,5"
+                    oninput="window.updateManagerSalaryParamsSaveButtonState&&window.updateManagerSalaryParamsSaveButtonState()"
                   />
                   <span class="settings-salary-percent-suffix" aria-hidden="true">%</span>
                 </div>
@@ -2108,6 +2114,9 @@
                   id="settings_salary_andrey_base"
                   title="Только целые рубли"
                   autocomplete="off"
+                  value="22000"
+                  data-saved-value="22000"
+                  oninput="window.updateManagerSalaryParamsSaveButtonState&&window.updateManagerSalaryParamsSaveButtonState()"
                 />
               </div>
               <div class="settings-salary-field">
@@ -2119,6 +2128,9 @@
                     id="settings_salary_andrey_percent"
                     title="Число от 0 до 100, можно дробь (например 1,5)"
                     autocomplete="off"
+                    value="1,5"
+                    data-saved-value="1,5"
+                    oninput="window.updateManagerSalaryParamsSaveButtonState&&window.updateManagerSalaryParamsSaveButtonState()"
                   />
                   <span class="settings-salary-percent-suffix" aria-hidden="true">%</span>
                 </div>
@@ -2280,7 +2292,61 @@
       btn.addEventListener("click", openMyTasksFallback);
     })();
   </script>
-  <script type="module" src="./js/main.js?v=40"></script>
+  <script>
+    (function bindSalaryParamsFallback() {
+      var FIELD_IDS = [
+        "settings_salary_kristina_base",
+        "settings_salary_kristina_percent",
+        "settings_salary_andrey_base",
+        "settings_salary_andrey_percent",
+      ];
+      function isSalaryField(el) {
+        return el && FIELD_IDS.indexOf(el.id) !== -1;
+      }
+      function setBtnActive(active) {
+        var btn = document.getElementById("settingsSaveSalaryParamsBtn");
+        if (!btn) return;
+        btn.disabled = !active;
+        if (active) btn.classList.remove("settings-save-btn-inactive");
+        else btn.classList.add("settings-save-btn-inactive");
+      }
+      function fieldsDifferFromSaved() {
+        for (var i = 0; i < FIELD_IDS.length; i++) {
+          var el = document.getElementById(FIELD_IDS[i]);
+          if (!el) continue;
+          var saved = el.getAttribute("data-saved-value");
+          if (saved == null) saved = el.defaultValue || "";
+          if (String(el.value || "").trim() !== String(saved).trim()) return true;
+        }
+        return false;
+      }
+      function update() {
+        if (typeof window.updateManagerSalaryParamsSaveButtonState === "function") {
+          window.updateManagerSalaryParamsSaveButtonState();
+        }
+        var btn = document.getElementById("settingsSaveSalaryParamsBtn");
+        if (btn && !btn.disabled) return;
+        setBtnActive(fieldsDifferFromSaved());
+      }
+      function bind() {
+        var section = document.getElementById("section-settings");
+        if (!section || section.dataset.salaryParamsFallbackBound === "1") return;
+        section.dataset.salaryParamsFallbackBound = "1";
+        section.addEventListener("input", function (e) {
+          if (isSalaryField(e.target)) update();
+        });
+        section.addEventListener("change", function (e) {
+          if (isSalaryField(e.target)) update();
+        });
+      }
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", bind);
+      } else {
+        bind();
+      }
+    })();
+  </script>
+  <script type="module" src="./js/main.js?v=41"></script>
   <script type="module">
     /* HTML — network-first; /js/* может прийти из старого SW-кэша.
        Поднимаем раздел даже если section-nav ещё без обработчика. */
