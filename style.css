@@ -8407,6 +8407,122 @@ th {
   color: #0f172a;
 }
 
+.messages-reaction-picker {
+  position: fixed;
+  z-index: 81;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow:
+    0 8px 28px rgba(15, 23, 42, 0.18),
+    0 1px 3px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.messages-reaction-picker[hidden] {
+  display: none !important;
+}
+
+.messages-reaction-picker-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.messages-reaction-picker-btn:focus-visible {
+  background: #f1f5f9;
+  outline: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .messages-reaction-picker-btn:hover {
+    background: #f1f5f9;
+    transform: scale(1.12);
+  }
+}
+
+@media (hover: none) {
+  .messages-reaction-picker-btn:active {
+    background: #f1f5f9;
+    transform: scale(1.12);
+  }
+}
+
+.messages-reaction-picker-btn--active {
+  background: rgba(219, 234, 254, 0.95);
+}
+
+.message-item-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.message-item-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 24px;
+  padding: 2px 7px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.message-item--out .message-item-reaction {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.message-item-reaction--mine {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(219, 234, 254, 0.85);
+}
+
+.message-item--out .message-item-reaction--mine {
+  background: rgba(191, 219, 254, 0.75);
+}
+
+.message-item-reaction-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.message-item-reaction-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.message-item-reaction--mine .message-item-reaction-count {
+  color: #1d4ed8;
+}
+
 .messages-action-menu {
   position: fixed;
   z-index: 80;

@@ -137,6 +137,16 @@ const LONG_PRESS_MOVE_PX = 12;
 /** После показа меню игнорим outside-click/scroll (отпускание пальца / micro-scroll iOS). */
 const ACTION_MENU_DISMISS_GRACE_MS = 450;
 const ACTION_MENU_ACTION_DEDUP_MS = 500;
+/** null = unknown, true/false after first probe — message_reactions table */
+let messageReactionsSupported = null;
+/** @type {Map<string, Array<{ user_id: string, emoji: string }>>} */
+let feedReactionsByMessageKey = new Map();
+/** @type {"user" | "group" | null} */
+let actionMenuMessageKind = null;
+/** @type {{ emoji: string, messageId: string, messageKind: string, pointerId: number } | null} */
+let reactionPickerArmed = null;
+/** защита от двойного срабатывания pointerup + click на реакциях */
+let reactionPickerHandledAt = 0;
 
 const MESSAGE_ACTION_COLS = "reply_to_id, edited_at, deleted_at";
 const MESSAGE_SELECT_WITH_DELIVERED =
@@ -243,6 +253,78 @@ function noteMessageActionsSupport(error) {
   return false;
 }
 
+function noteMessageReactionsSupport(error) {
+  if (!error) {
+    messageReactionsSupported = true;
+    return false;
+  }
+  const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""} ${error.code || ""}`.toLowerCase();
+  if (
+    msg.includes("message_reactions") ||
+    error.code === "PGRST204" ||
+    error.code === "42P01" ||
+    error.code === "42703"
+  ) {
+    if (msg.includes("message_reactions") || error.code === "42P01") {
+      messageReactionsSupported = false;
+      return true;
+    }
+  }
+  return false;
+}
+
+function messageReactionKey(messageKind, messageId) {
+  return `${messageKind}:${messageId}`;
+}
+
+function getMessageReactionsSetupHint() {
+  return "Реакции на сообщения не настроены. Выполните supabase_message_reactions.sql в Supabase.";
+}
+
+function clearFeedReactionsCache() {
+  feedReactionsByMessageKey = new Map();
+}
+
+function groupReactionsForDisplay(reactions, currentUserId) {
+  /** @type {Map<string, { emoji: string, count: number, mine: boolean }>} */
+  const byEmoji = new Map();
+  for (const row of reactions || []) {
+    const emoji = String(row.emoji || "");
+    if (!emoji) continue;
+    const existing = byEmoji.get(emoji) || { emoji, count: 0, mine: false };
+    existing.count += 1;
+    if (currentUserId && String(row.user_id) === String(currentUserId)) {
+      existing.mine = true;
+    }
+    byEmoji.set(emoji, existing);
+  }
+  return [...byEmoji.values()].sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    return a.emoji.localeCompare(b.emoji);
+  });
+}
+
+function renderMessageReactionsHtml(row, messageKind) {
+  if (messageReactionsSupported === false || !row?.id) return "";
+  const key = messageReactionKey(messageKind, row.id);
+  const reactions = feedReactionsByMessageKey.get(key) || [];
+  const grouped = groupReactionsForDisplay(reactions, getCurrentUserId());
+  if (!grouped.length) return "";
+
+  const chips = grouped
+    .map(({ emoji, count, mine }) => {
+      const mineClass = mine ? " message-item-reaction--mine" : "";
+      const countHtml =
+        count > 1 ? `<span class="message-item-reaction-count">${count}</span>` : "";
+      return `<button type="button" class="message-item-reaction${mineClass}" data-emoji="${escapeHtml(emoji)}" aria-label="Реакция ${escapeHtml(emoji)}">
+        <span class="message-item-reaction-emoji">${emoji}</span>${countHtml}
+      </button>`;
+    })
+    .join("");
+
+  return `<div class="message-item-reactions">${chips}</div>`;
+}
+
 function isMessageDeleted(row) {
   return Boolean(row?.deleted_at);
 }
@@ -257,6 +339,7 @@ function rememberFeedMessages(rows) {
 function clearFeedMessageCache() {
   feedMessagesById = new Map();
   activeGroupReceiptsByUser = new Map();
+  clearFeedReactionsCache();
 }
 
 function getMessageActionsSetupHint() {
@@ -1172,6 +1255,7 @@ function renderMessageItem(row) {
     : "";
   const ownAttr = isOut ? ' data-own="1"' : ' data-own="0"';
   const messageKind = isGroupChat() ? "group" : "user";
+  const reactionsHtml = renderMessageReactionsHtml(row, messageKind);
   const taskClass = messageHasActiveTask(messageKind, row.id) ? " message-item--has-active-task" : "";
   return `
     <article class="${messageItemClass(row)}${taskClass}" data-message-id="${row.id}" data-message-kind="${messageKind}"${statusAttr}${ownAttr}>
@@ -1179,6 +1263,7 @@ function renderMessageItem(row) {
       ${replyHtml}
       ${attachmentHtml}
       ${textBlock}
+      ${reactionsHtml}
     </article>
   `;
 }
@@ -2399,6 +2484,10 @@ export async function loadMessages() {
     // Слоты фото фиксированы при рендере — повторный scroll после load не нужен (он давал мигание).
     await hydrateMessageAttachments(feed);
 
+    const messageKind = isGroupChat() ? "group" : "user";
+    const ids = visibleRows.map((row) => row.id).filter((id) => id != null);
+    if (ids.length) void loadAndApplyReactions(messageKind, ids);
+
     if (!markRead) return;
     if (!isGroupChat()) {
       await markIncomingMessagesRead(visibleRows);
@@ -2500,6 +2589,11 @@ function prependOlderMessagesToFeed(rows) {
   feed.scrollTop = prevTop + (feed.scrollHeight - prevHeight);
 
   void hydrateMessageAttachments(feed);
+  const messageKind = isGroupChat() ? "group" : "user";
+  void loadAndApplyReactions(
+    messageKind,
+    olderRows.map((row) => row.id).filter((id) => id != null),
+  );
 }
 
 function appendMessagesToFeed(rows) {
@@ -2542,6 +2636,11 @@ function appendMessagesToFeed(rows) {
     scrollMessagesFeedToBottom(feed);
   }
   void hydrateMessageAttachments(feed);
+  const messageKind = isGroupChat() ? "group" : "user";
+  void loadAndApplyReactions(
+    messageKind,
+    newRows.map((row) => row.id).filter((id) => id != null),
+  );
 }
 
 async function syncOutgoingReadStatus() {
@@ -2654,6 +2753,7 @@ async function pollNewMessages() {
       void refreshMessagesUnreadBadge();
     }
     await syncGroupOutgoingReceipts();
+    await pollMessageReactions();
     return;
   }
 
@@ -2713,6 +2813,7 @@ async function pollNewMessages() {
   }
 
   await syncOutgoingReadStatus();
+  await pollMessageReactions();
 }
 
 export function startMessagesFeedPolling() {
@@ -3393,7 +3494,158 @@ async function handlePendingChatPhotoCrop() {
   setPendingChatPhoto(cropped);
 }
 
+async function fetchReactionsForMessageIds(messageKind, ids) {
+  if (!ids?.length || messageReactionsSupported === false) return [];
+  const uniqueIds = [...new Set(ids.map((id) => Number(id)).filter((id) => Number.isFinite(id)))];
+  if (!uniqueIds.length) return [];
+
+  const { data, error } = await supabaseClient
+    .from("message_reactions")
+    .select("message_id, user_id, emoji")
+    .eq("message_kind", messageKind)
+    .in("message_id", uniqueIds);
+
+  if (error) {
+    noteMessageReactionsSupport(error);
+    return [];
+  }
+  messageReactionsSupported = messageReactionsSupported !== false;
+  return data || [];
+}
+
+function applyReactionsToCache(messageKind, ids, reactionRows) {
+  for (const id of ids) {
+    feedReactionsByMessageKey.set(messageReactionKey(messageKind, id), []);
+  }
+  for (const row of reactionRows || []) {
+    const key = messageReactionKey(messageKind, row.message_id);
+    const list = feedReactionsByMessageKey.get(key) || [];
+    list.push({ user_id: row.user_id, emoji: row.emoji });
+    feedReactionsByMessageKey.set(key, list);
+  }
+}
+
+function updateMessageReactionsDom(messageKind, messageId) {
+  const feed = document.getElementById("messagesFeed");
+  if (!feed) return;
+  const el = feed.querySelector(
+    `[data-message-id="${messageId}"][data-message-kind="${messageKind}"]`,
+  );
+  if (!el) return;
+  const row = feedMessagesById.get(String(messageId));
+  if (!row || isMessageDeleted(row)) return;
+  const html = renderMessageReactionsHtml(row, messageKind);
+  const existing = el.querySelector(".message-item-reactions");
+  if (html) {
+    if (existing) {
+      existing.outerHTML = html;
+    } else {
+      el.insertAdjacentHTML("beforeend", html);
+    }
+  } else if (existing) {
+    existing.remove();
+  }
+}
+
+function refreshReactionsOnFeed(messageKind, ids) {
+  for (const id of ids || []) {
+    updateMessageReactionsDom(messageKind, id);
+  }
+}
+
+async function loadAndApplyReactions(messageKind, ids) {
+  if (!ids?.length || messageReactionsSupported === false) return;
+  const rows = await fetchReactionsForMessageIds(messageKind, ids);
+  if (messageReactionsSupported === false) return;
+  applyReactionsToCache(messageKind, ids, rows);
+  refreshReactionsOnFeed(messageKind, ids);
+}
+
+function getVisibleFeedMessageIds() {
+  const feed = document.getElementById("messagesFeed");
+  if (!feed) return [];
+  return [...feed.querySelectorAll("[data-message-id]")]
+    .map((el) => el.getAttribute("data-message-id"))
+    .filter(Boolean);
+}
+
+async function pollMessageReactions() {
+  if (messageReactionsSupported === false || messagesView !== "dialog") return;
+  const ids = getVisibleFeedMessageIds();
+  if (!ids.length) return;
+  const messageKind = isGroupChat() ? "group" : "user";
+  await loadAndApplyReactions(messageKind, ids);
+}
+
+function setReactionCacheForToggle(messageKind, messageId, emoji, uid, remove = false) {
+  const key = messageReactionKey(messageKind, messageId);
+  const reactions = feedReactionsByMessageKey.get(key) || [];
+  const next = reactions.filter((row) => String(row.user_id) !== String(uid));
+  if (!remove) next.push({ user_id: uid, emoji });
+  feedReactionsByMessageKey.set(key, next);
+}
+
+async function toggleMessageReaction(messageKind, messageId, emoji) {
+  const uid = getCurrentUserId();
+  if (!uid || !emoji || messageId == null || messageReactionsSupported === false) return false;
+
+  const msg = document.getElementById("messagesPageMessage");
+  const key = messageReactionKey(messageKind, messageId);
+  const reactions = feedReactionsByMessageKey.get(key) || [];
+  const mine = reactions.find((row) => String(row.user_id) === String(uid));
+  const removing = mine?.emoji === emoji;
+
+  setReactionCacheForToggle(messageKind, messageId, emoji, uid, removing);
+  updateMessageReactionsDom(messageKind, messageId);
+
+  if (removing) {
+    const { error } = await supabaseClient
+      .from("message_reactions")
+      .delete()
+      .eq("message_kind", messageKind)
+      .eq("message_id", Number(messageId))
+      .eq("user_id", uid);
+    if (error) {
+      noteMessageReactionsSupport(error);
+      if (messageReactionsSupported === false && msg) {
+        msg.textContent = getMessageReactionsSetupHint();
+        msg.classList.add("messages-page-message--error");
+      }
+      void loadAndApplyReactions(messageKind, [String(messageId)]);
+      return false;
+    }
+    return true;
+  }
+
+  const { error } = await supabaseClient.from("message_reactions").upsert(
+    {
+      message_kind: messageKind,
+      message_id: Number(messageId),
+      user_id: uid,
+      emoji,
+    },
+    { onConflict: "message_kind,message_id,user_id" },
+  );
+  if (error) {
+    noteMessageReactionsSupport(error);
+    if (messageReactionsSupported === false && msg) {
+      msg.textContent = getMessageReactionsSetupHint();
+      msg.classList.add("messages-page-message--error");
+    }
+    void loadAndApplyReactions(messageKind, [String(messageId)]);
+    return false;
+  }
+  messageReactionsSupported = true;
+  return true;
+}
+
 function hideMessageActionMenu() {
+  const picker = document.getElementById("messagesReactionPicker");
+  if (picker) {
+    picker.hidden = true;
+    picker.style.top = "";
+    picker.style.left = "";
+  }
   const menu = document.getElementById("messagesActionMenu");
   if (menu) {
     menu.hidden = true;
@@ -3401,9 +3653,11 @@ function hideMessageActionMenu() {
     menu.style.left = "";
   }
   actionMenuMessageId = null;
+  actionMenuMessageKind = null;
   actionMenuFromPhoto = false;
   actionMenuPointerDown = false;
   actionMenuArmed = null;
+  reactionPickerArmed = null;
   document.querySelector(".message-item--menu-open")?.classList.remove("message-item--menu-open");
 }
 
@@ -3420,6 +3674,7 @@ function clearMessageTextSelection() {
 
 function showMessageActionMenu(messageEl, clientX, clientY, { fromPhoto = false } = {}) {
   const menu = document.getElementById("messagesActionMenu");
+  const picker = document.getElementById("messagesReactionPicker");
   if (!menu || !messageEl) return;
 
   const messageId = messageEl.getAttribute("data-message-id");
@@ -3429,11 +3684,14 @@ function showMessageActionMenu(messageEl, clientX, clientY, { fromPhoto = false 
   if (!row || isMessageDeleted(row)) return;
 
   const isOwn = messageEl.getAttribute("data-own") === "1";
+  const messageKind = messageEl.getAttribute("data-message-kind") || (isGroupChat() ? "group" : "user");
   actionMenuMessageId = String(messageId);
+  actionMenuMessageKind = messageKind;
   actionMenuFromPhoto = Boolean(fromPhoto);
   actionMenuOpenedAt = Date.now();
   actionMenuPointerDown = false;
   actionMenuArmed = null;
+  reactionPickerArmed = null;
 
   clearMessageTextSelection();
   requestAnimationFrame(() => {
@@ -3457,16 +3715,42 @@ function showMessageActionMenu(messageEl, clientX, clientY, { fromPhoto = false 
   if (attachBtn) attachBtn.hidden = !(actionMenuFromPhoto && messageHasAttachment(row));
   if (deleteBtn) deleteBtn.hidden = !isOwn;
 
+  const showReactions = messageReactionsSupported !== false;
+  if (picker) {
+    picker.hidden = !showReactions;
+    if (showReactions) {
+      for (const btn of picker.querySelectorAll("[data-emoji]")) {
+        const emoji = btn.getAttribute("data-emoji");
+        const mine = (feedReactionsByMessageKey.get(messageReactionKey(messageKind, messageId)) || []).some(
+          (item) => String(item.user_id) === String(getCurrentUserId()) && item.emoji === emoji,
+        );
+        btn.classList.toggle("messages-reaction-picker-btn--active", mine);
+      }
+    }
+  }
+
   menu.hidden = false;
 
   const pad = 8;
-  const rect = menu.getBoundingClientRect();
-  let left = clientX - rect.width / 2;
-  let top = clientY - rect.height - 12;
-  left = Math.max(pad, Math.min(left, window.innerWidth - rect.width - pad));
+  const gap = 8;
+  const menuRect = menu.getBoundingClientRect();
+  const pickerRect = picker && !picker.hidden ? picker.getBoundingClientRect() : { width: 0, height: 0 };
+  const stackHeight = menuRect.height + (pickerRect.height ? pickerRect.height + gap : 0);
+  let left = clientX - Math.max(menuRect.width, pickerRect.width || menuRect.width) / 2;
+  let top = clientY - stackHeight - 12;
+  const stackWidth = Math.max(menuRect.width, pickerRect.width || 0);
+  left = Math.max(pad, Math.min(left, window.innerWidth - stackWidth - pad));
   if (top < pad) top = clientY + 12;
-  top = Math.max(pad, Math.min(top, window.innerHeight - rect.height - pad));
-  menu.style.left = `${left}px`;
+  top = Math.max(pad, Math.min(top, window.innerHeight - stackHeight - pad));
+
+  if (picker && !picker.hidden) {
+    const pickerLeft = clientX - pickerRect.width / 2;
+    picker.style.left = `${Math.max(pad, Math.min(pickerLeft, window.innerWidth - pickerRect.width - pad))}px`;
+    picker.style.top = `${top}px`;
+    top += pickerRect.height + gap;
+  }
+
+  menu.style.left = `${Math.max(pad, Math.min(left, window.innerWidth - menuRect.width - pad))}px`;
   menu.style.top = `${top}px`;
 }
 
@@ -3812,6 +4096,79 @@ function highlightMessageInFeed(messageId) {
   el.scrollIntoView({ behavior: "smooth", block: "center" });
   el.classList.add("message-item--flash");
   setTimeout(() => el.classList.remove("message-item--flash"), 1200);
+}
+
+function runReactionPick(emoji, messageId, messageKind) {
+  if (!emoji || messageId == null || messageId === "" || !messageKind) return false;
+  const now = Date.now();
+  if (now - reactionPickerHandledAt < ACTION_MENU_ACTION_DEDUP_MS) return false;
+  reactionPickerHandledAt = now;
+
+  hideMessageActionMenu();
+  longPressTriggered = false;
+  void toggleMessageReaction(messageKind, messageId, emoji);
+  return true;
+}
+
+function onReactionPickerPointerDown(e) {
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  const btn = e.target.closest("[data-emoji]");
+  if (!btn || btn.hidden) {
+    reactionPickerArmed = null;
+    return;
+  }
+  const emoji = btn.getAttribute("data-emoji");
+  if (!emoji || actionMenuMessageId == null || !actionMenuMessageKind) {
+    reactionPickerArmed = null;
+    return;
+  }
+  actionMenuPointerDown = true;
+  reactionPickerArmed = {
+    emoji,
+    messageId: String(actionMenuMessageId),
+    messageKind: actionMenuMessageKind,
+    pointerId: e.pointerId,
+  };
+}
+
+function onReactionPickerPointerUp(e) {
+  const armed = reactionPickerArmed;
+  actionMenuPointerDown = false;
+  if (!armed || armed.pointerId !== e.pointerId) {
+    reactionPickerArmed = null;
+    return;
+  }
+  const btn = e.target.closest("[data-emoji]");
+  reactionPickerArmed = null;
+  if (!btn || btn.getAttribute("data-emoji") !== armed.emoji) return;
+  e.preventDefault();
+  e.stopPropagation();
+  runReactionPick(armed.emoji, armed.messageId, armed.messageKind);
+}
+
+function onReactionPickerPointerCancel() {
+  actionMenuPointerDown = false;
+  reactionPickerArmed = null;
+}
+
+function onReactionPickerClick(e) {
+  const btn = e.target.closest("[data-emoji]");
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const emoji = btn.getAttribute("data-emoji");
+  const messageId =
+    reactionPickerArmed?.emoji === emoji
+      ? reactionPickerArmed.messageId
+      : actionMenuMessageId;
+  const messageKind =
+    reactionPickerArmed?.emoji === emoji
+      ? reactionPickerArmed.messageKind
+      : actionMenuMessageKind;
+  reactionPickerArmed = null;
+  actionMenuPointerDown = false;
+  if (!emoji || messageId == null || !messageKind) return;
+  runReactionPick(emoji, messageId, messageKind);
 }
 
 function runMessageAction(action, messageId) {
@@ -4173,6 +4530,20 @@ function onFeedClick(e) {
     longPressTriggered = false;
     e.preventDefault();
     e.stopPropagation();
+    return;
+  }
+
+  const reactionBtn = e.target.closest(".message-item-reaction[data-emoji]");
+  if (reactionBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const item = reactionBtn.closest("[data-message-id][data-message-kind]");
+    const emoji = reactionBtn.getAttribute("data-emoji");
+    const messageId = item?.getAttribute("data-message-id");
+    const messageKind = item?.getAttribute("data-message-kind");
+    if (emoji && messageId && messageKind) {
+      void toggleMessageReaction(messageKind, messageId, emoji);
+    }
     return;
   }
 
@@ -4702,6 +5073,14 @@ export function initMessagesSection() {
     actionMenu.addEventListener("click", onMessageActionMenuClick);
   }
 
+  const reactionPicker = document.getElementById("messagesReactionPicker");
+  if (reactionPicker) {
+    reactionPicker.addEventListener("pointerdown", onReactionPickerPointerDown);
+    reactionPicker.addEventListener("pointerup", onReactionPickerPointerUp);
+    reactionPicker.addEventListener("pointercancel", onReactionPickerPointerCancel);
+    reactionPicker.addEventListener("click", onReactionPickerClick);
+  }
+
   const contextCloseBtn = document.getElementById("messagesComposerContextClose");
   if (contextCloseBtn) {
     contextCloseBtn.addEventListener("click", () => {
@@ -4802,10 +5181,13 @@ export function initMessagesSection() {
 
   document.addEventListener("click", (e) => {
     const menu = document.getElementById("messagesActionMenu");
+    const picker = document.getElementById("messagesReactionPicker");
+    const menuOpen = menu && !menu.hidden;
+    const pickerOpen = picker && !picker.hidden;
     if (
-      menu &&
-      !menu.hidden &&
-      !menu.contains(e.target) &&
+      (menuOpen || pickerOpen) &&
+      !(menu && menu.contains(e.target)) &&
+      !(picker && picker.contains(e.target)) &&
       !e.target.closest(".message-item--menu-open") &&
       !actionMenuPointerDown &&
       !isActionMenuDismissGraceActive()
@@ -4834,7 +5216,10 @@ export function initMessagesSection() {
     "scroll",
     () => {
       const menu = document.getElementById("messagesActionMenu");
-      if (!menu || menu.hidden) return;
+      const picker = document.getElementById("messagesReactionPicker");
+      const menuOpen = menu && !menu.hidden;
+      const pickerOpen = picker && !picker.hidden;
+      if (!menuOpen && !pickerOpen) return;
       // Micro-scroll / rubber-band / scrollIntoView на iOS во время tap по «Ответить»
       // раньше закрывали меню до click и сбрасывали actionMenuMessageId.
       if (actionMenuPointerDown || isActionMenuDismissGraceActive()) return;
