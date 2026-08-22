@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v27: клик по тексту задачи в «Мои задачи» открывает попап со всеми полями заказа.
-const STATIC_CACHE = "orders-site-static-v27";
+// v28: фильтр «Менеджер» (Кристина / Андрей) на «Зарплата менеджера».
+const STATIC_CACHE = "orders-site-static-v28";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 

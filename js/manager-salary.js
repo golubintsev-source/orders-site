@@ -17,8 +17,25 @@ const MANAGER_SALARY_STATUSES = new Set([
   "Заказ закрыт",
 ]);
 
-/** Префикс ключа в app_settings: manager_salary_unchecked_YYYY-MM-DD_YYYY-MM-DD */
+/**
+ * Префикс ключа в app_settings: manager_salary_unchecked_[<manager>_]YYYY-MM-DD_YYYY-MM-DD.
+ * Для менеджера по умолчанию суффикса нет — ключи, сохранённые до фильтра, продолжают работать.
+ */
 const SETTINGS_KEY_PREFIX = "manager_salary_unchecked_";
+
+/**
+ * Менеджеры и их заказы: Кристине принадлежат все заказы, кроме типа «Магазин»,
+ * Андрею — заказы типа «Магазин».
+ */
+const MANAGERS = [
+  { id: "kristina", name: "Кристина", ownsOrder: (order) => !isShopOrder(order) },
+  { id: "andrey", name: "Андрей", ownsOrder: (order) => isShopOrder(order) },
+];
+
+/** Менеджер по умолчанию; для него ключ в app_settings остаётся без суффикса. */
+const DEFAULT_MANAGER_ID = "kristina";
+
+let selectedManagerId = DEFAULT_MANAGER_ID;
 
 /** Выбранный период YYYY-MM-DD; по умолчанию — с 1-го числа текущего месяца по сегодня. */
 let selectedFromYmd = "";
@@ -27,11 +44,11 @@ let selectedToYmd = "";
 /** id заказов, снятых с учёта (чекбокс снят). По умолчанию все учтены. */
 const uncheckedOrderIds = new Set();
 
-/** Последнее сохранённое в БД состояние снятых чекбоксов для текущего периода. */
+/** Последнее сохранённое в БД состояние снятых чекбоксов для текущего менеджера и периода. */
 const savedUncheckedOrderIds = new Set();
 
-/** Период, для которого уже загружены сохранённые чекбоксы. */
-let loadedPeriodKey = null;
+/** Менеджер и период, для которых уже загружены сохранённые чекбоксы. */
+let loadedSelectionKey = null;
 
 let bound = false;
 let saveInFlight = false;
@@ -54,12 +71,21 @@ function ensureDefaultPeriod() {
   selectedToYmd = toYmd;
 }
 
-function periodKey(fromYmd, toYmd) {
-  return `${fromYmd}_${toYmd}`;
+function getManagerById(managerId) {
+  return MANAGERS.find((m) => m.id === managerId) || MANAGERS[0];
 }
 
-function settingsKeyForPeriod(fromYmd, toYmd) {
-  return `${SETTINGS_KEY_PREFIX}${fromYmd}_${toYmd}`;
+function selectionKey(managerId, fromYmd, toYmd) {
+  return `${managerId}_${fromYmd}_${toYmd}`;
+}
+
+function currentSelectionKey() {
+  return selectionKey(selectedManagerId, selectedFromYmd, selectedToYmd);
+}
+
+function settingsKeyForSelection(managerId, fromYmd, toYmd) {
+  const suffix = managerId === DEFAULT_MANAGER_ID ? "" : `${managerId}_`;
+  return `${SETTINGS_KEY_PREFIX}${suffix}${fromYmd}_${toYmd}`;
 }
 
 function isValidYmd(ymd) {
@@ -168,20 +194,24 @@ function paidBadge(order) {
   return '<span class="status-value">нет</span>';
 }
 
-function fillPeriodInputs() {
+function fillFilterInputs() {
   ensureDefaultPeriod();
   const fromEl = document.getElementById("managerSalaryDateFrom");
   const toEl = document.getElementById("managerSalaryDateTo");
+  const managerEl = document.getElementById("managerSalaryManager");
   if (fromEl) fromEl.value = selectedFromYmd;
   if (toEl) toEl.value = selectedToYmd;
+  if (managerEl) managerEl.value = selectedManagerId;
 }
 
-function readPeriodInputs() {
+function readFilterInputs() {
   const fromEl = document.getElementById("managerSalaryDateFrom");
   const toEl = document.getElementById("managerSalaryDateTo");
+  const managerEl = document.getElementById("managerSalaryManager");
   return {
     fromYmd: (fromEl?.value ?? "").trim(),
     toYmd: (toEl?.value ?? "").trim(),
+    managerId: getManagerById((managerEl?.value ?? "").trim()).id,
   };
 }
 
@@ -191,9 +221,10 @@ function getManagerSalaryOrders() {
     return [];
   }
 
+  const manager = getManagerById(selectedManagerId);
   const list = (state.allOrders || []).filter((order) => {
     if (isOrderHiddenForCurrentRole(order)) return false;
-    if (isShopOrder(order)) return false;
+    if (!manager.ownsOrder(order)) return false;
     const status = normalizeStatus(order.payment_status);
     if (!MANAGER_SALARY_STATUSES.has(status)) return false;
     const ymd = getOrderCalendarYmd(order);
@@ -409,10 +440,10 @@ function applyUncheckedIds(ids) {
   }
 }
 
-async function loadUncheckedForPeriod(fromYmd, toYmd) {
+async function loadUncheckedForSelection(managerId, fromYmd, toYmd) {
   const token = ++loadToken;
-  const key = settingsKeyForPeriod(fromYmd, toYmd);
-  const expectedPeriod = periodKey(fromYmd, toYmd);
+  const key = settingsKeyForSelection(managerId, fromYmd, toYmd);
+  const expectedSelection = selectionKey(managerId, fromYmd, toYmd);
 
   const { data, error } = await supabaseClient
     .from("app_settings")
@@ -420,18 +451,18 @@ async function loadUncheckedForPeriod(fromYmd, toYmd) {
     .eq("key", key)
     .maybeSingle();
 
-  if (token !== loadToken || periodKey(selectedFromYmd, selectedToYmd) !== expectedPeriod) return;
+  if (token !== loadToken || currentSelectionKey() !== expectedSelection) return;
 
   if (error) {
     applyUncheckedIds([]);
-    loadedPeriodKey = expectedPeriod;
+    loadedSelectionKey = expectedSelection;
     setSaveMessage("Не удалось загрузить сохранённый выбор", true);
     updateSaveButtonState();
     return;
   }
 
   applyUncheckedIds(parseUncheckedIds(data?.value));
-  loadedPeriodKey = expectedPeriod;
+  loadedSelectionKey = expectedSelection;
   setSaveMessage("");
   updateSaveButtonState();
 }
@@ -459,11 +490,9 @@ async function saveUncheckedSelection() {
   }
 
   const ids = visibleUncheckedIds(visibleIds);
-  const fromYmd = selectedFromYmd;
-  const toYmd = selectedToYmd;
-  const key = settingsKeyForPeriod(fromYmd, toYmd);
+  const key = settingsKeyForSelection(selectedManagerId, selectedFromYmd, selectedToYmd);
   const value = JSON.stringify(ids);
-  const expectedPeriod = periodKey(fromYmd, toYmd);
+  const expectedSelection = currentSelectionKey();
 
   saveInFlight = true;
   updateSaveButtonState();
@@ -475,7 +504,7 @@ async function saveUncheckedSelection() {
 
   saveInFlight = false;
 
-  if (periodKey(selectedFromYmd, selectedToYmd) !== expectedPeriod) {
+  if (currentSelectionKey() !== expectedSelection) {
     updateSaveButtonState();
     return;
   }
@@ -494,7 +523,7 @@ async function saveUncheckedSelection() {
 
 export function renderManagerSalary() {
   ensureDefaultPeriod();
-  fillPeriodInputs();
+  fillFilterInputs();
 
   const tbody = document.querySelector("#managerSalaryTable tbody");
   const emptyEl = document.getElementById("managerSalaryEmpty");
@@ -532,7 +561,7 @@ export function renderManagerSalary() {
     tbody.innerHTML = "";
     if (emptyEl) {
       emptyEl.hidden = false;
-      emptyEl.textContent = `Нет заказов ${formatPeriodLabel(selectedFromYmd, selectedToYmd)} со статусом «Производство» и далее (включая закрытые).`;
+      emptyEl.textContent = `Нет заказов менеджера ${getManagerById(selectedManagerId).name} ${formatPeriodLabel(selectedFromYmd, selectedToYmd)} со статусом «Производство» и далее (включая закрытые).`;
     }
     updateSummary([]);
     updateSaveButtonState();
@@ -550,38 +579,25 @@ export function renderManagerSalary() {
 export async function loadManagerSalary() {
   initManagerSalarySection();
   ensureDefaultPeriod();
-  fillPeriodInputs();
-  const currentKey = periodKey(selectedFromYmd, selectedToYmd);
-  if (loadedPeriodKey !== currentKey) {
-    await loadUncheckedForPeriod(selectedFromYmd, selectedToYmd);
+  fillFilterInputs();
+  if (loadedSelectionKey !== currentSelectionKey()) {
+    await loadUncheckedForSelection(selectedManagerId, selectedFromYmd, selectedToYmd);
   }
   renderManagerSalary();
 }
 
-async function onPeriodChange() {
-  const { fromYmd, toYmd } = readPeriodInputs();
-  if (!fromYmd || !toYmd) {
-    selectedFromYmd = fromYmd;
-    selectedToYmd = toYmd;
-    renderManagerSalary();
-    return;
-  }
-  if (!isValidYmd(fromYmd) || !isValidYmd(toYmd)) {
-    selectedFromYmd = fromYmd;
-    selectedToYmd = toYmd;
-    renderManagerSalary();
-    return;
-  }
-
+async function onFiltersChange() {
+  const { fromYmd, toYmd, managerId } = readFilterInputs();
+  selectedManagerId = managerId;
   selectedFromYmd = fromYmd;
   selectedToYmd = toYmd;
 
-  if (fromYmd > toYmd) {
+  if (!fromYmd || !toYmd || !isValidYmd(fromYmd) || !isValidYmd(toYmd) || fromYmd > toYmd) {
     renderManagerSalary();
     return;
   }
 
-  await loadUncheckedForPeriod(selectedFromYmd, selectedToYmd);
+  await loadUncheckedForSelection(selectedManagerId, selectedFromYmd, selectedToYmd);
   renderManagerSalary();
 }
 
@@ -608,15 +624,17 @@ export function initManagerSalarySection() {
   bound = true;
 
   ensureDefaultPeriod();
-  fillPeriodInputs();
+  fillFilterInputs();
 
   const fromEl = document.getElementById("managerSalaryDateFrom");
   const toEl = document.getElementById("managerSalaryDateTo");
+  const managerEl = document.getElementById("managerSalaryManager");
   const onChange = () => {
-    void onPeriodChange();
+    void onFiltersChange();
   };
   if (fromEl) fromEl.addEventListener("change", onChange);
   if (toEl) toEl.addEventListener("change", onChange);
+  if (managerEl) managerEl.addEventListener("change", onChange);
 
   const table = document.getElementById("managerSalaryTable");
   if (table) {
