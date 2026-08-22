@@ -3554,6 +3554,92 @@ h2 {
   opacity: 0.9;
 }
 
+#section-settings .settings-salary-card {
+  margin-top: 16px;
+  max-width: 520px;
+}
+#section-settings .settings-salary-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+#section-settings .settings-salary-people {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+#section-settings .settings-salary-person-name {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+#section-settings .settings-salary-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+@media (max-width: 480px) {
+  #section-settings .settings-salary-fields {
+    grid-template-columns: 1fr;
+  }
+}
+#section-settings .settings-salary-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: #374151;
+}
+#section-settings .settings-salary-field input {
+  width: 100%;
+  max-width: 220px;
+  height: 36px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  /* 16px: иначе iPhone Safari зумит страницу при фокусе */
+  font-size: 16px;
+}
+#section-settings .settings-salary-percent-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+}
+#section-settings .settings-salary-percent-wrap input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+}
+#section-settings .settings-salary-percent-suffix {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+}
+#section-settings .settings-save-salary-btn {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #1f6feb;
+  color: #fff;
+  box-sizing: border-box;
+}
+#section-settings .settings-save-salary-btn:hover:not(:disabled) {
+  opacity: 0.95;
+}
+#section-settings .settings-save-salary-btn.settings-save-btn-inactive,
+#section-settings .settings-save-salary-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+
 #section-settings .push-notifications-card {
   margin-top: 16px;
   max-width: 520px;
