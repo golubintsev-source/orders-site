@@ -1295,35 +1295,6 @@
               </svg>
             </button>
           </div>
-          <div
-            id="messagesReactionPicker"
-            class="messages-reaction-picker"
-            hidden
-            role="toolbar"
-            aria-label="Реакция на сообщение"
-          >
-            <button type="button" class="messages-reaction-picker-btn" data-emoji="👍" aria-label="Нравится">👍</button>
-            <button type="button" class="messages-reaction-picker-btn" data-emoji="👎" aria-label="Не нравится">👎</button>
-            <button type="button" class="messages-reaction-picker-btn" data-emoji="❤️" aria-label="Сердечко">❤️</button>
-            <button type="button" class="messages-reaction-picker-btn" data-emoji="😂" aria-label="Смех">😂</button>
-            <button type="button" class="messages-reaction-picker-btn" data-emoji="😮" aria-label="Удивление">😮</button>
-            <button type="button" class="messages-reaction-picker-btn" data-emoji="😢" aria-label="Грусть">😢</button>
-            <button type="button" class="messages-reaction-picker-btn" data-emoji="🙏" aria-label="Спасибо">🙏</button>
-          </div>
-          <div
-            id="messagesActionMenu"
-            class="messages-action-menu"
-            hidden
-            role="menu"
-            aria-label="Действия с сообщением"
-          >
-            <button type="button" class="messages-action-menu-item" data-action="reply" role="menuitem">Ответить</button>
-            <button type="button" class="messages-action-menu-item" data-action="copy" role="menuitem">Копировать</button>
-            <button type="button" class="messages-action-menu-item" data-action="create-task" role="menuitem">Создать задачу</button>
-            <button type="button" class="messages-action-menu-item" data-action="edit" role="menuitem">Изменить</button>
-            <button type="button" class="messages-action-menu-item" data-action="attach-to-order" role="menuitem" hidden>Прикрепить к заказу</button>
-            <button type="button" class="messages-action-menu-item messages-action-menu-item--danger" data-action="delete" role="menuitem">Удалить</button>
-          </div>
           <div class="messages-composer">
             <div class="messages-composer-tools" aria-label="Вставка в сообщение">
               <button
@@ -2376,5 +2347,34 @@
       document.addEventListener("orders-table-will-render", run);
     })();
   </script>
+  <div
+    id="messagesReactionPicker"
+    class="messages-reaction-picker"
+    hidden
+    role="toolbar"
+    aria-label="Реакция на сообщение"
+  >
+    <button type="button" class="messages-reaction-picker-btn" data-emoji="👍" aria-label="Нравится">👍</button>
+    <button type="button" class="messages-reaction-picker-btn" data-emoji="👎" aria-label="Не нравится">👎</button>
+    <button type="button" class="messages-reaction-picker-btn" data-emoji="❤️" aria-label="Сердечко">❤️</button>
+    <button type="button" class="messages-reaction-picker-btn" data-emoji="😂" aria-label="Смех">😂</button>
+    <button type="button" class="messages-reaction-picker-btn" data-emoji="😮" aria-label="Удивление">😮</button>
+    <button type="button" class="messages-reaction-picker-btn" data-emoji="😢" aria-label="Грусть">😢</button>
+    <button type="button" class="messages-reaction-picker-btn" data-emoji="🙏" aria-label="Спасибо">🙏</button>
+  </div>
+  <div
+    id="messagesActionMenu"
+    class="messages-action-menu"
+    hidden
+    role="menu"
+    aria-label="Действия с сообщением"
+  >
+    <button type="button" class="messages-action-menu-item" data-action="reply" role="menuitem">Ответить</button>
+    <button type="button" class="messages-action-menu-item" data-action="copy" role="menuitem">Копировать</button>
+    <button type="button" class="messages-action-menu-item" data-action="create-task" role="menuitem">Создать задачу</button>
+    <button type="button" class="messages-action-menu-item" data-action="edit" role="menuitem">Изменить</button>
+    <button type="button" class="messages-action-menu-item" data-action="attach-to-order" role="menuitem" hidden>Прикрепить к заказу</button>
+    <button type="button" class="messages-action-menu-item messages-action-menu-item--danger" data-action="delete" role="menuitem">Удалить</button>
+  </div>
 </body>
 </html>
