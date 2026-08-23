@@ -154,6 +154,36 @@ export function syncOrderIdInUrl(orderId) {
   history.replaceState(null, "", path || "/");
 }
 
+const CHAT_PEER_RE =
+  /^(?:group:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Peer диалога из ?chat= (uuid или group:<uuid>) либо null. */
+export function getChatPeerFromUrl() {
+  const raw = new URLSearchParams(window.location.search).get("chat");
+  if (raw == null || raw === "") return null;
+  const peer = String(raw).trim();
+  return CHAT_PEER_RE.test(peer) ? peer : null;
+}
+
+/**
+ * Синхронизировать ?chat= в адресной строке (replaceState).
+ * @param {string | null | undefined} peerId — null/undefined убирает параметр
+ */
+export function syncChatPeerInUrl(peerId) {
+  const u = new URL(window.location.href);
+  if (peerId == null || peerId === "") {
+    if (!u.searchParams.has("chat")) return;
+    u.searchParams.delete("chat");
+  } else {
+    const next = String(peerId);
+    if (!CHAT_PEER_RE.test(next)) return;
+    if (u.searchParams.get("chat") === next) return;
+    u.searchParams.set("chat", next);
+  }
+  const path = u.pathname + u.search + u.hash;
+  history.replaceState(null, "", path || "/");
+}
+
 function stripHashAndExportParam() {
   const u = new URL(window.location.href);
   u.hash = "";
@@ -213,6 +243,9 @@ export function syncBrowserUrlToSection(sectionId) {
   const search = new URLSearchParams(window.location.search);
   if (sectionId !== "new") {
     search.delete("order_id");
+  }
+  if (sectionId !== "messages") {
+    search.delete("chat");
   }
   const searchStr = search.toString();
   const q = searchStr ? `?${searchStr}` : "";

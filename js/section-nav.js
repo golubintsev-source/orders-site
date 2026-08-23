@@ -316,7 +316,7 @@ function toggleSectionNavDropdown() {
 /**
  * Переключить раздел и обновить заголовок в шапке (без открытого дропдауна).
  * @param {string} sectionId
- * @param {{ skipUrlSync?: boolean, logInitialAccess?: boolean, skipAccessLog?: boolean }} [opts]
+ * @param {{ skipUrlSync?: boolean, logInitialAccess?: boolean, skipAccessLog?: boolean, restoreMessagesChat?: boolean }} [opts]
  */
 export function switchSection(sectionId, opts = {}) {
   if (!sectionId) return;
@@ -400,7 +400,7 @@ export function switchSection(sectionId, opts = {}) {
   }
   if (sectionId === "messages") {
     void import("./messages.js").then((m) => {
-      m.onMessagesSectionEnter();
+      m.onMessagesSectionEnter({ restoreFromUrl: Boolean(opts.restoreMessagesChat) });
     });
     void import("./push-notifications.js").then((m) => {
       m.clearPushBadge();

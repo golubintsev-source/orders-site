@@ -327,6 +327,7 @@ function applyRouteOnLoad() {
   switchSection(sectionId, {
     skipUrlSync: true,
     logInitialAccess: !hasOrderInUrl,
+    restoreMessagesChat: true,
   });
   migrateLegacyHashToPathIfNeeded();
 }
@@ -340,7 +341,7 @@ function ensurePopstateRouting() {
     if (!document.getElementById("ordersTable")) return;
     let sectionId = getRouteSectionFromUrl();
     if (!canAccessSection(sectionId)) sectionId = "all";
-    switchSection(sectionId, { skipUrlSync: true });
+    switchSection(sectionId, { skipUrlSync: true, restoreMessagesChat: true });
   });
 }
 
