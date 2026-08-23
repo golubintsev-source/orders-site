@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru" data-route-boot="1">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Messages composer viewport smoke</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    /* Как iPhone PWA: вырез 47px, домашняя полоска 34px, фикс. шапка. */
+    html, body { margin: 0; height: 100%; }
+    .topbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 980;
+      padding-top: 47px;
+      padding-bottom: 6px;
+      background: #f5f7fb;
+    }
+    .container:has(.topbar) {
+      padding-top: calc(47px + 56px);
+    }
+    #out {
+      position: fixed;
+      top: 4px;
+      left: 8px;
+      right: 8px;
+      z-index: 1200;
+      margin: 0;
+      font: 12px/1.3 ui-monospace, monospace;
+    }
+  </style>
+</head>
+<body>
+  <p id="out">running…</p>
+  <div class="container">
+    <div class="topbar">
+      <div class="topbar-section-nav section-nav">
+        <span id="sectionNavCurrentLabel">Чаты</span>
+      </div>
+    </div>
+    <section id="section-messages" class="content-section active">
+      <div class="messages-page">
+        <div id="messagesDialogView" class="messages-dialog-view">
+          <header class="messages-dialog-header">
+            <p class="messages-dialog-title">Диалог</p>
+          </header>
+          <div id="messagesFeed" class="messages-feed" role="log">
+            <div class="messages-empty">Проверка нижней панели</div>
+          </div>
+          <div class="messages-composer">
+            <div class="messages-composer-tools">
+              <button type="button" class="messages-composer-tool-btn" aria-label="Вложение">+</button>
+            </div>
+            <div class="messages-composer-input-wrap">
+              <textarea class="messages-composer-input" rows="1" placeholder="Новое сообщение…"></textarea>
+            </div>
+            <button type="button" class="btn-primary messages-send-btn" aria-label="Отправить">➤</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+    function measure() {
+      const composer = document.querySelector(".messages-composer");
+      const sendBtn = document.querySelector(".messages-send-btn");
+      const out = document.getElementById("out");
+      const vv = window.visualViewport;
+      const viewBottom = vv ? vv.height + vv.offsetTop : window.innerHeight;
+      const rect = composer.getBoundingClientRect();
+      const btnRect = sendBtn.getBoundingClientRect();
+      const overflow = rect.bottom - viewBottom;
+      const btnClearance = viewBottom - btnRect.bottom;
+      const ok =
+        overflow <= 1 &&
+        rect.top >= -1 &&
+        rect.height > 40 &&
+        btnClearance >= 6;
+      const report = {
+        ok,
+        overflow: Number(overflow.toFixed(1)),
+        btnClearance: Number(btnClearance.toFixed(1)),
+        composerBottom: Number(rect.bottom.toFixed(1)),
+        viewBottom: Number(viewBottom.toFixed(1)),
+        composerHeight: Number(rect.height.toFixed(1)),
+        paddingBottom: getComputedStyle(composer).paddingBottom,
+      };
+      out.textContent = (ok ? "PASS" : "FAIL") + " " + JSON.stringify(report);
+      out.style.color = ok ? "#047857" : "#b91c1c";
+      document.title = ok ? "PASS composer viewport" : "FAIL composer viewport";
+      return report;
+    }
+    window.__composerViewportSmoke = measure;
+    requestAnimationFrame(() => requestAnimationFrame(measure));
+    window.addEventListener("resize", measure);
+  </script>
+</body>
+</html>
