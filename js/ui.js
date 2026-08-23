@@ -510,33 +510,49 @@ export function bindUIEvents() {
     });
   }
 
+  const settingsSection = document.getElementById("section-settings");
   const settingsSaveSalaryParamsBtn = document.getElementById("settingsSaveSalaryParamsBtn");
-  if (settingsSaveSalaryParamsBtn) {
+  const onSalaryParamFieldEvent = (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLInputElement)) return;
+    const id = t.id || "";
+    if (!id.startsWith("settings_salary_")) return;
+    if (id.endsWith("_base")) {
+      refreshRublesIntegerInputState(t, t.value);
+    } else if (id.endsWith("_percent")) {
+      refreshPercentInputState(t, t.value);
+    } else {
+      return;
+    }
+    updateManagerSalaryParamsSaveButtonState();
+  };
+  if (settingsSection && settingsSection.dataset.salaryParamsInputBound !== "1") {
+    settingsSection.dataset.salaryParamsInputBound = "1";
+    settingsSection.addEventListener("input", onSalaryParamFieldEvent);
+    settingsSection.addEventListener("change", onSalaryParamFieldEvent);
+    settingsSection.addEventListener("keyup", onSalaryParamFieldEvent);
+  }
+  if (settingsSaveSalaryParamsBtn && settingsSaveSalaryParamsBtn.dataset.salarySaveBound !== "1") {
+    settingsSaveSalaryParamsBtn.dataset.salarySaveBound = "1";
     settingsSaveSalaryParamsBtn.addEventListener("click", async () => {
       const ok = await saveManagerSalaryParams();
       setMessage(ok ? "Параметры зарплаты сохранены" : "Ошибка сохранения или неверное значение", ok ? "" : "#d32f2f");
     });
-    for (const { baseInputId, percentInputId } of MANAGER_SALARY_PARAM_FIELDS) {
-      const baseEl = document.getElementById(baseInputId);
-      const percentEl = document.getElementById(percentInputId);
-      if (baseEl) {
-        const onBase = () => {
-          refreshRublesIntegerInputState(baseEl, baseEl.value);
-          updateManagerSalaryParamsSaveButtonState();
-        };
-        baseEl.addEventListener("input", onBase);
-        baseEl.addEventListener("change", onBase);
-        baseEl.addEventListener("blur", onBase);
-      }
-      if (percentEl) {
-        const onPercent = () => {
-          refreshPercentInputState(percentEl, percentEl.value);
-          updateManagerSalaryParamsSaveButtonState();
-        };
-        percentEl.addEventListener("input", onPercent);
-        percentEl.addEventListener("change", onPercent);
-        percentEl.addEventListener("blur", onPercent);
-      }
+  }
+  for (const { baseInputId, percentInputId } of MANAGER_SALARY_PARAM_FIELDS) {
+    const baseEl = document.getElementById(baseInputId);
+    const percentEl = document.getElementById(percentInputId);
+    if (baseEl) {
+      baseEl.addEventListener("blur", () => {
+        refreshRublesIntegerInputState(baseEl, baseEl.value);
+        updateManagerSalaryParamsSaveButtonState();
+      });
+    }
+    if (percentEl) {
+      percentEl.addEventListener("blur", () => {
+        refreshPercentInputState(percentEl, percentEl.value);
+        updateManagerSalaryParamsSaveButtonState();
+      });
     }
   }
 

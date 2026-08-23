@@ -140,6 +140,16 @@ function notifyManagerSalaryParamsChanged() {
   document.dispatchEvent(new CustomEvent("manager-salary-params-updated"));
 }
 
+function syncSalaryParamInputSavedValue(el, savedValue) {
+  if (!el) return;
+  el.setAttribute("data-saved-value", savedValue);
+}
+
+function exposeManagerSalaryParamsHelpers() {
+  if (typeof window === "undefined") return;
+  window.updateManagerSalaryParamsSaveButtonState = updateManagerSalaryParamsSaveButtonState;
+}
+
 /** На мобильной numeric-клавиатуре часто нет «−» — переключаем знак кнопкой ±. */
 export function toggleAdjustmentSign(input) {
   if (!input) return;
@@ -335,14 +345,23 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
     const params = state.managerSalaryParams[managerId] || defaultManagerSalaryParams()[managerId];
     const baseEl = document.getElementById(baseInputId);
     const percentEl = document.getElementById(percentInputId);
-    if (baseEl) baseEl.value = String(params.base);
-    if (percentEl) percentEl.value = formatPercentSettingValue(params.percent);
+    const baseValue = String(params.base);
+    const percentValue = formatPercentSettingValue(params.percent);
+    if (baseEl) {
+      baseEl.value = baseValue;
+      syncSalaryParamInputSavedValue(baseEl, baseValue);
+    }
+    if (percentEl) {
+      percentEl.value = percentValue;
+      syncSalaryParamInputSavedValue(percentEl, percentValue);
+    }
   }
 
   updateSettingsSaveButtonState();
   updateDriverSaveButtonState();
   updateEditorsSaveButtonState();
   updateAdjustmentsSaveButtonState();
+  exposeManagerSalaryParamsHelpers();
   updateManagerSalaryParamsSaveButtonState();
   notifyManagerSalaryParamsChanged();
 }
@@ -435,6 +454,17 @@ export function updateAdjustmentsSaveButtonState() {
   btn.classList.toggle("settings-save-btn-inactive", !isDirty);
 }
 
+function salaryInputDiffersFromSaved(el, parsedCurrent, parsedSaved) {
+  if (!el) return false;
+  if (Number.isNaN(parsedCurrent)) return true;
+  const raw = String(el.value ?? "").trim();
+  const savedAttr = el.getAttribute("data-saved-value");
+  if (savedAttr != null && raw !== String(savedAttr).trim()) {
+    return parsedCurrent !== parsedSaved;
+  }
+  return parsedCurrent !== parsedSaved;
+}
+
 /** Кнопка «Сохранить» у блока параметров з/п: активна при отличии или неверном вводе. */
 export function updateManagerSalaryParamsSaveButtonState() {
   const btn = document.getElementById("settingsSaveSalaryParamsBtn");
@@ -443,15 +473,17 @@ export function updateManagerSalaryParamsSaveButtonState() {
   for (const { managerId, baseInputId, percentInputId } of MANAGER_SALARY_PARAM_FIELDS) {
     const baseEl = document.getElementById(baseInputId);
     const percentEl = document.getElementById(percentInputId);
-    if (!baseEl || !percentEl) continue;
-    const currentBase = parseManagerSalaryBase(baseEl.value);
-    const currentPercent = parseManagerSalaryPercent(percentEl.value);
-    if (Number.isNaN(currentBase) || Number.isNaN(currentPercent)) {
-      isDirty = true;
-      break;
-    }
+    if (!baseEl && !percentEl) continue;
     const saved = getManagerSalaryParams(managerId);
-    if (currentBase !== saved.base || normalizeSalaryPercent(currentPercent) !== saved.percent) {
+    const currentBase = parseManagerSalaryBase(baseEl?.value);
+    const currentPercent = parseManagerSalaryPercent(percentEl?.value);
+    const normalizedPercent = Number.isNaN(currentPercent)
+      ? NaN
+      : normalizeSalaryPercent(currentPercent);
+    if (
+      salaryInputDiffersFromSaved(baseEl, currentBase, saved.base) ||
+      salaryInputDiffersFromSaved(percentEl, normalizedPercent, saved.percent)
+    ) {
       isDirty = true;
       break;
     }
@@ -637,8 +669,16 @@ export async function saveManagerSalaryParams() {
     const params = nextValues[managerId];
     const baseEl = document.getElementById(baseInputId);
     const percentEl = document.getElementById(percentInputId);
-    if (baseEl) baseEl.value = String(params.base);
-    if (percentEl) percentEl.value = formatPercentSettingValue(params.percent);
+    const baseValue = String(params.base);
+    const percentValue = formatPercentSettingValue(params.percent);
+    if (baseEl) {
+      baseEl.value = baseValue;
+      syncSalaryParamInputSavedValue(baseEl, baseValue);
+    }
+    if (percentEl) {
+      percentEl.value = percentValue;
+      syncSalaryParamInputSavedValue(percentEl, percentValue);
+    }
   }
 
   updateManagerSalaryParamsSaveButtonState();
@@ -667,4 +707,7 @@ export function applySettingsAdminBlocksVisibility() {
     if (el.id === "loginLinksCard") return;
     el.hidden = !showAdmin;
   });
+  exposeManagerSalaryParamsHelpers();
 }
+
+exposeManagerSalaryParamsHelpers();
