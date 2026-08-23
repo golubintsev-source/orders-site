@@ -8962,14 +8962,10 @@ th {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  /* 8px над домашней полоской — иначе кнопки визуально «подрезаются» pill. */
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  /* Без нижнего отступа: панель вплотную к краю экрана. */
+  padding: 8px 12px 0;
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
-}
-
-html.keyboard-open .messages-composer {
-  padding-bottom: 8px;
 }
 
 .messages-composer-tools {
@@ -9217,17 +9213,21 @@ html.keyboard-open .messages-composer {
     padding-left: 0;
     padding-right: 0;
     padding-bottom: 0;
-    height: 100dvh;
+    /* 100dvh до физического низа. visualViewport короче экрана и оставлял дыру под композером. */
     height: 100svh;
-    height: var(--app-visible-height, 100svh);
-    max-height: 100dvh;
+    height: 100dvh;
     max-height: 100svh;
-    max-height: var(--app-visible-height, 100svh);
+    max-height: 100dvh;
     min-height: 0;
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
     overflow: hidden;
+  }
+
+  html.keyboard-open .container:has(#section-messages.content-section.active) {
+    height: var(--app-visible-height, 100dvh);
+    max-height: var(--app-visible-height, 100dvh);
   }
 
   #section-messages.content-section.active {
