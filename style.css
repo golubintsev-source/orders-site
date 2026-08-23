@@ -1261,16 +1261,34 @@ h2 {
   min-width: 6.8rem;
 }
 
-#section-calculations .calculations-form-row--amounts .calculations-amount-field input,
-.calculations-page .calculations-form-row--amounts .calculations-amount-field input {
-  width: 7.5rem;
-  flex: 0 0 7.5rem;
-  min-width: 0;
-  height: var(--calc-submit-row-height, 40px);
-  min-height: var(--calc-submit-row-height, 40px);
+/* «от» / «до»: как поля дат, в одну строку; 16px — без зума iOS при фокусе */
+#section-calculations .calculations-form-row--amounts .calculations-amount-field,
+.calculations-page .calculations-form-row--amounts .calculations-amount-field {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: max-content;
+}
+
+#section-calculations #calcAmountFrom,
+#section-calculations #calcAmountTo,
+.calculations-page #calcAmountFrom,
+.calculations-page #calcAmountTo {
+  width: 6.8rem;
+  min-width: 6.8rem;
+  max-width: 6.8rem;
+  flex: 0 0 6.8rem;
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
   padding: 0 8px;
   font-size: 16px;
   box-sizing: border-box;
+}
+
+/* Поле «Сумма» в форме записи — тоже 16px, иначе iOS зумит страницу */
+#section-calculations #calcAmount,
+.calculations-page #calcAmount {
+  font-size: 16px;
 }
 
 #section-calculations .calculations-export-excel-btn,
@@ -3805,6 +3823,19 @@ h2 {
   min-width: 0;
 }
 
+/* После общего .field { column }: подпись «от»/«до» слева, поля в один ряд */
+#section-calculations .calculations-form-row--amounts .calculations-amount-field,
+.calculations-page .calculations-form-row--amounts .calculations-amount-field {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  width: auto;
+  max-width: max-content;
+}
+
 .field.full {
   grid-column: 1 / -1;
 }
@@ -3881,6 +3912,30 @@ textarea {
 input,
 select {
   height: 42px;
+}
+
+/* Перебивает width:100% / height:42px у input выше — фильтр сумм как даты */
+#section-calculations #calcAmountFrom,
+#section-calculations #calcAmountTo,
+.calculations-page #calcAmountFrom,
+.calculations-page #calcAmountTo {
+  width: 6.8rem;
+  min-width: 6.8rem;
+  max-width: 6.8rem;
+  flex: 0 0 6.8rem;
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  padding: 0 8px;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+#section-calculations #calcAmount,
+.calculations-page #calcAmount,
+#section-calculations .calculations-amount-input,
+.calculations-page .calculations-amount-input {
+  font-size: 16px;
 }
 
 textarea {
