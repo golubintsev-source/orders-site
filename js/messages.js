@@ -13,6 +13,7 @@ import {
 } from "./files.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { messageHasActiveTask } from "./message-task-links.js";
+import { getChatPeerFromUrl, syncChatPeerInUrl } from "./app-routes.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 /** Максимальная высота поля ввода сообщения (как в CSS max-height). */
@@ -2403,6 +2404,7 @@ export function showMessagesChatList() {
   hideMessageActionMenu();
   clearFeedMessageCache();
   setMessagesView("list");
+  syncChatPeerInUrl(null);
   stopMessagesFeedPolling();
   startChatListPolling();
   void loadChatList();
@@ -2416,6 +2418,7 @@ export async function openMessagesDialog(peerId) {
   hideMessageActionMenu();
   clearFeedMessageCache();
   setMessagesView("dialog");
+  syncChatPeerInUrl(peerId);
   stopChatListPolling();
   await loadUsersDirectory();
   if (isGroupChat() && groupChatsById.size === 0) {
@@ -2538,8 +2541,13 @@ export async function loadMessages() {
   })();
 }
 
-export function onMessagesSectionEnter() {
+export function onMessagesSectionEnter(opts = {}) {
   initMessagesSection();
+  const peerFromUrl = opts.restoreFromUrl ? getChatPeerFromUrl() : null;
+  if (peerFromUrl) {
+    void openMessagesDialog(peerFromUrl);
+    return;
+  }
   showMessagesChatList();
 }
 

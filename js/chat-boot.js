@@ -28,6 +28,29 @@
     " delivered_at, deleted_at, attachment_storage_path";
   const GROUP_COLUMNS = "id, name, created_by, member_ids, created_at, avatar_storage_path";
 
+  function getChatPeerFromUrl() {
+    try {
+      const raw = new URLSearchParams(window.location.search).get("chat");
+      if (!raw) return null;
+      const peer = String(raw).trim();
+      if (!/^(?:group:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(peer)) {
+        return null;
+      }
+      return peer;
+    } catch {
+      return null;
+    }
+  }
+
+  function showDialogShellIfNeeded() {
+    if (!getChatPeerFromUrl()) return;
+    const listView = document.getElementById("messagesChatListView");
+    const dialogView = document.getElementById("messagesDialogView");
+    if (listView) listView.hidden = true;
+    if (dialogView) dialogView.hidden = false;
+    document.getElementById("section-messages")?.classList.add("messages-section--dialog");
+  }
+
   /** Тот же разбор маршрута, что и в app-routes.js, но без импорта модуля. */
   function isMessagesRoute() {
     if (window.location.protocol === "file:") {
@@ -198,8 +221,18 @@
 
   if (!isMessagesRoute()) return;
 
+  const restoringDialog = Boolean(getChatPeerFromUrl());
   const session = readSession();
-  if (!session) return;
+  if (!session) {
+    if (restoringDialog) {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", showDialogShellIfNeeded, { once: true });
+      } else {
+        showDialogShellIfNeeded();
+      }
+    }
+    return;
+  }
 
   window.__chatBoot = {
     uid: session.uid,
@@ -211,7 +244,16 @@
   preloadMessagesModule();
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => paintSnapshot(session.uid), { once: true });
+    document.addEventListener(
+      "DOMContentLoaded",
+      () => {
+        if (restoringDialog) showDialogShellIfNeeded();
+        else paintSnapshot(session.uid);
+      },
+      { once: true },
+    );
+  } else if (restoringDialog) {
+    showDialogShellIfNeeded();
   } else {
     paintSnapshot(session.uid);
   }
