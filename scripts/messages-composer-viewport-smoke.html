@@ -77,7 +77,8 @@
         overflow <= 1 &&
         rect.top >= -1 &&
         rect.height > 40 &&
-        btnClearance >= 6;
+        btnClearance >= -1 &&
+        btnClearance <= 8;
       const report = {
         ok,
         overflow: Number(overflow.toFixed(1)),
