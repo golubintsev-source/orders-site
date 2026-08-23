@@ -183,10 +183,13 @@ export function initKeyboardOpenClass() {
     const vv = window.visualViewport;
     if (!vv) {
       root.classList.remove("keyboard-open");
+      root.style.removeProperty("--app-visible-height");
       return;
     }
     const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
     root.classList.toggle("keyboard-open", overlap > 120);
+    // Высота видимой области (над клавиатурой / динамической панелью браузера).
+    root.style.setProperty("--app-visible-height", `${Math.round(vv.height)}px`);
   };
   sync();
   window.visualViewport?.addEventListener("resize", sync);
