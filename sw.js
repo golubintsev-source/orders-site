@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v29: параметры зарплаты менеджера (сумма и процент) в настройках.
-const STATIC_CACHE = "orders-site-static-v29";
+// v30: кнопка «Сохранить» в блоке параметров зарплаты оживает при правке полей.
+const STATIC_CACHE = "orders-site-static-v30";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 
