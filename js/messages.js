@@ -50,7 +50,6 @@ let unreadPollTimer = null;
 let feedPollTimer = null;
 let chatListPollTimer = null;
 let lastFeedMessageAt = null;
-let lastMessagePeerId = null;
 /** @type {"list" | "dialog"} */
 let messagesView = "list";
 /** @type {string | null} null на списке; uuid пользователя или group:<uuid> в диалоге */
@@ -430,16 +429,6 @@ function getCurrentUserEmail() {
   const u = state.currentUser;
   if (!u) return "";
   return (u.email || "").trim();
-}
-
-function updateLastMessagePeerId(rows) {
-  if (!rows?.length) {
-    lastMessagePeerId = null;
-    return;
-  }
-  const uid = getCurrentUserId();
-  const last = rows[rows.length - 1];
-  lastMessagePeerId = String(last.sender_id) === String(uid) ? last.recipient_id : last.sender_id;
 }
 
 function toGroupPeerId(groupId) {
@@ -2356,7 +2345,6 @@ function setMessagesView(view) {
 }
 
 function syncComposerForActivePeer() {
-  const userPickBtn = document.getElementById("messagesPickUserBtn");
   const input = document.getElementById("messagesComposerInput");
   composerRecipients.clear();
   clearPendingChatPhoto();
@@ -2368,14 +2356,11 @@ function syncComposerForActivePeer() {
     if (peer) {
       composerRecipients.set(peer.id, { id: peer.id, email: peer.email });
     }
-    if (userPickBtn) userPickBtn.hidden = true;
     if (input) input.placeholder = "Сообщение…";
   } else if (isGroupChat()) {
-    if (userPickBtn) userPickBtn.hidden = true;
     if (input) input.placeholder = "Сообщение в группу…";
-  } else {
-    if (userPickBtn) userPickBtn.hidden = false;
-    if (input) input.placeholder = "Новое сообщение…";
+  } else if (input) {
+    input.placeholder = "Новое сообщение…";
   }
   hideSuggestions();
 }
@@ -2474,7 +2459,6 @@ export async function loadMessages() {
     }
 
     lastFeedMessageAt = rows.length ? rows[rows.length - 1].created_at : null;
-    updateLastMessagePeerId(isGroupChat() ? [] : rows.filter((r) => !isMessageDeleted(r)));
 
     clearFeedMessageCache();
     rememberFeedMessages(rows);
@@ -2651,10 +2635,6 @@ function appendMessagesToFeed(rows) {
       lastFeedMessageAt = row.created_at;
     }
   }
-  if (newRows.length && !isGroupChat()) {
-    updateLastMessagePeerId(newRows);
-  }
-
   if (atBottom) {
     scrollMessagesFeedToBottom(feed);
   }
@@ -3089,20 +3069,6 @@ function getTriggerContext(text, caretPos) {
   return null;
 }
 
-function filterUsers(query, { limit = 15 } = {}) {
-  const q = (query || "").trim().toLowerCase();
-  const uid = getCurrentUserId();
-  const list = (usersCache || []).filter((u) => u.id !== uid);
-  if (!q) return limit > 0 ? list.slice(0, limit) : list;
-  return list
-    .filter((u) => {
-      const email = u.email.toLowerCase();
-      const name = displayNameByEmail(u.email).toLowerCase();
-      return email.includes(q) || name.includes(q);
-    })
-    .slice(0, limit > 0 ? limit : list.length);
-}
-
 function normalizeOrderStatus(val) {
   if (val === "нет" || val === "оплачен" || val == null || val === "") return "Контакт с клиентом";
   return val;
@@ -3155,7 +3121,7 @@ function hideSuggestions() {
   if (list) {
     list.hidden = true;
     list.innerHTML = "";
-    list.classList.remove("messages-suggestions--orders", "messages-suggestions--recipients");
+    list.classList.remove("messages-suggestions--orders");
   }
   activePicker = null;
   pendingAttachPhotoToOrder = null;
@@ -3163,108 +3129,12 @@ function hideSuggestions() {
 }
 
 function syncPickerButtonStates() {
-  const userBtn = document.getElementById("messagesPickUserBtn");
   const orderBtn = document.getElementById("messagesPickOrderBtn");
-  if (userBtn) {
-    const on = activePicker === "user";
-    userBtn.classList.toggle("messages-composer-tool-btn--active", on);
-    userBtn.setAttribute("aria-expanded", on ? "true" : "false");
-  }
   if (orderBtn) {
     const on = activePicker === "order";
     orderBtn.classList.toggle("messages-composer-tool-btn--active", on);
     orderBtn.setAttribute("aria-expanded", on ? "true" : "false");
   }
-}
-
-function syncComposerRecipientsFromList(list) {
-  composerRecipients.clear();
-  list.querySelectorAll(".messages-recipient-option[aria-checked='true']").forEach((btn) => {
-    const mark = btn.querySelector(".messages-recipient-checkbox");
-    if (!mark?.dataset.value) return;
-    composerRecipients.set(mark.dataset.value, { id: mark.dataset.value, email: mark.dataset.email });
-  });
-}
-
-function getDefaultRecipientIds(users) {
-  if (composerRecipients.size > 0) {
-    return new Set([...composerRecipients.keys()]);
-  }
-  if (lastMessagePeerId && users.some((u) => String(u.id) === String(lastMessagePeerId))) {
-    return new Set([String(lastMessagePeerId)]);
-  }
-  return new Set();
-}
-
-function ensureComposerRecipientsDefault(users) {
-  if (composerRecipients.size > 0) return;
-  const selectedIds = getDefaultRecipientIds(users);
-  for (const user of users) {
-    if (selectedIds.has(String(user.id))) {
-      composerRecipients.set(user.id, { id: user.id, email: user.email });
-    }
-  }
-}
-
-function showUserRecipientPicker(users) {
-  const list = document.getElementById("messagesComposerSuggestions");
-  if (!list) return;
-  if (!users.length) {
-    hideSuggestions();
-    return;
-  }
-
-  const selectedIds = getDefaultRecipientIds(users);
-  composerRecipients.clear();
-  for (const user of users) {
-    if (selectedIds.has(String(user.id))) {
-      composerRecipients.set(user.id, { id: user.id, email: user.email });
-    }
-  }
-
-  list.classList.remove("messages-suggestions--orders");
-  list.classList.add("messages-suggestions--recipients");
-  list.innerHTML = users
-    .map((user) => {
-      const checked = selectedIds.has(String(user.id));
-      return `
-    <li>
-      <button
-        type="button"
-        class="messages-recipient-option"
-        role="checkbox"
-        aria-checked="${checked ? "true" : "false"}"
-      >
-        <span
-          class="messages-recipient-checkbox"
-          data-value="${escapeHtml(user.id)}"
-          data-email="${escapeHtml(user.email)}"
-          aria-hidden="true"
-        ></span>
-        <span class="messages-suggestion-text">${escapeHtml(displayNameByEmail(user.email))}</span>
-      </button>
-    </li>
-  `;
-    })
-    .join("");
-  list.hidden = false;
-
-  list.querySelectorAll(".messages-recipient-option").forEach((btn) => {
-    const mark = btn.querySelector(".messages-recipient-checkbox");
-    if (mark && btn.getAttribute("aria-checked") === "true") {
-      mark.classList.add("messages-recipient-checkbox--checked");
-    }
-    btn.addEventListener("click", () => {
-      const on = btn.getAttribute("aria-checked") !== "true";
-      btn.setAttribute("aria-checked", on ? "true" : "false");
-      if (mark) mark.classList.toggle("messages-recipient-checkbox--checked", on);
-      syncComposerRecipientsFromList(list);
-    });
-  });
-
-  list.onmousedown = (e) => {
-    e.preventDefault();
-  };
 }
 
 function showOrderSuggestions(items, onPick) {
@@ -3275,7 +3145,6 @@ function showOrderSuggestions(items, onPick) {
     return;
   }
 
-  list.classList.remove("messages-suggestions--recipients");
   list.classList.add("messages-suggestions--orders");
   list.innerHTML = items
     .map(
@@ -3324,7 +3193,6 @@ function updateComposerSuggestions(input) {
   const caret = getTextareaCaret(input);
   const ctx = getTriggerContext(input.value, caret.start);
   if (!ctx) {
-    if (activePicker === "user") return;
     hideSuggestions();
     return;
   }
@@ -3336,19 +3204,6 @@ function updateComposerSuggestions(input) {
     const orders = filterOrders(ctx.query);
     showOrderSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order, ctx));
   }
-}
-
-function openUserPicker(input) {
-  if (activePicker === "user") {
-    hideSuggestions();
-    return;
-  }
-  pendingAttachPhotoToOrder = null;
-  activePicker = "user";
-  syncPickerButtonStates();
-  const users = filterUsers("", { limit: 0 });
-  showUserRecipientPicker(users);
-  input.focus();
 }
 
 function openOrderPicker(input) {
@@ -4466,25 +4321,31 @@ async function sendMessage() {
     return;
   }
 
-  const users = await loadUsersDirectory();
-
-  if (isPeerChat()) {
-    const peer = users.find((u) => String(u.id) === String(activePeerId));
-    if (!peer) {
-      await cleanupUploadedPhoto();
-      if (sendBtn) sendBtn.disabled = false;
-      if (attachBtn) attachBtn.disabled = false;
-      if (msg) {
-        msg.textContent = "Не удалось определить получателя.";
-        msg.classList.add("messages-page-message--error");
-      }
-      return;
+  if (!isPeerChat()) {
+    await cleanupUploadedPhoto();
+    if (sendBtn) sendBtn.disabled = false;
+    if (attachBtn) attachBtn.disabled = false;
+    if (msg) {
+      msg.textContent = "Не удалось определить получателя.";
+      msg.classList.add("messages-page-message--error");
     }
-    composerRecipients.clear();
-    composerRecipients.set(peer.id, { id: peer.id, email: peer.email });
-  } else {
-    ensureComposerRecipientsDefault(users);
+    return;
   }
+
+  const users = await loadUsersDirectory();
+  const peer = users.find((u) => String(u.id) === String(activePeerId));
+  if (!peer) {
+    await cleanupUploadedPhoto();
+    if (sendBtn) sendBtn.disabled = false;
+    if (attachBtn) attachBtn.disabled = false;
+    if (msg) {
+      msg.textContent = "Не удалось определить получателя.";
+      msg.classList.add("messages-page-message--error");
+    }
+    return;
+  }
+  composerRecipients.clear();
+  composerRecipients.set(peer.id, { id: peer.id, email: peer.email });
 
   const recipientList = [...composerRecipients.values()].filter((recipient) => recipient.id !== uid);
   if (!recipientList.length) {
@@ -4492,9 +4353,7 @@ async function sendMessage() {
     if (sendBtn) sendBtn.disabled = false;
     if (attachBtn) attachBtn.disabled = false;
     if (msg) {
-      msg.textContent = isPeerChat()
-        ? "Не удалось определить получателя."
-        : "Выберите получателя кнопкой с человечком.";
+      msg.textContent = "Не удалось определить получателя.";
       msg.classList.add("messages-page-message--error");
     }
     return;
@@ -4551,9 +4410,6 @@ async function sendMessage() {
   clearPendingChatPhoto();
   composerReplyTo = null;
   syncComposerContextBar();
-  if (!isPeerChat()) {
-    composerRecipients.clear();
-  }
   hideSuggestions();
   await loadMessages();
 }
@@ -5130,7 +4986,6 @@ export function initMessagesSection() {
     });
   }
 
-  const userPickBtn = document.getElementById("messagesPickUserBtn");
   const orderPickBtn = document.getElementById("messagesPickOrderBtn");
   const attachPhotoBtn = document.getElementById("messagesAttachPhotoBtn");
   const attachPhotoMenu = document.getElementById("messagesAttachPhotoMenu");
@@ -5140,14 +4995,6 @@ export function initMessagesSection() {
   const cameraInput = document.getElementById("messagesPhotoCameraInput");
   const pendingRemoveBtn = document.getElementById("messagesPendingAttachmentRemove");
   const pendingCropBtn = document.getElementById("messagesPendingAttachmentCrop");
-
-  if (userPickBtn && input) {
-    userPickBtn.addEventListener("mousedown", (e) => e.preventDefault());
-    userPickBtn.addEventListener("click", () => {
-      if (isPeerChat() || isGroupChat()) return;
-      void loadUsersDirectory().then(() => openUserPicker(input));
-    });
-  }
 
   if (orderPickBtn && input) {
     orderPickBtn.addEventListener("mousedown", (e) => e.preventDefault());
@@ -5277,11 +5124,6 @@ export function initMessagesSection() {
       const list = document.getElementById("messagesComposerSuggestions");
       // Enter вставляет новую строку (как в мессенджерах); отправка — кнопкой.
       if (!list || list.hidden) return;
-
-      if (list.classList.contains("messages-suggestions--recipients")) {
-        if (e.key === "Escape") hideSuggestions();
-        return;
-      }
 
       const items = [...list.querySelectorAll("li")];
       let idx = items.findIndex((li) => li.getAttribute("aria-selected") === "true");

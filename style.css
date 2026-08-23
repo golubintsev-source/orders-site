@@ -9130,67 +9130,6 @@ th {
   color: #6b7280;
 }
 
-.messages-suggestions--recipients {
-  max-height: 240px;
-}
-
-.messages-suggestions--recipients li {
-  padding: 0;
-  cursor: default;
-}
-
-.messages-suggestions--recipients li:hover {
-  background: transparent;
-}
-
-.messages-recipient-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 12px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  font-size: 14px;
-  color: #111827;
-  text-align: left;
-}
-
-.messages-recipient-option:hover {
-  background: #f3f4f6;
-}
-
-.messages-recipient-checkbox {
-  flex-shrink: 0;
-  box-sizing: border-box;
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  border: 1.5px solid #9ca3af;
-  border-radius: 4px;
-  background: #fff;
-  position: relative;
-}
-
-.messages-recipient-checkbox--checked {
-  border-color: #1f6feb;
-  background: #1f6feb;
-}
-
-.messages-recipient-checkbox--checked::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 1px;
-  width: 4px;
-  height: 8px;
-  border: solid #fff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
 .messages-suggestions--orders {
   max-height: 280px;
   overflow-x: auto;
