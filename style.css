@@ -8891,8 +8891,8 @@ th {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  /* Минимум 8px снизу, плюс home-indicator / safe-area. */
-  padding: 8px 12px max(8px, env(safe-area-inset-bottom, 0px));
+  /* 8px над домашней полоской — иначе кнопки визуально «подрезаются» pill. */
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
 }
