@@ -86,6 +86,7 @@ function notificationBodyFromMessage(record) {
   const hasPhoto = Boolean(record.attachment_storage_path);
   const raw = String(record.body || "")
     .replace(/\[\[order:\d+\]\]/g, "заказ")
+    .replace(/\b[\w.+-]+@[\w.-]+\.\w+\b/g, "")
     .replace(/\s+/g, " ")
     .trim();
   if (hasPhoto && raw) return truncate(`Фото · ${raw}`, 120);
@@ -170,12 +171,10 @@ module.exports = async (req, res) => {
       return res.status(200).json({ sent: 0, reason: "no_subscriptions" });
     }
 
-    const groupName = truncate(chat.name || "Группа", 40);
-    const author = truncate(record.sender_email || "Пользователь", 40);
     const bodyText = notificationBodyFromMessage(record);
     const payload = JSON.stringify({
-      title: groupName,
-      body: `${author}: ${bodyText || "без текста"}`,
+      title: "Новое сообщение",
+      body: bodyText || "без текста",
       url: "/messages",
       messageId: record.id,
       chatId: record.chat_id,
