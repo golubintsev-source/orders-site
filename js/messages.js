@@ -2374,6 +2374,20 @@ function syncComposerForActivePeer() {
   hideSuggestions();
 }
 
+function groupMemberHeaderNames(memberIds) {
+  const uid = getCurrentUserId();
+  const users = usersCache || [];
+  return (memberIds || [])
+    .map(String)
+    .filter((id) => id && id !== String(uid))
+    .map((id) => {
+      const user = users.find((u) => String(u.id) === id);
+      return displayNameByEmail(user?.email) || "";
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "ru"));
+}
+
 function updateDialogHeader() {
   const title = document.getElementById("messagesDialogTitle");
   const subtitle = document.getElementById("messagesDialogSubtitle");
@@ -2386,7 +2400,10 @@ function updateDialogHeader() {
   }
 
   if (isGroupChat()) {
-    title.textContent = "Чат";
+    const groupId = parseGroupId();
+    const chat = groupId ? groupChatsById.get(groupId) : null;
+    const names = groupMemberHeaderNames(chat?.memberIds);
+    title.textContent = names.length ? names.join(", ") : "Чат";
     if (editBtn) editBtn.hidden = false;
     return;
   }
