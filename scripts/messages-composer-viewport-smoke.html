@@ -67,18 +67,17 @@
       const composer = document.querySelector(".messages-composer");
       const sendBtn = document.querySelector(".messages-send-btn");
       const out = document.getElementById("out");
-      const vv = window.visualViewport;
-      const viewBottom = vv ? vv.height + vv.offsetTop : window.innerHeight;
+      const viewBottom = window.innerHeight;
       const rect = composer.getBoundingClientRect();
       const btnRect = sendBtn.getBoundingClientRect();
       const overflow = rect.bottom - viewBottom;
       const btnClearance = viewBottom - btnRect.bottom;
       const ok =
-        overflow <= 1 &&
+        overflow <= 2 &&
         rect.top >= -1 &&
         rect.height > 40 &&
         btnClearance >= -1 &&
-        btnClearance <= 8;
+        btnClearance <= 4;
       const report = {
         ok,
         overflow: Number(overflow.toFixed(1)),
