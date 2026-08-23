@@ -32,12 +32,13 @@ function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
-/** Имя для интерфейса; для неизвестного email — часть до @. */
+/** Имя для интерфейса; для неизвестного email — часть до @. Никогда не возвращает адрес целиком. */
 export function displayNameByEmail(email) {
   const key = normalizeEmail(email);
   if (!key) return "";
   if (EMAIL_DISPLAY_NAMES[key]) return EMAIL_DISPLAY_NAMES[key];
-  return key.split("@")[0] || key;
+  const local = key.split("@")[0] || "";
+  return local.includes("@") ? "" : local;
 }
 
 /** URL логотипа участника по email или отображаемому имени; иначе null. */

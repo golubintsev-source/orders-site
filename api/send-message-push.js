@@ -155,11 +155,10 @@ module.exports = async (req, res) => {
       return res.status(200).json({ sent: 0, reason: "no_subscriptions" });
     }
 
-    const author = truncate(record.sender_email || "Пользователь", 40);
     const bodyText = notificationBodyFromMessage(record);
     const payload = JSON.stringify({
       title: "Новое сообщение",
-      body: `${author}: ${bodyText || "без текста"}`,
+      body: bodyText || "без текста",
       url: "/messages",
       messageId: record.id,
       tag: `message-${record.id}`,

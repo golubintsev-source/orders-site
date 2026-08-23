@@ -589,8 +589,8 @@ function aggregateGroupOutgoingListStatus(messageCreatedAt, memberIds, receiptsB
 function resolveMemberLabel(memberId) {
   const user = (usersCache || []).find((u) => String(u.id) === String(memberId));
   const email = user?.email || "";
-  const name = displayNameByEmail(email) || email || "Участник";
-  return { name, email, letter: avatarInitial(name) };
+  const name = displayNameByEmail(email) || "Участник";
+  return { name, email: "", letter: avatarInitial(name) };
 }
 
 function groupParticipantReceiptLabel(name, state) {
@@ -1033,12 +1033,21 @@ async function loadUsersDirectory() {
   return usersCachePromise;
 }
 
+function stripDisplayedEmails(text) {
+  return String(text || "")
+    .replace(/@?[\w.+-]+@[\w.-]+\.\w+/gi, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 function stripRecipientMentionFromBody(body, recipientEmail) {
-  const text = String(body || "");
+  let text = String(body || "");
   const email = (recipientEmail || "").trim();
-  if (!text || !email) return text.trim();
-  const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return text.replace(new RegExp(`@${escaped}\\s*`, "gi"), "").trim();
+  if (text && email) {
+    const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    text = text.replace(new RegExp(`@${escaped}\\s*`, "gi"), "");
+  }
+  return stripDisplayedEmails(text);
 }
 
 /** Текст сообщения для копирования в буфер обмена. */
@@ -1201,8 +1210,7 @@ function renderReplyQuoteHtml(row) {
   let preview = "Сообщение удалено";
   if (target && !isMessageDeleted(target)) {
     const isOwn = String(target.sender_id) === String(uid);
-    const name =
-      displayNameByEmail(target.sender_email) || target.sender_email || "Участник";
+    const name = displayNameByEmail(target.sender_email) || "Участник";
     authorLabel = isOwn ? "Вы" : name;
     preview =
       previewMessageBody(target.body, target.recipient_email, target) || "Сообщение";
@@ -1220,7 +1228,7 @@ function renderMessageItem(row) {
   const uid = getCurrentUserId();
   const isOut = String(row.sender_id) === String(uid);
   const peerEmail = isOut ? row.recipient_email : row.sender_email;
-  const peerName = displayNameByEmail(peerEmail || row.sender_email) || peerEmail || row.sender_email || "—";
+  const peerName = displayNameByEmail(peerEmail || row.sender_email) || "—";
   const showPeer = isGroupChat();
   const peerLabel = isOut ? "Вы" : peerName;
   const state = messageDeliveryState(row, isOut);
@@ -1730,7 +1738,7 @@ function buildChatListEntries(peerInfo, rows, groupChats, lastGroupMessages, gro
       const isOut = String(last.sender_id) === String(uid);
       email = (isOut ? last.recipient_email : last.sender_email) || "";
     }
-    const name = displayNameByEmail(email) || email || "—";
+    const name = displayNameByEmail(email) || "—";
     userEntries.push({
       peerId: peerKey,
       kind: "user",
@@ -2366,21 +2374,36 @@ function syncComposerForActivePeer() {
   hideSuggestions();
 }
 
+function groupMemberHeaderNames(memberIds) {
+  const uid = getCurrentUserId();
+  const users = usersCache || [];
+  return (memberIds || [])
+    .map(String)
+    .filter((id) => id && id !== String(uid))
+    .map((id) => {
+      const user = users.find((u) => String(u.id) === id);
+      return displayNameByEmail(user?.email) || "";
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "ru"));
+}
+
 function updateDialogHeader() {
   const title = document.getElementById("messagesDialogTitle");
   const subtitle = document.getElementById("messagesDialogSubtitle");
   const editBtn = document.getElementById("messagesEditGroupBtn");
   if (!title) return;
 
+  if (subtitle) {
+    subtitle.textContent = "";
+    subtitle.hidden = true;
+  }
+
   if (isGroupChat()) {
     const groupId = parseGroupId();
     const chat = groupId ? groupChatsById.get(groupId) : null;
-    title.textContent = chat?.name || "Групповой чат";
-    if (subtitle) {
-      const memberCount = chat?.memberIds?.length || 0;
-      subtitle.textContent = memberCount ? `${memberCount} участн.` : "";
-      subtitle.hidden = !memberCount;
-    }
+    const names = groupMemberHeaderNames(chat?.memberIds);
+    title.textContent = names.length ? names.join(", ") : "Чат";
     if (editBtn) editBtn.hidden = false;
     return;
   }
@@ -2389,12 +2412,7 @@ function updateDialogHeader() {
 
   const users = usersCache || [];
   const peer = users.find((u) => String(u.id) === String(activePeerId));
-  const name = peer ? displayNameByEmail(peer.email) || peer.email : "Чат";
-  title.textContent = name;
-  if (subtitle) {
-    subtitle.textContent = peer?.email || "";
-    subtitle.hidden = !peer?.email;
-  }
+  title.textContent = peer ? displayNameByEmail(peer.email) || "Чат" : "Чат";
 }
 
 export function showMessagesChatList() {
@@ -3674,10 +3692,7 @@ function syncComposerContextBar() {
     bar.dataset.mode = "reply";
     const uid = getCurrentUserId();
     const isOwn = String(composerReplyTo.sender_id) === String(uid);
-    const name =
-      displayNameByEmail(composerReplyTo.sender_email) ||
-      composerReplyTo.sender_email ||
-      "Участник";
+    const name = displayNameByEmail(composerReplyTo.sender_email) || "Участник";
     titleEl.textContent = isOwn ? "Ответ себе" : `Ответ: ${name}`;
     const preview =
       previewMessageBody(composerReplyTo.body, composerReplyTo.recipient_email, composerReplyTo) ||
@@ -4592,7 +4607,7 @@ function renderGroupFormUsers(usersEl, selectedIds) {
   usersEl.innerHTML = others.length
     ? others
         .map((user) => {
-          const name = displayNameByEmail(user.email) || user.email || "—";
+          const name = displayNameByEmail(user.email) || "—";
           const checked = selected.has(String(user.id)) ? " checked" : "";
           return `
             <label class="messages-create-group-user">
