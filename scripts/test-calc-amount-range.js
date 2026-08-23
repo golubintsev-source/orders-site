@@ -43,9 +43,30 @@ for (const file of ["index.html", "calculations.html"]) {
   assert(html.includes('id="calcAmountFrom"'), `${file}: поле суммы «от»`);
   assert(html.includes('id="calcAmountTo"'), `${file}: поле суммы «до»`);
   assert(html.includes('calculations-form-row--amounts'), `${file}: строка диапазона сумм ниже дат`);
+  assert(html.includes('class="calculations-amount-input"'), `${file}: класс полей суммы`);
+  assert(/id="calcAmountFrom"[^>]*size="8"/.test(html), `${file}: компактный size у «от»`);
+  assert(/id="calcAmountTo"[^>]*size="8"/.test(html), `${file}: компактный size у «до»`);
   const dateIdx = html.indexOf('calculations-form-row--dates');
   const amountIdx = html.indexOf('calculations-form-row--amounts');
   assert(dateIdx >= 0 && amountIdx > dateIdx, `${file}: поля сумм идут ниже полей дат`);
 }
+
+const css = fs.readFileSync(path.join(root, "style.css"), "utf8");
+assert(
+  /#calcAmountFrom[\s\S]*font-size:\s*16px/.test(css),
+  "style.css: поля «от»/«до» с font-size 16px (без зума iOS)"
+);
+assert(
+  /#calcAmountFrom[\s\S]*width:\s*6\.8rem/.test(css),
+  "style.css: ширина полей сумм как у дат (6.8rem)"
+);
+assert(
+  /#calcAmount\s*,[\s\S]*font-size:\s*16px/.test(css) || /#calcAmount \{[\s\S]*font-size:\s*16px/.test(css),
+  "style.css: поле «Сумма» с font-size 16px"
+);
+assert(
+  css.includes("calculations-form-row--amounts") && css.includes("flex-direction: row"),
+  "style.css: «от» и «до» в одну строку"
+);
 
 console.log("test-calc-amount-range: ok");

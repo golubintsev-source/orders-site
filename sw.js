@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v30: кнопка «Сохранить» в блоке параметров зарплаты оживает при правке полей.
-const STATIC_CACHE = "orders-site-static-v30";
+// v31: поля сумм на странице расчётов — 16px и компактный ряд «от»/«до».
+const STATIC_CACHE = "orders-site-static-v31";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 
