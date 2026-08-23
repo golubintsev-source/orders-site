@@ -8969,9 +8969,14 @@ th {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 8px 12px 16px;
+  /* Как голосовой экран: safe-area или 8px, без фиксированных 16px пустой полосы. */
+  padding: 8px 12px max(8px, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
+}
+
+html.keyboard-open .messages-composer {
+  padding-bottom: 8px;
 }
 
 .messages-composer-tools {
@@ -9219,11 +9224,9 @@ th {
     padding-left: 0;
     padding-right: 0;
     padding-bottom: 0;
-    /* 100dvh до физического низа. visualViewport короче экрана и оставлял дыру под композером. */
+    /* 100svh = видимая высота. 100dvh выше экрана с панелью браузера и даёт белую дыру под полем. */
     height: 100svh;
-    height: 100dvh;
     max-height: 100svh;
-    max-height: 100dvh;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -9232,8 +9235,8 @@ th {
   }
 
   html.keyboard-open .container:has(#section-messages.content-section.active) {
-    height: var(--app-visible-height, 100dvh);
-    max-height: var(--app-visible-height, 100dvh);
+    height: var(--app-visible-height, 100svh);
+    max-height: var(--app-visible-height, 100svh);
   }
 
   #section-messages.content-section.active {
