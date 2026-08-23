@@ -1208,7 +1208,7 @@ h2 {
   display: none;
 }
 
-/* Блок фильтров (даты, поиск) — отделён от добавления записи */
+/* Блок фильтров (даты, суммы, поиск) — отделён от добавления записи */
 .calculations-form-block--filters {
   display: flex;
   flex-direction: column;
@@ -1218,8 +1218,9 @@ h2 {
   border-top: 1px solid #e5e7eb;
 }
 
-/* Период «с» / «по» — одна строка: подпись и дата рядом, оба периода в ряд */
-.calculations-form-row--dates {
+/* Период «с» / «по» и диапазон сумм «от» / «до» — одна строка: подпись и поле рядом */
+.calculations-form-row--dates,
+.calculations-form-row--amounts {
   --calc-submit-row-height: 40px;
   display: flex;
   flex-direction: row;
@@ -1232,7 +1233,8 @@ h2 {
   -webkit-overflow-scrolling: touch;
 }
 
-.calculations-form-row--dates .calculations-date-field {
+.calculations-form-row--dates .calculations-date-field,
+.calculations-form-row--amounts .calculations-amount-field {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -1244,7 +1246,9 @@ h2 {
 }
 
 #section-calculations .calculations-form-row--dates .calculations-date-field label,
-.calculations-page .calculations-form-row--dates .calculations-date-field label {
+.calculations-page .calculations-form-row--dates .calculations-date-field label,
+#section-calculations .calculations-form-row--amounts .calculations-amount-field label,
+.calculations-page .calculations-form-row--amounts .calculations-amount-field label {
   margin-bottom: 0;
   flex: 0 0 auto;
   white-space: nowrap;
@@ -1255,6 +1259,18 @@ h2 {
   width: auto;
   flex: 0 1 auto;
   min-width: 6.8rem;
+}
+
+#section-calculations .calculations-form-row--amounts .calculations-amount-field input,
+.calculations-page .calculations-form-row--amounts .calculations-amount-field input {
+  width: 7.5rem;
+  flex: 0 0 7.5rem;
+  min-width: 0;
+  height: var(--calc-submit-row-height, 40px);
+  min-height: var(--calc-submit-row-height, 40px);
+  padding: 0 8px;
+  font-size: 16px;
+  box-sizing: border-box;
 }
 
 #section-calculations .calculations-export-excel-btn,

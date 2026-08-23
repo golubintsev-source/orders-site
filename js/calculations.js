@@ -62,12 +62,16 @@ const DEFAULT_VOICE_EXPENSE_TO = "Покупка";
 let calculationsRowsCache = [];
 /** Адреса заказов для автозаписей (id → address), подставляются в комментарий при отображении. */
 let calcOrderAddressById = new Map();
-/** Непустая строка — поиск активен (кнопка «Отменить»). */
+/** Непустая строка — текстовый поиск активен. */
 let appliedCalculationsSearchQuery = null;
 
 /** Применённый период (YYYY-MM-DD, локальный календарь); таблица и запрос к БД. */
 let appliedCalcDateFromYmd = "";
 let appliedCalcDateToYmd = "";
+
+/** Применённый диапазон сумм (целые рубли); null — граница не задана. */
+let appliedCalcAmountFrom = null;
+let appliedCalcAmountTo = null;
 
 const CALC_SALDO_PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
 /** «Куда» = доход: Вова, Дима, Касса, Безнал; иначе сумма в колонке «Расход». */
@@ -208,10 +212,55 @@ async function applyCalculationsPeriodFromInputs() {
   return true;
 }
 
-/** Одна кнопка «Показать»: период «с»/«по» + запрос к БД + фильтр по полю «Поиск». */
+function readCalcAmountRangeInputs() {
+  const fromEl = document.getElementById("calcAmountFrom");
+  const toEl = document.getElementById("calcAmountTo");
+  const fromRaw = (fromEl?.value ?? "").trim();
+  const toRaw = (toEl?.value ?? "").trim();
+
+  let fromAmount = null;
+  let toAmount = null;
+
+  if (fromRaw) {
+    const parsed = parseCalcAmountInput(fromRaw);
+    if (parsed === undefined) {
+      return { fromAmount: null, toAmount: null, error: "Сумма «от» — только целые рубли, без копеек." };
+    }
+    fromAmount = parsed;
+  }
+  if (toRaw) {
+    const parsed = parseCalcAmountInput(toRaw);
+    if (parsed === undefined) {
+      return { fromAmount: null, toAmount: null, error: "Сумма «до» — только целые рубли, без копеек." };
+    }
+    toAmount = parsed;
+  }
+  if (fromAmount != null && toAmount != null && fromAmount > toAmount) {
+    return { fromAmount: null, toAmount: null, error: "Сумма «от» не может быть больше суммы «до»." };
+  }
+  return { fromAmount, toAmount, error: "" };
+}
+
+function rowMatchesAmountRange(row, fromAmount, toAmount) {
+  if (fromAmount == null && toAmount == null) return true;
+  const n = Number(row?.amount);
+  if (!Number.isFinite(n)) return false;
+  if (fromAmount != null && n < fromAmount) return false;
+  if (toAmount != null && n > toAmount) return false;
+  return true;
+}
+
+/** Одна кнопка «Показать»: период «с»/«по» + диапазон сумм + запрос к БД + фильтр «Поиск». */
 async function applyCalculationsFindCombined() {
+  const amountParsed = readCalcAmountRangeInputs();
+  if (amountParsed.error) {
+    setMessage(amountParsed.error, true);
+    return;
+  }
   const ok = await applyCalculationsPeriodFromInputs();
   if (!ok) return;
+  appliedCalcAmountFrom = amountParsed.fromAmount;
+  appliedCalcAmountTo = amountParsed.toAmount;
   applyCalculationsSearchFromInput();
 }
 
@@ -697,13 +746,19 @@ async function refreshCalcOrderAddressesForRows(rows) {
   }
 }
 
-/** Строки, видимые в таблице (период уже в кэше; учитывается активный поиск). */
+/** Строки, видимые в таблице (период уже в кэше; поиск и диапазон сумм). */
 export function getFilteredCalculationRows() {
+  return filterVisibleCalculationRows(calculationsRowsCache);
+}
+
+function filterVisibleCalculationRows(rows) {
   const q =
     appliedCalculationsSearchQuery != null ? String(appliedCalculationsSearchQuery).trim() : "";
   const needle = q ? q.toLowerCase() : "";
-  if (!needle) return [...calculationsRowsCache];
-  return calculationsRowsCache.filter((row) => rowMatchesCalculationsSearch(row, needle));
+  return (rows || []).filter((row) => {
+    if (needle && !rowMatchesCalculationsSearch(row, needle)) return false;
+    return rowMatchesAmountRange(row, appliedCalcAmountFrom, appliedCalcAmountTo);
+  });
 }
 
 function rowMatchesCalculationsSearch(row, needleLower) {
@@ -726,31 +781,45 @@ function rowMatchesCalculationsSearch(row, needleLower) {
   return parts.join(" ").toLowerCase().includes(needleLower);
 }
 
-/** Поиск применён (кнопка могла бы быть «Отменить», если поля не менялись). */
-function isCalculationsSearchApplied() {
+function isCalculationsSearchQueryApplied() {
   return (
     appliedCalculationsSearchQuery != null &&
     String(appliedCalculationsSearchQuery).trim() !== ""
   );
 }
 
+function isCalculationsAmountRangeApplied() {
+  return appliedCalcAmountFrom != null || appliedCalcAmountTo != null;
+}
+
+/** Поиск или диапазон сумм применён (кнопка могла бы быть «Отменить», если поля не менялись). */
+function isCalculationsSearchApplied() {
+  return isCalculationsSearchQueryApplied() || isCalculationsAmountRangeApplied();
+}
+
 /**
- * Поля периода или поиска отличаются от применённых значений.
+ * Поля периода, сумм или поиска отличаются от применённых значений.
  * Тогда «Отменить» сразу сменяется на «Показать».
  */
 function areCalculationsFilterInputsDirty() {
   if (!isCalculationsSearchApplied()) return false;
   const searchInput = document.getElementById("calcSearchInput");
   const searchRaw = (searchInput?.value ?? "").trim();
-  const appliedQ = String(appliedCalculationsSearchQuery).trim();
+  const appliedQ = isCalculationsSearchQueryApplied()
+    ? String(appliedCalculationsSearchQuery).trim()
+    : "";
   if (searchRaw !== appliedQ) return true;
   const { fromYmd, toYmd } = readCalcPeriodInputs();
   if (fromYmd !== appliedCalcDateFromYmd) return true;
   if (toYmd !== appliedCalcDateToYmd) return true;
+  const amountInputs = readCalcAmountRangeInputs();
+  if (amountInputs.error) return true;
+  if (amountInputs.fromAmount !== appliedCalcAmountFrom) return true;
+  if (amountInputs.toAmount !== appliedCalcAmountTo) return true;
   return false;
 }
 
-/** Режим «Отменить»: поиск применён и поля совпадают с применёнными. */
+/** Режим «Отменить»: опциональный фильтр применён и поля совпадают с применёнными. */
 function isCalculationsCancelMode() {
   return isCalculationsSearchApplied() && !areCalculationsFilterInputsDirty();
 }
@@ -763,6 +832,29 @@ function updateCalculationsSearchButton() {
   btn.setAttribute("aria-pressed", active ? "true" : "false");
 }
 
+function formatCalcAmountFilterInput(el) {
+  if (!el) return;
+  const raw = el.value;
+  if (!String(raw).trim()) {
+    el.classList.remove("sum-input-invalid");
+    el.removeAttribute("aria-invalid");
+    el.title = "Только целые рубли, без копеек";
+    return;
+  }
+  const n = parseCalcAmountInput(raw);
+  if (n === undefined) {
+    el.classList.add("sum-input-invalid");
+    el.title = MSG_SUM_INTEGER_ONLY;
+    el.setAttribute("aria-invalid", "true");
+    return;
+  }
+  el.classList.remove("sum-input-invalid");
+  el.removeAttribute("aria-invalid");
+  el.title = "Только целые рубли, без копеек";
+  if (n == null) return;
+  el.value = formatAmountWholeRubles(n);
+}
+
 function applyCalculationsSearchFromInput() {
   const input = document.getElementById("calcSearchInput");
   const raw = (input?.value ?? "").trim();
@@ -771,14 +863,22 @@ function applyCalculationsSearchFromInput() {
   } else {
     appliedCalculationsSearchQuery = raw;
   }
+  formatCalcAmountFilterInput(document.getElementById("calcAmountFrom"));
+  formatCalcAmountFilterInput(document.getElementById("calcAmountTo"));
   updateCalculationsSearchButton();
   renderCalculationsTableFromCache();
 }
 
 function cancelCalculationsSearch() {
   appliedCalculationsSearchQuery = null;
+  appliedCalcAmountFrom = null;
+  appliedCalcAmountTo = null;
   const input = document.getElementById("calcSearchInput");
   if (input) input.value = "";
+  const amountFromEl = document.getElementById("calcAmountFrom");
+  const amountToEl = document.getElementById("calcAmountTo");
+  if (amountFromEl) amountFromEl.value = "";
+  if (amountToEl) amountToEl.value = "";
   updateCalculationsSearchButton();
   renderCalculationsTableFromCache();
 }
@@ -858,13 +958,7 @@ function renderCalculationsTableFromCache() {
 
   tbody.innerHTML = "";
 
-  const q =
-    appliedCalculationsSearchQuery != null ? String(appliedCalculationsSearchQuery).trim() : "";
-  const needle = q ? q.toLowerCase() : "";
-  let rows = calculationsRowsCache;
-  if (needle) {
-    rows = calculationsRowsCache.filter((row) => rowMatchesCalculationsSearch(row, needle));
-  }
+  const rows = filterVisibleCalculationRows(calculationsRowsCache);
 
   if (calculationsRowsCache.length === 0) {
     const tr = document.createElement("tr");
@@ -1423,6 +1517,28 @@ function setupCalculationsForm() {
     calcDateToEl.addEventListener("input", updateCalculationsSearchButton);
     calcDateToEl.addEventListener("change", updateCalculationsSearchButton);
   }
+
+  const bindAmountRangeField = (el) => {
+    if (!el || el.dataset.filterDirtyBound) return;
+    el.dataset.filterDirtyBound = "1";
+    el.addEventListener("input", () => {
+      refreshRublesIntegerInputState(el, el.value);
+      updateCalculationsSearchButton();
+    });
+    el.addEventListener("change", updateCalculationsSearchButton);
+    el.addEventListener("blur", () => formatCalcAmountFilterInput(el));
+    el.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if (isCalculationsCancelMode()) {
+        applyCalculationsSearchFromInput();
+      } else {
+        void applyCalculationsFindCombined();
+      }
+    });
+  };
+  bindAmountRangeField(document.getElementById("calcAmountFrom"));
+  bindAmountRangeField(document.getElementById("calcAmountTo"));
 
   const exportBtn = document.getElementById("calcExportExcelBtn");
   if (exportBtn && !exportBtn.dataset.exportBound) {
