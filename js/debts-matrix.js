@@ -65,15 +65,36 @@ export function orderMatchesOrderTypeKeys(order, selectedKeys) {
   return selectedKeys.some((key) => (key === "__empty__" ? t === "" : t === key));
 }
 
+export const DEBT_BUCKETS = ["all", "over1m", "over3m"];
+
 function emptyBucket() {
-  return { all: 0, over1m: 0, over3m: 0 };
+  return {
+    all: 0,
+    over1m: 0,
+    over3m: 0,
+    orders: { all: [], over1m: [], over3m: [] },
+  };
 }
 
-function addToBucket(bucket, amount, ymd, cutoff1, cutoff3) {
+function addToBucket(bucket, order, amount, ymd, cutoff1, cutoff3) {
   bucket.all += amount;
+  bucket.orders.all.push(order);
   if (!ymd) return;
-  if (ymd < cutoff1) bucket.over1m += amount;
-  if (ymd < cutoff3) bucket.over3m += amount;
+  if (ymd < cutoff1) {
+    bucket.over1m += amount;
+    bucket.orders.over1m.push(order);
+  }
+  if (ymd < cutoff3) {
+    bucket.over3m += amount;
+    bucket.orders.over3m.push(order);
+  }
+}
+
+/** Заказы, из которых собрана сумма в ячейке матрицы. statusKey — статус или «все». */
+export function getDebtCellOrders(matrix, statusKey, bucket) {
+  if (!matrix || !DEBT_BUCKETS.includes(bucket)) return [];
+  const source = statusKey === "все" ? matrix.total : matrix.byStatus?.[statusKey];
+  return source?.orders?.[bucket] ? [...source.orders[bucket]] : [];
 }
 
 /**
@@ -97,8 +118,8 @@ export function buildDebtsMatrix(orders, now = new Date()) {
     const amount = remainingAmount(order);
     if (!amount) continue;
     const ymd = orderYmd(order);
-    addToBucket(bucket, amount, ymd, cutoff1, cutoff3);
-    addToBucket(total, amount, ymd, cutoff1, cutoff3);
+    addToBucket(bucket, order, amount, ymd, cutoff1, cutoff3);
+    addToBucket(total, order, amount, ymd, cutoff1, cutoff3);
   }
 
   return { byStatus, total, cutoff1, cutoff3 };

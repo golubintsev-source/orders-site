@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { addCalendarMonths, buildDebtsMatrix, orderMatchesOrderTypeKeys } from "../js/debts-matrix.js";
+import { addCalendarMonths, buildDebtsMatrix, getDebtCellOrders, orderMatchesOrderTypeKeys } from "../js/debts-matrix.js";
 
 assert.equal(addCalendarMonths("2026-08-24", -1), "2026-07-24");
 assert.equal(addCalendarMonths("2026-08-24", -3), "2026-05-24");
@@ -82,5 +82,13 @@ const windowsOnly = buildDebtsMatrix(
 );
 assert.equal(windowsOnly.byStatus["Клиент согласен"].all, 1000);
 assert.equal(windowsOnly.total.all, 1000);
+
+assert.equal(getDebtCellOrders(matrix, "Клиент согласен", "all").length, 1);
+assert.equal(getDebtCellOrders(matrix, "Клиент согласен", "over1m").length, 0);
+assert.equal(getDebtCellOrders(matrix, "Производство", "over1m").length, 1);
+assert.equal(getDebtCellOrders(matrix, "Товар передан заказчику", "over3m")[0].remaining_amount, 3000);
+assert.equal(getDebtCellOrders(matrix, "все", "all").length, 3);
+assert.equal(getDebtCellOrders(matrix, "все", "over3m").length, 1);
+assert.equal(getDebtCellOrders(matrix, "Монтаж выполнен", "all").length, 0);
 
 console.log("test-debts-matrix: ok");
