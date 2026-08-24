@@ -9,7 +9,7 @@
  */
 const BADGE_CACHE = "orders-site-badge-v1";
 // v31: поля сумм на странице расчётов — 16px и компактный ряд «от»/«до».
-const STATIC_CACHE = "orders-site-static-v36";
+const STATIC_CACHE = "orders-site-static-v37";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 
