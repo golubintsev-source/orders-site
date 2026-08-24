@@ -75,6 +75,7 @@ const SECTION_LABELS = {
   settings: "Настройки",
   statistics: "Статистика",
   "statistics-balance": "Статистика баланса",
+  debts: "Долги",
   messages: "Чаты",
   voice: "Голосовое управление",
 };
@@ -100,6 +101,7 @@ const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "settings",
   "statistics",
   "statistics-balance",
+  "debts",
 ]);
 
 function updateBackToOrdersBtnVisibility(sectionId) {
@@ -410,6 +412,9 @@ export function switchSection(sectionId, opts = {}) {
     void import("./statistics-balance.js").then((m) =>
       m.loadStatisticsBalance({ refreshDefaultRange: true }),
     );
+  }
+  if (sectionId === "debts") {
+    void import("./debts.js").then((m) => m.loadDebts());
   }
   if (sectionId === "settings") {
     void import("./settings.js").then((m) => m.applySettingsAdminBlocksVisibility());

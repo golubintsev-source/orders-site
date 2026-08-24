@@ -9,7 +9,7 @@
  */
 const BADGE_CACHE = "orders-site-badge-v1";
 // v31: поля сумм на странице расчётов — 16px и компактный ряд «от»/«до».
-const STATIC_CACHE = "orders-site-static-v31";
+const STATIC_CACHE = "orders-site-static-v32";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 
@@ -37,6 +37,8 @@ const PRECACHE_URLS = [
   "/js/roles.js",
   "/js/files.js",
   "/js/manager-salary.js",
+  "/js/debts.js",
+  "/js/debts-matrix.js",
   "/js/register-sw.js",
   // Раздел «Чаты» открывают чаще всего — держим его модули готовыми к первому кадру.
   "/js/messages.js",
@@ -148,6 +150,7 @@ const APP_SHELL_PATHS = new Set([
   "/settings",
   "/statistics",
   "/statistics-balance",
+  "/debts",
   "/order-tasks",
   "/messages",
   "/voice",

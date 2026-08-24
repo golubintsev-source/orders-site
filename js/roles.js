@@ -82,6 +82,7 @@ export function canAccessSection(sectionId) {
       sectionId !== "manager-salary" &&
       sectionId !== "statistics" &&
       sectionId !== "statistics-balance" &&
+      sectionId !== "debts" &&
       sectionId !== "calculations"
     );
   }
@@ -104,6 +105,7 @@ export function isSectionHiddenFromNav(sectionId) {
       sectionId === "manager-salary" ||
       sectionId === "statistics" ||
       sectionId === "statistics-balance" ||
+      sectionId === "debts" ||
       sectionId === "calculations"
     );
   }

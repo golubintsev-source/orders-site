@@ -2759,6 +2759,52 @@ h2 {
   color: #6b7280;
 }
 
+#section-debts .debts-table-wrap {
+  overflow-x: auto;
+}
+#debtsTable {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+#debtsTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f9fafb;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 2px solid #e5e7eb;
+  white-space: nowrap;
+}
+#debtsTable thead th.th-money,
+#debtsTable tbody td.td-money {
+  text-align: right;
+}
+#debtsTable tbody th {
+  text-align: left;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  white-space: nowrap;
+  background: #fff;
+}
+#debtsTable tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+#debtsTable tbody tr:hover {
+  background: #f9fafb;
+}
+#debtsTable tbody tr.debts-total-row th,
+#debtsTable tbody tr.debts-total-row td {
+  border-top: 2px solid #e5e7eb;
+  font-weight: 700;
+  background: #f9fafb;
+}
+
 /* Зарплата менеджера */
 #section-manager-salary .manager-salary-period-toolbar {
   display: flex;
