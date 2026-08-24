@@ -316,18 +316,20 @@ h2 {
   background: #eff6ff;
 }
 
-/* user_lite: пункты Баланс, Заказы в Excel, Расчёты не показываются (дублирует логику hidden в JS) */
+/* user_lite: пункты Баланс, Заказы в Excel, Расчёты, Долги не показываются (дублирует логику hidden в JS) */
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="balance"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="calculations"],
-#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="orders-excel"] {
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="orders-excel"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="debts"] {
   display: none !important;
 }
 
-/* user_shop: Баланс, Зарплата менеджера, Статистика, Расчёты скрыты (дублирует логику JS) */
+/* user_shop: Баланс, Зарплата менеджера, Статистика, Расчёты, Долги скрыты (дублирует логику JS) */
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="balance"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="manager-salary"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="statistics"],
-#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="calculations"] {
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="calculations"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="debts"] {
   display: none !important;
 }
 

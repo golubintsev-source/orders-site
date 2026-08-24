@@ -1,6 +1,6 @@
 import { state } from "./state.js";
 import { formatAmount, formatDateShortRU, formatOrderIdTypeChip } from "./format.js";
-import { isOrderHiddenForCurrentRole, isUserLite, isUserShop } from "./roles.js";
+import { canAccessDebts, isOrderHiddenForCurrentRole, isUserLite, isUserShop } from "./roles.js";
 import {
   DEBT_STATUSES,
   buildDebtsMatrix,
@@ -341,6 +341,10 @@ function initDebtsOrdersPopup() {
 export function loadDebts() {
   const tbody = document.querySelector("#debtsTable tbody");
   if (!tbody) return;
+  if (!canAccessDebts()) {
+    tbody.innerHTML = "";
+    return;
+  }
   const orders = (state.allOrders || []).filter((order) => {
     if (isOrderHiddenForCurrentRole(order)) return false;
     return orderMatchesOrderTypeKeys(order, debtsOrderTypeFilterSelected);

@@ -74,15 +74,20 @@ export function canSaveManagerSalaryChecks() {
   return isAdmin() || state.currentRole === "user";
 }
 
+/** Страница «Долги» — только admin и user. */
+export function canAccessDebts() {
+  return isAdmin() || state.currentRole === "user";
+}
+
 /** Разделы меню, закрытые для отдельных ролей. Настройки доступны всем (блок уведомлений). */
 export function canAccessSection(sectionId) {
+  if (sectionId === "debts") return canAccessDebts();
   if (isUserShop()) {
     return (
       sectionId !== "balance" &&
       sectionId !== "manager-salary" &&
       sectionId !== "statistics" &&
       sectionId !== "statistics-balance" &&
-      sectionId !== "debts" &&
       sectionId !== "calculations"
     );
   }
@@ -99,13 +104,13 @@ export function isSectionHiddenFromNav(sectionId) {
   if (sectionId === "order-tasks") return true;
   if (sectionId === "messages") return true;
   if (sectionId === "voice") return true;
+  if (sectionId === "debts") return !canAccessDebts();
   if (isUserShop()) {
     return (
       sectionId === "balance" ||
       sectionId === "manager-salary" ||
       sectionId === "statistics" ||
       sectionId === "statistics-balance" ||
-      sectionId === "debts" ||
       sectionId === "calculations"
     );
   }
