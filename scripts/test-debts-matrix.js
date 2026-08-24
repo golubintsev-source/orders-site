@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { addCalendarMonths, buildDebtsMatrix } from "../js/debts-matrix.js";
+import { addCalendarMonths, buildDebtsMatrix, orderMatchesOrderTypeKeys } from "../js/debts-matrix.js";
 
 assert.equal(addCalendarMonths("2026-08-24", -1), "2026-07-24");
 assert.equal(addCalendarMonths("2026-08-24", -3), "2026-05-24");
@@ -54,5 +54,33 @@ assert.equal(matrix.byStatus["Монтаж выполнен"].all, 0);
 assert.equal(matrix.total.all, 6000);
 assert.equal(matrix.total.over1m, 5000);
 assert.equal(matrix.total.over3m, 3000);
+
+assert.equal(orderMatchesOrderTypeKeys({ order_type: "Окна" }, []), true);
+assert.equal(orderMatchesOrderTypeKeys({ order_type: "Окна" }, ["Окна"]), true);
+assert.equal(orderMatchesOrderTypeKeys({ order_type: "Окна" }, ["Магазин"]), false);
+assert.equal(orderMatchesOrderTypeKeys({ order_type: "" }, ["__empty__"]), true);
+assert.equal(orderMatchesOrderTypeKeys({ order_type: "Подоконники" }, ["Окна", "Подоконники"]), true);
+
+const windowsOnly = buildDebtsMatrix(
+  [
+    {
+      payment_status: "Клиент согласен",
+      remaining_amount: 1000,
+      remaining_to: "",
+      order_date: "2026-08-20",
+      order_type: "Окна",
+    },
+    {
+      payment_status: "Клиент согласен",
+      remaining_amount: 500,
+      remaining_to: "",
+      order_date: "2026-08-20",
+      order_type: "Магазин",
+    },
+  ].filter((o) => orderMatchesOrderTypeKeys(o, ["Окна"])),
+  now,
+);
+assert.equal(windowsOnly.byStatus["Клиент согласен"].all, 1000);
+assert.equal(windowsOnly.total.all, 1000);
 
 console.log("test-debts-matrix: ok");

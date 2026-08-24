@@ -2804,6 +2804,21 @@ h2 {
   font-weight: 700;
   background: #f9fafb;
 }
+#debtsTable thead th.th-order-filter-heading-cell {
+  padding: 4px 6px;
+  text-align: right;
+}
+#debtsTable thead #debtsOrderTypeFilterBtn {
+  width: auto;
+  margin-left: auto;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+#debtsTable tbody tr.debts-row-blue td .status-value {
+  background: #dbeafe;
+  color: #1e40af;
+}
 
 /* Зарплата менеджера */
 #section-manager-salary .manager-salary-period-toolbar {

@@ -75,7 +75,7 @@ const SECTION_LABELS = {
   settings: "Настройки",
   statistics: "Статистика",
   "statistics-balance": "Статистика баланса",
-  debts: "Долги",
+  debts: "долги",
   messages: "Чаты",
   voice: "Голосовое управление",
 };

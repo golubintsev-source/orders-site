@@ -17,7 +17,7 @@ const BOOT_LABELS = {
   settings: "Настройки",
   statistics: "Статистика",
   "statistics-balance": "Статистика баланса",
-  debts: "Долги",
+  debts: "долги",
   "order-tasks": "Задачи",
   messages: "Чаты",
   voice: "Голосовое управление",
