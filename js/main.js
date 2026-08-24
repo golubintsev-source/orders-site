@@ -108,6 +108,7 @@ async function initSecondarySections(opts = {}) {
       { initAllChangesSection },
       { initStatisticsSection },
       { initStatisticsBalanceSection },
+      { initDebtsSection },
       { initPushNotifications },
       { initMessagesSection },
       { initTaskCreateDialog },
@@ -121,6 +122,7 @@ async function initSecondarySections(opts = {}) {
       import("./all-changes.js"),
       import("./statistics.js"),
       import("./statistics-balance.js"),
+      import("./debts.js"),
       import("./push-notifications.js"),
       import("./messages.js"),
       import("./task-create-dialog.js"),
@@ -154,6 +156,7 @@ async function initSecondarySections(opts = {}) {
     initAllChangesSection();
     initStatisticsSection();
     initStatisticsBalanceSection();
+    initDebtsSection();
 
     if (isAdmin()) {
       const { initLoginLinksSection, loadLoginLinksSection } = await import("./login-links.js");
@@ -285,6 +288,7 @@ async function init() {
       sectionNow === "changes-all" ||
       sectionNow === "statistics" ||
       sectionNow === "statistics-balance" ||
+      sectionNow === "debts" ||
       sectionNow === "manager-salary" ||
       sectionNow === "balance" ||
       savedApp?.sectionId === "order-tasks";
