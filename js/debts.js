@@ -28,11 +28,11 @@ const POPUP_TABLE_HEADERS = [
   "Дата",
   "Клиент",
   "Адрес",
+  "Описание",
   "Статус",
   "Стоимость",
   "Предоплата",
   "Остаток",
-  "Кому",
   "Телефон",
 ];
 
@@ -216,11 +216,11 @@ function popupOrderCells(order) {
     formatDateShortRU(order.order_date),
     order.client ?? "",
     order.address ?? "",
+    order.description ?? "",
     statusDisplay,
     moneyOrDash(order.amount),
     moneyOrDash(order.prepayment),
     moneyOrDash(order.remaining_amount),
-    order.remaining_to ? String(order.remaining_to) : "",
     order.phone ?? "",
   ];
 }
@@ -236,7 +236,7 @@ function renderDebtsOrdersPopupTable(orders) {
     .map((order) => {
       const cells = popupOrderCells(order)
         .map((v, i) => {
-          const cls = i === 5 || i === 6 || i === 7 ? ' class="td-money"' : "";
+          const cls = i === 6 || i === 7 || i === 8 ? ' class="td-money"' : "";
           return `<td${cls}>${escapeHtml(v)}</td>`;
         })
         .join("");
