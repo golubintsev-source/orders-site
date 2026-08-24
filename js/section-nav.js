@@ -176,9 +176,18 @@ export function syncIosFormControlLocks(activeSectionId = currentSectionId) {
   }
 }
 
-/** Класс на <html>, когда открыта экранная клавиатура — убираем safe-area у композеров. */
+function isTextInputFocused() {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  return tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT";
+}
+
+/** Класс на <html>, когда открыта экранная клавиатура — ужимаем чат и убираем safe-area у композеров. */
 export function initKeyboardOpenClass() {
   const root = document.documentElement;
+  let focusOutTimer = 0;
   const sync = () => {
     const vv = window.visualViewport;
     if (!vv) {
@@ -187,15 +196,26 @@ export function initKeyboardOpenClass() {
       return;
     }
     const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-    root.classList.toggle("keyboard-open", overlap > 120);
-    // Высота видимой области (над клавиатурой / динамической панелью браузера).
-    root.style.setProperty("--app-visible-height", `${Math.round(vv.height)}px`);
+    // Нижняя панель Safari/Chrome тоже уменьшает visualViewport — это не клавиатура.
+    const open = isTextInputFocused() && overlap > 120;
+    root.classList.toggle("keyboard-open", open);
+    if (open) {
+      root.style.setProperty("--app-visible-height", `${Math.round(vv.height)}px`);
+    } else {
+      root.style.removeProperty("--app-visible-height");
+    }
   };
   sync();
   window.visualViewport?.addEventListener("resize", sync);
   window.visualViewport?.addEventListener("scroll", sync);
-  window.addEventListener("focusin", sync);
+  window.addEventListener("focusin", () => {
+    window.clearTimeout(focusOutTimer);
+    sync();
+  });
   window.addEventListener("focusout", () => {
+    // iOS обновляет visualViewport после закрытия клавиатуры с задержкой.
+    window.clearTimeout(focusOutTimer);
+    focusOutTimer = window.setTimeout(sync, 280);
     queueMicrotask(sync);
   });
 }
