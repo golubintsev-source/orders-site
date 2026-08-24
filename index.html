@@ -114,7 +114,7 @@
             </button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="debts">
               <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>
-              <span class="section-nav-dropdown-item-text">Долги</span>
+              <span class="section-nav-dropdown-item-text">долги</span>
             </button>
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="settings">
               <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
@@ -1962,12 +1962,19 @@
 
     <section id="section-debts" class="content-section">
       <div class="card order-tasks-card">
+        <div id="debtsOrderTypeFilterDropdown" class="status-filter-dropdown" role="dialog" aria-label="Фильтр по типу заказа" style="display: none;">
+          <div class="status-filter-dropdown-inner" id="debtsOrderTypeFilterCheckboxes"></div>
+        </div>
         <div class="table-wrap debts-table-wrap">
           <table id="debtsTable" class="debts-table">
             <thead>
               <tr>
                 <th>Статусы</th>
-                <th class="th-money">Всё</th>
+                <th class="th-money th-order-filter-heading-cell">
+                  <button type="button" class="orders-filter-heading-btn" id="debtsOrderTypeFilterBtn" title="Фильтр по типу заказа" aria-haspopup="true" aria-expanded="false">
+                    <span class="orders-filter-heading-label">все</span>
+                  </button>
+                </th>
                 <th class="th-money">Более 1 месяца</th>
                 <th class="th-money">Более 3 месяцев</th>
               </tr>

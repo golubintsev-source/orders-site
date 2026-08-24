@@ -58,6 +58,13 @@ function remainingAmount(order) {
   return parseLooseNumber(order?.remaining_amount) ?? 0;
 }
 
+/** Пустой selectedKeys = все типы. Ключ __empty__ — заказы без типа. */
+export function orderMatchesOrderTypeKeys(order, selectedKeys) {
+  if (!selectedKeys || selectedKeys.length === 0) return true;
+  const t = (order?.order_type || "").trim();
+  return selectedKeys.some((key) => (key === "__empty__" ? t === "" : t === key));
+}
+
 function emptyBucket() {
   return { all: 0, over1m: 0, over3m: 0 };
 }
