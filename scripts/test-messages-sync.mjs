@@ -5,6 +5,7 @@ import {
   laterIsoTimestamp,
   conversationPeerFromPushData,
   shouldSuppressPushNotification,
+  shouldResetDialogFeed,
 } from "../js/messages-sync-utils.js";
 
 function assert(cond, msg) {
@@ -64,5 +65,12 @@ assert(
   }),
   "ignore stale visibility heartbeat",
 );
+
+assert(shouldResetDialogFeed("user-a", "user-b"), "switching chats must reset the feed");
+assert(!shouldResetDialogFeed("user-a", "user-a"), "reopening the same chat keeps the feed");
+assert(shouldResetDialogFeed("", "user-b"), "empty painted peer is a switch");
+assert(shouldResetDialogFeed(null, "user-b"), "missing painted peer is a switch");
+assert(shouldResetDialogFeed("group:1", "group:2"), "switching groups must reset the feed");
+assert(!shouldResetDialogFeed("group:1", "group:1"), "same group keeps the feed");
 
 console.log("test-messages-sync: ok");

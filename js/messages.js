@@ -19,6 +19,7 @@ import {
   isTimestampAfter,
   laterIsoTimestamp,
   timestampMs,
+  shouldResetDialogFeed,
 } from "./messages-sync-utils.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
@@ -2490,9 +2491,91 @@ function updateDialogHeader() {
   title.textContent = peer ? displayNameByEmail(peer.email) || "Чат" : "Чат";
 }
 
+function chatListItemName(peerId) {
+  const list = document.getElementById("messagesChatList");
+  if (!list || !peerId) return "";
+  const safe = String(peerId).replace(/"/g, "");
+  const nameEl = list.querySelector(
+    `.messages-chat-item[data-peer-id="${safe}"] .messages-chat-item-name`,
+  );
+  return (nameEl?.textContent || "").trim();
+}
+
+function isMessagesFeedForPeer(peerId = activePeerId) {
+  const feed = document.getElementById("messagesFeed");
+  if (!feed || !peerId) return false;
+  return !shouldResetDialogFeed(feed.dataset.peerId, peerId);
+}
+
+function isCurrentDialogLoad(gen, peerAtStart) {
+  return (
+    gen === loadMessagesGeneration &&
+    messagesView === "dialog" &&
+    String(activePeerId || "") === String(peerAtStart || "") &&
+    isMessagesFeedForPeer(peerAtStart)
+  );
+}
+
+function resetComposerDraft() {
+  const input = document.getElementById("messagesComposerInput");
+  if (!input) return;
+  input.value = "";
+  resizeMessagesComposerInput(input);
+}
+
+function resetMessagesFeedDom(peerId = null) {
+  const feed = document.getElementById("messagesFeed");
+  if (feed) {
+    feed.innerHTML = peerId ? `<p class="messages-empty">Загрузка…</p>` : "";
+    if (peerId) feed.dataset.peerId = String(peerId);
+    else delete feed.dataset.peerId;
+    feed.scrollTop = 0;
+  }
+  const msg = document.getElementById("messagesPageMessage");
+  if (msg) {
+    msg.textContent = "";
+    msg.classList.remove("messages-page-message--error");
+  }
+}
+
+function applyDialogHeaderPlaceholder(peerId) {
+  const title = document.getElementById("messagesDialogTitle");
+  const subtitle = document.getElementById("messagesDialogSubtitle");
+  const editBtn = document.getElementById("messagesEditGroupBtn");
+  if (title) title.textContent = chatListItemName(peerId) || "Чат";
+  if (subtitle) {
+    subtitle.textContent = "";
+    subtitle.hidden = true;
+  }
+  if (editBtn) editBtn.hidden = !isGroupChat(peerId);
+}
+
+/**
+ * Если в ленте ещё чужой диалог — сразу очищаем DOM, не дожидаясь fetch.
+ * Иначе при входе в другой чат 1–2 секунды видна предыдущая переписка.
+ */
+function prepareMessagesDialogForPeer(peerId) {
+  const feed = document.getElementById("messagesFeed");
+  const switchingChat = shouldResetDialogFeed(feed?.dataset.peerId, peerId);
+  if (!switchingChat) {
+    if (feed) feed.dataset.peerId = String(peerId);
+    return false;
+  }
+  loadMessagesGeneration += 1;
+  lastFeedMessageAt = null;
+  clearComposerContext();
+  hideMessageActionMenu();
+  clearFeedMessageCache();
+  resetComposerDraft();
+  resetMessagesFeedDom(peerId);
+  applyDialogHeaderPlaceholder(peerId);
+  return true;
+}
+
 export function showMessagesChatList() {
   activePeerId = null;
   lastFeedMessageAt = null;
+  loadMessagesGeneration += 1;
   clearComposerContext();
   hideMessageActionMenu();
   clearFeedMessageCache();
@@ -2507,6 +2590,7 @@ export function showMessagesChatList() {
 export async function openMessagesDialog(peerId) {
   if (!peerId) return;
   loadChatListGeneration += 1;
+  prepareMessagesDialogForPeer(peerId);
   activePeerId = peerId;
   lastFeedMessageAt = null;
   clearComposerContext();
@@ -2515,17 +2599,22 @@ export async function openMessagesDialog(peerId) {
   setMessagesView("dialog");
   syncChatPeerInUrl(peerId);
   stopChatListPolling();
+  stopMessagesFeedPolling();
   clearChatListUnreadForPeer(peerId);
   void closeNotificationsForConversation(peerId);
   reportChatVisibilityToSw();
+  const peerAtStart = peerId;
   const markPromise = markActiveConversationRead();
   await loadUsersDirectory();
+  if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
   if (isGroupChat() && groupChatsById.size === 0) {
     await fetchMyGroupChats();
+    if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
   }
   updateDialogHeader();
   syncComposerForActivePeer();
   await loadMessages();
+  if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
   await markPromise;
   startMessagesFeedPolling();
   reportChatVisibilityToSw();
@@ -2543,6 +2632,7 @@ export async function loadMessages() {
 
   const gen = ++loadMessagesGeneration;
   const peerAtStart = activePeerId;
+  if (!feed.dataset.peerId) feed.dataset.peerId = String(peerAtStart);
   const sinceIso = getMessagesFastLoadSinceIso();
 
   if (msg) {
@@ -2551,15 +2641,22 @@ export async function loadMessages() {
   }
 
   async function fetchDialogRows({ since = null, limit = DIALOG_MESSAGE_LIMIT } = {}) {
-    if (isGroupChat()) {
-      return fetchGroupMessages(parseGroupId(), { sinceIso: since, limit });
+    if (isGroupChat(peerAtStart)) {
+      return fetchGroupMessages(parseGroupId(peerAtStart), { sinceIso: since, limit });
     }
-    return fetchPeerMessages(activePeerId, { sinceIso: since, limit });
+    return fetchPeerMessages(peerAtStart, { sinceIso: since, limit });
   }
 
   async function renderDialogRows(rows, { markRead = true } = {}) {
-    if (gen !== loadMessagesGeneration || activePeerId !== peerAtStart || messagesView !== "dialog") {
-      return;
+    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
+
+    await import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
+    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
+
+    if (isGroupChat()) {
+      const groupId = parseGroupId();
+      if (groupId) await loadActiveGroupReceipts(groupId);
+      if (!isCurrentDialogLoad(gen, peerAtStart)) return;
     }
 
     lastFeedMessageAt = rows.length ? rows[rows.length - 1].created_at : null;
@@ -2567,19 +2664,13 @@ export async function loadMessages() {
     clearFeedMessageCache();
     rememberFeedMessages(rows);
 
-    await import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
-
-    if (isGroupChat()) {
-      const groupId = parseGroupId();
-      if (groupId) await loadActiveGroupReceipts(groupId);
-    }
-
     const visibleRows = rows.filter((row) => !isMessageDeleted(row));
     const emptyText = isGroupChat()
       ? "Пока нет сообщений в этом групповом чате. Напишите первое."
       : "Пока нет сообщений в этой переписке. Напишите первое.";
 
     const stickBottom = isFeedAtBottom(feed, 80) || !feed.querySelector("[data-message-id]");
+    feed.dataset.peerId = String(peerAtStart);
     feed.innerHTML = visibleRows.length
       ? visibleRows.map(renderMessageItem).join("")
       : `<p class="messages-empty">${emptyText}</p>`;
@@ -2587,6 +2678,7 @@ export async function loadMessages() {
     if (stickBottom) scrollMessagesFeedToBottom(feed);
     // Слоты фото фиксированы при рендере — повторный scroll после load не нужен (он давал мигание).
     await hydrateMessageAttachments(feed);
+    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
 
     const messageKind = isGroupChat() ? "group" : "user";
     const ids = visibleRows.map((row) => row.id).filter((id) => id != null);
@@ -2599,7 +2691,7 @@ export async function loadMessages() {
 
   // Фаза 1: только последние 3 дня.
   const fast = await fetchDialogRows({ since: sinceIso });
-  if (gen !== loadMessagesGeneration || activePeerId !== peerAtStart) return;
+  if (!isCurrentDialogLoad(gen, peerAtStart)) return;
 
   if (fast.error) {
     console.error("Ошибка загрузки сообщений:", fast.error);
@@ -2618,9 +2710,7 @@ export async function loadMessages() {
   // Фаза 2: догрузка более старых сообщений — только prepend, без полной перерисовки ленты.
   void (async () => {
     const fuller = await fetchDialogRows({ since: null, limit: DIALOG_MESSAGE_LIMIT });
-    if (gen !== loadMessagesGeneration || activePeerId !== peerAtStart || messagesView !== "dialog") {
-      return;
-    }
+    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
     if (fuller.error) return;
     rememberFeedMessages(fuller.rows);
 
@@ -2677,6 +2767,7 @@ function scrollMessagesFeedToBottom(feed) {
 function prependOlderMessagesToFeed(rows) {
   const feed = document.getElementById("messagesFeed");
   if (!feed || !rows?.length) return;
+  if (!isMessagesFeedForPeer()) return;
 
   const existingIds = getFeedMessageIds();
   const olderRows = rows.filter(
@@ -2706,10 +2797,12 @@ function prependOlderMessagesToFeed(rows) {
 function appendMessagesToFeed(rows) {
   const feed = document.getElementById("messagesFeed");
   if (!feed || !rows.length) return;
+  if (!isMessagesFeedForPeer()) return;
 
   const uid = getCurrentUserId();
-  const scoped = isGroupChat()
-    ? rows
+  const groupId = isGroupChat() ? parseGroupId() : null;
+  const scoped = groupId
+    ? rows.filter((row) => row.chat_id == null || String(row.chat_id) === String(groupId))
     : rows.filter((row) => messageBelongsToPeer(row, activePeerId, uid));
   if (!scoped.length) return;
 
@@ -2819,6 +2912,7 @@ async function pollNewMessages() {
 async function pollNewMessagesUnlocked() {
   const uid = getCurrentUserId();
   if (!uid || messagesView !== "dialog" || !activePeerId) return;
+  const peerAtStart = activePeerId;
 
   if (isGroupChat()) {
     const groupId = parseGroupId();
@@ -2868,6 +2962,9 @@ async function pollNewMessagesUnlocked() {
       return;
     }
     const rows = data || [];
+    if (activePeerId !== peerAtStart || messagesView !== "dialog" || !isMessagesFeedForPeer(peerAtStart)) {
+      return;
+    }
     if (rows.length) {
       appendMessagesToFeed(rows);
       if (canMarkMessagesRead()) await markActiveConversationRead();
@@ -2927,6 +3024,9 @@ async function pollNewMessagesUnlocked() {
   }
 
   const rows = data || [];
+  if (activePeerId !== peerAtStart || messagesView !== "dialog" || !isMessagesFeedForPeer(peerAtStart)) {
+    return;
+  }
   if (rows.length) {
     appendMessagesToFeed(rows);
     if (canMarkMessagesRead()) await markActiveConversationRead();
@@ -4260,6 +4360,7 @@ function startEditMessage(row) {
 function replaceMessageElement(row) {
   const feed = document.getElementById("messagesFeed");
   if (!feed || !row?.id) return;
+  if (!isMessagesFeedForPeer()) return;
   rememberFeedMessages([row]);
   const existing = feed.querySelector(`[data-message-id="${row.id}"]`);
   const html = renderMessageItem(row);
