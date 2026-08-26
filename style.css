@@ -9148,6 +9148,17 @@ th {
   font-weight: 600;
 }
 
+.message-email-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.message-email-link:hover {
+  color: #1f6feb;
+}
+
 .messages-page-message {
   flex-shrink: 0;
   margin: 0 16px 8px;

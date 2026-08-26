@@ -187,7 +187,12 @@
 
   /** Догрузку messages.js (164 КБ) начинаем во время разбора HTML, а не после main.js. */
   function preloadMessagesModule() {
-    for (const href of ["./js/messages.js", "./js/format.js", "./js/user-names.js"]) {
+    for (const href of [
+      "./js/messages.js",
+      "./js/messages-body.js",
+      "./js/format.js",
+      "./js/user-names.js",
+    ]) {
       const link = document.createElement("link");
       link.rel = "modulepreload";
       link.href = href;

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Чаты: e-mail в пузыре</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    html, body { margin: 0; background: #dce8d8; }
+    .wrap { max-width: 420px; margin: 0 auto; padding: 16px; }
+    .messages-feed { min-height: 0; overflow: visible; padding: 12px; gap: 8px; }
+    .label { font: 13px/1.4 system-ui, sans-serif; color: #334155; margin: 16px 0 8px; }
+    .status { font: 14px/1.4 ui-monospace, monospace; margin: 12px 0; }
+    .status.ok { color: #166534; }
+    .status.fail { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p id="status" class="status">проверка…</p>
+    <p class="label">Входящее: только e-mail</p>
+    <div class="messages-feed" id="inOnly"></div>
+    <p class="label">Исходящее: e-mail в тексте</p>
+    <div class="messages-feed" id="outMixed"></div>
+    <p class="label">Входящее: упоминание + e-mail</p>
+    <div class="messages-feed" id="inMention"></div>
+  </div>
+  <script type="module">
+    import {
+      formatMessagePlainTextHtml,
+      stripRecipientMentionFromBody,
+    } from "../js/messages-body.js";
+
+    function bubble(kind, body, recipientEmail) {
+      const displayed = stripRecipientMentionFromBody(body, recipientEmail);
+      const html = formatMessagePlainTextHtml(displayed);
+      return `<article class="message-item message-item--${kind}">
+        <header class="message-item-header message-item-header--compact">
+          <span class="message-item-meta"><time class="message-item-time">21:46</time></span>
+        </header>
+        ${html ? `<div class="message-item-body message-item-body-text">${html}</div>` : ""}
+      </article>`;
+    }
+
+    const email = "dima.test@gmail.com";
+    const mixed = "Напиши на dima.test@gmail.com пожалуйста";
+    const mention = "@peer@example.com и ещё user@mail.ru";
+
+    document.getElementById("inOnly").innerHTML = bubble("in", email, "peer@example.com");
+    document.getElementById("outMixed").innerHTML = bubble("out", mixed, "peer@example.com");
+    document.getElementById("inMention").innerHTML = bubble("in", mention, "peer@example.com");
+
+    const texts = [...document.querySelectorAll(".message-item-body-text")].map((el) => el.textContent);
+    const hasEmail = texts.every((t) => t.includes("@"));
+    const inOnlyVisible = texts[0]?.includes(email);
+    const status = document.getElementById("status");
+    if (hasEmail && inOnlyVisible && texts.length === 3) {
+      status.textContent = "ok: e-mail виден в пузырях";
+      status.classList.add("ok");
+    } else {
+      status.textContent = "fail: e-mail не отображается";
+      status.classList.add("fail");
+    }
+  </script>
+</body>
+</html>

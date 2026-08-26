@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "update-supabase": "node scripts/update-supabase.js",
-    "test:messages-sync": "node scripts/test-messages-sync.mjs"
+    "test:messages-sync": "node scripts/test-messages-sync.mjs",
+    "test:messages-body": "node scripts/test-messages-body.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
