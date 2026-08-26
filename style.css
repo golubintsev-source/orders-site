@@ -3941,7 +3941,7 @@ h2 {
 #section-settings .login-links-url-cell code {
   display: block;
   word-break: break-all;
-  font-size: 0.82rem;
+  font: inherit;
 }
 
 #section-settings .login-links-actions {

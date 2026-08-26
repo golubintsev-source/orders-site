@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v39: список чатов — не мигать старыми DM на частичном 3-дневном проходе (PWA).
-const STATIC_CACHE = "orders-site-static-v39";
+// v40: ссылки входа в настройках — тот же шрифт, что у имени в первом столбце.
+const STATIC_CACHE = "orders-site-static-v40";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
