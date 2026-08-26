@@ -20,6 +20,7 @@ import {
   laterIsoTimestamp,
   timestampMs,
   shouldResetDialogFeed,
+  mergePartialChatListPeerIds,
 } from "./messages-sync-utils.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
@@ -2149,26 +2150,41 @@ function updateChatListItemEl(button, entry, groupReceiptsByChat) {
   replaceChatListItemAvatar(button, entry);
 }
 
-function syncChatListDom(list, entries, groupReceiptsByChat) {
+function syncChatListDom(list, entries, groupReceiptsByChat, { retainUnseen = false } = {}) {
   const existingByPeer = new Map();
   for (const el of list.querySelectorAll(".messages-chat-item[data-peer-id]")) {
     existingByPeer.set(el.getAttribute("data-peer-id") || "", el);
   }
 
+  const entryByPeer = new Map(entries.map((entry) => [entry.peerId, entry]));
+  const nextPeerIds = entries.map((entry) => entry.peerId);
+  const order = retainUnseen
+    ? mergePartialChatListPeerIds(nextPeerIds, [...existingByPeer.keys()])
+    : nextPeerIds;
+
   const seen = new Set();
-  for (const entry of entries) {
-    seen.add(entry.peerId);
-    let el = existingByPeer.get(entry.peerId);
-    if (el) {
-      updateChatListItemEl(el, entry, groupReceiptsByChat);
-    } else {
-      el = createChatListItemElement(entry, groupReceiptsByChat);
+  for (const peerId of order) {
+    if (!peerId || seen.has(peerId)) continue;
+    seen.add(peerId);
+    const entry = entryByPeer.get(peerId);
+    let el = existingByPeer.get(peerId);
+    if (entry) {
+      if (el) {
+        updateChatListItemEl(el, entry, groupReceiptsByChat);
+      } else {
+        el = createChatListItemElement(entry, groupReceiptsByChat);
+      }
+      list.appendChild(el);
+    } else if (el) {
+      // Частичная выборка не знает этот диалог — оставляем на месте внизу.
+      list.appendChild(el);
     }
-    list.appendChild(el);
   }
 
-  for (const [peerId, el] of existingByPeer) {
-    if (!seen.has(peerId)) el.remove();
+  if (!retainUnseen) {
+    for (const [peerId, el] of existingByPeer) {
+      if (!seen.has(peerId)) el.remove();
+    }
   }
 }
 
@@ -2308,7 +2324,7 @@ function buildDmUnreadByPeer(unreadRows) {
   return dmUnreadByPeer;
 }
 
-async function paintChatListFromData(list, rows, unreadRows, groupChats) {
+async function paintChatListFromData(list, rows, unreadRows, groupChats, { partial = false } = {}) {
   const uid = getCurrentUserId();
   const dmUnreadByPeer = buildDmUnreadByPeer(unreadRows);
   const peerInfo = buildPeerInfoMap(rows, unreadRows, uid);
@@ -2330,19 +2346,30 @@ async function paintChatListFromData(list, rows, unreadRows, groupChats) {
     dmUnreadByPeer,
   );
   const signature = buildChatListSignature(entries);
-  if (list.dataset.chatListSig === signature) return;
-  list.dataset.chatListSig = signature;
-  // Снимок мог быть отрисован прошлой версией renderChatListItem — не достраиваем
-  // поверх него, а заменяем целиком; дальше syncChatListDom работает как обычно.
-  if (list.dataset.chatListFromSnapshot === "1") {
-    list.innerHTML = "";
+  if (!partial) {
+    list.dataset.chatListFull = "1";
     delete list.dataset.chatListFromSnapshot;
   }
-  syncChatListDom(list, entries, groupReceiptsByChat);
+  if (list.dataset.chatListSig === signature) return;
+  list.dataset.chatListSig = signature;
+  // Снимок и уже отрисованные старые DM не сбрасываем на частичном проходе:
+  // иначе нижний чат мигает, пока не доедет полная выборка.
+  syncChatListDom(list, entries, groupReceiptsByChat, { retainUnseen: partial });
   void hydrateGroupAvatars(list);
   void preloadChatListAvatarsForEntries(entries);
   document.dispatchEvent(new CustomEvent("chat-list-painted"));
   saveChatListSnapshot(list);
+}
+
+function showChatListLoadError(list, msg, error) {
+  console.error("Ошибка загрузки сообщений:", error);
+  if (msg) {
+    msg.textContent = "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
+    msg.classList.add("messages-page-message--error");
+  }
+  list.innerHTML = "";
+  list.removeAttribute("data-chat-list-sig");
+  delete list.dataset.chatListFull;
 }
 
 export async function loadChatList() {
@@ -2355,10 +2382,40 @@ export async function loadChatList() {
 
   const gen = ++loadChatListGeneration;
   const sinceIso = getMessagesFastLoadSinceIso();
+  const alreadyFull = list.dataset.chatListFull === "1";
 
   if (msg) {
     msg.textContent = "";
     msg.classList.remove("messages-page-message--error");
+  }
+
+  // После полной отрисовки больше не красим урезанную 3-дневную выборку:
+  // иначе старые DM (как нижний чат) пропадают на время повторного прохода.
+  if (alreadyFull) {
+    const [fuller, unreadFresh, groupPack] = await Promise.all([
+      fetchRecentUserMessagesForChatList({
+        sinceIso: null,
+        limit: CHAT_LIST_DM_PREVIEW_LIMIT,
+      }),
+      fetchUnreadIncomingDmMeta(),
+      fetchMyGroupChats(),
+    ]);
+    if (gen !== loadChatListGeneration || messagesView !== "list") return;
+    if (fuller.error) {
+      console.warn("Ошибка обновления списка чатов:", fuller.error);
+      return;
+    }
+    if (groupPack.error) {
+      console.warn("Ошибка загрузки групповых чатов:", groupPack.error);
+    }
+    await paintChatListFromData(
+      list,
+      fuller.rows,
+      unreadFresh.rows,
+      groupPack.error ? [...groupChatsById.values()] : (groupPack.chats || []),
+    );
+    void refreshMessagesUnreadBadge();
+    return;
   }
 
   const boot = takeChatBootPack();
@@ -2374,13 +2431,7 @@ export async function loadChatList() {
   if (messagesView !== "list") return;
 
   if (recentPack.error) {
-    console.error("Ошибка загрузки сообщений:", recentPack.error);
-    if (msg) {
-      msg.textContent = "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
-      msg.classList.add("messages-page-message--error");
-    }
-    list.innerHTML = "";
-    list.removeAttribute("data-chat-list-sig");
+    showChatListLoadError(list, msg, recentPack.error);
     return;
   }
 
@@ -2393,6 +2444,7 @@ export async function loadChatList() {
     recentPack.rows,
     unreadPack.rows,
     groupPack.chats || [],
+    { partial: true },
   );
 
   // Второй проход добирает переписки старше MESSAGES_FAST_LOAD_DAYS. Он не влияет на

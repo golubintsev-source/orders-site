@@ -70,3 +70,27 @@ export function shouldSuppressPushNotification({
 export function shouldResetDialogFeed(renderedPeerId, nextPeerId) {
   return String(renderedPeerId || "") !== String(nextPeerId || "");
 }
+
+/**
+ * Первый проход списка чатов берёт только недавние DM. Если по нему пересобрать
+ * DOM «как есть», более старые диалоги (снимок / полный проход) пропадают,
+ * а через 1–2 с появляются снова — на телефоне в PWA это выглядит как мигание.
+ * Частичный набор дополняем уже показанными peer'ами, сохраняя порядок новых.
+ */
+export function mergePartialChatListPeerIds(nextPeerIds, existingPeerIds) {
+  const seen = new Set();
+  const out = [];
+  for (const id of nextPeerIds || []) {
+    const peerId = String(id || "");
+    if (!peerId || seen.has(peerId)) continue;
+    seen.add(peerId);
+    out.push(peerId);
+  }
+  for (const id of existingPeerIds || []) {
+    const peerId = String(id || "");
+    if (!peerId || seen.has(peerId)) continue;
+    seen.add(peerId);
+    out.push(peerId);
+  }
+  return out;
+}

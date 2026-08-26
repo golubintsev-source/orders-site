@@ -6,6 +6,7 @@ import {
   conversationPeerFromPushData,
   shouldSuppressPushNotification,
   shouldResetDialogFeed,
+  mergePartialChatListPeerIds,
 } from "../js/messages-sync-utils.js";
 
 function assert(cond, msg) {
@@ -154,6 +155,23 @@ assert(paintedPeer === "b", "feed peer must match the chat being opened");
   });
   assert(feed.innerHTML === "Загрузка…", "delayed previous-chat paint must not win");
   assert(feed.dataset.peerId === "b", "delayed paint must not restore previous peer");
+}
+
+{
+  const recent = ["group:1", "dima", "andrey", "factory"];
+  const onScreen = ["group:1", "dima", "andrey", "factory", "lena"];
+  const merged = mergePartialChatListPeerIds(recent, onScreen);
+  assert(merged.includes("lena"), "partial 3-day fetch must keep the older chat already on screen");
+  assert(merged[merged.length - 1] === "lena", "retained older chat stays at the bottom");
+  assert(merged.filter((id) => id === "dima").length === 1, "already-listed peers are not duplicated");
+  assert(
+    mergePartialChatListPeerIds(["a", "b"], []).join(",") === "a,b",
+    "empty screen does not invent extra chats",
+  );
+  assert(
+    mergePartialChatListPeerIds([], ["lena"]).join(",") === "lena",
+    "snapshot-only chat survives an empty partial pass",
+  );
 }
 
 console.log("test-messages-sync: ok");
