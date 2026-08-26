@@ -761,12 +761,28 @@ function filterVisibleCalculationRows(rows) {
   });
 }
 
+/** Несколько слов в «Что искать»: каждое должно встретиться в данных (%слово1% И %слово2% …). */
+function splitCalculationsSearchTokens(query) {
+  return String(query || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function haystackMatchesAllSearchTokens(haystack, query) {
+  const tokens = splitCalculationsSearchTokens(query);
+  if (!tokens.length) return true;
+  const hay = String(haystack || "").toLowerCase();
+  return tokens.every((token) => hay.includes(token));
+}
+
 function rowMatchesCalculationsSearch(row, needleLower) {
   if (!needleLower) return true;
   const displayComment = getCalcDisplayComment(row.comment);
   const displayAuthor = getCalcDisplayAuthor(row.comment);
   const rawComment = row.comment ?? "";
-  const parts = [
+  const haystack = [
     displayAuthor,
     formatCalcTimeRu(row.created_at),
     row.created_at || "",
@@ -777,8 +793,8 @@ function rowMatchesCalculationsSearch(row, needleLower) {
     displayComment,
     rawComment,
     String(row.id ?? ""),
-  ];
-  return parts.join(" ").toLowerCase().includes(needleLower);
+  ].join(" ");
+  return haystackMatchesAllSearchTokens(haystack, needleLower);
 }
 
 function isCalculationsSearchQueryApplied() {
