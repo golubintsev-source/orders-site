@@ -5,6 +5,7 @@ import {
   laterIsoTimestamp,
   conversationPeerFromPushData,
   shouldSuppressPushNotification,
+  shouldResetDialogFeed,
 } from "../js/messages-sync-utils.js";
 
 function assert(cond, msg) {
@@ -64,5 +65,95 @@ assert(
   }),
   "ignore stale visibility heartbeat",
 );
+
+assert(shouldResetDialogFeed("user-a", "user-b"), "switching chats must reset the feed");
+assert(!shouldResetDialogFeed("user-a", "user-a"), "reopening the same chat keeps the feed");
+assert(shouldResetDialogFeed("", "user-b"), "empty painted peer is a switch");
+assert(shouldResetDialogFeed(null, "user-b"), "missing painted peer is a switch");
+assert(shouldResetDialogFeed("group:1", "group:2"), "switching groups must reset the feed");
+assert(!shouldResetDialogFeed("group:1", "group:1"), "same group keeps the feed");
+
+function canPaintDialog({ gen, loadGen, view, activePeer, paintedPeer, peerAtStart }) {
+  return (
+    gen === loadGen &&
+    view === "dialog" &&
+    String(activePeer || "") === String(peerAtStart || "") &&
+    !shouldResetDialogFeed(paintedPeer, peerAtStart)
+  );
+}
+
+assert(
+  !canPaintDialog({
+    gen: 1,
+    loadGen: 2,
+    view: "dialog",
+    activePeer: "b",
+    paintedPeer: "b",
+    peerAtStart: "a",
+  }),
+  "stale load of previous chat must not paint after switch",
+);
+assert(
+  !canPaintDialog({
+    gen: 2,
+    loadGen: 2,
+    view: "list",
+    activePeer: null,
+    paintedPeer: "a",
+    peerAtStart: "a",
+  }),
+  "paint must not run after leaving to the chat list",
+);
+assert(
+  canPaintDialog({
+    gen: 2,
+    loadGen: 2,
+    view: "dialog",
+    activePeer: "b",
+    paintedPeer: "b",
+    peerAtStart: "b",
+  }),
+  "current dialog load may paint",
+);
+
+let paintedPeer = "a";
+let html = "messages of A";
+if (shouldResetDialogFeed(paintedPeer, "b")) {
+  html = "Загрузка…";
+  paintedPeer = "b";
+}
+assert(html === "Загрузка…", "feed must drop previous chat messages immediately");
+assert(paintedPeer === "b", "feed peer must match the chat being opened");
+
+{
+  const feed = { innerHTML: "messages of A", dataset: { peerId: "a" } };
+  let loadGen = 1;
+  const staleGen = loadGen;
+  const stalePeer = "a";
+  await new Promise((resolve) => {
+    setTimeout(() => {
+      if (
+        canPaintDialog({
+          gen: staleGen,
+          loadGen,
+          view: "dialog",
+          activePeer: "b",
+          paintedPeer: feed.dataset.peerId,
+          peerAtStart: stalePeer,
+        })
+      ) {
+        feed.innerHTML = "STALE A";
+      }
+      resolve();
+    }, 15);
+    loadGen += 1;
+    if (shouldResetDialogFeed(feed.dataset.peerId, "b")) {
+      feed.innerHTML = "Загрузка…";
+      feed.dataset.peerId = "b";
+    }
+  });
+  assert(feed.innerHTML === "Загрузка…", "delayed previous-chat paint must not win");
+  assert(feed.dataset.peerId === "b", "delayed paint must not restore previous peer");
+}
 
 console.log("test-messages-sync: ok");

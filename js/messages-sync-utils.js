@@ -62,3 +62,11 @@ export function shouldSuppressPushNotification({
   if (!incomingPeerId) return false;
   return String(viewingPeerId || "") === String(incomingPeerId);
 }
+
+/**
+ * Ленту диалога нужно сбросить, если на экране ещё чужой peer.
+ * Иначе при входе в другой чат секунду-две видна предыдущая переписка.
+ */
+export function shouldResetDialogFeed(renderedPeerId, nextPeerId) {
+  return String(renderedPeerId || "") !== String(nextPeerId || "");
+}
