@@ -3928,6 +3928,8 @@ h2 {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 #section-settings .login-links-table th,
@@ -3936,12 +3938,26 @@ h2 {
   border-bottom: 1px solid #e8e8e8;
   vertical-align: top;
   text-align: left;
+  font-size: 0.9rem;
 }
 
-#section-settings .login-links-url-cell code {
+#section-settings .login-links-url-cell {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+#section-settings .login-links-url-cell a,
+#section-settings .login-links-url-cell .login-links-url {
   display: block;
   word-break: break-all;
-  font: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+  text-decoration: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 #section-settings .login-links-actions {

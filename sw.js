@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v40: ссылки входа в настройках — тот же шрифт, что у имени в первом столбце.
-const STATIC_CACHE = "orders-site-static-v40";
+// v41: ссылки входа в настройках — тот же шрифт, что у имени в первом столбце.
+const STATIC_CACHE = "orders-site-static-v41";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

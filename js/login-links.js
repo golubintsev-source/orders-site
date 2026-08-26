@@ -42,9 +42,11 @@ function appendLoginLinkRow(tbody, { userId, email, loginKey }) {
 
   const urlTd = document.createElement("td");
   urlTd.className = "login-links-url-cell";
-  const code = document.createElement("code");
-  code.textContent = url;
-  urlTd.appendChild(code);
+  urlTd.setAttribute("x-apple-data-detectors", "false");
+  const urlEl = document.createElement("span");
+  urlEl.className = "login-links-url";
+  urlEl.textContent = url;
+  urlTd.appendChild(urlEl);
 
   const actionsTd = document.createElement("td");
   actionsTd.className = "login-links-actions";

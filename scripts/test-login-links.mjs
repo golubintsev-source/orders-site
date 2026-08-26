@@ -52,6 +52,7 @@ function makeEl(tag) {
       el.children.push(node);
       return node;
     },
+    setAttribute() {},
     replaceChildren() {
       el.children.length = 0;
     },
