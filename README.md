@@ -81,6 +81,12 @@ git push
 
 Чтобы в групповых чатах показывались галочки (в списке чатов — когда все получили / все прочитали; в диалоге — буква участника и 0/1/2 галочки), выполни SQL из файла **`supabase_group_chat_receipts.sql`** в **Supabase → SQL Editor** (после `supabase_group_chat_reads.sql`). Добавляется колонка `last_delivered_at` и политика SELECT для участников чата.
 
+## Supabase: мгновенные сообщения (Realtime)
+
+Чтобы список чатов, лента и статусы доставки/прочтения обновлялись сразу, как в Telegram/WhatsApp Web, выполни SQL из файла **`supabase_messages_live.sql`** в **Supabase → SQL Editor**. Он включает Realtime для `user_messages`, `group_messages` и `group_chat_reads`.
+
+Без этого шага чаты продолжают работать: клиент подстраховывается опросом и push, но новые сообщения могут появиться в интерфейсе с задержкой.
+
 ## Supabase: статистика баланса
 
 Снимки строки «Сейчас» при открытии «Баланс» пишутся в **`site_access_logs`** (путь `/balance-snapshot?…`) — ту же таблицу, что и раздел «Статистика». Отдельный SQL для баланса не нужен, если уже выполнен **`supabase_site_access_logs.sql`**.

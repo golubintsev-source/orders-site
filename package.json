@@ -2,7 +2,8 @@
   "name": "orders-site",
   "private": true,
   "scripts": {
-    "update-supabase": "node scripts/update-supabase.js"
+    "update-supabase": "node scripts/update-supabase.js",
+    "test:messages-sync": "node scripts/test-messages-sync.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",

@@ -9,6 +9,7 @@
  */
 
 const webpush = require("web-push");
+const { displayNameByEmail } = require("./user-display-names");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -171,15 +172,20 @@ module.exports = async (req, res) => {
       return res.status(200).json({ sent: 0, reason: "no_subscriptions" });
     }
 
+    const senderName = displayNameByEmail(record.sender_email) || "Участник";
     const bodyText = notificationBodyFromMessage(record);
+    const chatPeer = `group:${record.chat_id}`;
     const payload = JSON.stringify({
-      title: "Новое сообщение",
-      body: bodyText || "без текста",
-      url: "/messages",
+      title: chat.name || "Группа",
+      body: bodyText ? `${senderName}: ${bodyText}` : senderName,
+      url: `/messages?chat=${encodeURIComponent(chatPeer)}`,
       messageId: record.id,
       chatId: record.chat_id,
-      tag: `group-message-${record.id}`,
+      peerId: chatPeer,
+      senderId: record.sender_id,
+      tag: `group-${record.chat_id}`,
     });
+    const pushOptions = { TTL: 86400, urgency: "high" };
 
     let sent = 0;
     const errors = [];
@@ -191,7 +197,7 @@ module.exports = async (req, res) => {
           keys: { p256dh: sub.p256dh, auth: sub.auth },
         };
         try {
-          await webpush.sendNotification(pushSub, payload);
+          await webpush.sendNotification(pushSub, payload, pushOptions);
           sent += 1;
         } catch (e) {
           errors.push({ id: sub.id, status: e.statusCode, message: e.message });

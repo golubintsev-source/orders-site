@@ -8,10 +8,11 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v31: поля сумм на странице расчётов — 16px и компактный ряд «от»/«до».
-const STATIC_CACHE = "orders-site-static-v37";
+// v38: живые чаты — push не дублирует открытый диалог, бейдж = непрочитанные.
+const STATIC_CACHE = "orders-site-static-v38";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
+const CHAT_VISIBILITY_KEY = "/chat-visibility";
 
 const LEGACY_CACHE_PREFIXES = ["orders-site-static-"];
 
@@ -42,6 +43,7 @@ const PRECACHE_URLS = [
   "/js/register-sw.js",
   // Раздел «Чаты» открывают чаще всего — держим его модули готовыми к первому кадру.
   "/js/messages.js",
+  "/js/messages-sync-utils.js",
   "/js/format.js",
   "/js/user-names.js",
   "/js/supabase-fetch.js",
@@ -324,9 +326,101 @@ async function clearBadge() {
   await setBadgeCount(0);
 }
 
+const CHAT_VISIBILITY_MAX_AGE_MS = 90_000;
+/** @type {Map<string, { visible: boolean, focused: boolean, peerId: string|null, at: number }>} */
+const chatVisibilityByClientId = new Map();
+
+function rememberChatVisibility(clientId, data) {
+  if (!clientId) return;
+  const state = {
+    visible: Boolean(data?.visible),
+    focused: Boolean(data?.focused),
+    peerId: data?.peerId ? String(data.peerId) : null,
+    at: Date.now(),
+  };
+  chatVisibilityByClientId.set(String(clientId), state);
+  void persistChatVisibilitySnapshot();
+}
+
+async function persistChatVisibilitySnapshot() {
+  try {
+    const latest = [...chatVisibilityByClientId.values()].sort((a, b) => b.at - a.at)[0];
+    const cache = await caches.open(BADGE_CACHE);
+    if (!latest) {
+      await cache.delete(CHAT_VISIBILITY_KEY);
+      return;
+    }
+    await cache.put(CHAT_VISIBILITY_KEY, new Response(JSON.stringify(latest)));
+  } catch {
+    /* ignore */
+  }
+}
+
+async function readPersistedChatVisibility() {
+  try {
+    const cache = await caches.open(BADGE_CACHE);
+    const res = await cache.match(CHAT_VISIBILITY_KEY);
+    if (!res) return null;
+    const parsed = JSON.parse(await res.text());
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function shouldSuppressPushForPeer(incomingPeer) {
+  if (!incomingPeer) return false;
+  const now = Date.now();
+  const states = [...chatVisibilityByClientId.values()];
+  const persisted = await readPersistedChatVisibility();
+  if (persisted) states.push(persisted);
+  for (const state of states) {
+    if (now - Number(state.at || 0) > CHAT_VISIBILITY_MAX_AGE_MS) continue;
+    if (!state.visible) continue;
+    if (state.peerId && String(state.peerId) === String(incomingPeer)) return true;
+  }
+  return false;
+}
+
+function incomingPeerFromPushData(data) {
+  if (data?.peerId) return String(data.peerId);
+  if (data?.chatId) {
+    const id = String(data.chatId);
+    return id.startsWith("group:") ? id : `group:${id}`;
+  }
+  try {
+    const u = new URL(data?.url || "/messages", self.location.origin);
+    return u.searchParams.get("chat");
+  } catch {
+    return null;
+  }
+}
+
+function clientViewsIncomingChat(client, incomingPeer) {
+  if (!incomingPeer || !client) return false;
+  const visible = client.visibilityState === "visible" || client.focused === true;
+  if (!visible) return false;
+  try {
+    const u = new URL(client.url);
+    const chat = u.searchParams.get("chat");
+    return Boolean(chat && chat === String(incomingPeer));
+  } catch {
+    return false;
+  }
+}
+
 self.addEventListener("message", (event) => {
+  if (event.data?.type === "chat-visibility") {
+    rememberChatVisibility(event.source?.id || "page", event.data);
+    return;
+  }
   if (event.data?.type === "clear-badge") {
     event.waitUntil(clearBadge());
+    return;
+  }
+  if (event.data?.type === "set-badge-count") {
+    event.waitUntil(setBadgeCount(Number(event.data.count) || 0));
     return;
   }
   if (event.data?.type === "get-shell-updated") {
@@ -352,7 +446,7 @@ self.addEventListener("push", (event) => {
   let data = {
     title: "ФАБРИКА ОКОН",
     body: "Новое уведомление",
-    url: "/",
+    url: "/messages",
     tag: "orders-site",
   };
   try {
@@ -364,17 +458,43 @@ self.addEventListener("push", (event) => {
     /* ignore malformed payload */
   }
 
-  const options = {
-    body: data.body || "Новое уведомление",
-    icon: "/img/icon-192.png?v=20260803",
-    badge: "/img/icon-192.png?v=20260803",
-    tag: data.tag || "orders-site",
-    data: { url: data.url || "/" },
-    renotify: true,
-  };
-
   event.waitUntil(
     (async () => {
+      const incomingPeer = incomingPeerFromPushData(data);
+      const clientList = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      let suppress = await shouldSuppressPushForPeer(incomingPeer);
+      for (const client of clientList) {
+        client.postMessage({
+          type: "push-received",
+          payload: data,
+          peerId: incomingPeer,
+          chatId: data.chatId || null,
+          url: data.url || "/messages",
+        });
+        if (clientViewsIncomingChat(client, incomingPeer)) suppress = true;
+      }
+
+      if (suppress) return;
+
+      const tag = data.tag || (incomingPeer ? `chat-${incomingPeer}` : "orders-site");
+      const options = {
+        body: data.body || "Новое уведомление",
+        icon: "/img/icon-192.png?v=20260803",
+        badge: "/img/icon-192.png?v=20260803",
+        tag,
+        renotify: true,
+        data: {
+          url: data.url || "/messages",
+          peerId: incomingPeer,
+          chatId: data.chatId || null,
+          messageId: data.messageId || null,
+        },
+      };
+
       const count = (await getBadgeCount()) + 1;
       await Promise.all([
         setBadgeCount(count),
@@ -386,21 +506,23 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const relUrl = event.notification.data?.url || "/";
+  const noteData = event.notification.data || {};
+  const relUrl = noteData.url || "/messages";
   const targetUrl = new URL(relUrl, self.location.origin).href;
+  const peerId = noteData.peerId || incomingPeerFromPushData(noteData);
 
   event.waitUntil(
     (async () => {
-      await clearBadge();
       const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       for (const client of clients) {
         if (!client.url.startsWith(self.location.origin)) continue;
-        if ("focus" in client) {
-          if (typeof client.navigate === "function") {
-            await client.navigate(targetUrl);
-          }
-          return client.focus();
-        }
+        client.postMessage({
+          type: "open-chat",
+          url: relUrl,
+          peerId,
+          chatId: noteData.chatId || null,
+        });
+        if ("focus" in client) return client.focus();
       }
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);

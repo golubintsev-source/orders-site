@@ -7,6 +7,16 @@
     (me && me.src ? new URL("../sw.js", me.src).href : new URL("/sw.js", window.location.origin).href);
   navigator.serviceWorker.register(swUrl).catch((e) => console.warn("[orders-site] SW register:", e));
 
+  window.__pendingSwMessages = window.__pendingSwMessages || [];
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    const data = event.data;
+    if (!data || (data.type !== "push-received" && data.type !== "open-chat")) return;
+    window.dispatchEvent(new CustomEvent("orders-sw-message", { detail: data }));
+    if (!window.__swMessageHandlerReady) {
+      window.__pendingSwMessages.push(data);
+    }
+  });
+
   /**
    * Оболочка отдаётся из кэша, поэтому сразу после выкатки открывается прошлая версия.
    * После критичных фиксов (сохранение заказа) перезагружаем сразу, иначе в памяти

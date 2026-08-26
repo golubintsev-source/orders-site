@@ -1,0 +1,68 @@
+import {
+  timestampMs,
+  isTimestampAfter,
+  isTimestampSameOrBefore,
+  laterIsoTimestamp,
+  conversationPeerFromPushData,
+  shouldSuppressPushNotification,
+} from "../js/messages-sync-utils.js";
+
+function assert(cond, msg) {
+  if (!cond) throw new Error(msg);
+}
+
+const z = "2026-08-26T07:06:00.123Z";
+const offset = "2026-08-26T07:06:00.123+00:00";
+const micros = "2026-08-26T07:06:00.123456+00:00";
+const later = "2026-08-26T07:06:01.000Z";
+
+assert(timestampMs(z) === timestampMs(offset), "Z and +00:00 must be equal");
+assert(timestampMs(micros) === timestampMs(z), "microseconds must collapse to the same ms");
+assert(!isTimestampAfter(micros, z), "same message must not count as unread vs last_read");
+assert(isTimestampSameOrBefore(micros, z), "opened chat covers last visible message");
+assert(isTimestampAfter(later, micros), "next message stays unread");
+assert(laterIsoTimestamp(z, micros) === z, "laterIso keeps first on equal ms");
+assert(laterIsoTimestamp(z, later) === later, "laterIso picks later");
+
+assert(conversationPeerFromPushData({ peerId: "abc" }) === "abc", "peerId");
+assert(conversationPeerFromPushData({ chatId: "g1" }) === "group:g1", "chatId");
+assert(
+  conversationPeerFromPushData({ url: "/messages?chat=group:g1" }) === "group:g1",
+  "url chat",
+);
+
+assert(
+  shouldSuppressPushNotification({
+    clientVisible: true,
+    viewingPeerId: "u1",
+    incomingPeerId: "u1",
+  }),
+  "suppress when the same dialog is on screen",
+);
+assert(
+  !shouldSuppressPushNotification({
+    clientVisible: true,
+    viewingPeerId: null,
+    incomingPeerId: "u1",
+  }),
+  "do not suppress on chat list",
+);
+assert(
+  !shouldSuppressPushNotification({
+    clientVisible: false,
+    viewingPeerId: "u1",
+    incomingPeerId: "u1",
+  }),
+  "do not suppress when PWA is in background",
+);
+assert(
+  !shouldSuppressPushNotification({
+    clientVisible: true,
+    viewingPeerId: "u1",
+    incomingPeerId: "u1",
+    stateAgeMs: 120_000,
+  }),
+  "ignore stale visibility heartbeat",
+);
+
+console.log("test-messages-sync: ok");

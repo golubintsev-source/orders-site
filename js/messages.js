@@ -14,14 +14,23 @@ import {
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { messageHasActiveTask } from "./message-task-links.js";
 import { getChatPeerFromUrl, syncChatPeerInUrl } from "./app-routes.js";
+import {
+  conversationPeerFromPushData,
+  isTimestampAfter,
+  laterIsoTimestamp,
+  timestampMs,
+} from "./messages-sync-utils.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 /** Максимальная высота поля ввода сообщения (как в CSS max-height). */
 const COMPOSER_INPUT_MAX_HEIGHT_PX = 120;
 const SUGGEST_DEBOUNCE_MS = 120;
-const UNREAD_POLL_MS = 60_000;
-const FEED_POLL_MS = 15_000;
-const CHAT_LIST_POLL_MS = 20_000;
+const UNREAD_POLL_MS = 45_000;
+const FEED_POLL_MS = 8_000;
+const FEED_POLL_REALTIME_MS = 30_000;
+const CHAT_LIST_POLL_MS = 12_000;
+const CHAT_LIST_POLL_REALTIME_MS = 35_000;
+const CHAT_VISIBILITY_HEARTBEAT_MS = 25_000;
 /** Сколько недавних DM тянуть для превью списка чатов (не всю историю). */
 const CHAT_LIST_DM_PREVIEW_LIMIT = 800;
 /** Первый проход списка чатов: только недавние DM за MESSAGES_FAST_LOAD_DAYS. */
@@ -51,6 +60,16 @@ let unreadPollTimer = null;
 let feedPollTimer = null;
 let chatListPollTimer = null;
 let lastFeedMessageAt = null;
+let messagesRealtimeChannel = null;
+let messagesRealtimeUid = null;
+let messagesRealtimeActive = false;
+let messagesLiveSyncInited = false;
+let chatVisibilityHeartbeatTimer = null;
+let messagesResumeTimer = null;
+let chatListRefreshTimer = null;
+let unreadBadgeTimer = null;
+let pollNewMessagesInFlight = false;
+let markConversationReadInFlight = null;
 /** @type {"list" | "dialog"} */
 let messagesView = "list";
 /** @type {string | null} null на списке; uuid пользователя или group:<uuid> в диалоге */
@@ -552,8 +571,9 @@ function memberReceiptState(messageCreatedAt, receipt) {
   }
   const readAt = receipt?.lastReadAt || null;
   const deliveredAt = receipt?.lastDeliveredAt || null;
-  const read = Boolean(readAt && readAt >= created);
-  const delivered = read || Boolean(deliveredAt && deliveredAt >= created);
+  const createdMs = timestampMs(created);
+  const read = Boolean(readAt && timestampMs(readAt) >= createdMs);
+  const delivered = read || Boolean(deliveredAt && timestampMs(deliveredAt) >= createdMs);
   if (read) return { read: true, delivered: true, status: "read" };
   if (delivered) return { read: false, delivered: true, status: "delivered" };
   return { read: false, delivered: false, status: "sent" };
@@ -630,9 +650,25 @@ function renderGroupParticipantReceiptsHtml(messageCreatedAt, memberIds, receipt
 }
 
 function mergeLaterReadAt(a, b) {
-  if (!a) return b || null;
-  if (!b) return a;
-  return a >= b ? a : b;
+  return laterIsoTimestamp(a, b);
+}
+
+function isDocumentVisible() {
+  return typeof document === "undefined" || document.visibilityState === "visible";
+}
+
+function isMessagesSectionActive() {
+  return Boolean(document.getElementById("section-messages")?.classList.contains("active"));
+}
+
+/** Прочтение — только когда диалог реально на экране (не в фоне PWA). */
+function canMarkMessagesRead() {
+  return (
+    isDocumentVisible() &&
+    isMessagesSectionActive() &&
+    messagesView === "dialog" &&
+    Boolean(activePeerId)
+  );
 }
 
 /** last_read_at по chat_id: только сервер (Supabase). */
@@ -678,16 +714,54 @@ function ownReadsFromGroupReceipts(receiptsByChat, uid) {
 
 async function markGroupChatRead(chatId, at = new Date().toISOString()) {
   const uid = getCurrentUserId();
-  if (!uid || !chatId) return;
+  if (!uid || !chatId || !at) return;
   if (groupChatReadsSupported === false) return;
+
+  const selectCols = groupReceiptSelectColumns();
+  let existing = null;
+  let selectError = null;
+  ({ data: existing, error: selectError } = await supabaseClient
+    .from("group_chat_reads")
+    .select(selectCols)
+    .eq("chat_id", chatId)
+    .eq("user_id", uid)
+    .maybeSingle());
+
+  if (selectError) {
+    if (noteGroupChatReadsSupport(selectError)) return;
+    if (noteGroupDeliveredAtSupport(selectError) && groupDeliveredAtSupported === false) {
+      ({ data: existing, error: selectError } = await supabaseClient
+        .from("group_chat_reads")
+        .select(groupReceiptSelectColumns())
+        .eq("chat_id", chatId)
+        .eq("user_id", uid)
+        .maybeSingle());
+    }
+    if (selectError) {
+      if (!noteGroupChatReadsSupport(selectError)) {
+        console.warn("Не удалось проверить прочитанность группового чата:", selectError);
+      }
+      existing = null;
+    }
+  }
+
+  const prevRead = existing?.last_read_at ? String(existing.last_read_at) : null;
+  const nextRead = laterIsoTimestamp(prevRead, at) || at;
+  const prevDelivered = existing?.last_delivered_at ? String(existing.last_delivered_at) : null;
+  const nextDelivered = laterIsoTimestamp(prevDelivered, nextRead) || nextRead;
+  const readUnchanged = Boolean(prevRead && timestampMs(prevRead) >= timestampMs(nextRead));
+  const deliveredUnchanged =
+    groupDeliveredAtSupported === false ||
+    Boolean(prevDelivered && timestampMs(prevDelivered) >= timestampMs(nextDelivered));
+  if (existing && readUnchanged && deliveredUnchanged) return;
 
   const payload = {
     chat_id: chatId,
     user_id: uid,
-    last_read_at: at,
+    last_read_at: nextRead,
   };
   if (groupDeliveredAtSupported !== false) {
-    payload.last_delivered_at = at;
+    payload.last_delivered_at = nextDelivered;
   }
 
   const { error } = await supabaseClient.from("group_chat_reads").upsert(payload, {
@@ -701,7 +775,7 @@ async function markGroupChatRead(chatId, at = new Date().toISOString()) {
         {
           chat_id: chatId,
           user_id: uid,
-          last_read_at: at,
+          last_read_at: nextRead,
         },
         { onConflict: "chat_id,user_id" },
       );
@@ -917,7 +991,7 @@ function countUnreadGroupMessagesForChat(messages, uid, lastReadAt) {
     if (isMessageDeleted(row)) return false;
     if (String(row.sender_id) === me) return false;
     if (!lastReadAt) return true;
-    return String(row.created_at || "") > String(lastReadAt);
+    return isTimestampAfter(row.created_at, lastReadAt);
   }).length;
 }
 
@@ -1639,34 +1713,31 @@ async function fetchGroupUnreadCounts(chatIds, uid, lastReadByChat) {
   let select = "id, chat_id, created_at, sender_id";
   if (messageActionsSupported !== false) select += ", deleted_at";
 
-  let query = supabaseClient
-    .from("group_messages")
-    .select(select)
-    .in("chat_id", chatIds)
-    .neq("sender_id", uid);
-
   let minLastRead = null;
   for (const chatId of chatIds) {
     const lastRead = lastReadByChat?.get(String(chatId)) || lastReadByChat?.get(chatId);
-    if (lastRead && (!minLastRead || lastRead < minLastRead)) {
+    if (!lastRead) continue;
+    if (!minLastRead || timestampMs(lastRead) < timestampMs(minLastRead)) {
       minLastRead = lastRead;
     }
   }
-  if (minLastRead) {
-    query = query.gt("created_at", minLastRead);
-  }
 
-  let { data, error } = await query;
+  const buildQuery = (cols) => {
+    let query = supabaseClient
+      .from("group_messages")
+      .select(cols)
+      .in("chat_id", chatIds)
+      .neq("sender_id", uid)
+      .order("id", { ascending: true });
+    if (minLastRead) query = query.gt("created_at", minLastRead);
+    return query;
+  };
+
+  let { data, error } = await fetchAllSupabaseRows(() => buildQuery(select));
 
   if (error && noteMessageActionsSupport(error)) {
     select = "id, chat_id, created_at, sender_id";
-    query = supabaseClient
-      .from("group_messages")
-      .select(select)
-      .in("chat_id", chatIds)
-      .neq("sender_id", uid);
-    if (minLastRead) query = query.gt("created_at", minLastRead);
-    ({ data, error } = await query);
+    ({ data, error } = await fetchAllSupabaseRows(() => buildQuery(select)));
   }
 
   if (error) {
@@ -1679,8 +1750,8 @@ async function fetchGroupUnreadCounts(chatIds, uid, lastReadByChat) {
   for (const row of data || []) {
     if (isMessageDeleted(row)) continue;
     const chatId = String(row.chat_id);
-    const lastRead = lastReadByChat?.get(chatId);
-    if (lastRead && row.created_at <= lastRead) continue;
+    const lastRead = lastReadByChat?.get(chatId) || lastReadByChat?.get(row.chat_id);
+    if (lastRead && !isTimestampAfter(row.created_at, lastRead)) continue;
     unreadByChat.set(chatId, (unreadByChat.get(chatId) || 0) + 1);
   }
 
@@ -2299,6 +2370,7 @@ export async function loadChatList() {
   ]);
 
   if (gen !== loadChatListGeneration) return;
+  if (messagesView !== "list") return;
 
   if (recentPack.error) {
     console.error("Ошибка загрузки сообщений:", recentPack.error);
@@ -2327,16 +2399,19 @@ export async function loadChatList() {
   void (async () => {
     await whenIdle();
     if (gen !== loadChatListGeneration || messagesView !== "list") return;
-    const fuller = await fetchRecentUserMessagesForChatList({
-      sinceIso: null,
-      limit: CHAT_LIST_DM_PREVIEW_LIMIT,
-    });
-    if (gen !== loadChatListGeneration) return;
-    if (fuller.error || messagesView !== "list") return;
+    const [fuller, unreadFresh] = await Promise.all([
+      fetchRecentUserMessagesForChatList({
+        sinceIso: null,
+        limit: CHAT_LIST_DM_PREVIEW_LIMIT,
+      }),
+      fetchUnreadIncomingDmMeta(),
+    ]);
+    if (gen !== loadChatListGeneration || messagesView !== "list") return;
+    if (fuller.error) return;
     await paintChatListFromData(
       list,
       fuller.rows,
-      unreadPack.rows,
+      unreadFresh.error ? unreadPack.rows : unreadFresh.rows,
       groupPack.chats || [],
     );
   })();
@@ -2425,11 +2500,13 @@ export function showMessagesChatList() {
   syncChatPeerInUrl(null);
   stopMessagesFeedPolling();
   startChatListPolling();
+  reportChatVisibilityToSw();
   void loadChatList();
 }
 
 export async function openMessagesDialog(peerId) {
   if (!peerId) return;
+  loadChatListGeneration += 1;
   activePeerId = peerId;
   lastFeedMessageAt = null;
   clearComposerContext();
@@ -2438,6 +2515,10 @@ export async function openMessagesDialog(peerId) {
   setMessagesView("dialog");
   syncChatPeerInUrl(peerId);
   stopChatListPolling();
+  clearChatListUnreadForPeer(peerId);
+  void closeNotificationsForConversation(peerId);
+  reportChatVisibilityToSw();
+  const markPromise = markActiveConversationRead();
   await loadUsersDirectory();
   if (isGroupChat() && groupChatsById.size === 0) {
     await fetchMyGroupChats();
@@ -2445,7 +2526,9 @@ export async function openMessagesDialog(peerId) {
   updateDialogHeader();
   syncComposerForActivePeer();
   await loadMessages();
+  await markPromise;
   startMessagesFeedPolling();
+  reportChatVisibilityToSw();
 }
 
 export async function loadMessages() {
@@ -2510,16 +2593,7 @@ export async function loadMessages() {
     if (ids.length) void loadAndApplyReactions(messageKind, ids);
 
     if (!markRead) return;
-    if (!isGroupChat()) {
-      await markIncomingMessagesRead(visibleRows);
-    } else {
-      const groupId = parseGroupId();
-      const latestAt =
-        visibleRows.length > 0
-          ? visibleRows[visibleRows.length - 1].created_at
-          : new Date().toISOString();
-      if (groupId) await markGroupChatRead(groupId, latestAt || new Date().toISOString());
-    }
+    await markActiveConversationRead();
     void refreshMessagesUnreadBadge();
   }
 
@@ -2730,26 +2804,48 @@ async function syncOutgoingReadStatus() {
 }
 
 async function pollNewMessages() {
+  if (pollNewMessagesInFlight) return;
   const feed = document.getElementById("messagesFeed");
   const uid = getCurrentUserId();
   if (!feed || !uid || messagesView !== "dialog" || !activePeerId) return;
+  pollNewMessagesInFlight = true;
+  try {
+    await pollNewMessagesUnlocked();
+  } finally {
+    pollNewMessagesInFlight = false;
+  }
+}
+
+async function pollNewMessagesUnlocked() {
+  const uid = getCurrentUserId();
+  if (!uid || messagesView !== "dialog" || !activePeerId) return;
 
   if (isGroupChat()) {
     const groupId = parseGroupId();
     const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
+    const selectCols = withMessageActionColumns(withAttachmentColumns(selectBase));
     let query = supabaseClient
       .from("group_messages")
-      .select(withAttachmentColumns(selectBase))
+      .select(selectCols)
       .eq("chat_id", groupId)
       .order("created_at", { ascending: true });
     if (lastFeedMessageAt) {
       query = query.gte("created_at", lastFeedMessageAt);
     }
     let { data, error } = await query;
+    if (error && noteMessageActionsSupport(error)) {
+      query = supabaseClient
+        .from("group_messages")
+        .select(withMessageActionColumns(withAttachmentColumns(selectBase)))
+        .eq("chat_id", groupId)
+        .order("created_at", { ascending: true });
+      if (lastFeedMessageAt) query = query.gte("created_at", lastFeedMessageAt);
+      ({ data, error } = await query);
+    }
     if (error && noteAttachmentDimensionSupport(error)) {
       query = supabaseClient
         .from("group_messages")
-        .select(withAttachmentColumns(selectBase))
+        .select(withMessageActionColumns(withAttachmentColumns(selectBase)))
         .eq("chat_id", groupId)
         .order("created_at", { ascending: true });
       if (lastFeedMessageAt) query = query.gte("created_at", lastFeedMessageAt);
@@ -2758,7 +2854,7 @@ async function pollNewMessages() {
     if (error && noteAttachmentSupport(error)) {
       query = supabaseClient
         .from("group_messages")
-        .select(withAttachmentColumns(selectBase))
+        .select(withMessageActionColumns(withAttachmentColumns(selectBase)))
         .eq("chat_id", groupId)
         .order("created_at", { ascending: true });
       if (lastFeedMessageAt) query = query.gte("created_at", lastFeedMessageAt);
@@ -2774,11 +2870,7 @@ async function pollNewMessages() {
     const rows = data || [];
     if (rows.length) {
       appendMessagesToFeed(rows);
-      const latestAt = rows.reduce((max, row) => {
-        const at = row.created_at || "";
-        return !max || at > max ? at : max;
-      }, lastFeedMessageAt || "");
-      if (groupId && latestAt) await markGroupChatRead(groupId, latestAt);
+      if (canMarkMessagesRead()) await markActiveConversationRead();
       void refreshMessagesUnreadBadge();
     }
     await syncGroupOutgoingReceipts();
@@ -2837,7 +2929,7 @@ async function pollNewMessages() {
   const rows = data || [];
   if (rows.length) {
     appendMessagesToFeed(rows);
-    await markIncomingMessagesRead(rows);
+    if (canMarkMessagesRead()) await markActiveConversationRead();
     void refreshMessagesUnreadBadge();
   }
 
@@ -2848,9 +2940,11 @@ async function pollNewMessages() {
 export function startMessagesFeedPolling() {
   stopMessagesFeedPolling();
   if (messagesView !== "dialog") return;
+  if (!isDocumentVisible()) return;
+  const ms = messagesRealtimeActive ? FEED_POLL_REALTIME_MS : FEED_POLL_MS;
   feedPollTimer = window.setInterval(() => {
     void pollNewMessages();
-  }, FEED_POLL_MS);
+  }, ms);
 }
 
 export function stopMessagesFeedPolling() {
@@ -2863,9 +2957,11 @@ export function stopMessagesFeedPolling() {
 function startChatListPolling() {
   stopChatListPolling();
   if (messagesView !== "list") return;
+  if (!isDocumentVisible()) return;
+  const ms = messagesRealtimeActive ? CHAT_LIST_POLL_REALTIME_MS : CHAT_LIST_POLL_MS;
   chatListPollTimer = window.setInterval(() => {
     if (messagesView === "list") void loadChatList();
-  }, CHAT_LIST_POLL_MS);
+  }, ms);
 }
 
 function stopChatListPolling() {
@@ -2878,6 +2974,433 @@ function stopChatListPolling() {
 export function stopMessagesPolling() {
   stopMessagesFeedPolling();
   stopChatListPolling();
+}
+
+function restartVisiblePolling() {
+  if (!isMessagesSectionActive() || !isDocumentVisible()) {
+    stopMessagesFeedPolling();
+    stopChatListPolling();
+    return;
+  }
+  if (messagesView === "dialog") startMessagesFeedPolling();
+  else if (messagesView === "list") startChatListPolling();
+}
+
+function clearChatListUnreadForPeer(peerId) {
+  const list = document.getElementById("messagesChatList");
+  if (!list || !peerId) return;
+  const item = list.querySelector(`.messages-chat-item[data-peer-id="${String(peerId).replace(/"/g, "")}"]`);
+  if (!item) return;
+  item.classList.remove("messages-chat-item--unread");
+  item.querySelector(".messages-chat-item-count")?.remove();
+  if (list.dataset.chatListSig) {
+    list.dataset.chatListSig = `${list.dataset.chatListSig}|read:${peerId}`;
+  }
+}
+
+function scheduleUnreadBadgeRefresh() {
+  if (unreadBadgeTimer) return;
+  unreadBadgeTimer = window.setTimeout(() => {
+    unreadBadgeTimer = null;
+    void refreshMessagesUnreadBadge();
+  }, 300);
+}
+
+function scheduleChatListRefresh() {
+  if (chatListRefreshTimer) window.clearTimeout(chatListRefreshTimer);
+  chatListRefreshTimer = window.setTimeout(() => {
+    chatListRefreshTimer = null;
+    if (messagesView === "list" && isMessagesSectionActive()) void loadChatList();
+  }, 250);
+}
+
+function reportChatVisibilityToSw() {
+  if (!("serviceWorker" in navigator)) return;
+  const payload = {
+    type: "chat-visibility",
+    visible: isDocumentVisible(),
+    focused: typeof document.hasFocus === "function" ? document.hasFocus() : isDocumentVisible(),
+    peerId: messagesView === "dialog" ? activePeerId : null,
+    section: isMessagesSectionActive() ? "messages" : "other",
+  };
+  const post = (worker) => {
+    try {
+      worker?.postMessage(payload);
+    } catch {
+      /* ignore */
+    }
+  };
+  post(navigator.serviceWorker.controller);
+  void navigator.serviceWorker.ready.then((reg) => post(reg.active)).catch(() => {});
+}
+
+async function closeNotificationsForConversation(peerId) {
+  if (!peerId || !("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (typeof reg.getNotifications !== "function") return;
+    const notes = await reg.getNotifications();
+    const incoming = String(peerId);
+    const groupId = incoming.startsWith(GROUP_PEER_PREFIX) ? incoming.slice(GROUP_PEER_PREFIX.length) : "";
+    for (const note of notes) {
+      const tag = String(note.tag || "");
+      const url = String(note.data?.url || "");
+      const notePeer = conversationPeerFromPushData(note.data || { url, tag });
+      if (
+        notePeer === incoming ||
+        tag === `dm-${incoming}` ||
+        (groupId && (tag === `group-${groupId}` || tag === `group-message-${groupId}`)) ||
+        url.includes(encodeURIComponent(incoming)) ||
+        url.includes(incoming)
+      ) {
+        note.close();
+      }
+    }
+  } catch (e) {
+    console.warn("[messages] close notifications:", e);
+  }
+}
+
+async function fetchLatestGroupMessageCreatedAt(chatId) {
+  if (!chatId) return null;
+  const { data, error } = await supabaseClient
+    .from("group_messages")
+    .select("created_at")
+    .eq("chat_id", chatId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data?.created_at) return null;
+  return String(data.created_at);
+}
+
+async function markPeerConversationRead(peerId) {
+  const uid = getCurrentUserId();
+  if (!uid || !peerId) return;
+
+  const now = new Date().toISOString();
+  const payload =
+    deliveredAtSupported === false ? { read_at: now } : { read_at: now, delivered_at: now };
+
+  const applyUpdate = (body) => {
+    let query = supabaseClient
+      .from("user_messages")
+      .update(body)
+      .eq("recipient_id", uid)
+      .eq("sender_id", peerId)
+      .is("read_at", null);
+    if (messageActionsSupported !== false) {
+      query = query.is("deleted_at", null);
+    }
+    return query;
+  };
+
+  const { error } = await applyUpdate(payload);
+  if (error) {
+    if (noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
+      const retry = await applyUpdate({ read_at: now });
+      if (retry.error) {
+        if (!noteMessageActionsSupport(retry.error)) {
+          console.error("Ошибка отметки прочитанных:", retry.error);
+        }
+      }
+      return;
+    }
+    if (noteMessageActionsSupport(error)) {
+      const retry = await supabaseClient
+        .from("user_messages")
+        .update(payload)
+        .eq("recipient_id", uid)
+        .eq("sender_id", peerId)
+        .is("read_at", null);
+      if (retry.error) console.error("Ошибка отметки прочитанных:", retry.error);
+      return;
+    }
+    console.error("Ошибка отметки прочитанных:", error);
+  }
+}
+
+async function markActiveConversationRead() {
+  if (!canMarkMessagesRead()) return;
+  const peerId = activePeerId;
+  if (!peerId) return;
+  const key = String(peerId);
+  if (markConversationReadInFlight === key) return;
+  markConversationReadInFlight = key;
+  try {
+    if (isGroupChat(peerId)) {
+      const groupId = parseGroupId(peerId);
+      if (!groupId) return;
+      const latestAt = await fetchLatestGroupMessageCreatedAt(groupId);
+      if (latestAt) await markGroupChatRead(groupId, latestAt);
+      return;
+    }
+    await markPeerConversationRead(peerId);
+  } finally {
+    if (markConversationReadInFlight === key) markConversationReadInFlight = null;
+  }
+}
+
+function realtimeEventType(payload) {
+  return String(payload?.eventType || payload?.event || "").toUpperCase();
+}
+
+function handleRealtimeUserMessage(payload) {
+  const row = payload?.new;
+  if (!row) return;
+  const uid = getCurrentUserId();
+  if (!uid) return;
+  const involvesMe =
+    String(row.sender_id) === String(uid) || String(row.recipient_id) === String(uid);
+  if (!involvesMe) return;
+
+  const eventType = realtimeEventType(payload);
+  if (eventType === "UPDATE") {
+    if (messagesView === "dialog" && isPeerChat() && messageBelongsToPeer(row, activePeerId, uid)) {
+      const el = document.querySelector(`#messagesFeed [data-message-id="${row.id}"]`);
+      if (row.deleted_at) {
+        el?.remove();
+        return;
+      }
+      if (el && String(row.sender_id) === String(uid)) {
+        applyOutgoingStatusToElement(el, {
+          delivered: Boolean(row.delivered_at) || Boolean(row.read_at),
+          read: Boolean(row.read_at),
+        });
+      }
+    }
+    if (messagesView === "list" && isMessagesSectionActive()) scheduleChatListRefresh();
+    scheduleUnreadBadgeRefresh();
+    return;
+  }
+
+  if (eventType && eventType !== "INSERT") return;
+
+  if (messagesView === "dialog" && isPeerChat() && messageBelongsToPeer(row, activePeerId, uid)) {
+    appendMessagesToFeed([row]);
+    if (canMarkMessagesRead()) void markActiveConversationRead();
+    void closeNotificationsForConversation(activePeerId);
+    scheduleUnreadBadgeRefresh();
+    return;
+  }
+
+  if (messagesView === "list" && isMessagesSectionActive()) scheduleChatListRefresh();
+  scheduleUnreadBadgeRefresh();
+}
+
+function handleRealtimeGroupMessage(payload) {
+  const row = payload?.new;
+  if (!row?.chat_id) return;
+  const chatId = String(row.chat_id);
+  const peerId = toGroupPeerId(chatId);
+  const eventType = realtimeEventType(payload);
+
+  if (eventType === "UPDATE") {
+    if (messagesView === "dialog" && isGroupChat() && parseGroupId() === chatId) {
+      const el = document.querySelector(`#messagesFeed [data-message-id="${row.id}"]`);
+      if (row.deleted_at) el?.remove();
+    }
+    if (messagesView === "list" && isMessagesSectionActive()) scheduleChatListRefresh();
+    scheduleUnreadBadgeRefresh();
+    return;
+  }
+
+  if (eventType && eventType !== "INSERT") return;
+
+  if (messagesView === "dialog" && isGroupChat() && parseGroupId() === chatId) {
+    appendMessagesToFeed([row]);
+    if (canMarkMessagesRead()) void markActiveConversationRead();
+    void closeNotificationsForConversation(peerId);
+    scheduleUnreadBadgeRefresh();
+    return;
+  }
+
+  if (messagesView === "list" && isMessagesSectionActive()) scheduleChatListRefresh();
+  scheduleUnreadBadgeRefresh();
+}
+
+function handleRealtimeGroupReceipt(payload) {
+  const row = payload?.new;
+  if (!row?.chat_id) return;
+  if (messagesView === "dialog" && isGroupChat() && parseGroupId() === String(row.chat_id)) {
+    void syncGroupOutgoingReceipts();
+  }
+  if (messagesView === "list" && isMessagesSectionActive()) scheduleChatListRefresh();
+}
+
+function stopMessagesRealtime() {
+  if (!messagesRealtimeChannel) {
+    messagesRealtimeUid = null;
+    messagesRealtimeActive = false;
+    return;
+  }
+  const channel = messagesRealtimeChannel;
+  messagesRealtimeChannel = null;
+  messagesRealtimeUid = null;
+  messagesRealtimeActive = false;
+  void supabaseClient.removeChannel(channel);
+}
+
+function startMessagesRealtime() {
+  const uid = getCurrentUserId();
+  if (!uid) return;
+  if (messagesRealtimeChannel && messagesRealtimeUid === String(uid) && messagesRealtimeActive) {
+    return;
+  }
+  if (messagesRealtimeChannel) stopMessagesRealtime();
+  messagesRealtimeUid = String(uid);
+
+  const channel = supabaseClient
+    .channel(`messages-sync:${uid}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "user_messages", filter: `recipient_id=eq.${uid}` },
+      (payload) => handleRealtimeUserMessage(payload),
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "user_messages", filter: `sender_id=eq.${uid}` },
+      (payload) => handleRealtimeUserMessage(payload),
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "group_messages" },
+      (payload) => handleRealtimeGroupMessage(payload),
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "group_chat_reads" },
+      (payload) => handleRealtimeGroupReceipt(payload),
+    );
+
+  channel.subscribe((status) => {
+    messagesRealtimeActive = status === "SUBSCRIBED";
+    if (status === "SUBSCRIBED") restartVisiblePolling();
+    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+      messagesRealtimeActive = false;
+    }
+  });
+
+  messagesRealtimeChannel = channel;
+}
+
+async function syncMessagesAfterResume() {
+  reportChatVisibilityToSw();
+  startMessagesRealtime();
+  if (!getCurrentUserId()) return;
+  void refreshMessagesUnreadBadge();
+  if (!isMessagesSectionActive()) {
+    stopMessagesFeedPolling();
+    stopChatListPolling();
+    return;
+  }
+  restartVisiblePolling();
+  if (messagesView === "dialog") {
+    await pollNewMessages();
+    if (canMarkMessagesRead()) void markActiveConversationRead();
+  } else if (messagesView === "list") {
+    void loadChatList();
+  }
+}
+
+function scheduleMessagesResume() {
+  if (messagesResumeTimer) window.clearTimeout(messagesResumeTimer);
+  messagesResumeTimer = window.setTimeout(() => {
+    messagesResumeTimer = null;
+    void syncMessagesAfterResume();
+  }, 200);
+}
+
+async function handleServiceWorkerChatEvent(data) {
+  if (!data || typeof data !== "object") return;
+  if (data.type === "open-chat") {
+    const peerId = conversationPeerFromPushData(data) || data.peerId || null;
+    await openChatFromNotification(peerId);
+    return;
+  }
+  if (data.type !== "push-received") return;
+  const payload = data.payload && typeof data.payload === "object" ? data.payload : data;
+  const peerId = conversationPeerFromPushData(payload);
+  reportChatVisibilityToSw();
+  if (
+    peerId &&
+    messagesView === "dialog" &&
+    String(activePeerId) === String(peerId) &&
+    isDocumentVisible()
+  ) {
+    void closeNotificationsForConversation(peerId);
+    await pollNewMessages();
+    if (canMarkMessagesRead()) await markActiveConversationRead();
+    void refreshMessagesUnreadBadge();
+    return;
+  }
+  void refreshMessagesUnreadBadge();
+  if (!isMessagesSectionActive()) return;
+  if (messagesView === "list") scheduleChatListRefresh();
+  else if (messagesView === "dialog") void pollNewMessages();
+}
+
+export async function openChatFromNotification(peerId) {
+  if (peerId) syncChatPeerInUrl(peerId);
+  const active = isMessagesSectionActive();
+  if (!active) {
+    const { switchSection } = await import("./section-nav.js");
+    switchSection("messages", { restoreMessagesChat: Boolean(peerId) });
+    return;
+  }
+  if (peerId) await openMessagesDialog(peerId);
+  else showMessagesChatList();
+}
+
+function drainPendingServiceWorkerChatEvents() {
+  const pending = window.__pendingSwMessages;
+  window.__swMessageHandlerReady = true;
+  if (!Array.isArray(pending) || !pending.length) return;
+  window.__pendingSwMessages = [];
+  for (const data of pending) {
+    void handleServiceWorkerChatEvent(data);
+  }
+}
+
+function initMessagesLiveSync() {
+  if (messagesLiveSyncInited) return;
+  messagesLiveSyncInited = true;
+
+  document.addEventListener("visibilitychange", () => {
+    reportChatVisibilityToSw();
+    if (document.visibilityState === "visible") scheduleMessagesResume();
+    else {
+      stopMessagesFeedPolling();
+      stopChatListPolling();
+    }
+  });
+  window.addEventListener("focus", () => {
+    reportChatVisibilityToSw();
+    scheduleMessagesResume();
+  });
+  window.addEventListener("pageshow", () => scheduleMessagesResume());
+  window.addEventListener("online", () => scheduleMessagesResume());
+  document.addEventListener("orders-app-resume", () => scheduleMessagesResume());
+  window.addEventListener("orders-sw-message", (event) => {
+    void handleServiceWorkerChatEvent(event.detail);
+  });
+
+  drainPendingServiceWorkerChatEvents();
+  startMessagesRealtime();
+  reportChatVisibilityToSw();
+  if (chatVisibilityHeartbeatTimer) window.clearInterval(chatVisibilityHeartbeatTimer);
+  chatVisibilityHeartbeatTimer = window.setInterval(() => {
+    if (isDocumentVisible()) reportChatVisibilityToSw();
+  }, CHAT_VISIBILITY_HEARTBEAT_MS);
+}
+
+async function setAppUnreadBadgeCount(count) {
+  try {
+    const { setPushBadgeCount } = await import("./push-notifications.js");
+    await setPushBadgeCount(count);
+  } catch (e) {
+    console.warn("[messages] set badge:", e);
+  }
 }
 
 async function markIncomingMessagesDelivered(ids) {
@@ -2901,43 +3424,6 @@ async function markIncomingMessagesDelivered(ids) {
       return;
     }
     deliveredAtSupported = true;
-  }
-}
-
-async function markIncomingMessagesRead(rows) {
-  const uid = getCurrentUserId();
-  if (!uid) return;
-
-  const incoming = (rows || []).filter((r) => String(r.recipient_id) === String(uid));
-  const undeliveredIds = incoming.filter((r) => !r.delivered_at && !r.read_at).map((r) => r.id);
-  const unreadIds = incoming.filter((r) => !r.read_at).map((r) => r.id);
-
-  if (undeliveredIds.length) {
-    await markIncomingMessagesDelivered(undeliveredIds);
-  }
-
-  if (unreadIds.length === 0) return;
-
-  const now = new Date().toISOString();
-  const payload =
-    deliveredAtSupported === false ? { read_at: now } : { read_at: now, delivered_at: now };
-  const { error } = await supabaseClient
-    .from("user_messages")
-    .update(payload)
-    .in("id", unreadIds)
-    .eq("recipient_id", uid);
-
-  if (error) {
-    if (noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
-      const retry = await supabaseClient
-        .from("user_messages")
-        .update({ read_at: now })
-        .in("id", unreadIds)
-        .eq("recipient_id", uid);
-      if (retry.error) console.error("Ошибка отметки прочитанных:", retry.error);
-      return;
-    }
-    console.error("Ошибка отметки прочитанных:", error);
   }
 }
 
@@ -2994,9 +3480,9 @@ async function countUnreadGroupMessagesTotal() {
   const unreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
 
   let total = 0;
-  const activeGroupId = isGroupChat() ? parseGroupId() : null;
+  const activeGroupId = canMarkMessagesRead() && isGroupChat() ? parseGroupId() : null;
   for (const chat of chats) {
-    // Открытый сейчас групповой чат считаем прочитанным.
+    // Открытый на экране групповой чат считаем прочитанным.
     if (activeGroupId && chat.id === activeGroupId) continue;
     total += unreadByChat.get(String(chat.id)) || unreadByChat.get(chat.id) || 0;
   }
@@ -3006,13 +3492,15 @@ async function countUnreadGroupMessagesTotal() {
 export async function refreshMessagesUnreadBadge() {
   const badge = document.getElementById("messagesUnreadBadge");
   const btn = document.getElementById("messagesNavBtn");
-  if (!badge || !btn) return;
 
   const uid = getCurrentUserId();
   if (!uid) {
-    badge.hidden = true;
+    if (badge) badge.hidden = true;
+    void setAppUnreadBadgeCount(0);
     return;
   }
+
+  startMessagesRealtime();
 
   // While the app is open, acknowledge delivery without marking as read.
   await acknowledgeIncomingDelivered();
@@ -3038,7 +3526,7 @@ export async function refreshMessagesUnreadBadge() {
 
   if (error) {
     console.warn("Не удалось получить число непрочитанных:", error);
-    badge.hidden = true;
+    if (badge) badge.hidden = true;
     return;
   }
 
@@ -3051,14 +3539,17 @@ export async function refreshMessagesUnreadBadge() {
   }
 
   const n = dmUnread + groupUnread;
-  if (n > 0) {
-    badge.textContent = n > 99 ? "99+" : String(n);
-    badge.hidden = false;
-    btn.classList.add("messages-nav-btn--has-unread");
-  } else {
-    badge.hidden = true;
-    btn.classList.remove("messages-nav-btn--has-unread");
+  if (badge && btn) {
+    if (n > 0) {
+      badge.textContent = n > 99 ? "99+" : String(n);
+      badge.hidden = false;
+      btn.classList.add("messages-nav-btn--has-unread");
+    } else {
+      badge.hidden = true;
+      btn.classList.remove("messages-nav-btn--has-unread");
+    }
   }
+  void setAppUnreadBadgeCount(n);
 }
 
 function startUnreadPolling() {
@@ -5174,6 +5665,7 @@ export function initMessagesSection() {
 
   void loadUsersDirectory();
   startUnreadPolling();
+  initMessagesLiveSync();
 }
 
 export { ORDER_TOKEN_RE, GROUP_PEER_PREFIX };

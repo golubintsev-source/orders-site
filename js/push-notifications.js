@@ -305,6 +305,18 @@ export async function refreshPushNotificationsUi() {
   await refreshPushSettingsUi();
 }
 
+/** Выставить красный кружок на иконке PWA по фактическому числу непрочитанных. */
+export async function setPushBadgeCount(count) {
+  const n = Math.max(0, Math.min(Number(count) || 0, 99));
+  try {
+    await applyPageBadge(n);
+    const reg = await navigator.serviceWorker?.ready;
+    reg?.active?.postMessage({ type: "set-badge-count", count: n });
+  } catch (e) {
+    console.warn("[push] set badge:", e);
+  }
+}
+
 /** Сбросить красный кружок на иконке PWA (iOS / Windows / Android). */
 export async function clearPushBadge() {
   try {
@@ -409,12 +421,11 @@ export async function initPushNotifications() {
   initPwaInstallPrompt();
   initPushNotificationsSection();
   await syncPushSubscriptionIfGranted();
-  await syncPushBadgeFromServiceWorker();
   await refreshPushSettingsUi();
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
-      void syncPushBadgeFromServiceWorker();
+      document.dispatchEvent(new CustomEvent("orders-app-resume"));
     }
   });
 }

@@ -427,9 +427,6 @@ export function switchSection(sectionId, opts = {}) {
     void import("./messages.js").then((m) => {
       m.onMessagesSectionEnter({ restoreFromUrl: Boolean(opts.restoreMessagesChat) });
     });
-    void import("./push-notifications.js").then((m) => {
-      m.clearPushBadge();
-    });
   }
   if (prevSectionId === "voice" && sectionId !== "voice") {
     void import("./voice.js").then((m) => m.onVoiceSectionLeave());
