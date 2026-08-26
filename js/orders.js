@@ -90,6 +90,7 @@ import { orderHasActiveTask } from "./order-task-links.js";
 import {
   overlayHistorySnapshotWithParticipants,
   recoverLostMoneyRecipientsInOrderData,
+  shouldLockKassaBeznalRecipientSelect,
 } from "./order-money-recipients.js";
 
 function mergedLocalOrdersForOfflineDisplayMeta() {
@@ -2550,11 +2551,16 @@ function selectOptionValues(selectId) {
 }
 
 function recoverLostMoneyRecipientsFromForm(orderData) {
-  return recoverLostMoneyRecipientsInOrderData(orderData, state.initialOrderParticipants, {
-    prepayment_to: selectOptionValues("prepayment_to"),
-    remaining_to: selectOptionValues("remaining_to"),
-    installer_payment_by: selectOptionValues("installer_payment_by"),
-  });
+  return recoverLostMoneyRecipientsInOrderData(
+    orderData,
+    state.initialOrderParticipants,
+    {
+      prepayment_to: selectOptionValues("prepayment_to"),
+      remaining_to: selectOptionValues("remaining_to"),
+      installer_payment_by: selectOptionValues("installer_payment_by"),
+    },
+    { canSelectRestricted: canSelectKassaBeznal() },
+  );
 }
 
 function buildEditOrderHistoryComments(orderData) {
@@ -2769,6 +2775,8 @@ function ensureSelectValue(sel, value) {
  */
 export function applyMoneyRecipientSelectsForRole() {
   const allowed = canSelectKassaBeznal();
+  const viewOnly = state.viewingOrderId != null;
+  const lockTitle = "«Касса» и «Безнал» для вашей роли менять нельзя";
   for (const id of MONEY_RECIPIENT_SELECT_IDS) {
     const sel = document.getElementById(id);
     if (!sel) continue;
@@ -2785,6 +2793,12 @@ export function applyMoneyRecipientSelectsForRole() {
       }
     }
     if (current) ensureSelectValue(sel, current);
+    const lock = shouldLockKassaBeznalRecipientSelect(sel.value || current, allowed);
+    sel.classList.toggle("money-recipient-select-locked", lock);
+    if (lock) sel.title = lockTitle;
+    else if (sel.title === lockTitle) sel.title = "";
+    // В режиме просмотра все поля уже disabled — не снимаем блокировку.
+    if (!viewOnly) sel.disabled = lock;
   }
 }
 
@@ -2797,12 +2811,14 @@ function bindMoneyRecipientSelectRoleGuards() {
   }
 }
 
-/** Новое значение «Касса»/«Безнал» запрещено для роли; прежнее при редактировании — можно оставить. */
+/** Новое «Касса»/«Безнал» запрещено; уже записанное для этих ролей менять тоже нельзя. */
 function isForbiddenKassaBeznalSelection(newVal, previousVal) {
   if (canSelectKassaBeznal()) return false;
   const next = String(newVal || "").trim();
-  if (!KASSA_BEZNAL_PLACES.has(next)) return false;
-  return next !== String(previousVal || "").trim();
+  const prev = String(previousVal || "").trim();
+  if (KASSA_BEZNAL_PLACES.has(next) && next !== prev) return true;
+  if (KASSA_BEZNAL_PLACES.has(prev) && next !== prev) return true;
+  return false;
 }
 
 export function setInstallerPaymentBlockDisabled(disabled) {
@@ -3679,7 +3695,7 @@ export async function submitOrderForm(event) {
     isForbiddenKassaBeznalSelection(prepaymentToVal, initialParticipants.prepayment_to) ||
     isForbiddenKassaBeznalSelection(remainingToVal, initialParticipants.remaining_to)
   ) {
-    setMessage("«Касса» и «Безнал» доступны только ролям admin и user", "#d32f2f");
+    setMessage("«Касса» и «Безнал» для вашей роли нельзя выбирать и нельзя менять, если уже стоят в заказе", "#d32f2f");
     return;
   }
   const conditionalMissing = [];
@@ -4039,7 +4055,7 @@ export async function createOrderFromVoicePayload(draft) {
     isForbiddenKassaBeznalSelection(prepaymentTo, "") ||
     isForbiddenKassaBeznalSelection(normalizeVoiceMoneyTo(draft?.remaining_to), "")
   ) {
-    return { ok: false, message: "«Касса» и «Безнал» доступны только ролям admin и user" };
+    return { ok: false, message: "«Касса» и «Безнал» для вашей роли нельзя выбирать и нельзя менять, если уже стоят в заказе" };
   }
 
   let delivery = String(draft?.delivery || "").trim() || null;
@@ -4396,7 +4412,7 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
     isForbiddenKassaBeznalSelection(orderData.prepayment_to, existing.prepayment_to) ||
     isForbiddenKassaBeznalSelection(orderData.remaining_to, existing.remaining_to)
   ) {
-    return { ok: false, message: "«Касса» и «Безнал» доступны только ролям admin и user" };
+    return { ok: false, message: "«Касса» и «Безнал» для вашей роли нельзя выбирать и нельзя менять, если уже стоят в заказе" };
   }
 
   if (isUserLite() && orderData.order_type === "Магазин") {

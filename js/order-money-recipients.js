@@ -4,9 +4,32 @@
  */
 
 export const MONEY_RECIPIENT_HISTORY_KEYS = ["prepayment_to", "remaining_to", "installer_payment_by"];
+export const MONEY_RECIPIENT_LOCK_KEYS = ["prepayment_to", "remaining_to"];
+
+const KASSA_BEZNAL_RECIPIENTS = new Set(["Касса", "Безнал"]);
 
 function trimRecipient(v) {
   return String(v ?? "").trim();
+}
+
+export function isKassaBeznalRecipientValue(v) {
+  return KASSA_BEZNAL_RECIPIENTS.has(trimRecipient(v));
+}
+
+/**
+ * Для ролей без права выбирать «Касса»/«Безнал» уже записанное значение
+ * в «Кому предоплата» / «Кому остаток» нельзя менять — select неактивен.
+ */
+export function shouldLockKassaBeznalRecipientSelect(currentValue, canSelectRestricted) {
+  if (canSelectRestricted) return false;
+  return isKassaBeznalRecipientValue(currentValue);
+}
+
+/** Если поле заблокировано ролью, при сохранении оставляем значение из заказа. */
+export function preserveLockedKassaBeznalRecipient(formValue, storedValue, canSelectRestricted) {
+  if (canSelectRestricted) return formValue;
+  if (isKassaBeznalRecipientValue(storedValue)) return storedValue;
+  return formValue;
 }
 
 /**
@@ -61,12 +84,16 @@ export function overlayHistorySnapshotWithParticipants(snapshot, participants) {
  * @param {Record<string, unknown> | null | undefined} participants
  * @param {Record<string, string[]>} optionValuesByKey ключ поля → значения option
  */
-export function recoverLostMoneyRecipientsInOrderData(orderData, participants, optionValuesByKey) {
+export function recoverLostMoneyRecipientsInOrderData(orderData, participants, optionValuesByKey, opts = {}) {
   if (!orderData || !participants) return orderData;
+  const canSelectRestricted = opts.canSelectRestricted !== false;
   const next = { ...orderData };
   for (const key of MONEY_RECIPIENT_HISTORY_KEYS) {
     const options = optionValuesByKey?.[key] || [];
     next[key] = recoverLostRecipientFormValue(next[key], participants[key], options);
+    if (MONEY_RECIPIENT_LOCK_KEYS.includes(key)) {
+      next[key] = preserveLockedKassaBeznalRecipient(next[key], participants[key], canSelectRestricted);
+    }
   }
   return next;
 }

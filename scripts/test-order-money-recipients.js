@@ -4,6 +4,8 @@ import {
   recoverLostRecipientFormValue,
   overlayHistorySnapshotWithParticipants,
   recoverLostMoneyRecipientsInOrderData,
+  shouldLockKassaBeznalRecipientSelect,
+  preserveLockedKassaBeznalRecipient,
 } from "../js/order-money-recipients.js";
 
 const liteOptionsWithoutBeznal = ["", "Дима", "Вова"];
@@ -74,5 +76,32 @@ const incidentPrev = overlayHistorySnapshotWithParticipants(
 assert.equal(incidentRecovered.remaining_to, "Безнал");
 assert.equal(incidentPrev.remaining_to, "Безнал");
 assert.equal(String(incidentRecovered.remaining_to || "").trim(), String(incidentPrev.remaining_to || "").trim());
+
+assert.equal(shouldLockKassaBeznalRecipientSelect("Безнал", false), true);
+assert.equal(shouldLockKassaBeznalRecipientSelect("Касса", false), true);
+assert.equal(shouldLockKassaBeznalRecipientSelect("Дима", false), false);
+assert.equal(shouldLockKassaBeznalRecipientSelect("Безнал", true), false);
+assert.equal(shouldLockKassaBeznalRecipientSelect("", false), false);
+
+assert.equal(preserveLockedKassaBeznalRecipient(null, "Безнал", false), "Безнал");
+assert.equal(preserveLockedKassaBeznalRecipient("Дима", "Касса", false), "Касса");
+assert.equal(preserveLockedKassaBeznalRecipient(null, "Безнал", true), null);
+assert.equal(preserveLockedKassaBeznalRecipient("Дима", "Дима", false), "Дима");
+
+const liteCannotClear = recoverLostMoneyRecipientsInOrderData(
+  { remaining_to: null },
+  { remaining_to: "Безнал" },
+  { remaining_to: fullOptions },
+  { canSelectRestricted: false },
+);
+assert.equal(liteCannotClear.remaining_to, "Безнал");
+
+const adminCanClear = recoverLostMoneyRecipientsInOrderData(
+  { remaining_to: null },
+  { remaining_to: "Безнал" },
+  { remaining_to: fullOptions },
+  { canSelectRestricted: true },
+);
+assert.equal(adminCanClear.remaining_to, null);
 
 console.log("test-order-money-recipients: ok");
