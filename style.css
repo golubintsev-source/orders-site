@@ -145,10 +145,17 @@ h2 {
   align-self: center;
 }
 
+/* Название раздела в шапке не сжимаем до «Д…» — иначе «Долги» не читается */
+.section-nav-dropdown-wrap:not(.section-nav-search-wrap) {
+  flex: 0 0 auto;
+  min-width: auto;
+}
+
 .section-nav-current {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
   max-width: 100%;
   padding: 8px 10px;
   font-size: 14px;
