@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v41: ссылки входа в настройках — тот же шрифт, что у имени в первом столбце.
-const STATIC_CACHE = "orders-site-static-v41";
+// v42: e-mail в тексте чата больше не вырезается из пузыря.
+const STATIC_CACHE = "orders-site-static-v42";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -43,6 +43,7 @@ const PRECACHE_URLS = [
   "/js/register-sw.js",
   // Раздел «Чаты» открывают чаще всего — держим его модули готовыми к первому кадру.
   "/js/messages.js",
+  "/js/messages-body.js",
   "/js/messages-sync-utils.js",
   "/js/format.js",
   "/js/user-names.js",

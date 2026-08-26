@@ -22,6 +22,10 @@ import {
   shouldResetDialogFeed,
   mergePartialChatListPeerIds,
 } from "./messages-sync-utils.js";
+import {
+  formatMessagePlainTextHtml,
+  stripRecipientMentionFromBody,
+} from "./messages-body.js";
 
 const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 /** Максимальная высота поля ввода сообщения (как в CSS max-height). */
@@ -1109,23 +1113,6 @@ async function loadUsersDirectory() {
   return usersCachePromise;
 }
 
-function stripDisplayedEmails(text) {
-  return String(text || "")
-    .replace(/@?[\w.+-]+@[\w.-]+\.\w+/gi, "")
-    .replace(/[ \t]{2,}/g, " ")
-    .trim();
-}
-
-function stripRecipientMentionFromBody(body, recipientEmail) {
-  let text = String(body || "");
-  const email = (recipientEmail || "").trim();
-  if (text && email) {
-    const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    text = text.replace(new RegExp(`@${escaped}\\s*`, "gi"), "");
-  }
-  return stripDisplayedEmails(text);
-}
-
 /** Текст сообщения для копирования в буфер обмена. */
 function getMessageCopyText(row) {
   const stripped = stripRecipientMentionFromBody(row?.body, row?.recipient_email);
@@ -1196,9 +1183,7 @@ function renderMessageBodyHtml(body) {
         const chip = formatOrderIdTypeChip(part.orderId, order?.order_type);
         return `<a href="#" class="message-order-link" data-order-id="${escapeHtml(part.orderId)}">${escapeHtml(chip)}</a>`;
       }
-      let text = escapeHtml(part.value);
-      text = text.replace(/@([\w.@+-]+)/g, '<span class="message-mention">@$1</span>');
-      return text;
+      return formatMessagePlainTextHtml(part.value);
     })
     .join("");
 }
