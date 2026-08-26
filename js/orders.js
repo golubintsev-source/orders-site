@@ -87,6 +87,11 @@ import {
 import { shortLoginByEmail } from "./user-names.js";
 import { getEditors } from "./settings.js";
 import { orderHasActiveTask } from "./order-task-links.js";
+import {
+  overlayHistorySnapshotWithParticipants,
+  recoverLostMoneyRecipientsInOrderData,
+  shouldLockKassaBeznalRecipientSelect,
+} from "./order-money-recipients.js";
 
 function mergedLocalOrdersForOfflineDisplayMeta() {
   const snap = readSnapshot();
@@ -2498,8 +2503,16 @@ function buildOrderHistoryComment(prev, next, wasEditing) {
   return buildOrderHistoryComments(prev, next, wasEditing).join("; ");
 }
 
+function isOrderHistoryUniqueViolation(err) {
+  const code = err?.code;
+  const msg = String(err?.message || "");
+  return code === "23505" || /duplicate key|unique constraint|violates unique/i.test(msg);
+}
+
 /**
  * Записать каждое изменение отдельной строкой в order_history.
+ * При UNIQUE(order_id, user_email, comment) вставляем по одной строке,
+ * чтобы повтор того же «Кому остаток» не откатывал остальные поля того же сохранения.
  * @param {number|string} orderId
  * @param {string[]} comments
  * @param {{ created_at?: string }} [opts]
@@ -2518,9 +2531,44 @@ async function insertOrderHistoryComments(orderId, comments, opts = {}) {
     return row;
   });
   const { error } = await supabaseClient.from("order_history").insert(rows);
-  if (error) {
+  if (!error) return;
+  if (!isOrderHistoryUniqueViolation(error)) {
     console.error("Ошибка записи в историю изменений:", error);
+    return;
   }
+  for (const row of rows) {
+    const { error: oneErr } = await supabaseClient.from("order_history").insert(row);
+    if (oneErr && !isOrderHistoryUniqueViolation(oneErr)) {
+      console.error("Ошибка записи в историю изменений:", oneErr);
+    }
+  }
+}
+
+function selectOptionValues(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return [];
+  return [...sel.options].map((o) => o.value);
+}
+
+function recoverLostMoneyRecipientsFromForm(orderData) {
+  return recoverLostMoneyRecipientsInOrderData(
+    orderData,
+    state.initialOrderParticipants,
+    {
+      prepayment_to: selectOptionValues("prepayment_to"),
+      remaining_to: selectOptionValues("remaining_to"),
+      installer_payment_by: selectOptionValues("installer_payment_by"),
+    },
+    { canSelectRestricted: canSelectKassaBeznal() },
+  );
+}
+
+function buildEditOrderHistoryComments(orderData) {
+  return buildOrderHistoryComments(
+    overlayHistorySnapshotWithParticipants(state.initialOrderSnapshot, state.initialOrderParticipants),
+    orderData,
+    true,
+  );
 }
 
 /**
@@ -2694,6 +2742,32 @@ const MONEY_RECIPIENT_SELECT_IDS = ["prepayment_to", "remaining_to"];
 /** Полный HTML опций до ограничений по роли. */
 const moneyRecipientSelectHtmlBackup = new Map();
 
+function restoreMoneyRecipientSelectsFullOptions() {
+  for (const id of MONEY_RECIPIENT_SELECT_IDS) {
+    const sel = document.getElementById(id);
+    if (!sel) continue;
+    if (!moneyRecipientSelectHtmlBackup.has(id)) {
+      moneyRecipientSelectHtmlBackup.set(id, sel.innerHTML);
+    } else {
+      sel.innerHTML = moneyRecipientSelectHtmlBackup.get(id);
+    }
+  }
+}
+
+/** Если option нет в списке, браузер молча ставит value в "". */
+function ensureSelectValue(sel, value) {
+  if (!sel) return;
+  const v = value == null ? "" : String(value);
+  sel.value = v;
+  if (v && sel.value !== v) {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = v;
+    sel.appendChild(opt);
+    sel.value = v;
+  }
+}
+
 /**
  * «Безнал» и «Касса» только для admin/user.
  * Для остальных опции убираются из списка; текущее значение при редактировании сохраняется,
@@ -2701,6 +2775,8 @@ const moneyRecipientSelectHtmlBackup = new Map();
  */
 export function applyMoneyRecipientSelectsForRole() {
   const allowed = canSelectKassaBeznal();
+  const viewOnly = state.viewingOrderId != null;
+  const lockTitle = "«Касса» и «Безнал» для вашей роли менять нельзя";
   for (const id of MONEY_RECIPIENT_SELECT_IDS) {
     const sel = document.getElementById(id);
     if (!sel) continue;
@@ -2709,16 +2785,20 @@ export function applyMoneyRecipientSelectsForRole() {
     }
     const current = String(sel.value || "");
     sel.innerHTML = moneyRecipientSelectHtmlBackup.get(id);
+    if (current) ensureSelectValue(sel, current);
     if (!allowed) {
       for (const opt of [...sel.options]) {
         if (!KASSA_BEZNAL_PLACES.has(opt.value)) continue;
         if (opt.value !== current) opt.remove();
       }
     }
-    if (current) {
-      sel.value = current;
-      if (sel.value !== current) sel.value = "";
-    }
+    if (current) ensureSelectValue(sel, current);
+    const lock = shouldLockKassaBeznalRecipientSelect(sel.value || current, allowed);
+    sel.classList.toggle("money-recipient-select-locked", lock);
+    if (lock) sel.title = lockTitle;
+    else if (sel.title === lockTitle) sel.title = "";
+    // В режиме просмотра все поля уже disabled — не снимаем блокировку.
+    if (!viewOnly) sel.disabled = lock;
   }
 }
 
@@ -2731,12 +2811,14 @@ function bindMoneyRecipientSelectRoleGuards() {
   }
 }
 
-/** Новое значение «Касса»/«Безнал» запрещено для роли; прежнее при редактировании — можно оставить. */
+/** Новое «Касса»/«Безнал» запрещено; уже записанное для этих ролей менять тоже нельзя. */
 function isForbiddenKassaBeznalSelection(newVal, previousVal) {
   if (canSelectKassaBeznal()) return false;
   const next = String(newVal || "").trim();
-  if (!KASSA_BEZNAL_PLACES.has(next)) return false;
-  return next !== String(previousVal || "").trim();
+  const prev = String(previousVal || "").trim();
+  if (KASSA_BEZNAL_PLACES.has(next) && next !== prev) return true;
+  if (KASSA_BEZNAL_PLACES.has(prev) && next !== prev) return true;
+  return false;
 }
 
 export function setInstallerPaymentBlockDisabled(disabled) {
@@ -2871,11 +2953,12 @@ export async function fillForm(order) {
   document.getElementById("prepayment").value = order.prepayment != null
     ? formatOrderFormNumberValue(order.prepayment, ORDER_FORM_NUMERIC_FIELD_DECIMALS.prepayment)
     : "";
-  document.getElementById("prepayment_to").value = order.prepayment_to || "";
+  restoreMoneyRecipientSelectsFullOptions();
+  ensureSelectValue(document.getElementById("prepayment_to"), order.prepayment_to || "");
   document.getElementById("remaining_amount").value = order.remaining_amount != null
     ? formatOrderFormNumberValue(order.remaining_amount, ORDER_FORM_NUMERIC_FIELD_DECIMALS.remaining_amount)
     : "";
-  document.getElementById("remaining_to").value = order.remaining_to || "";
+  ensureSelectValue(document.getElementById("remaining_to"), order.remaining_to || "");
   document.getElementById("area_m2").value = order.area_m2 != null
     ? formatOrderFormNumberValue(order.area_m2, ORDER_FORM_NUMERIC_FIELD_DECIMALS.area_m2)
     : "";
@@ -2942,6 +3025,12 @@ export async function fillForm(order) {
   await checkInstallerPaymentDone(order.id);
   applyOrderFormFieldsVisibilityForRole();
   bindMoneyRecipientSelectRoleGuards();
+  applyMoneyRecipientSelectsForRole();
+  // Повторно выставить «кому» из заказа: если option успели убрать до fill,
+  // первый sel.value = «Безнал» молча сбрасывается, и снимок для истории
+  // расходится с initialOrderParticipants (расчёты видят смену, «Все изменения» — нет).
+  ensureSelectValue(document.getElementById("prepayment_to"), order.prepayment_to || "");
+  ensureSelectValue(document.getElementById("remaining_to"), order.remaining_to || "");
   applyMoneyRecipientSelectsForRole();
   state.initialOrderSnapshot = JSON.parse(JSON.stringify(getFormData()));
 }
@@ -3345,7 +3434,7 @@ export async function deleteOrder(orderId) {
  *  @returns {boolean} true — ушли с формы / сохранили в очередь; false — нечего сохранять. */
 function commitServerOrderEditToOfflineStorage(orderData) {
   const orderId = Number(state.editingOrderId);
-  const historyComments = buildOrderHistoryComments(state.initialOrderSnapshot, orderData, true);
+  const historyComments = buildEditOrderHistoryComments(orderData);
   if (isNoOpOrderHistoryComments(historyComments)) {
     setMessage("Нет изменений для сохранения", "");
     return false;
@@ -3406,7 +3495,7 @@ function commitOrderFormToOfflineStorage(orderData, editingOffline) {
     }
     const displayRow = buildDisplayRowForPendingOrder(orderData, state.editingOrderId, localId);
     updatePendingOfflineOrder(localId, displayRow, insertPayload);
-    const historyComments = buildOrderHistoryComments(state.initialOrderSnapshot, orderData, true);
+    const historyComments = buildEditOrderHistoryComments(orderData);
     if (!isNoOpOrderHistoryComments(historyComments)) {
       queueOfflineOrderHistoryComments({
         pending_order_local_id: localId,
@@ -3606,7 +3695,7 @@ export async function submitOrderForm(event) {
     isForbiddenKassaBeznalSelection(prepaymentToVal, initialParticipants.prepayment_to) ||
     isForbiddenKassaBeznalSelection(remainingToVal, initialParticipants.remaining_to)
   ) {
-    setMessage("«Касса» и «Безнал» доступны только ролям admin и user", "#d32f2f");
+    setMessage("«Касса» и «Безнал» для вашей роли нельзя выбирать и нельзя менять, если уже стоят в заказе", "#d32f2f");
     return;
   }
   const conditionalMissing = [];
@@ -3643,7 +3732,7 @@ export async function submitOrderForm(event) {
 
   setMessage("Сохраняю...", "");
 
-  const orderData = getFormData();
+  const orderData = recoverLostMoneyRecipientsFromForm(getFormData());
   // Идемпотентный ключ нужен только для создания нового заказа.
   if (!state.editingOrderId && orderData?.save_idempotency_key == null) {
     orderData.save_idempotency_key = ensureOrderFormNewOrderIdempotencyKey();
@@ -3758,11 +3847,9 @@ export async function submitOrderForm(event) {
   });
 
   if (savedOrderId && state.currentUser?.email) {
-    const historyComments = buildOrderHistoryComments(
-      wasEditing ? state.initialOrderSnapshot : null,
-      orderData,
-      wasEditing
-    );
+    const historyComments = wasEditing
+      ? buildEditOrderHistoryComments(orderData)
+      : buildOrderHistoryComments(null, orderData, false);
     await insertOrderHistoryComments(savedOrderId, historyComments);
   }
 
@@ -3968,7 +4055,7 @@ export async function createOrderFromVoicePayload(draft) {
     isForbiddenKassaBeznalSelection(prepaymentTo, "") ||
     isForbiddenKassaBeznalSelection(normalizeVoiceMoneyTo(draft?.remaining_to), "")
   ) {
-    return { ok: false, message: "«Касса» и «Безнал» доступны только ролям admin и user" };
+    return { ok: false, message: "«Касса» и «Безнал» для вашей роли нельзя выбирать и нельзя менять, если уже стоят в заказе" };
   }
 
   let delivery = String(draft?.delivery || "").trim() || null;
@@ -4325,7 +4412,7 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
     isForbiddenKassaBeznalSelection(orderData.prepayment_to, existing.prepayment_to) ||
     isForbiddenKassaBeznalSelection(orderData.remaining_to, existing.remaining_to)
   ) {
-    return { ok: false, message: "«Касса» и «Безнал» доступны только ролям admin и user" };
+    return { ok: false, message: "«Касса» и «Безнал» для вашей роли нельзя выбирать и нельзя менять, если уже стоят в заказе" };
   }
 
   if (isUserLite() && orderData.order_type === "Магазин") {
