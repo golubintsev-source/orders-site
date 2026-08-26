@@ -7,6 +7,9 @@ const EMAIL_DISPLAY_NAMES = {
   "golubintsev@gmail.com": "Алексей",
   "golubintsev26@gmail.com": "Дима",
   "lexa@mail.ru": "Алексей",
+  "animashka89": "Маша",
+  "animashka89@gmail.com": "Маша",
+  "animashka89@mail.ru": "Маша",
 };
 
 /** Логотипы по ролям: бухгалтер, производство, продажи, разработчик, менеджер, металл. */
@@ -32,13 +35,19 @@ function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
+function localPart(emailKey) {
+  const local = String(emailKey || "").split("@")[0] || "";
+  return local.includes("@") ? "" : local;
+}
+
 /** Имя для интерфейса; для неизвестного email — часть до @. Никогда не возвращает адрес целиком. */
 export function displayNameByEmail(email) {
   const key = normalizeEmail(email);
   if (!key) return "";
   if (EMAIL_DISPLAY_NAMES[key]) return EMAIL_DISPLAY_NAMES[key];
-  const local = key.split("@")[0] || "";
-  return local.includes("@") ? "" : local;
+  const local = localPart(key);
+  if (local && EMAIL_DISPLAY_NAMES[local]) return EMAIL_DISPLAY_NAMES[local];
+  return local;
 }
 
 /** URL логотипа участника по email или отображаемому имени; иначе null. */
