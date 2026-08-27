@@ -7,6 +7,11 @@ import {
   shouldSuppressPushNotification,
   shouldResetDialogFeed,
   mergePartialChatListPeerIds,
+  resolvePushSuppression,
+  notificationBodyWithCount,
+  nextReconnectDelayMs,
+  pollSinceIso,
+  groupUnreadCutoffIso,
 } from "../js/messages-sync-utils.js";
 
 function assert(cond, msg) {
@@ -66,6 +71,121 @@ assert(
   }),
   "ignore stale visibility heartbeat",
 );
+assert(
+  !shouldSuppressPushNotification({
+    clientVisible: true,
+    viewingPeerId: "u1",
+    incomingPeerId: "u1",
+    hasLiveClient: false,
+  }),
+  "closed PWA must still get the notification",
+);
+
+{
+  const now = 1_800_000_000_000;
+  assert(
+    resolvePushSuppression({
+      incomingPeerId: "u1",
+      clientStates: [{ visible: true, peerId: "u1", at: now - 500 }],
+      now,
+    }),
+    "fresh answer from the open dialog suppresses the banner",
+  );
+  assert(
+    !resolvePushSuppression({
+      incomingPeerId: "u1",
+      clientStates: [{ visible: true, peerId: "u1", at: now - 60_000 }],
+      now,
+    }),
+    "frozen tab cannot answer, so the banner must be shown",
+  );
+  assert(
+    !resolvePushSuppression({ incomingPeerId: "u1", clientStates: [], now }),
+    "no live window means no suppression",
+  );
+  assert(
+    !resolvePushSuppression({
+      incomingPeerId: "u1",
+      clientStates: [{ visible: true, peerId: "u2", at: now - 100 }],
+      now,
+    }),
+    "another dialog on screen does not hide the banner",
+  );
+  assert(
+    resolvePushSuppression({
+      incomingPeerId: "group:g1",
+      clientStates: [
+        { visible: false, peerId: "group:g1", at: now - 100 },
+        { visible: true, peerId: "group:g1", at: now - 100 },
+      ],
+      now,
+    }),
+    "any visible window viewing the chat is enough",
+  );
+}
+
+assert(notificationBodyWithCount("Привет", 1) === "Привет", "single message keeps the plain body");
+assert(
+  notificationBodyWithCount("Привет", 2) === "Привет\nЕщё 1 сообщение",
+  "second message adds a singular counter",
+);
+assert(
+  notificationBodyWithCount("Привет", 4) === "Привет\nЕщё 3 сообщения",
+  "few messages use the paucal form",
+);
+assert(
+  notificationBodyWithCount("Привет", 8) === "Привет\nЕщё 7 сообщений",
+  "many messages use the plural form",
+);
+assert(
+  notificationBodyWithCount("Привет", 13) === "Привет\nЕщё 12 сообщений",
+  "teens always use the plural form",
+);
+
+{
+  const flat = nextReconnectDelayMs(0, { baseMs: 1_000, maxMs: 30_000 });
+  assert(flat === 1_000, "first retry waits the base delay");
+  assert(
+    nextReconnectDelayMs(3, { baseMs: 1_000, maxMs: 30_000 }) === 8_000,
+    "delay doubles with every attempt",
+  );
+  assert(
+    nextReconnectDelayMs(20, { baseMs: 1_000, maxMs: 30_000 }) === 30_000,
+    "delay never exceeds the cap",
+  );
+  for (let i = 0; i < 50; i += 1) {
+    const jittered = nextReconnectDelayMs(2, { baseMs: 1_000, maxMs: 30_000, jitter: 0.5 });
+    assert(jittered >= 3_000 && jittered <= 5_000, "jitter stays around the nominal delay");
+  }
+}
+
+assert(pollSinceIso(null) === null, "empty feed has no catch-up window");
+assert(
+  pollSinceIso("2026-08-26T07:06:00.000Z", 60_000) === "2026-08-26T07:05:00.000Z",
+  "catch-up window reaches back before the last seen message",
+);
+assert(
+  timestampMs(pollSinceIso("2026-08-26T07:06:00.000Z", 0)) ===
+    timestampMs("2026-08-26T07:06:00.000Z"),
+  "zero overlap keeps the exact cutoff",
+);
+
+{
+  const chatIds = ["a", "b"];
+  const allRead = new Map([
+    ["a", "2026-08-20T00:00:00.000Z"],
+    ["b", "2026-08-25T00:00:00.000Z"],
+  ]);
+  assert(
+    groupUnreadCutoffIso(chatIds, allRead) === "2026-08-20T00:00:00.000Z",
+    "cutoff is the earliest read mark across chats",
+  );
+  assert(
+    groupUnreadCutoffIso(chatIds, new Map([["b", "2026-08-25T00:00:00.000Z"]])) === null,
+    "a never-opened chat disables the cutoff so its unread are not lost",
+  );
+  assert(groupUnreadCutoffIso([], allRead) === null, "no chats means no cutoff");
+}
 
 assert(shouldResetDialogFeed("user-a", "user-b"), "switching chats must reset the feed");
 assert(!shouldResetDialogFeed("user-a", "user-a"), "reopening the same chat keeps the feed");
