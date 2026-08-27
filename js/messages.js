@@ -16,8 +16,11 @@ import { messageHasActiveTask } from "./message-task-links.js";
 import { getChatPeerFromUrl, syncChatPeerInUrl } from "./app-routes.js";
 import {
   conversationPeerFromPushData,
+  groupUnreadCutoffIso,
   isTimestampAfter,
   laterIsoTimestamp,
+  nextReconnectDelayMs,
+  pollSinceIso,
   timestampMs,
   shouldResetDialogFeed,
   mergePartialChatListPeerIds,
@@ -37,6 +40,21 @@ const FEED_POLL_REALTIME_MS = 30_000;
 const CHAT_LIST_POLL_MS = 12_000;
 const CHAT_LIST_POLL_REALTIME_MS = 35_000;
 const CHAT_VISIBILITY_HEARTBEAT_MS = 25_000;
+/**
+ * Догон сообщений идёт от метки последнего показанного, но строка может попасть
+ * в БД позже своего created_at. Небольшой перехлёст назад закрывает эту щель,
+ * повторы отсеиваются по id.
+ */
+const FEED_POLL_OVERLAP_MS = 60_000;
+/** Переподключение realtime: 1с, 2с, 4с… но не реже раза в 30 секунд. */
+const REALTIME_RECONNECT_BASE_MS = 1_000;
+const REALTIME_RECONNECT_MAX_MS = 30_000;
+/** Пересоздавать канал чаще этого интервала бессмысленно — только рвём связь. */
+const REALTIME_RESUBSCRIBE_MIN_MS = 5_000;
+/** Пометка прочтения по сети: столько раз повторяем перед откатом бейджа. */
+const MARK_READ_RETRY_DELAYS_MS = [400, 1_200, 3_000];
+/** Сообщения, пришедшие во время отметки, добираем повторным проходом. */
+const MARK_READ_MAX_RERUNS = 3;
 /** Сколько недавних DM тянуть для превью списка чатов (не всю историю). */
 const CHAT_LIST_DM_PREVIEW_LIMIT = 800;
 /** Первый проход списка чатов: только недавние DM за MESSAGES_FAST_LOAD_DAYS. */
@@ -69,6 +87,11 @@ let lastFeedMessageAt = null;
 let messagesRealtimeChannel = null;
 let messagesRealtimeUid = null;
 let messagesRealtimeActive = false;
+let messagesRealtimeConnecting = false;
+let messagesRealtimeEverConnected = false;
+let messagesRealtimeStartedAt = 0;
+let messagesRealtimeRetries = 0;
+let messagesRealtimeReconnectTimer = null;
 let messagesLiveSyncInited = false;
 let chatVisibilityHeartbeatTimer = null;
 let messagesResumeTimer = null;
@@ -76,6 +99,9 @@ let chatListRefreshTimer = null;
 let unreadBadgeTimer = null;
 let pollNewMessagesInFlight = false;
 let markConversationReadInFlight = null;
+let markConversationReadRerunRequested = false;
+/** Диалоги, где «прочитано» не дошло до сервера: повторяем при следующем шансе. */
+const pendingReadRetryPeers = new Set();
 /** @type {"list" | "dialog"} */
 let messagesView = "list";
 /** @type {string | null} null на списке; uuid пользователя или group:<uuid> в диалоге */
@@ -718,10 +744,11 @@ function ownReadsFromGroupReceipts(receiptsByChat, uid) {
   return result;
 }
 
+/** @returns {Promise<boolean>} дошла ли отметка до сервера. */
 async function markGroupChatRead(chatId, at = new Date().toISOString()) {
   const uid = getCurrentUserId();
-  if (!uid || !chatId || !at) return;
-  if (groupChatReadsSupported === false) return;
+  if (!uid || !chatId || !at) return true;
+  if (groupChatReadsSupported === false) return true;
 
   const selectCols = groupReceiptSelectColumns();
   let existing = null;
@@ -734,7 +761,7 @@ async function markGroupChatRead(chatId, at = new Date().toISOString()) {
     .maybeSingle());
 
   if (selectError) {
-    if (noteGroupChatReadsSupport(selectError)) return;
+    if (noteGroupChatReadsSupport(selectError)) return true;
     if (noteGroupDeliveredAtSupport(selectError) && groupDeliveredAtSupported === false) {
       ({ data: existing, error: selectError } = await supabaseClient
         .from("group_chat_reads")
@@ -759,7 +786,7 @@ async function markGroupChatRead(chatId, at = new Date().toISOString()) {
   const deliveredUnchanged =
     groupDeliveredAtSupported === false ||
     Boolean(prevDelivered && timestampMs(prevDelivered) >= timestampMs(nextDelivered));
-  if (existing && readUnchanged && deliveredUnchanged) return;
+  if (existing && readUnchanged && deliveredUnchanged) return true;
 
   const payload = {
     chat_id: chatId,
@@ -775,7 +802,7 @@ async function markGroupChatRead(chatId, at = new Date().toISOString()) {
   });
 
   if (error) {
-    if (noteGroupChatReadsSupport(error)) return;
+    if (noteGroupChatReadsSupport(error)) return true;
     if (noteGroupDeliveredAtSupport(error) && groupDeliveredAtSupported === false) {
       const retry = await supabaseClient.from("group_chat_reads").upsert(
         {
@@ -786,19 +813,20 @@ async function markGroupChatRead(chatId, at = new Date().toISOString()) {
         { onConflict: "chat_id,user_id" },
       );
       if (retry.error) {
-        if (!noteGroupChatReadsSupport(retry.error)) {
-          console.warn("Не удалось отметить групповой чат прочитанным:", retry.error);
-        }
-        return;
+        if (noteGroupChatReadsSupport(retry.error)) return true;
+        console.warn("Не удалось отметить групповой чат прочитанным:", retry.error);
+        return false;
       }
       groupChatReadsSupported = true;
-      return;
+      return true;
     }
     console.warn("Не удалось отметить групповой чат прочитанным:", error);
-  } else {
-    groupChatReadsSupported = true;
-    if (groupDeliveredAtSupported !== false) groupDeliveredAtSupported = true;
+    return false;
   }
+
+  groupChatReadsSupported = true;
+  if (groupDeliveredAtSupported !== false) groupDeliveredAtSupported = true;
+  return true;
 }
 
 /**
@@ -1700,14 +1728,9 @@ async function fetchGroupUnreadCounts(chatIds, uid, lastReadByChat) {
   let select = "id, chat_id, created_at, sender_id";
   if (messageActionsSupported !== false) select += ", deleted_at";
 
-  let minLastRead = null;
-  for (const chatId of chatIds) {
-    const lastRead = lastReadByChat?.get(String(chatId)) || lastReadByChat?.get(chatId);
-    if (!lastRead) continue;
-    if (!minLastRead || timestampMs(lastRead) < timestampMs(minLastRead)) {
-      minLastRead = lastRead;
-    }
-  }
+  // Отсечка допустима, только если метка прочтения есть у всех чатов: иначе запрос
+  // обрежет старые непрочитанные того чата, который пользователь ещё не открывал.
+  const minLastRead = groupUnreadCutoffIso(chatIds, lastReadByChat);
 
   const buildQuery = (cols) => {
     let query = supabaseClient
@@ -2652,9 +2675,11 @@ export async function openMessagesDialog(peerId) {
   syncComposerForActivePeer();
   await loadMessages();
   if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
-  await markPromise;
+  // Отметка прочтения умеет повторяться по нескольку секунд на плохой сети —
+  // лента не должна ждать её, чтобы начать опрос.
   startMessagesFeedPolling();
   reportChatVisibilityToSw();
+  await markPromise;
 }
 
 export async function loadMessages() {
@@ -2831,17 +2856,18 @@ function prependOlderMessagesToFeed(rows) {
   );
 }
 
+/** @returns {number} сколько сообщений реально добавилось в ленту (без дублей). */
 function appendMessagesToFeed(rows) {
   const feed = document.getElementById("messagesFeed");
-  if (!feed || !rows.length) return;
-  if (!isMessagesFeedForPeer()) return;
+  if (!feed || !rows.length) return 0;
+  if (!isMessagesFeedForPeer()) return 0;
 
   const uid = getCurrentUserId();
   const groupId = isGroupChat() ? parseGroupId() : null;
   const scoped = groupId
     ? rows.filter((row) => row.chat_id == null || String(row.chat_id) === String(groupId))
     : rows.filter((row) => messageBelongsToPeer(row, activePeerId, uid));
-  if (!scoped.length) return;
+  if (!scoped.length) return 0;
 
   rememberFeedMessages(scoped);
 
@@ -2849,7 +2875,7 @@ function appendMessagesToFeed(rows) {
   const newRows = scoped.filter(
     (row) => !isMessageDeleted(row) && !existingIds.has(String(row.id)),
   );
-  if (!newRows.length) return;
+  if (!newRows.length) return 0;
 
   const atBottom = isFeedAtBottom(feed);
   feed.querySelector(".messages-empty")?.remove();
@@ -2874,6 +2900,7 @@ function appendMessagesToFeed(rows) {
     messageKind,
     newRows.map((row) => row.id).filter((id) => id != null),
   );
+  return newRows.length;
 }
 
 async function syncOutgoingReadStatus() {
@@ -2950,6 +2977,7 @@ async function pollNewMessagesUnlocked() {
   const uid = getCurrentUserId();
   if (!uid || messagesView !== "dialog" || !activePeerId) return;
   const peerAtStart = activePeerId;
+  const sinceIso = pollSinceIso(lastFeedMessageAt, FEED_POLL_OVERLAP_MS);
 
   if (isGroupChat()) {
     const groupId = parseGroupId();
@@ -2960,8 +2988,8 @@ async function pollNewMessagesUnlocked() {
       .select(selectCols)
       .eq("chat_id", groupId)
       .order("created_at", { ascending: true });
-    if (lastFeedMessageAt) {
-      query = query.gte("created_at", lastFeedMessageAt);
+    if (sinceIso) {
+      query = query.gte("created_at", sinceIso);
     }
     let { data, error } = await query;
     if (error && noteMessageActionsSupport(error)) {
@@ -2970,7 +2998,7 @@ async function pollNewMessagesUnlocked() {
         .select(withMessageActionColumns(withAttachmentColumns(selectBase)))
         .eq("chat_id", groupId)
         .order("created_at", { ascending: true });
-      if (lastFeedMessageAt) query = query.gte("created_at", lastFeedMessageAt);
+      if (sinceIso) query = query.gte("created_at", sinceIso);
       ({ data, error } = await query);
     }
     if (error && noteAttachmentDimensionSupport(error)) {
@@ -2979,7 +3007,7 @@ async function pollNewMessagesUnlocked() {
         .select(withMessageActionColumns(withAttachmentColumns(selectBase)))
         .eq("chat_id", groupId)
         .order("created_at", { ascending: true });
-      if (lastFeedMessageAt) query = query.gte("created_at", lastFeedMessageAt);
+      if (sinceIso) query = query.gte("created_at", sinceIso);
       ({ data, error } = await query);
     }
     if (error && noteAttachmentSupport(error)) {
@@ -2988,7 +3016,7 @@ async function pollNewMessagesUnlocked() {
         .select(withMessageActionColumns(withAttachmentColumns(selectBase)))
         .eq("chat_id", groupId)
         .order("created_at", { ascending: true });
-      if (lastFeedMessageAt) query = query.gte("created_at", lastFeedMessageAt);
+      if (sinceIso) query = query.gte("created_at", sinceIso);
       ({ data, error } = await query);
     }
     if (error) {
@@ -3002,8 +3030,8 @@ async function pollNewMessagesUnlocked() {
     if (activePeerId !== peerAtStart || messagesView !== "dialog" || !isMessagesFeedForPeer(peerAtStart)) {
       return;
     }
-    if (rows.length) {
-      appendMessagesToFeed(rows);
+    // Окно опроса берётся с запасом назад, поэтому реагируем только на реально новые.
+    if (rows.length && appendMessagesToFeed(rows) > 0) {
       if (canMarkMessagesRead()) await markActiveConversationRead();
       void refreshMessagesUnreadBadge();
     }
@@ -3019,8 +3047,8 @@ async function pollNewMessagesUnlocked() {
     .or(peerFilter)
     .order("created_at", { ascending: true });
 
-  if (lastFeedMessageAt) {
-    query = query.gte("created_at", lastFeedMessageAt);
+  if (sinceIso) {
+    query = query.gte("created_at", sinceIso);
   }
 
   let { data, error } = await query;
@@ -3030,7 +3058,7 @@ async function pollNewMessagesUnlocked() {
       .select(messageSelectColumns())
       .or(peerFilter)
       .order("created_at", { ascending: true });
-    if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
+    if (sinceIso) retry = retry.gte("created_at", sinceIso);
     ({ data, error } = await retry);
   }
   if (error && noteAttachmentSupport(error)) {
@@ -3039,7 +3067,7 @@ async function pollNewMessagesUnlocked() {
       .select(messageSelectColumns())
       .or(peerFilter)
       .order("created_at", { ascending: true });
-    if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
+    if (sinceIso) retry = retry.gte("created_at", sinceIso);
     ({ data, error } = await retry);
   }
   if (error && noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
@@ -3048,7 +3076,7 @@ async function pollNewMessagesUnlocked() {
       .select(messageSelectColumns())
       .or(peerFilter)
       .order("created_at", { ascending: true });
-    if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
+    if (sinceIso) retry = retry.gte("created_at", sinceIso);
     ({ data, error } = await retry);
   } else if (!error) {
     deliveredAtSupported = deliveredAtSupported !== false;
@@ -3064,8 +3092,7 @@ async function pollNewMessagesUnlocked() {
   if (activePeerId !== peerAtStart || messagesView !== "dialog" || !isMessagesFeedForPeer(peerAtStart)) {
     return;
   }
-  if (rows.length) {
-    appendMessagesToFeed(rows);
+  if (rows.length && appendMessagesToFeed(rows) > 0) {
     if (canMarkMessagesRead()) await markActiveConversationRead();
     void refreshMessagesUnreadBadge();
   }
@@ -3211,9 +3238,10 @@ async function fetchLatestGroupMessageCreatedAt(chatId) {
   return String(data.created_at);
 }
 
+/** @returns {Promise<boolean>} дошла ли отметка до сервера. */
 async function markPeerConversationRead(peerId) {
   const uid = getCurrentUserId();
-  if (!uid || !peerId) return;
+  if (!uid || !peerId) return true;
 
   const now = new Date().toISOString();
   const payload =
@@ -3233,49 +3261,105 @@ async function markPeerConversationRead(peerId) {
   };
 
   const { error } = await applyUpdate(payload);
-  if (error) {
-    if (noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
-      const retry = await applyUpdate({ read_at: now });
-      if (retry.error) {
-        if (!noteMessageActionsSupport(retry.error)) {
-          console.error("Ошибка отметки прочитанных:", retry.error);
-        }
-      }
-      return;
+  if (!error) return true;
+
+  if (noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
+    const retry = await applyUpdate({ read_at: now });
+    if (!retry.error) return true;
+    if (!noteMessageActionsSupport(retry.error)) {
+      console.error("Ошибка отметки прочитанных:", retry.error);
     }
-    if (noteMessageActionsSupport(error)) {
-      const retry = await supabaseClient
-        .from("user_messages")
-        .update(payload)
-        .eq("recipient_id", uid)
-        .eq("sender_id", peerId)
-        .is("read_at", null);
-      if (retry.error) console.error("Ошибка отметки прочитанных:", retry.error);
-      return;
-    }
-    console.error("Ошибка отметки прочитанных:", error);
+    return false;
+  }
+  if (noteMessageActionsSupport(error)) {
+    const retry = await supabaseClient
+      .from("user_messages")
+      .update(payload)
+      .eq("recipient_id", uid)
+      .eq("sender_id", peerId)
+      .is("read_at", null);
+    if (!retry.error) return true;
+    console.error("Ошибка отметки прочитанных:", retry.error);
+    return false;
+  }
+  console.error("Ошибка отметки прочитанных:", error);
+  return false;
+}
+
+function sleepMs(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function markConversationReadOnce(peerId) {
+  if (isGroupChat(peerId)) {
+    const groupId = parseGroupId(peerId);
+    if (!groupId) return true;
+    const serverLatest = await fetchLatestGroupMessageCreatedAt(groupId);
+    // Если запрос за последним сообщением не прошёл, курсор двигаем хотя бы по ленте —
+    // но только когда на экране именно этот чат, иначе метка уедет вперёд по чужой.
+    const feedLatest = String(activePeerId || "") === String(peerId) ? lastFeedMessageAt : null;
+    const latestAt = laterIsoTimestamp(serverLatest, feedLatest);
+    if (!latestAt) return true;
+    return markGroupChatRead(groupId, latestAt);
+  }
+  return markPeerConversationRead(peerId);
+}
+
+/** Мобильная сеть отваливается регулярно, а «прочитано» теряться не должно. */
+async function markConversationReadWithRetries(peerId) {
+  for (let attempt = 0; ; attempt += 1) {
+    if (await markConversationReadOnce(peerId)) return true;
+    if (attempt >= MARK_READ_RETRY_DELAYS_MS.length) return false;
+    await sleepMs(MARK_READ_RETRY_DELAYS_MS[attempt]);
+    if (String(activePeerId || "") !== String(peerId)) return false;
   }
 }
 
+/**
+ * Отметка прочтения диалога целиком. Параллельный вызов не выбрасывается: UPDATE,
+ * который уже летит, не захватит сообщение, пришедшее следом, — поэтому просим
+ * повторный проход. Раньше такое сообщение оставалось непрочитанным до следующего
+ * опроса, а если пользователь успевал выйти из чата — навсегда.
+ */
 async function markActiveConversationRead() {
   if (!canMarkMessagesRead()) return;
   const peerId = activePeerId;
   if (!peerId) return;
   const key = String(peerId);
-  if (markConversationReadInFlight === key) return;
+  if (markConversationReadInFlight === key) {
+    markConversationReadRerunRequested = true;
+    return;
+  }
   markConversationReadInFlight = key;
   try {
-    if (isGroupChat(peerId)) {
-      const groupId = parseGroupId(peerId);
-      if (!groupId) return;
-      const latestAt = await fetchLatestGroupMessageCreatedAt(groupId);
-      if (latestAt) await markGroupChatRead(groupId, latestAt);
-      return;
+    let ok = await markConversationReadWithRetries(peerId);
+    for (let pass = 0; pass < MARK_READ_MAX_RERUNS && markConversationReadRerunRequested; pass += 1) {
+      markConversationReadRerunRequested = false;
+      if (!canMarkMessagesRead() || String(activePeerId || "") !== key) break;
+      ok = (await markConversationReadWithRetries(peerId)) && ok;
     }
-    await markPeerConversationRead(peerId);
+    if (ok) {
+      pendingReadRetryPeers.delete(key);
+    } else {
+      // Бейдж в списке мы уже погасили оптимистично — вернём честное значение с сервера.
+      pendingReadRetryPeers.add(key);
+      scheduleChatListRefresh();
+      scheduleUnreadBadgeRefresh();
+    }
   } finally {
+    markConversationReadRerunRequested = false;
     if (markConversationReadInFlight === key) markConversationReadInFlight = null;
   }
+}
+
+/** Повтор непрошедших отметок: при возврате в приложение и появлении сети. */
+async function retryPendingConversationReads() {
+  if (!pendingReadRetryPeers.size || !getCurrentUserId()) return;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  for (const peerId of [...pendingReadRetryPeers]) {
+    if (await markConversationReadOnce(peerId)) pendingReadRetryPeers.delete(peerId);
+  }
+  void refreshMessagesUnreadBadge();
 }
 
 function realtimeEventType(payload) {
@@ -3366,6 +3450,11 @@ function handleRealtimeGroupReceipt(payload) {
 }
 
 function stopMessagesRealtime() {
+  if (messagesRealtimeReconnectTimer) {
+    window.clearTimeout(messagesRealtimeReconnectTimer);
+    messagesRealtimeReconnectTimer = null;
+  }
+  messagesRealtimeConnecting = false;
   if (!messagesRealtimeChannel) {
     messagesRealtimeUid = null;
     messagesRealtimeActive = false;
@@ -3378,14 +3467,79 @@ function stopMessagesRealtime() {
   void supabaseClient.removeChannel(channel);
 }
 
+/**
+ * Сокет рвётся при уходе PWA в фон, смене сети и протухшем JWT. Раньше канал просто
+ * помечался неживым и переподключался в лучшем случае через 45 секунд (по таймеру
+ * бейджа), а лента всё это время опрашивалась в «медленном» realtime-ритме — со стороны
+ * выглядело как «чат не обновляется сам».
+ */
+function scheduleRealtimeReconnect() {
+  if (messagesRealtimeReconnectTimer) return;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  const delay = nextReconnectDelayMs(messagesRealtimeRetries, {
+    baseMs: REALTIME_RECONNECT_BASE_MS,
+    maxMs: REALTIME_RECONNECT_MAX_MS,
+    jitter: 0.3,
+  });
+  messagesRealtimeRetries = Math.min(messagesRealtimeRetries + 1, 10);
+  messagesRealtimeReconnectTimer = window.setTimeout(() => {
+    messagesRealtimeReconnectTimer = null;
+    if (!getCurrentUserId()) return;
+    stopMessagesRealtime();
+    startMessagesRealtime();
+  }, delay);
+}
+
+function handleRealtimeStatus(status) {
+  if (status === "SUBSCRIBED") {
+    const afterGap = messagesRealtimeEverConnected;
+    messagesRealtimeConnecting = false;
+    messagesRealtimeActive = true;
+    messagesRealtimeEverConnected = true;
+    messagesRealtimeRetries = 0;
+    if (messagesRealtimeReconnectTimer) {
+      window.clearTimeout(messagesRealtimeReconnectTimer);
+      messagesRealtimeReconnectTimer = null;
+    }
+    restartVisiblePolling();
+    // Пока канал лежал, события шли мимо — досинхронизируем видимый экран.
+    // При первой подписке этого не нужно: раздел и так только что загрузился.
+    if (afterGap) void resyncAfterRealtimeGap();
+    return;
+  }
+  if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+    messagesRealtimeConnecting = false;
+    messagesRealtimeActive = false;
+    // Без сокета возвращаемся к частому опросу, иначе лента ждёт до 30 секунд.
+    restartVisiblePolling();
+    scheduleRealtimeReconnect();
+  }
+}
+
+async function resyncAfterRealtimeGap() {
+  if (!getCurrentUserId() || !isMessagesSectionActive() || !isDocumentVisible()) return;
+  if (messagesView === "dialog") {
+    await pollNewMessages();
+    if (canMarkMessagesRead()) void markActiveConversationRead();
+  } else if (messagesView === "list") {
+    void loadChatList();
+  }
+  void refreshMessagesUnreadBadge();
+}
+
 function startMessagesRealtime() {
   const uid = getCurrentUserId();
   if (!uid) return;
-  if (messagesRealtimeChannel && messagesRealtimeUid === String(uid) && messagesRealtimeActive) {
-    return;
+  const sameUid = messagesRealtimeUid === String(uid);
+  if (messagesRealtimeChannel && sameUid && (messagesRealtimeActive || messagesRealtimeConnecting)) {
+    // Рукопожатие ещё идёт — не рвём его повторным вызовом с resume или таймера бейджа.
+    if (messagesRealtimeActive) return;
+    if (Date.now() - messagesRealtimeStartedAt < REALTIME_RESUBSCRIBE_MIN_MS) return;
   }
   if (messagesRealtimeChannel) stopMessagesRealtime();
   messagesRealtimeUid = String(uid);
+  messagesRealtimeConnecting = true;
+  messagesRealtimeStartedAt = Date.now();
 
   const channel = supabaseClient
     .channel(`messages-sync:${uid}`)
@@ -3410,21 +3564,25 @@ function startMessagesRealtime() {
       (payload) => handleRealtimeGroupReceipt(payload),
     );
 
-  channel.subscribe((status) => {
-    messagesRealtimeActive = status === "SUBSCRIBED";
-    if (status === "SUBSCRIBED") restartVisiblePolling();
-    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-      messagesRealtimeActive = false;
-    }
-  });
-
   messagesRealtimeChannel = channel;
+  channel.subscribe((status) => {
+    // Отменённый канал ещё может доложить о своём закрытии — это не повод переподключаться.
+    if (messagesRealtimeChannel !== channel) return;
+    handleRealtimeStatus(String(status || ""));
+  });
 }
 
 async function syncMessagesAfterResume() {
   reportChatVisibilityToSw();
+  // Возврат в приложение — повод подключиться немедленно, а не досиживать backoff.
+  if (!messagesRealtimeActive && messagesRealtimeReconnectTimer) {
+    window.clearTimeout(messagesRealtimeReconnectTimer);
+    messagesRealtimeReconnectTimer = null;
+    messagesRealtimeRetries = 0;
+  }
   startMessagesRealtime();
   if (!getCurrentUserId()) return;
+  void retryPendingConversationReads();
   void refreshMessagesUnreadBadge();
   if (!isMessagesSectionActive()) {
     stopMessagesFeedPolling();
@@ -3450,6 +3608,10 @@ function scheduleMessagesResume() {
 
 async function handleServiceWorkerChatEvent(data) {
   if (!data || typeof data !== "object") return;
+  if (data.type === "chat-visibility-query") {
+    reportChatVisibilityToSw();
+    return;
+  }
   if (data.type === "open-chat") {
     const peerId = conversationPeerFromPushData(data) || data.peerId || null;
     await openChatFromNotification(peerId);
@@ -3516,7 +3678,21 @@ function initMessagesLiveSync() {
     scheduleMessagesResume();
   });
   window.addEventListener("pageshow", () => scheduleMessagesResume());
-  window.addEventListener("online", () => scheduleMessagesResume());
+  window.addEventListener("online", () => {
+    messagesRealtimeRetries = 0;
+    scheduleMessagesResume();
+  });
+  window.addEventListener("offline", () => {
+    // Сокет уже мёртв — не держим его «живым» и не жжём батарею опросами.
+    messagesRealtimeActive = false;
+    stopMessagesPolling();
+  });
+  // Page Lifecycle: iOS замораживает PWA в фоне, иногда без visibilitychange.
+  document.addEventListener("freeze", () => {
+    stopMessagesPolling();
+    reportChatVisibilityToSw();
+  });
+  document.addEventListener("resume", () => scheduleMessagesResume());
   document.addEventListener("orders-app-resume", () => scheduleMessagesResume());
   window.addEventListener("orders-sw-message", (event) => {
     void handleServiceWorkerChatEvent(event.detail);
@@ -3642,28 +3818,30 @@ export async function refreshMessagesUnreadBadge() {
   // While the app is open, acknowledge delivery without marking as read.
   await acknowledgeIncomingDelivered();
 
-  let query = supabaseClient
-    .from("user_messages")
-    .select("id", { count: "exact", head: true })
-    .eq("recipient_id", uid)
-    .is("read_at", null);
-  if (messageActionsSupported !== false) {
-    query = query.is("deleted_at", null);
-  }
+  // Открытый на экране диалог считаем прочитанным сразу — так же, как групповой чат.
+  // Иначе бейдж мигал непрочитанным всё время, пока UPDATE read_at идёт по сети.
+  const activeDmPeer = canMarkMessagesRead() && isPeerChat() ? activePeerId : null;
 
-  let { count, error } = await query;
-
-  if (error && noteMessageActionsSupport(error)) {
-    ({ count, error } = await supabaseClient
+  const buildUnreadQuery = (withMessageActions) => {
+    let query = supabaseClient
       .from("user_messages")
       .select("id", { count: "exact", head: true })
       .eq("recipient_id", uid)
-      .is("read_at", null));
+      .is("read_at", null);
+    if (withMessageActions) query = query.is("deleted_at", null);
+    if (activeDmPeer) query = query.neq("sender_id", activeDmPeer);
+    return query;
+  };
+
+  let { count, error } = await buildUnreadQuery(messageActionsSupported !== false);
+
+  if (error && noteMessageActionsSupport(error)) {
+    ({ count, error } = await buildUnreadQuery(false));
   }
 
   if (error) {
     console.warn("Не удалось получить число непрочитанных:", error);
-    if (badge) badge.hidden = true;
+    // Прошлое значение честнее пустоты: иначе бейдж мигает при каждом сбое сети.
     return;
   }
 
