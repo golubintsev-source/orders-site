@@ -12,6 +12,8 @@
  */
 (() => {
   const SNAPSHOT_KEY = "orders_site_chat_list_snapshot_v1";
+  /** Старый снимок покажет непрочитанные, давно прочитанные на другом устройстве. */
+  const SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
   /** Должно совпадать с MESSAGES_FAST_LOAD_DAYS в messages.js. */
   const FAST_LOAD_DAYS = 3;
   /** Должно совпадать с CHAT_LIST_FAST_PREVIEW_LIMIT в messages.js. */
@@ -216,6 +218,7 @@
       return;
     }
     if (!snap?.html || String(snap.uid) !== String(uid)) return;
+    if (!snap.at || Date.now() - Number(snap.at) > SNAPSHOT_MAX_AGE_MS) return;
 
     const list = document.getElementById("messagesChatList");
     if (!list || list.children.length > 0) return;

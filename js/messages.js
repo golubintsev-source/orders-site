@@ -2315,7 +2315,7 @@ function saveChatListSnapshot(list) {
     .join("");
 
   try {
-    localStorage.setItem(CHAT_LIST_SNAPSHOT_KEY, JSON.stringify({ uid, html }));
+    localStorage.setItem(CHAT_LIST_SNAPSHOT_KEY, JSON.stringify({ uid, html, at: Date.now() }));
   } catch {
     /* переполнение квоты — снимок не обязателен */
   }
@@ -3160,6 +3160,9 @@ function clearChatListUnreadForPeer(peerId) {
   if (list.dataset.chatListSig) {
     list.dataset.chatListSig = `${list.dataset.chatListSig}|read:${peerId}`;
   }
+  // Снимок рисуется до загрузки модулей: без обновления следующий запуск покажет
+  // бейдж непрочитанного у чата, который пользователь уже открыл.
+  saveChatListSnapshot(list);
 }
 
 function scheduleUnreadBadgeRefresh() {
