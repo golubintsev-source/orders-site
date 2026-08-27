@@ -7,12 +7,20 @@
     (me && me.src ? new URL("../sw.js", me.src).href : new URL("/sw.js", window.location.origin).href);
   navigator.serviceWorker.register(swUrl).catch((e) => console.warn("[orders-site] SW register:", e));
 
+  const FORWARDED_SW_MESSAGES = new Set([
+    "push-received",
+    "open-chat",
+    // Ответ нужен здесь и сейчас, иначе service worker решит, что чат не на экране.
+    "chat-visibility-query",
+  ]);
+  const QUEUED_SW_MESSAGES = new Set(["push-received", "open-chat"]);
+
   window.__pendingSwMessages = window.__pendingSwMessages || [];
   navigator.serviceWorker.addEventListener("message", (event) => {
     const data = event.data;
-    if (!data || (data.type !== "push-received" && data.type !== "open-chat")) return;
+    if (!data || !FORWARDED_SW_MESSAGES.has(data.type)) return;
     window.dispatchEvent(new CustomEvent("orders-sw-message", { detail: data }));
-    if (!window.__swMessageHandlerReady) {
+    if (!window.__swMessageHandlerReady && QUEUED_SW_MESSAGES.has(data.type)) {
       window.__pendingSwMessages.push(data);
     }
   });

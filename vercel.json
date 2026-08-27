@@ -44,6 +44,9 @@
     "api/push-status.js": {
       "maxDuration": 10
     },
+    "api/push-subscription-rotate.js": {
+      "maxDuration": 10
+    },
     "api/voice-assistant.js": {
       "maxDuration": 60
     },

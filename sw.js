@@ -8,11 +8,12 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v42: e-mail в тексте чата больше не вырезается из пузыря.
-const STATIC_CACHE = "orders-site-static-v42";
+// v43: push не глушится по устаревшему статусу видимости, подписка переживает ротацию.
+const STATIC_CACHE = "orders-site-static-v43";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
-const CHAT_VISIBILITY_KEY = "/chat-visibility";
+/** Ключ снимка видимости из прежних версий — больше не используется, чистим при активации. */
+const LEGACY_CHAT_VISIBILITY_KEY = "/chat-visibility";
 
 const LEGACY_CACHE_PREFIXES = ["orders-site-static-"];
 
@@ -86,6 +87,11 @@ self.addEventListener("activate", (event) => {
           .map((k) => caches.delete(k)),
       );
       await self.clients.claim();
+      try {
+        await (await caches.open(BADGE_CACHE)).delete(LEGACY_CHAT_VISIBILITY_KEY);
+      } catch {
+        /* ignore */
+      }
       // После смены STATIC_CACHE старый JS мог остаться в памяти вкладки —
       // всегда просим оболочку перезагрузиться.
       await notifyShellUpdated();
@@ -327,61 +333,94 @@ async function clearBadge() {
   await setBadgeCount(0);
 }
 
-const CHAT_VISIBILITY_MAX_AGE_MS = 90_000;
+/**
+ * Ответ вкладки живёт считаные секунды: перед показом push мы спрашиваем окна заново.
+ * Замороженная вкладка (свёрнутое PWA на iPhone) ответить не успеет — и уведомление
+ * будет показано. Раньше здесь лежал снимок на 90 секунд, который переживал закрытие
+ * приложения и молча глотал уведомления из последнего открытого чата.
+ */
+const CHAT_VISIBILITY_ANSWER_MAX_AGE_MS = 3_000;
+/** Сколько ждём ответы окон, прежде чем решить про баннер. */
+const CHAT_VISIBILITY_QUERY_TIMEOUT_MS = 600;
 /** @type {Map<string, { visible: boolean, focused: boolean, peerId: string|null, at: number }>} */
 const chatVisibilityByClientId = new Map();
 
 function rememberChatVisibility(clientId, data) {
   if (!clientId) return;
-  const state = {
+  chatVisibilityByClientId.set(String(clientId), {
     visible: Boolean(data?.visible),
     focused: Boolean(data?.focused),
     peerId: data?.peerId ? String(data.peerId) : null,
     at: Date.now(),
-  };
-  chatVisibilityByClientId.set(String(clientId), state);
-  void persistChatVisibilitySnapshot();
+  });
 }
 
-async function persistChatVisibilitySnapshot() {
-  try {
-    const latest = [...chatVisibilityByClientId.values()].sort((a, b) => b.at - a.at)[0];
-    const cache = await caches.open(BADGE_CACHE);
-    if (!latest) {
-      await cache.delete(CHAT_VISIBILITY_KEY);
-      return;
+function forgetClosedClients(clientList) {
+  const live = new Set(clientList.map((client) => String(client.id)));
+  for (const clientId of [...chatVisibilityByClientId.keys()]) {
+    if (!live.has(clientId)) chatVisibilityByClientId.delete(clientId);
+  }
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Спрашиваем живые окна, что у них на экране прямо сейчас. */
+async function collectChatVisibility(clientList) {
+  forgetClosedClients(clientList);
+  if (!clientList.length) return [];
+  for (const client of clientList) {
+    try {
+      client.postMessage({ type: "chat-visibility-query" });
+    } catch {
+      /* ignore */
     }
-    await cache.put(CHAT_VISIBILITY_KEY, new Response(JSON.stringify(latest)));
-  } catch {
-    /* ignore */
   }
+  await delay(CHAT_VISIBILITY_QUERY_TIMEOUT_MS);
+  return [...chatVisibilityByClientId.values()];
 }
 
-async function readPersistedChatVisibility() {
-  try {
-    const cache = await caches.open(BADGE_CACHE);
-    const res = await cache.match(CHAT_VISIBILITY_KEY);
-    if (!res) return null;
-    const parsed = JSON.parse(await res.text());
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-async function shouldSuppressPushForPeer(incomingPeer) {
+/** Дублирует resolvePushSuppression из js/messages-sync-utils.js: sw.js не модуль. */
+function shouldSuppressPushForPeer(incomingPeer, states) {
   if (!incomingPeer) return false;
   const now = Date.now();
-  const states = [...chatVisibilityByClientId.values()];
-  const persisted = await readPersistedChatVisibility();
-  if (persisted) states.push(persisted);
   for (const state of states) {
-    if (now - Number(state.at || 0) > CHAT_VISIBILITY_MAX_AGE_MS) continue;
-    if (!state.visible) continue;
+    if (now - Number(state?.at || 0) > CHAT_VISIBILITY_ANSWER_MAX_AGE_MS) continue;
+    if (!state?.visible) continue;
     if (state.peerId && String(state.peerId) === String(incomingPeer)) return true;
   }
   return false;
+}
+
+function pluralRu(n, one, few, many) {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  const mod10 = n % 10;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+}
+
+/** Дублирует notificationBodyWithCount из js/messages-sync-utils.js. */
+function notificationBodyWithCount(text, count) {
+  const body = String(text || "").trim();
+  const extra = Math.max(0, Math.floor(Number(count) || 0) - 1);
+  if (!extra) return body;
+  const suffix = `Ещё ${extra} ${pluralRu(extra, "сообщение", "сообщения", "сообщений")}`;
+  return body ? `${body}\n${suffix}` : suffix;
+}
+
+/** Сколько сообщений уже висит в баннере этого чата — чтобы схлопнуть их в один счётчик. */
+async function pendingNotificationCount(tag) {
+  try {
+    const existing = await self.registration.getNotifications({ tag });
+    let count = 0;
+    for (const note of existing) count += Math.max(1, Number(note.data?.count) || 1);
+    return count;
+  } catch {
+    return 0;
+  }
 }
 
 function incomingPeerFromPushData(data) {
@@ -400,8 +439,9 @@ function incomingPeerFromPushData(data) {
 
 function clientViewsIncomingChat(client, incomingPeer) {
   if (!incomingPeer || !client) return false;
-  const visible = client.visibilityState === "visible" || client.focused === true;
-  if (!visible) return false;
+  // Только visibilityState: WindowClient.focused на iOS остаётся true у свёрнутого PWA,
+  // и уведомление о новом сообщении пропадало.
+  if (client.visibilityState !== "visible") return false;
   try {
     const u = new URL(client.url);
     const chat = u.searchParams.get("chat");
@@ -467,7 +507,6 @@ self.addEventListener("push", (event) => {
         includeUncontrolled: true,
       });
 
-      let suppress = await shouldSuppressPushForPeer(incomingPeer);
       for (const client of clientList) {
         client.postMessage({
           type: "push-received",
@@ -476,34 +515,107 @@ self.addEventListener("push", (event) => {
           chatId: data.chatId || null,
           url: data.url || "/messages",
         });
-        if (clientViewsIncomingChat(client, incomingPeer)) suppress = true;
       }
 
+      const states = await collectChatVisibility(clientList);
+      let suppress = shouldSuppressPushForPeer(incomingPeer, states);
+      if (!suppress) {
+        suppress = clientList.some((client) => clientViewsIncomingChat(client, incomingPeer));
+      }
       if (suppress) return;
 
       const tag = data.tag || (incomingPeer ? `chat-${incomingPeer}` : "orders-site");
+      const count = (await pendingNotificationCount(tag)) + 1;
       const options = {
-        body: data.body || "Новое уведомление",
+        body: notificationBodyWithCount(data.body || "Новое уведомление", count),
         icon: "/img/icon-192.png?v=20260803",
         badge: "/img/icon-192.png?v=20260803",
         tag,
         renotify: true,
+        timestamp: Date.now(),
         data: {
           url: data.url || "/messages",
           peerId: incomingPeer,
           chatId: data.chatId || null,
           messageId: data.messageId || null,
+          count,
         },
       };
 
-      const count = (await getBadgeCount()) + 1;
       await Promise.all([
-        setBadgeCount(count),
+        setBadgeCount((await getBadgeCount()) + 1),
         self.registration.showNotification(data.title || "ФАБРИКА ОКОН", options),
       ]);
     })(),
   );
 });
+
+/**
+ * Браузер периодически перевыпускает подписку (и сам гасит старую). Без обмена
+ * endpoint'ов сервер получает 410, удаляет строку — и push молча пропадают до
+ * следующего открытия приложения.
+ */
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      const oldEndpoint = event.oldSubscription?.endpoint || null;
+      try {
+        let subscription = event.newSubscription || null;
+        if (!subscription) {
+          subscription = await self.registration.pushManager.getSubscription();
+        }
+        if (!subscription) {
+          const applicationServerKey =
+            event.oldSubscription?.options?.applicationServerKey ||
+            (await fetchApplicationServerKey());
+          if (!applicationServerKey) return;
+          subscription = await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey,
+          });
+        }
+        const json = subscription.toJSON();
+        if (!json?.endpoint || !json.keys?.p256dh || !json.keys?.auth) return;
+        await fetch("/api/push-subscription-rotate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ oldEndpoint, subscription: json }),
+        });
+      } catch (e) {
+        console.warn("[sw] pushsubscriptionchange:", e);
+      }
+    })(),
+  );
+});
+
+function base64UrlToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+async function fetchApplicationServerKey() {
+  try {
+    const res = await fetch("/api/push-config");
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.publicKey ? base64UrlToUint8Array(data.publicKey) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Оболочка SPA сама разведёт маршрут по postMessage; отдельные страницы — нет. */
+function clientCanRouteInPlace(client) {
+  try {
+    return isAppShellNavigation(new URL(client.url));
+  } catch {
+    return false;
+  }
+}
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
@@ -514,17 +626,37 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     (async () => {
-      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      for (const client of clients) {
-        if (!client.url.startsWith(self.location.origin)) continue;
-        client.postMessage({
+      // Остальные баннеры этого чата уже не нужны. Счётчик на иконке не трогаем:
+      // приложение сейчас откроется и пересчитает непрочитанные по базе.
+      await closeNotificationsForPeer(peerId, event.notification.tag);
+
+      const clients = (
+        await self.clients.matchAll({ type: "window", includeUncontrolled: true })
+      ).filter((client) => client.url.startsWith(self.location.origin));
+
+      // Видимое окно перехватывает клик: иначе на Windows фокус уходит в свёрнутую вкладку.
+      const target =
+        clients.find((client) => client.visibilityState === "visible" || client.focused) ||
+        clients[0];
+
+      if (target) {
+        target.postMessage({
           type: "open-chat",
           url: relUrl,
           peerId,
           chatId: noteData.chatId || null,
         });
-        if ("focus" in client) return client.focus();
+        if (!clientCanRouteInPlace(target) && typeof target.navigate === "function") {
+          try {
+            const navigated = await target.navigate(targetUrl);
+            if (navigated && "focus" in navigated) return navigated.focus();
+          } catch {
+            /* переход запрещён — остаётся обычный фокус */
+          }
+        }
+        if ("focus" in target) return target.focus();
       }
+
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }
@@ -532,3 +664,25 @@ self.addEventListener("notificationclick", (event) => {
     })(),
   );
 });
+
+/** Смахнули баннер — на иконке не должно оставаться этих сообщений. */
+self.addEventListener("notificationclose", (event) => {
+  const count = Math.max(1, Number(event.notification.data?.count) || 1);
+  event.waitUntil(
+    (async () => {
+      await setBadgeCount(Math.max(0, (await getBadgeCount()) - count));
+    })(),
+  );
+});
+
+async function closeNotificationsForPeer(peerId, tag) {
+  try {
+    const notes = await self.registration.getNotifications();
+    for (const note of notes) {
+      const notePeer = note.data?.peerId || incomingPeerFromPushData(note.data || {});
+      if ((peerId && notePeer === peerId) || (tag && note.tag === tag)) note.close();
+    }
+  } catch {
+    /* ignore */
+  }
+}
