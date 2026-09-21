@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 51998)
-Total output lines: 5908
-
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
@@ -2689,7 +2686,211 @@ function prepareMessagesDialogForPeer(peerId) {
     return false;
   }
   loadMessagesGeneration += 1;
-  l…1998 tokens truncated…me(() => {
+  lastFeedMessageAt = null;
+  clearComposerContext();
+  hideMessageActionMenu();
+  clearFeedMessageCache();
+  resetComposerDraft();
+  resetMessagesFeedDom(peerId);
+  applyDialogHeaderPlaceholder(peerId);
+  return true;
+}
+
+export function showMessagesChatList() {
+  activePeerId = null;
+  lastFeedMessageAt = null;
+  loadMessagesGeneration += 1;
+  clearComposerContext();
+  hideMessageActionMenu();
+  clearFeedMessageCache();
+  setMessagesView("list");
+  syncChatPeerInUrl(null);
+  stopMessagesFeedPolling();
+  startChatListPolling();
+  reportChatVisibilityToSw();
+  void loadChatList();
+}
+
+export async function openMessagesDialog(peerId) {
+  if (!peerId) return;
+  loadChatListGeneration += 1;
+  prepareMessagesDialogForPeer(peerId);
+  activePeerId = peerId;
+  lastFeedMessageAt = null;
+  clearComposerContext();
+  hideMessageActionMenu();
+  clearFeedMessageCache();
+  setMessagesView("dialog");
+  syncChatPeerInUrl(peerId);
+  stopChatListPolling();
+  stopMessagesFeedPolling();
+  clearChatListUnreadForPeer(peerId);
+  void closeNotificationsForConversation(peerId);
+  reportChatVisibilityToSw();
+  const peerAtStart = peerId;
+  const directoryPromise = loadUsersDirectory();
+  const groupMetaPromise =
+    isGroupChat() && groupChatsById.size === 0 ? fetchMyGroupChats() : Promise.resolve(null);
+  syncComposerForActivePeer();
+
+  // Сообщения — критический путь. Справочник имён и метаданные группы не должны
+  // задерживать первый пузырь; прочитанность отмечается уже после первой отрисовки.
+  void Promise.all([directoryPromise, groupMetaPromise]).then(() => {
+    if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
+    updateDialogHeader();
+    syncComposerForActivePeer();
+    if (isGroupChat()) applyGroupOutgoingReceiptsToFeed();
+  }).catch((error) => console.warn("Фоновая загрузка данных диалога:", error));
+  await loadMessages();
+  if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
+  startMessagesFeedPolling();
+  reportChatVisibilityToSw();
+}
+
+export async function loadMessages() {
+  const feed = document.getElementById("messagesFeed");
+  const msg = document.getElementById("messagesPageMessage");
+  if (!feed) return;
+
+  const uid = getCurrentUserId();
+  if (!uid) return;
+
+  if (messagesView !== "dialog" || !activePeerId) return;
+
+  const gen = ++loadMessagesGeneration;
+  const peerAtStart = activePeerId;
+  if (!feed.dataset.peerId) feed.dataset.peerId = String(peerAtStart);
+
+  if (msg) {
+    msg.textContent = "";
+    msg.classList.remove("messages-page-message--error");
+  }
+
+  async function fetchDialogRows({ since = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT } = {}) {
+    if (isGroupChat(peerAtStart)) {
+      return fetchGroupMessages(parseGroupId(peerAtStart), { sinceIso: since, limit });
+    }
+    return fetchPeerMessages(peerAtStart, { sinceIso: since, limit });
+  }
+
+  async function renderDialogRows(rows, { markRead = true } = {}) {
+    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
+
+    lastFeedMessageAt = rows.length ? rows[rows.length - 1].created_at : null;
+
+    clearFeedMessageCache();
+    rememberFeedMessages(rows);
+
+    const visibleRows = rows.filter((row) => !isMessageDeleted(row));
+    const emptyText = isGroupChat()
+      ? "Пока нет сообщений в этом групповом чате. Напишите первое."
+      : "Пока нет сообщений в этой переписке. Напишите первое.";
+
+    const stickBottom = isFeedAtBottom(feed, 80) || !feed.querySelector("[data-message-id]");
+    feed.dataset.peerId = String(peerAtStart);
+    feed.innerHTML = visibleRows.length
+      ? visibleRows.map(renderMessageItem).join("")
+      : `<p class="messages-empty">${emptyText}</p>`;
+
+    if (stickBottom) scrollMessagesFeedToBottom(feed);
+    // Фото, задачи, реакции и групповые квитанции обогащают уже видимую ленту.
+    // Ни один из этих запросов не участвует в time-to-first-message.
+    void hydrateMessageAttachments(feed);
+    void import("./message-task-links.js")
+      .then((m) => m.refreshActiveTaskMessageRefs())
+      .catch((error) => console.warn("Фоновая загрузка связей задач:", error));
+
+    if (isGroupChat()) {
+      const groupId = parseGroupId();
+      if (groupId) {
+        void loadActiveGroupReceipts(groupId)
+          .then(() => {
+            if (isCurrentDialogLoad(gen, peerAtStart)) applyGroupOutgoingReceiptsToFeed();
+          })
+          .catch((error) => console.warn("Фоновая загрузка статусов группы:", error));
+      }
+    }
+
+    const messageKind = isGroupChat() ? "group" : "user";
+    const ids = visibleRows.map((row) => row.id).filter((id) => id != null);
+    if (ids.length) void loadAndApplyReactions(messageKind, ids);
+
+    if (markRead) {
+      void markActiveConversationRead()
+        .then(() => refreshMessagesUnreadBadge())
+        .catch((error) => console.warn("Фоновая отметка прочитанности:", error));
+    }
+  }
+
+  // Фаза 1: последние сообщения независимо от даты. Так старый диалог не показывает
+  // ложное «нет сообщений» до фоновой догрузки, а LIMIT сохраняет быстрый ответ.
+  const fast = await fetchDialogRows({ since: null, limit: DIALOG_INITIAL_MESSAGE_LIMIT });
+  if (!isCurrentDialogLoad(gen, peerAtStart)) return;
+
+  if (fast.error) {
+    console.error("Ошибка загрузки сообщений:", fast.error);
+    if (msg) {
+      msg.textContent = isGroupChat()
+        ? "Ошибка загрузки сообщений группового чата."
+        : "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
+      msg.classList.add("messages-page-message--error");
+    }
+    feed.innerHTML = "";
+    return;
+  }
+
+  await renderDialogRows(fast.rows, { markRead: true });
+
+  // Фаза 2: догрузка более старых сообщений — только prepend, без полной перерисовки ленты.
+  void (async () => {
+    await whenIdle(2000);
+    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
+    const fuller = await fetchDialogRows({ since: null, limit: DIALOG_HISTORY_MESSAGE_LIMIT });
+    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
+    if (fuller.error) return;
+    rememberFeedMessages(fuller.rows);
+
+    const fastIds = new Set(fast.rows.map((row) => String(row.id)));
+    const hasOlderNotShown = fuller.rows.some(
+      (row) => !isMessageDeleted(row) && !fastIds.has(String(row.id)),
+    );
+    if (!hasOlderNotShown) return;
+    prependOlderMessagesToFeed(fuller.rows);
+  })();
+}
+
+export function onMessagesSectionEnter(opts = {}) {
+  initMessagesSection();
+  const peerFromUrl = opts.restoreFromUrl ? getChatPeerFromUrl() : null;
+  if (peerFromUrl) {
+    void openMessagesDialog(peerFromUrl);
+    return;
+  }
+  showMessagesChatList();
+}
+
+function getFeedMessageIds() {
+  const feed = document.getElementById("messagesFeed");
+  if (!feed) return new Set();
+  return new Set(
+    [...feed.querySelectorAll("[data-message-id]")]
+      .map((el) => el.getAttribute("data-message-id"))
+      .filter(Boolean),
+  );
+}
+
+function isFeedAtBottom(feed, threshold = 48) {
+  return feed.scrollHeight - feed.scrollTop - feed.clientHeight <= threshold;
+}
+
+/** Прокрутка к последнему сообщению с учётом отложенной раскладки flex/картинок. */
+function scrollMessagesFeedToBottom(feed) {
+  if (!feed) return;
+  const pin = () => {
+    feed.scrollTop = feed.scrollHeight;
+  };
+  pin();
+  requestAnimationFrame(() => {
     pin();
     requestAnimationFrame(pin);
   });
