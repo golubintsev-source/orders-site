@@ -25,6 +25,9 @@
     "api/supabase-proxy.js": {
       "maxDuration": 60
     },
+    "api/speed-test.js": {
+      "maxDuration": 20
+    },
     "api/secret-login.js": {
       "maxDuration": 30
     },
@@ -61,6 +64,7 @@
     { "source": "/manager-salary", "destination": "/index.html" },
     { "source": "/route-sheet", "destination": "/index.html" },
     { "source": "/settings", "destination": "/index.html" },
+    { "source": "/speed-test", "destination": "/index.html" },
     { "source": "/statistics", "destination": "/index.html" },
     { "source": "/statistics-balance", "destination": "/index.html" },
     { "source": "/debts", "destination": "/index.html" },

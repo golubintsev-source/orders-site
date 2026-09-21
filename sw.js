@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v42: e-mail в тексте чата больше не вырезается из пузыря.
-const STATIC_CACHE = "orders-site-static-v42";
+// v43: монитор производительности и раздел «Тест скорости».
+const STATIC_CACHE = "orders-site-static-v43";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -20,6 +20,7 @@ const PRECACHE_URLS = [
   "/",
   "/index.html",
   "/style.css",
+  "/js/performance-monitor.js",
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",
   "/js/boot-route.js",
@@ -33,6 +34,7 @@ const PRECACHE_URLS = [
   "/js/ui.js",
   "/js/cell-tooltip.js",
   "/js/section-nav.js",
+  "/js/speed-test.js",
   "/js/app-routes.js",
   "/js/settings.js",
   "/js/roles.js",
@@ -151,6 +153,7 @@ const APP_SHELL_PATHS = new Set([
   "/manager-salary",
   "/route-sheet",
   "/settings",
+  "/speed-test",
   "/statistics",
   "/statistics-balance",
   "/debts",
@@ -234,301 +237,4 @@ async function networkFirstNavigate(request) {
     return res;
   } catch {
     const fallback = await cache.match(request);
-    if (fallback) return fallback;
-    return offlineNavigationResponse();
-  }
-}
-
-function offlineNavigationResponse() {
-  return new Response("Нет сети", {
-    status: 503,
-    statusText: "Offline",
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
-  });
-}
-
-self.addEventListener("fetch", (event) => {
-  const request = event.request;
-  if (request.method !== "GET") return;
-
-  let url;
-  try {
-    url = new URL(request.url);
-  } catch {
-    return;
-  }
-  if (!isSameOrigin(url) || isApiPath(url.pathname)) return;
-
-  if (isStaticAsset(url)) {
-    // JS в PWA: не ждём сеть при нестабильном соединении (особенно на iOS/WebView),
-    // иначе динамические import'ы могут "залипать" до таймаутов браузера.
-    event.respondWith(staleWhileRevalidate(request));
-    return;
-  }
-
-  if (isNavigationRequest(request)) {
-    event.respondWith(
-      isAppShellNavigation(url)
-        ? staleWhileRevalidateShell(request, event)
-        : networkFirstNavigate(request),
-    );
-  }
-});
-
-async function getBadgeCount() {
-  try {
-    const cache = await caches.open(BADGE_CACHE);
-    const res = await cache.match(BADGE_COUNT_KEY);
-    if (!res) return 0;
-    const n = parseInt(await res.text(), 10);
-    return Number.isFinite(n) && n > 0 ? n : 0;
-  } catch {
-    return 0;
-  }
-}
-
-async function applyAppBadge(n) {
-  // iOS/WebKit: Badging API в SW только на navigator (не на registration).
-  if (n > 0) {
-    if ("setAppBadge" in self.navigator) {
-      await self.navigator.setAppBadge(n);
-    } else if (self.registration?.setAppBadge) {
-      await self.registration.setAppBadge(n);
-    }
-    return;
-  }
-  if ("clearAppBadge" in self.navigator) {
-    await self.navigator.clearAppBadge();
-  } else if (self.registration?.clearAppBadge) {
-    await self.registration.clearAppBadge();
-  }
-}
-
-async function setBadgeCount(count) {
-  const n = Math.max(0, Math.min(count, 99));
-  try {
-    const cache = await caches.open(BADGE_CACHE);
-    if (n > 0) {
-      await cache.put(BADGE_COUNT_KEY, new Response(String(n)));
-    } else {
-      await cache.delete(BADGE_COUNT_KEY);
-    }
-    await applyAppBadge(n);
-  } catch (e) {
-    console.warn("[sw] badge:", e);
-  }
-}
-
-async function incrementBadge() {
-  await setBadgeCount((await getBadgeCount()) + 1);
-}
-
-async function clearBadge() {
-  await setBadgeCount(0);
-}
-
-const CHAT_VISIBILITY_MAX_AGE_MS = 90_000;
-/** @type {Map<string, { visible: boolean, focused: boolean, peerId: string|null, at: number }>} */
-const chatVisibilityByClientId = new Map();
-
-function rememberChatVisibility(clientId, data) {
-  if (!clientId) return;
-  const state = {
-    visible: Boolean(data?.visible),
-    focused: Boolean(data?.focused),
-    peerId: data?.peerId ? String(data.peerId) : null,
-    at: Date.now(),
-  };
-  chatVisibilityByClientId.set(String(clientId), state);
-  void persistChatVisibilitySnapshot();
-}
-
-async function persistChatVisibilitySnapshot() {
-  try {
-    const latest = [...chatVisibilityByClientId.values()].sort((a, b) => b.at - a.at)[0];
-    const cache = await caches.open(BADGE_CACHE);
-    if (!latest) {
-      await cache.delete(CHAT_VISIBILITY_KEY);
-      return;
-    }
-    await cache.put(CHAT_VISIBILITY_KEY, new Response(JSON.stringify(latest)));
-  } catch {
-    /* ignore */
-  }
-}
-
-async function readPersistedChatVisibility() {
-  try {
-    const cache = await caches.open(BADGE_CACHE);
-    const res = await cache.match(CHAT_VISIBILITY_KEY);
-    if (!res) return null;
-    const parsed = JSON.parse(await res.text());
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-async function shouldSuppressPushForPeer(incomingPeer) {
-  if (!incomingPeer) return false;
-  const now = Date.now();
-  const states = [...chatVisibilityByClientId.values()];
-  const persisted = await readPersistedChatVisibility();
-  if (persisted) states.push(persisted);
-  for (const state of states) {
-    if (now - Number(state.at || 0) > CHAT_VISIBILITY_MAX_AGE_MS) continue;
-    if (!state.visible) continue;
-    if (state.peerId && String(state.peerId) === String(incomingPeer)) return true;
-  }
-  return false;
-}
-
-function incomingPeerFromPushData(data) {
-  if (data?.peerId) return String(data.peerId);
-  if (data?.chatId) {
-    const id = String(data.chatId);
-    return id.startsWith("group:") ? id : `group:${id}`;
-  }
-  try {
-    const u = new URL(data?.url || "/messages", self.location.origin);
-    return u.searchParams.get("chat");
-  } catch {
-    return null;
-  }
-}
-
-function clientViewsIncomingChat(client, incomingPeer) {
-  if (!incomingPeer || !client) return false;
-  const visible = client.visibilityState === "visible" || client.focused === true;
-  if (!visible) return false;
-  try {
-    const u = new URL(client.url);
-    const chat = u.searchParams.get("chat");
-    return Boolean(chat && chat === String(incomingPeer));
-  } catch {
-    return false;
-  }
-}
-
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "chat-visibility") {
-    rememberChatVisibility(event.source?.id || "page", event.data);
-    return;
-  }
-  if (event.data?.type === "clear-badge") {
-    event.waitUntil(clearBadge());
-    return;
-  }
-  if (event.data?.type === "set-badge-count") {
-    event.waitUntil(setBadgeCount(Number(event.data.count) || 0));
-    return;
-  }
-  if (event.data?.type === "get-shell-updated") {
-    event.waitUntil(
-      (async () => {
-        event.ports[0]?.postMessage({ updated: await consumeShellUpdatedFlag() });
-      })(),
-    );
-    return;
-  }
-  if (event.data?.type === "get-badge-count") {
-    event.waitUntil(
-      (async () => {
-        const count = await getBadgeCount();
-        event.ports[0]?.postMessage({ count });
-        if (count > 0) await applyAppBadge(count);
-      })(),
-    );
-  }
-});
-
-self.addEventListener("push", (event) => {
-  let data = {
-    title: "ФАБРИКА ОКОН",
-    body: "Новое уведомление",
-    url: "/messages",
-    tag: "orders-site",
-  };
-  try {
-    if (event.data) {
-      const parsed = event.data.json();
-      data = { ...data, ...parsed };
-    }
-  } catch (_) {
-    /* ignore malformed payload */
-  }
-
-  event.waitUntil(
-    (async () => {
-      const incomingPeer = incomingPeerFromPushData(data);
-      const clientList = await self.clients.matchAll({
-        type: "window",
-        includeUncontrolled: true,
-      });
-
-      let suppress = await shouldSuppressPushForPeer(incomingPeer);
-      for (const client of clientList) {
-        client.postMessage({
-          type: "push-received",
-          payload: data,
-          peerId: incomingPeer,
-          chatId: data.chatId || null,
-          url: data.url || "/messages",
-        });
-        if (clientViewsIncomingChat(client, incomingPeer)) suppress = true;
-      }
-
-      if (suppress) return;
-
-      const tag = data.tag || (incomingPeer ? `chat-${incomingPeer}` : "orders-site");
-      const options = {
-        body: data.body || "Новое уведомление",
-        icon: "/img/icon-192.png?v=20260803",
-        badge: "/img/icon-192.png?v=20260803",
-        tag,
-        renotify: true,
-        data: {
-          url: data.url || "/messages",
-          peerId: incomingPeer,
-          chatId: data.chatId || null,
-          messageId: data.messageId || null,
-        },
-      };
-
-      const count = (await getBadgeCount()) + 1;
-      await Promise.all([
-        setBadgeCount(count),
-        self.registration.showNotification(data.title || "ФАБРИКА ОКОН", options),
-      ]);
-    })(),
-  );
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const noteData = event.notification.data || {};
-  const relUrl = noteData.url || "/messages";
-  const targetUrl = new URL(relUrl, self.location.origin).href;
-  const peerId = noteData.peerId || incomingPeerFromPushData(noteData);
-
-  event.waitUntil(
-    (async () => {
-      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      for (const client of clients) {
-        if (!client.url.startsWith(self.location.origin)) continue;
-        client.postMessage({
-          type: "open-chat",
-          url: relUrl,
-          peerId,
-          chatId: noteData.chatId || null,
-        });
-        if ("focus" in client) return client.focus();
-      }
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(targetUrl);
-      }
-      return undefined;
-    })(),
-  );
-});
+    if (fallback) return 

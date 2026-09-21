@@ -16,6 +16,7 @@ export const ROUTE_SECTION_IDS = new Set([
   "manager-salary",
   "route-sheet",
   "settings",
+  "speed-test",
   "statistics",
   "statistics-balance",
   "debts",
@@ -42,6 +43,7 @@ const PATH_TO_SECTION = new Map([
   ["/manager-salary", "manager-salary"],
   ["/route-sheet", "route-sheet"],
   ["/settings", "settings"],
+  ["/speed-test", "speed-test"],
   ["/statistics", "statistics"],
   ["/statistics-balance", "statistics-balance"],
   ["/debts", "debts"],
@@ -232,40 +234,4 @@ export function getRouteSectionFromUrl() {
 }
 
 /** После загрузки: убрать устаревший #раздел при работе по путям (http/https). */
-export function migrateLegacyHashToPathIfNeeded() {
-  if (usesHashOnlyRouting()) return;
-  const h = window.location.hash.replace(/^#/, "");
-  if (!h || h === "orders-excel" || !ROUTE_SECTION_IDS.has(h)) return;
-  history.replaceState(null, "", pathForRouteSection(h) + window.location.search);
-}
-
-export function syncBrowserUrlToSection(sectionId) {
-  if (!ROUTE_SECTION_IDS.has(sectionId)) return;
-
-  const search = new URLSearchParams(window.location.search);
-  if (sectionId !== "new") {
-    search.delete("order_id");
-  }
-  if (sectionId !== "messages") {
-    search.delete("chat");
-  }
-  const searchStr = search.toString();
-  const q = searchStr ? `?${searchStr}` : "";
-
-  if (usesHashOnlyRouting()) {
-    const base = window.location.pathname + q;
-    const targetHash = sectionId === "all" ? "" : `#${sectionId}`;
-    const next = `${base}${targetHash}`;
-    if (`${window.location.pathname}${window.location.search}${window.location.hash}` === next) return;
-    history.pushState(null, "", next);
-    return;
-  }
-
-  const want = pathForRouteSection(sectionId);
-  const cur = normalizePathname(window.location.pathname);
-  const curSection = PATH_TO_SECTION.get(cur);
-  const curSearch = window.location.search || "";
-  if (curSection === sectionId && !window.location.hash && curSearch === q) return;
-
-  history.pushState(null, "", want + q);
-}
+export function migrateLegacyHashToPathIfNeede
