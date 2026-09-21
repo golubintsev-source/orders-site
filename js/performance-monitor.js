@@ -243,4 +243,124 @@
           dnsMs: round(entry.domainLookupEnd - entry.domainLookupStart),
           tcpMs: round(entry.connectEnd - entry.connectStart),
           tlsMs: round(entry.connectEnd - (entry.secureConnectionStart || entry.connectStart)),
-          ttf
+          ttfbMs: round(entry.responseStart - entry.requestStart),
+          downloadMs: round(entry.responseEnd - entry.responseStart),
+          transferBytes: finiteOrNull(entry.transferSize),
+          protocol: entry.nextHopProtocol || "",
+        },
+        MAX_RESOURCES,
+      );
+    }
+  });
+
+  observe("paint", (entries) => {
+    for (const entry of entries) session.paints[entry.name] = round(entry.startTime);
+    schedulePersist();
+  });
+
+  observe("largest-contentful-paint", (entries) => {
+    const last = entries[entries.length - 1];
+    if (last) session.lcpMs = round(last.startTime);
+    schedulePersist();
+  });
+
+  observe("longtask", (entries) => {
+    for (const entry of entries) {
+      pushLimited(
+        session.longTasks,
+        { startedMs: round(entry.startTime), durationMs: round(entry.duration), section: activeSection },
+        MAX_LONG_TASKS,
+      );
+    }
+  });
+
+  function markSectionStart(sectionId) {
+    const next = String(sectionId || "unknown");
+    const now = performance.now();
+    if (activeSection && sectionStartedAt != null && activeSection !== next) {
+      pushLimited(
+        session.sections,
+        {
+          section: activeSection,
+          startedMs: round(sectionStartedAt - startedAt),
+          visibleMs: round(now - sectionStartedAt),
+        },
+        80,
+      );
+    }
+    activeSection = next;
+    sectionStartedAt = now;
+    window.__ordersActiveSection = next;
+    const renderStarted = now;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        pushLimited(
+          session.sections,
+          {
+            section: next,
+            startedMs: round(renderStarted - startedAt),
+            firstPaintMs: round(performance.now() - renderStarted),
+          },
+          80,
+        );
+      });
+    });
+  }
+
+  function clone(value) {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch {
+      return value;
+    }
+  }
+
+  window.__ordersPerf = {
+    getCurrentSnapshot() {
+      collectNavigation();
+      return clone(session);
+    },
+    getHistory() {
+      persistNow();
+      return clone(readStoredSessions());
+    },
+    clearHistory() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+      schedulePersist();
+    },
+    markSectionStart,
+    persist: persistNow,
+  };
+
+  window.__ordersActiveSection = activeSection;
+  window.addEventListener("load", () => window.setTimeout(persistNow, 0), { once: true });
+  window.addEventListener("online", schedulePersist);
+  window.addEventListener("offline", schedulePersist);
+  window.addEventListener("error", (event) => {
+    pushLimited(
+      session.errors,
+      { atMs: round(performance.now() - startedAt), message: String(event.message || "error").slice(0, 200) },
+      30,
+    );
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    pushLimited(
+      session.errors,
+      {
+        atMs: round(performance.now() - startedAt),
+        message: String(event.reason?.message || event.reason || "unhandled rejection").slice(0, 200),
+      },
+      30,
+    );
+  });
+  window.addEventListener("pagehide", persistNow);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") persistNow();
+  });
+  connection?.addEventListener?.("change", schedulePersist);
+  schedulePersist();
+})();

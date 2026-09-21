@@ -205,4 +205,264 @@ function renderMetric(label, value, detail, tone) {
   return `
     <article class="speed-test-metric speed-test-metric--${tone}">
       <div class="speed-test-metric-label">${escapeHtml(label)}</div>
-      <div class="speed
+      <div class="speed-test-metric-value">${escapeHtml(value)}</div>
+      <div class="speed-test-metric-detail">${escapeHtml(detail)}</div>
+    </article>`;
+}
+
+function renderNavigation(navigation) {
+  const body = byId("speedTestNavigationBody");
+  if (!body) return;
+  const rows = [
+    ["DNS", navigation?.dnsMs, "Поиск адреса сервера"],
+    ["TCP", navigation?.tcpMs, "Установка соединения"],
+    ["TLS", navigation?.tlsMs, "Шифрование HTTPS"],
+    ["Ожидание первого байта", navigation?.requestToFirstByteMs, "Сеть + сервер до начала ответа"],
+    ["Передача HTML", navigation?.downloadMs, "Получение ответа браузером"],
+    ["Обработка DOM", navigation?.domProcessingMs, "Разбор HTML и выполнение стартового кода"],
+    ["Полная загрузка", navigation?.totalMs, "До события load"],
+  ];
+  body.innerHTML = rows
+    .map(
+      ([name, value, detail]) => `
+        <tr>
+          <td><strong>${escapeHtml(name)}</strong><span>${escapeHtml(detail)}</span></td>
+          <td class="speed-test-table-value speed-test-tone-${metricTone(Number(value), [500, 1500])}">${formatMs(value)}</td>
+        </tr>`,
+    )
+    .join("");
+}
+
+function renderRequestSummary(requests) {
+  const body = byId("speedTestRequestsBody");
+  if (!body) return;
+  const labels = {
+    supabase: "Supabase (напрямую)",
+    "vercel-api": "Vercel API",
+    "vercel-static": "Vercel: файлы сайта",
+    other: "Другие серверы",
+  };
+  body.innerHTML = Object.entries(requests.categories)
+    .sort((a, b) => b[1].cumulativeHeadersMs - a[1].cumulativeHeadersMs)
+    .map(
+      ([category, item]) => `
+        <tr>
+          <td>${escapeHtml(labels[category] || category)}</td>
+          <td>${item.count}</td>
+          <td>${formatMs(item.maxHeadersMs)}</td>
+          <td>${formatMs(item.cumulativeHeadersMs)}</td>
+          <td>${item.errors || "—"}</td>
+        </tr>`,
+    )
+    .join("") || '<tr><td colspan="5">Запросы пока не зафиксированы</td></tr>';
+}
+
+function sessionSummary(session) {
+  const requests = summarizeRequests(session);
+  const supabase = requests.categories.supabase || {};
+  const api = requests.categories["vercel-api"] || {};
+  const longTasks = summarizeLongTasks(session);
+  return {
+    startedAt: session.startedAt,
+    path: session.path || "/",
+    loadMs: session.navigation?.totalMs,
+    requests: requests.total,
+    supabaseMaxMs: supabase.maxHeadersMs || 0,
+    apiMaxMs: api.maxHeadersMs || 0,
+    longTaskMaxMs: longTasks.maxMs,
+  };
+}
+
+function renderHistory() {
+  const body = byId("speedTestHistoryBody");
+  if (!body) return;
+  const history = window.__ordersPerf?.getHistory?.() || [];
+  body.innerHTML = history
+    .slice(0, 12)
+    .map(sessionSummary)
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(new Date(item.startedAt).toLocaleString("ru-RU"))}<span>${escapeHtml(item.path)}</span></td>
+          <td>${formatMs(item.loadMs)}</td>
+          <td>${item.requests}</td>
+          <td>${formatMs(item.supabaseMaxMs)}</td>
+          <td>${formatMs(item.longTaskMaxMs)}</td>
+        </tr>`,
+    )
+    .join("") || '<tr><td colspan="5">История появится после первых загрузок сайта</td></tr>';
+}
+
+function renderReport(report) {
+  const { medians, navigation, requests, longTasks, device, connection, region } = report;
+  const metrics = byId("speedTestMetrics");
+  if (metrics) {
+    metrics.innerHTML = [
+      renderMetric(
+        "iPhone → Vercel",
+        formatMs(medians.edgeTotalMs),
+        `Сеть и первый ответ, регион ${region || "—"}`,
+        metricTone(medians.edgeTotalMs),
+      ),
+      renderMetric(
+        "Обработка Vercel",
+        formatMs(medians.edgeServerMs),
+        "Время кода на сервере без сетевого пути",
+        metricTone(medians.edgeServerMs, [100, 500]),
+      ),
+      renderMetric(
+        "iPhone → Supabase",
+        formatMs(medians.supabaseDirectMs),
+        "Так большинство данных загружается сейчас",
+        metricTone(medians.supabaseDirectMs),
+      ),
+      renderMetric(
+        "Vercel → Supabase",
+        formatMs(medians.supabaseFromVercelMs),
+        "Контрольный запрос из инфраструктуры Vercel",
+        metricTone(medians.supabaseFromVercelMs),
+      ),
+      renderMetric(
+        "CPU iPhone",
+        formatMs(device.cpuMs),
+        "Одинаковая вычислительная проба",
+        metricTone(device.cpuMs, [80, 250]),
+      ),
+      renderMetric(
+        "Рендер iPhone",
+        formatMs(device.renderMs),
+        "Создание и отображение 300 строк",
+        metricTone(device.renderMs, [120, 350]),
+      ),
+    ].join("");
+  }
+
+  renderNavigation(navigation);
+  renderRequestSummary(requests);
+  renderHistory();
+
+  const recommendations = byId("speedTestRecommendations");
+  if (recommendations) {
+    recommendations.innerHTML = report.recommendations
+      .map((item) => `<li>${escapeHtml(item)}</li>`)
+      .join("");
+  }
+
+  const environment = byId("speedTestEnvironment");
+  if (environment) {
+    const connectionText = connection
+      ? `${connection.effectiveType || "тип неизвестен"}, RTT ${connection.rttMs ?? "—"} мс, ${connection.downlinkMbps ?? "—"} Мбит/с`
+      : "iOS не предоставил Network Information API";
+    environment.textContent = `${navigator.onLine ? "Онлайн" : "Офлайн"} · ${connectionText} · ${navigator.userAgent}`;
+  }
+
+  const longTaskEl = byId("speedTestLongTasks");
+  if (longTaskEl) {
+    longTaskEl.textContent = longTasks.count
+      ? `${longTasks.count} длинных задач, суммарно ${formatMs(longTasks.totalMs)}, максимум ${formatMs(longTasks.maxMs)}`
+      : "Длинные задачи JavaScript не обнаружены или браузер не поддерживает их измерение";
+  }
+
+  const navBytes = byId("speedTestNavigationBytes");
+  if (navBytes) {
+    navBytes.textContent = `HTML: передано ${formatBytes(navigation?.transferBytes)}, распаковано ${formatBytes(navigation?.decodedBytes)}. Времена параллельных запросов перекрываются и не складываются напрямую.`;
+  }
+}
+
+async function runSpeedTest() {
+  if (running) return;
+  running = true;
+  const button = byId("speedTestRunBtn");
+  const status = byId("speedTestStatus");
+  if (button) button.disabled = true;
+  if (status) status.textContent = "Проверяю Vercel, Supabase и скорость iPhone…";
+
+  try {
+    const edge = await runRepeated(testVercelEdge);
+    if (status) status.textContent = "Проверяю прямой путь до Supabase…";
+    const direct = await runRepeated(testSupabaseDirect);
+    if (status) status.textContent = "Проверяю путь Vercel → Supabase…";
+    const viaVercel = await runRepeated(testSupabaseViaVercel);
+    if (status) status.textContent = "Измеряю обработку и рендер на устройстве…";
+    const device = await runDeviceBenchmarks();
+    window.__ordersPerf?.persist?.();
+    const snapshot = window.__ordersPerf?.getCurrentSnapshot?.() || {};
+    const requests = summarizeRequests(snapshot);
+    const longTasks = summarizeLongTasks(snapshot);
+    const successfulEdge = edge.find((sample) => sample?.ok);
+
+    lastReport = {
+      createdAt: new Date().toISOString(),
+      path: window.location.pathname,
+      connection: currentConnection(),
+      region: successfulEdge?.region || viaVercel.find((sample) => sample?.ok)?.region || null,
+      medians: {
+        edgeTotalMs: summarizeSamples(edge, "totalMs"),
+        edgeServerMs: summarizeSamples(edge, "serverMs"),
+        supabaseDirectMs: summarizeSamples(direct, "totalMs"),
+        supabaseViaVercelTotalMs: summarizeSamples(viaVercel, "totalMs"),
+        supabaseFromVercelMs: summarizeSamples(viaVercel, "supabaseMs"),
+      },
+      samples: { edge, direct, viaVercel },
+      navigation: snapshot.navigation || null,
+      requests,
+      longTasks,
+      device,
+      userAgent: navigator.userAgent,
+    };
+    lastReport.recommendations = buildRecommendations(lastReport);
+    renderReport(lastReport);
+    if (status) status.textContent = `Готово: по ${TEST_RUNS} замера каждого сетевого пути`;
+  } catch (error) {
+    if (status) status.textContent = `Не удалось завершить тест: ${error?.message || error}`;
+  } finally {
+    running = false;
+    if (button) button.disabled = false;
+  }
+}
+
+async function copyReport() {
+  const status = byId("speedTestStatus");
+  if (!lastReport) {
+    if (status) status.textContent = "Сначала запустите тест";
+    return;
+  }
+  const text = JSON.stringify(lastReport, null, 2);
+  try {
+    await navigator.clipboard.writeText(text);
+    if (status) status.textContent = "Отчёт скопирован — его можно отправить разработчику";
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+    if (status) status.textContent = "Отчёт скопирован";
+  }
+}
+
+function clearHistory() {
+  window.__ordersPerf?.clearHistory?.();
+  renderHistory();
+  const status = byId("speedTestStatus");
+  if (status) status.textContent = "Локальная история очищена";
+}
+
+export function initSpeedTestSection() {
+  if (initialized) return;
+  initialized = true;
+  byId("speedTestRunBtn")?.addEventListener("click", runSpeedTest);
+  byId("speedTestCopyBtn")?.addEventListener("click", copyReport);
+  byId("speedTestClearBtn")?.addEventListener("click", clearHistory);
+  renderHistory();
+}
+
+export function onSpeedTestSectionEnter() {
+  initSpeedTestSection();
+  renderHistory();
+  if (!hasRun) {
+    hasRun = true;
+    void runSpeedTest();
+  }
+}
