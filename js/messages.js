@@ -45,8 +45,13 @@ const CHAT_LIST_FAST_PREVIEW_LIMIT = 200;
 const CHAT_LIST_SNAPSHOT_KEY = "orders_site_chat_list_snapshot_v1";
 /** Больше одного экрана не нужно — не раздуваем localStorage. */
 const CHAT_LIST_SNAPSHOT_MAX_ITEMS = 20;
-/** Сколько последних сообщений диалога грузить сразу. */
-const DIALOG_MESSAGE_LIMIT = 400;
+/**
+ * Первый экран диалога. 400 сообщений заметно блокировали разбор JSON и DOM на
+ * мобильных устройствах; остальная история догружается после первого кадра.
+ */
+const DIALOG_INITIAL_MESSAGE_LIMIT = 80;
+/** Верхняя граница фоновой догрузки истории для обратной совместимости. */
+const DIALOG_HISTORY_MESSAGE_LIMIT = 400;
 /** Первая отрисовка списка/диалога: только сообщения за последние N дней. */
 const MESSAGES_FAST_LOAD_DAYS = 3;
 /** Префикс peer id для группового чата. */
@@ -1531,7 +1536,7 @@ async function fetchUnreadIncomingDmMeta() {
 }
 
 /** Сообщения одного peer (1:1), без выгрузки всей переписки пользователя. */
-async function fetchPeerMessages(peerId, { sinceIso = null, limit = DIALOG_MESSAGE_LIMIT } = {}) {
+async function fetchPeerMessages(peerId, { sinceIso = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT } = {}) {
   const uid = getCurrentUserId();
   if (!uid || !peerId) return { rows: [], error: null };
 
@@ -1587,7 +1592,7 @@ async function fetchMyGroupChats() {
   return { chats, error: null };
 }
 
-async function fetchGroupMessages(chatId, { sinceIso = null, limit = DIALOG_MESSAGE_LIMIT } = {}) {
+async function fetchGroupMessages(chatId, { sinceIso = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT } = {}) {
   if (!chatId || groupChatsSupported === false) return { rows: [], error: null };
 
   const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
@@ -2309,19 +2314,19 @@ function buildDmUnreadByPeer(unreadRows) {
   return dmUnreadByPeer;
 }
 
-async function paintChatListFromData(list, rows, unreadRows, groupChats, { partial = false } = {}) {
+function paintChatListEntries(
+  list,
+  rows,
+  unreadRows,
+  groupChats,
+  lastGroupMessages,
+  groupUnreadByChat,
+  groupReceiptsByChat,
+  { partial = false, announce = false } = {},
+) {
   const uid = getCurrentUserId();
   const dmUnreadByPeer = buildDmUnreadByPeer(unreadRows);
   const peerInfo = buildPeerInfoMap(rows, unreadRows, uid);
-  const chatIds = (groupChats || []).map((chat) => chat.id);
-  const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat] = await Promise.all([
-    fetchLastGroupMessagesByChat(chatIds),
-    fetchGroupMemberReceiptsByChat(chatIds),
-  ]);
-  // Своя прочитанность — часть уже полученных статусов участников, отдельный запрос не нужен.
-  const lastReadByChat = ownReadsFromGroupReceipts(groupReceiptsByChat, uid);
-  const groupUnreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
-
   const entries = buildChatListEntries(
     peerInfo,
     rows,
@@ -2342,8 +2347,81 @@ async function paintChatListFromData(list, rows, unreadRows, groupChats, { parti
   syncChatListDom(list, entries, groupReceiptsByChat, { retainUnseen: partial });
   void hydrateGroupAvatars(list);
   void preloadChatListAvatarsForEntries(entries);
-  document.dispatchEvent(new CustomEvent("chat-list-painted"));
+  if (announce) document.dispatchEvent(new CustomEvent("chat-list-painted"));
   saveChatListSnapshot(list);
+  return entries;
+}
+
+/**
+ * Первый кадр списка не должен зависеть от тяжёлых групповых счётчиков.
+ * DM и карточки групп рисуются сразу, а последние сообщения/галочки/unread
+ * добавляются отдельной фоновой фазой.
+ */
+async function paintChatListFromData(
+  list,
+  rows,
+  unreadRows,
+  groupChats,
+  { partial = false, progressive = false, isCurrent = null } = {},
+) {
+  const chatIds = (groupChats || []).map((chat) => chat.id);
+
+  if (progressive) {
+    paintChatListEntries(
+      list,
+      rows,
+      unreadRows,
+      groupChats,
+      new Map(),
+      new Map(),
+      new Map(),
+      { partial, announce: true },
+    );
+
+    if (!chatIds.length) return;
+    void (async () => {
+      const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat] = await Promise.all([
+        fetchLastGroupMessagesByChat(chatIds),
+        fetchGroupMemberReceiptsByChat(chatIds),
+      ]);
+      if (typeof isCurrent === "function" && !isCurrent()) return;
+      const uid = getCurrentUserId();
+      const lastReadByChat = ownReadsFromGroupReceipts(groupReceiptsByChat, uid);
+      const groupUnreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
+      if (typeof isCurrent === "function" && !isCurrent()) return;
+      paintChatListEntries(
+        list,
+        rows,
+        unreadRows,
+        groupChats,
+        lastGroupMessages,
+        groupUnreadByChat,
+        groupReceiptsByChat,
+        { partial },
+      );
+    })().catch((error) => console.warn("Фоновое обновление групповых чатов:", error));
+    return;
+  }
+
+  const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat] = await Promise.all([
+    fetchLastGroupMessagesByChat(chatIds),
+    fetchGroupMemberReceiptsByChat(chatIds),
+  ]);
+  if (typeof isCurrent === "function" && !isCurrent()) return;
+  const uid = getCurrentUserId();
+  const lastReadByChat = ownReadsFromGroupReceipts(groupReceiptsByChat, uid);
+  const groupUnreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
+  if (typeof isCurrent === "function" && !isCurrent()) return;
+  paintChatListEntries(
+    list,
+    rows,
+    unreadRows,
+    groupChats,
+    lastGroupMessages,
+    groupUnreadByChat,
+    groupReceiptsByChat,
+    { partial, announce: true },
+  );
 }
 
 function showChatListLoadError(list, msg, error) {
@@ -2398,6 +2476,7 @@ export async function loadChatList() {
       fuller.rows,
       unreadFresh.rows,
       groupPack.error ? [...groupChatsById.values()] : (groupPack.chats || []),
+      { isCurrent: () => gen === loadChatListGeneration && messagesView === "list" },
     );
     void refreshMessagesUnreadBadge();
     return;
@@ -2429,7 +2508,14 @@ export async function loadChatList() {
     recentPack.rows,
     unreadPack.rows,
     groupPack.chats || [],
-    { partial: true },
+    {
+      partial: true,
+      progressive: true,
+      isCurrent: () =>
+        gen === loadChatListGeneration &&
+        messagesView === "list" &&
+        list.dataset.chatListFull !== "1",
+    },
   );
 
   // Второй проход добирает переписки старше MESSAGES_FAST_LOAD_DAYS. Он не влияет на
@@ -2451,6 +2537,7 @@ export async function loadChatList() {
       fuller.rows,
       unreadFresh.error ? unreadPack.rows : unreadFresh.rows,
       groupPack.chats || [],
+      { isCurrent: () => gen === loadChatListGeneration && messagesView === "list" },
     );
   })();
 
@@ -2641,18 +2728,21 @@ export async function openMessagesDialog(peerId) {
   void closeNotificationsForConversation(peerId);
   reportChatVisibilityToSw();
   const peerAtStart = peerId;
-  const markPromise = markActiveConversationRead();
-  await loadUsersDirectory();
-  if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
-  if (isGroupChat() && groupChatsById.size === 0) {
-    await fetchMyGroupChats();
-    if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
-  }
-  updateDialogHeader();
+  const directoryPromise = loadUsersDirectory();
+  const groupMetaPromise =
+    isGroupChat() && groupChatsById.size === 0 ? fetchMyGroupChats() : Promise.resolve(null);
   syncComposerForActivePeer();
+
+  // Сообщения — критический путь. Справочник имён и метаданные группы не должны
+  // задерживать первый пузырь; прочитанность отмечается уже после первой отрисовки.
+  void Promise.all([directoryPromise, groupMetaPromise]).then(() => {
+    if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
+    updateDialogHeader();
+    syncComposerForActivePeer();
+    if (isGroupChat()) applyGroupOutgoingReceiptsToFeed();
+  }).catch((error) => console.warn("Фоновая загрузка данных диалога:", error));
   await loadMessages();
   if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
-  await markPromise;
   startMessagesFeedPolling();
   reportChatVisibilityToSw();
 }
@@ -2670,14 +2760,13 @@ export async function loadMessages() {
   const gen = ++loadMessagesGeneration;
   const peerAtStart = activePeerId;
   if (!feed.dataset.peerId) feed.dataset.peerId = String(peerAtStart);
-  const sinceIso = getMessagesFastLoadSinceIso();
 
   if (msg) {
     msg.textContent = "";
     msg.classList.remove("messages-page-message--error");
   }
 
-  async function fetchDialogRows({ since = null, limit = DIALOG_MESSAGE_LIMIT } = {}) {
+  async function fetchDialogRows({ since = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT } = {}) {
     if (isGroupChat(peerAtStart)) {
       return fetchGroupMessages(parseGroupId(peerAtStart), { sinceIso: since, limit });
     }
@@ -2686,15 +2775,6 @@ export async function loadMessages() {
 
   async function renderDialogRows(rows, { markRead = true } = {}) {
     if (!isCurrentDialogLoad(gen, peerAtStart)) return;
-
-    await import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
-    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
-
-    if (isGroupChat()) {
-      const groupId = parseGroupId();
-      if (groupId) await loadActiveGroupReceipts(groupId);
-      if (!isCurrentDialogLoad(gen, peerAtStart)) return;
-    }
 
     lastFeedMessageAt = rows.length ? rows[rows.length - 1].created_at : null;
 
@@ -2713,21 +2793,38 @@ export async function loadMessages() {
       : `<p class="messages-empty">${emptyText}</p>`;
 
     if (stickBottom) scrollMessagesFeedToBottom(feed);
-    // Слоты фото фиксированы при рендере — повторный scroll после load не нужен (он давал мигание).
-    await hydrateMessageAttachments(feed);
-    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
+    // Фото, задачи, реакции и групповые квитанции обогащают уже видимую ленту.
+    // Ни один из этих запросов не участвует в time-to-first-message.
+    void hydrateMessageAttachments(feed);
+    void import("./message-task-links.js")
+      .then((m) => m.refreshActiveTaskMessageRefs())
+      .catch((error) => console.warn("Фоновая загрузка связей задач:", error));
+
+    if (isGroupChat()) {
+      const groupId = parseGroupId();
+      if (groupId) {
+        void loadActiveGroupReceipts(groupId)
+          .then(() => {
+            if (isCurrentDialogLoad(gen, peerAtStart)) applyGroupOutgoingReceiptsToFeed();
+          })
+          .catch((error) => console.warn("Фоновая загрузка статусов группы:", error));
+      }
+    }
 
     const messageKind = isGroupChat() ? "group" : "user";
     const ids = visibleRows.map((row) => row.id).filter((id) => id != null);
     if (ids.length) void loadAndApplyReactions(messageKind, ids);
 
-    if (!markRead) return;
-    await markActiveConversationRead();
-    void refreshMessagesUnreadBadge();
+    if (markRead) {
+      void markActiveConversationRead()
+        .then(() => refreshMessagesUnreadBadge())
+        .catch((error) => console.warn("Фоновая отметка прочитанности:", error));
+    }
   }
 
-  // Фаза 1: только последние 3 дня.
-  const fast = await fetchDialogRows({ since: sinceIso });
+  // Фаза 1: последние сообщения независимо от даты. Так старый диалог не показывает
+  // ложное «нет сообщений» до фоновой догрузки, а LIMIT сохраняет быстрый ответ.
+  const fast = await fetchDialogRows({ since: null, limit: DIALOG_INITIAL_MESSAGE_LIMIT });
   if (!isCurrentDialogLoad(gen, peerAtStart)) return;
 
   if (fast.error) {
@@ -2746,7 +2843,9 @@ export async function loadMessages() {
 
   // Фаза 2: догрузка более старых сообщений — только prepend, без полной перерисовки ленты.
   void (async () => {
-    const fuller = await fetchDialogRows({ since: null, limit: DIALOG_MESSAGE_LIMIT });
+    await whenIdle(2000);
+    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
+    const fuller = await fetchDialogRows({ since: null, limit: DIALOG_HISTORY_MESSAGE_LIMIT });
     if (!isCurrentDialogLoad(gen, peerAtStart)) return;
     if (fuller.error) return;
     rememberFeedMessages(fuller.rows);
