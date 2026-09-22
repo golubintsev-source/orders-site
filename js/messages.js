@@ -31,11 +31,12 @@ const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 /** Максимальная высота поля ввода сообщения (как в CSS max-height). */
 const COMPOSER_INPUT_MAX_HEIGHT_PX = 120;
 const SUGGEST_DEBOUNCE_MS = 120;
-const UNREAD_POLL_MS = 45_000;
-const FEED_POLL_MS = 8_000;
-const FEED_POLL_REALTIME_MS = 30_000;
-const CHAT_LIST_POLL_MS = 12_000;
-const CHAT_LIST_POLL_REALTIME_MS = 35_000;
+const UNREAD_POLL_MS = 90_000;
+const FEED_POLL_MS = 15_000;
+const FEED_POLL_REALTIME_MS = 120_000;
+const CHAT_LIST_POLL_MS = 30_000;
+const CHAT_LIST_POLL_REALTIME_MS = 180_000;
+const POLL_BACKOFF_MAX_MS = 180_000;
 const CHAT_VISIBILITY_HEARTBEAT_MS = 25_000;
 /** Сколько недавних DM тянуть для превью списка чатов (не всю историю). */
 const CHAT_LIST_DM_PREVIEW_LIMIT = 800;
@@ -80,6 +81,10 @@ let messagesResumeTimer = null;
 let chatListRefreshTimer = null;
 let unreadBadgeTimer = null;
 let pollNewMessagesInFlight = false;
+let chatListLoadPromise = null;
+let unreadRefreshPromise = null;
+let chatListPollFailures = 0;
+let unreadPollFailures = 0;
 let markConversationReadInFlight = null;
 /** @type {"list" | "dialog"} */
 let messagesView = "list";
@@ -2379,7 +2384,7 @@ async function paintChatListFromData(
     );
 
     if (!chatIds.length) return;
-    void (async () => {
+    await (async () => {
       const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat] = await Promise.all([
         fetchLastGroupMessagesByChat(chatIds),
         fetchGroupMemberReceiptsByChat(chatIds),
@@ -2435,13 +2440,13 @@ function showChatListLoadError(list, msg, error) {
   delete list.dataset.chatListFull;
 }
 
-export async function loadChatList() {
+async function loadChatListOnce() {
   const list = document.getElementById("messagesChatList");
   const msg = document.getElementById("messagesChatListMessage");
-  if (!list) return;
+  if (!list) return true;
 
   const uid = getCurrentUserId();
-  if (!uid) return;
+  if (!uid) return true;
 
   const gen = ++loadChatListGeneration;
   const sinceIso = getMessagesFastLoadSinceIso();
@@ -2463,10 +2468,10 @@ export async function loadChatList() {
       fetchUnreadIncomingDmMeta(),
       fetchMyGroupChats(),
     ]);
-    if (gen !== loadChatListGeneration || messagesView !== "list") return;
+    if (gen !== loadChatListGeneration || messagesView !== "list") return true;
     if (fuller.error) {
       console.warn("Ошибка обновления списка чатов:", fuller.error);
-      return;
+      return false;
     }
     if (groupPack.error) {
       console.warn("Ошибка загрузки групповых чатов:", groupPack.error);
@@ -2479,7 +2484,7 @@ export async function loadChatList() {
       { isCurrent: () => gen === loadChatListGeneration && messagesView === "list" },
     );
     void refreshMessagesUnreadBadge();
-    return;
+    return true;
   }
 
   const boot = takeChatBootPack();
@@ -2491,12 +2496,12 @@ export async function loadChatList() {
     boot ? boot.groups.then(adoptBootGroupChats) : fetchMyGroupChats(),
   ]);
 
-  if (gen !== loadChatListGeneration) return;
-  if (messagesView !== "list") return;
+  if (gen !== loadChatListGeneration) return true;
+  if (messagesView !== "list") return true;
 
   if (recentPack.error) {
     showChatListLoadError(list, msg, recentPack.error);
-    return;
+    return false;
   }
 
   if (groupPack.error) {
@@ -2520,7 +2525,7 @@ export async function loadChatList() {
 
   // Второй проход добирает переписки старше MESSAGES_FAST_LOAD_DAYS. Он не влияет на
   // первый экран, поэтому ждём простоя: иначе 800 строк конкурируют с отрисовкой.
-  void (async () => {
+  await (async () => {
     await whenIdle();
     if (gen !== loadChatListGeneration || messagesView !== "list") return;
     const [fuller, unreadFresh] = await Promise.all([
@@ -2542,6 +2547,20 @@ export async function loadChatList() {
   })();
 
   void refreshMessagesUnreadBadge();
+  return true;
+}
+
+/** Один сетевой проход списка за раз: при медленной БД polling не создаёт лавину запросов. */
+export function loadChatList() {
+  if (chatListLoadPromise) return chatListLoadPromise;
+  const current = loadChatListOnce().catch((error) => {
+    console.warn("Ошибка обновления списка чатов:", error);
+    return false;
+  });
+  chatListLoadPromise = current;
+  return current.finally(() => {
+    if (chatListLoadPromise === current) chatListLoadPromise = null;
+  });
 }
 
 function setMessagesView(view) {
@@ -3194,15 +3213,26 @@ function startChatListPolling() {
   stopChatListPolling();
   if (messagesView !== "list") return;
   if (!isDocumentVisible()) return;
-  const ms = messagesRealtimeActive ? CHAT_LIST_POLL_REALTIME_MS : CHAT_LIST_POLL_MS;
-  chatListPollTimer = window.setInterval(() => {
-    if (messagesView === "list") void loadChatList();
-  }, ms);
+  chatListPollFailures = 0;
+  scheduleNextChatListPoll();
+}
+
+function scheduleNextChatListPoll() {
+  if (chatListPollTimer || messagesView !== "list" || !isDocumentVisible()) return;
+  const baseMs = messagesRealtimeActive ? CHAT_LIST_POLL_REALTIME_MS : CHAT_LIST_POLL_MS;
+  const delayMs = Math.min(baseMs * 2 ** chatListPollFailures, POLL_BACKOFF_MAX_MS);
+  chatListPollTimer = window.setTimeout(async () => {
+    chatListPollTimer = null;
+    if (messagesView !== "list" || !isDocumentVisible()) return;
+    const ok = await loadChatList();
+    chatListPollFailures = ok === false ? Math.min(chatListPollFailures + 1, 4) : 0;
+    scheduleNextChatListPoll();
+  }, delayMs);
 }
 
 function stopChatListPolling() {
   if (chatListPollTimer) {
-    window.clearInterval(chatListPollTimer);
+    window.clearTimeout(chatListPollTimer);
     chatListPollTimer = null;
   }
 }
@@ -3725,7 +3755,7 @@ async function countUnreadGroupMessagesTotal() {
   return total;
 }
 
-export async function refreshMessagesUnreadBadge() {
+async function refreshMessagesUnreadBadgeOnce() {
   const badge = document.getElementById("messagesUnreadBadge");
   const btn = document.getElementById("messagesNavBtn");
 
@@ -3733,7 +3763,7 @@ export async function refreshMessagesUnreadBadge() {
   if (!uid) {
     if (badge) badge.hidden = true;
     void setAppUnreadBadgeCount(0);
-    return;
+    return true;
   }
 
   startMessagesRealtime();
@@ -3763,7 +3793,7 @@ export async function refreshMessagesUnreadBadge() {
   if (error) {
     console.warn("Не удалось получить число непрочитанных:", error);
     if (badge) badge.hidden = true;
-    return;
+    return false;
   }
 
   const dmUnread = count || 0;
@@ -3786,14 +3816,37 @@ export async function refreshMessagesUnreadBadge() {
     }
   }
   void setAppUnreadBadgeCount(n);
+  return true;
+}
+
+/** Не запускаем новый тяжёлый unread-проход, пока предыдущий ещё использует PostgREST. */
+export function refreshMessagesUnreadBadge() {
+  if (unreadRefreshPromise) return unreadRefreshPromise;
+  const current = refreshMessagesUnreadBadgeOnce().catch((error) => {
+    console.warn("Не удалось обновить непрочитанные сообщения:", error);
+    return false;
+  });
+  unreadRefreshPromise = current;
+  return current.finally(() => {
+    if (unreadRefreshPromise === current) unreadRefreshPromise = null;
+  });
 }
 
 function startUnreadPolling() {
   if (unreadPollTimer) return;
   void refreshMessagesUnreadBadge();
-  unreadPollTimer = window.setInterval(() => {
-    void refreshMessagesUnreadBadge();
-  }, UNREAD_POLL_MS);
+  scheduleNextUnreadPoll();
+}
+
+function scheduleNextUnreadPoll() {
+  if (unreadPollTimer) return;
+  const delayMs = Math.min(UNREAD_POLL_MS * 2 ** unreadPollFailures, POLL_BACKOFF_MAX_MS);
+  unreadPollTimer = window.setTimeout(async () => {
+    unreadPollTimer = null;
+    const ok = await refreshMessagesUnreadBadge();
+    unreadPollFailures = ok === false ? Math.min(unreadPollFailures + 1, 3) : 0;
+    scheduleNextUnreadPoll();
+  }, delayMs);
 }
 
 function getTextareaCaret(el) {

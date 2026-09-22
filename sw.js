@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v43: монитор производительности и раздел «Тест скорости».
-const STATIC_CACHE = "orders-site-static-v43";
+// v44: hotfix нагрузки на Supabase и защита polling сообщений от наложения запросов.
+const STATIC_CACHE = "orders-site-static-v44";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
