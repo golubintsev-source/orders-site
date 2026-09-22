@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v44: hotfix нагрузки на Supabase и защита polling сообщений от наложения запросов.
-const STATIC_CACHE = "orders-site-static-v44";
+// v45: пакетная доставка сообщений и редкий polling при активном Realtime.
+const STATIC_CACHE = "orders-site-static-v45";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
