@@ -218,7 +218,6 @@ const ORDERS_LIST_SELECT = [
   "area_m2",
   "installer_payment_amount",
   "installer_payment_by",
-  "installer_rate_per_m2",
   "installer_name",
   "reveals",
   "reveals_date",
