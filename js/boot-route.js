@@ -15,6 +15,7 @@ const BOOT_LABELS = {
   "manager-salary": "Зарплата менеджера",
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
+  "speed-test": "Тест скорости",
   statistics: "Статистика",
   "statistics-balance": "Статистика баланса",
   debts: "Долги",

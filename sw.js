@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v42: e-mail в тексте чата больше не вырезается из пузыря.
-const STATIC_CACHE = "orders-site-static-v42";
+// v43: монитор производительности и раздел «Тест скорости».
+const STATIC_CACHE = "orders-site-static-v43";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -20,6 +20,7 @@ const PRECACHE_URLS = [
   "/",
   "/index.html",
   "/style.css",
+  "/js/performance-monitor.js",
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",
   "/js/boot-route.js",
@@ -33,6 +34,7 @@ const PRECACHE_URLS = [
   "/js/ui.js",
   "/js/cell-tooltip.js",
   "/js/section-nav.js",
+  "/js/speed-test.js",
   "/js/app-routes.js",
   "/js/settings.js",
   "/js/roles.js",
@@ -151,6 +153,7 @@ const APP_SHELL_PATHS = new Set([
   "/manager-salary",
   "/route-sheet",
   "/settings",
+  "/speed-test",
   "/statistics",
   "/statistics-balance",
   "/debts",

@@ -2,6 +2,190 @@
   box-sizing: border-box;
 }
 
+/* Диагностика скорости */
+.speed-test-page {
+  display: grid;
+  gap: 16px;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-bottom: 32px;
+}
+
+.speed-test-intro h2,
+.speed-test-card h3 {
+  margin: 0 0 8px;
+}
+
+.speed-test-intro > div > p,
+.speed-test-card-hint,
+.speed-test-note,
+.speed-test-privacy,
+.speed-test-environment {
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.speed-test-intro > div > p,
+.speed-test-card-hint {
+  margin: 0;
+}
+
+.speed-test-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.speed-test-secondary-btn,
+.speed-test-clear-btn {
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #334155;
+  padding: 9px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.speed-test-clear-btn {
+  padding: 7px 11px;
+  color: #b91c1c;
+}
+
+.speed-test-status {
+  min-height: 22px;
+  margin: 12px 0 0;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.speed-test-privacy {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+.speed-test-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.speed-test-metric {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-left: 5px solid #94a3b8;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+
+.speed-test-metric--good { border-left-color: #16a34a; }
+.speed-test-metric--warn { border-left-color: #f59e0b; }
+.speed-test-metric--bad { border-left-color: #dc2626; }
+.speed-test-metric-label { color: #475569; font-size: 13px; }
+.speed-test-metric-value { margin: 5px 0; color: #0f172a; font-size: 25px; font-weight: 750; }
+.speed-test-metric-detail { color: #64748b; font-size: 12px; line-height: 1.4; }
+
+.speed-test-card {
+  min-width: 0;
+}
+
+.speed-test-table-wrap {
+  width: 100%;
+  margin-top: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.speed-test-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.speed-test-table th,
+.speed-test-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.speed-test-table th {
+  color: #475569;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.speed-test-table td span {
+  display: block;
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.speed-test-table-value {
+  text-align: right !important;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.speed-test-tone-good { color: #15803d; }
+.speed-test-tone-warn { color: #b45309; }
+.speed-test-tone-bad { color: #b91c1c; }
+.speed-test-note { margin: 10px 0 0; font-size: 12px; }
+
+.speed-test-recommendations {
+  margin: 12px 0 0;
+  padding-left: 20px;
+}
+
+.speed-test-recommendations li {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.speed-test-environment {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.speed-test-history-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.speed-test-benchmark-host {
+  position: fixed;
+  top: -10000px;
+  left: -10000px;
+  width: 360px;
+  visibility: hidden;
+  contain: strict;
+}
+
+@media (max-width: 760px) {
+  .speed-test-page { gap: 12px; }
+  .speed-test-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .speed-test-metric { padding: 12px; }
+  .speed-test-metric-value { font-size: 20px; }
+  .speed-test-actions { display: grid; grid-template-columns: 1fr; }
+  .speed-test-actions button { width: 100%; }
+  .speed-test-table { min-width: 600px; }
+}
+
+@media (max-width: 420px) {
+  .speed-test-metrics { grid-template-columns: 1fr; }
+}
+
 body {
   margin: 0;
   font-family: Arial, sans-serif;

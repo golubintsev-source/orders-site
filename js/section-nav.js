@@ -73,6 +73,7 @@ const SECTION_LABELS = {
   "manager-salary": "Зарплата менеджера",
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
+  "speed-test": "Тест скорости",
   statistics: "Статистика",
   "statistics-balance": "Статистика баланса",
   debts: "Долги",
@@ -99,6 +100,7 @@ const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "manager-salary",
   "route-sheet",
   "settings",
+  "speed-test",
   "statistics",
   "statistics-balance",
   "debts",
@@ -359,6 +361,7 @@ export function switchSection(sectionId, opts = {}) {
   }
 
   currentSectionId = sectionId;
+  window.__ordersPerf?.markSectionStart?.(sectionId);
   contentSections.forEach((section) => {
     section.classList.toggle("active", section.id === `section-${sectionId}`);
   });
@@ -419,6 +422,11 @@ export function switchSection(sectionId, opts = {}) {
   if (sectionId === "settings") {
     void import("./settings.js").then((m) => m.applySettingsAdminBlocksVisibility());
     void import("./push-notifications.js").then((m) => m.refreshPushNotificationsUi());
+  }
+  if (sectionId === "speed-test") {
+    void import("./speed-test.js")
+      .then((m) => m.onSpeedTestSectionEnter())
+      .catch((err) => console.error("Тест скорости: не удалось загрузить раздел", err));
   }
   if (prevSectionId === "messages" && sectionId !== "messages") {
     void import("./messages.js").then((m) => m.stopMessagesPolling());

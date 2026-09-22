@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <link rel="preconnect" href="https://yizwpogwabosuguakyzt.supabase.co" crossorigin>
+  <!-- Ставим монитор до остальных скриптов, чтобы не потерять ранние запросы и ошибки. -->
+  <script src="./js/performance-monitor.js"></script>
   <!-- Раздел «Чаты»: запрос списка уходит уже во время разбора HTML, до supabase-js и main.js. -->
   <script src="./js/chat-boot.js"></script>
   <!-- В <head>, чтобы скачивание шло параллельно разбору body: config.js требует window.supabase. -->
@@ -119,6 +121,10 @@
             <button type="button" role="option" class="section-nav-dropdown-item" data-section="settings">
               <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
               <span class="section-nav-dropdown-item-text">Настройки</span>
+            </button>
+            <button type="button" role="option" class="section-nav-dropdown-item" data-section="speed-test">
+              <svg class="section-nav-dropdown-item-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14a8 8 0 1 1 16 0"/><path d="M12 14l4-4"/><circle cx="12" cy="14" r="1"/><path d="M6 19h12"/></svg>
+              <span class="section-nav-dropdown-item-text">Тест скорости</span>
             </button>
             <div class="section-nav-dropdown-footer">
               <div class="section-nav-dropdown-stat section-nav-dropdown-stat--admin" id="sectionNavRicherStat" role="status" aria-live="polite" hidden>
@@ -2190,6 +2196,68 @@
       </div>
     </section>
 
+    <section id="section-speed-test" class="content-section">
+      <div class="speed-test-page">
+        <div class="card speed-test-intro">
+          <div>
+            <h2>Тест скорости</h2>
+            <p>Три контрольных маршрута помогают отделить плохую связь до Vercel от задержек Supabase и работы самого iPhone. Тест запускается автоматически при первом открытии.</p>
+          </div>
+          <div class="speed-test-actions">
+            <button type="button" id="speedTestRunBtn" class="btn-primary">Запустить заново</button>
+            <button type="button" id="speedTestCopyBtn" class="speed-test-secondary-btn">Скопировать отчёт</button>
+          </div>
+          <p id="speedTestStatus" class="speed-test-status" role="status" aria-live="polite">Подготовка теста…</p>
+          <p class="speed-test-privacy">Адреса запросов сохраняются без параметров и данных заказов. История хранится только в этом браузере и никуда автоматически не отправляется.</p>
+        </div>
+
+        <div id="speedTestMetrics" class="speed-test-metrics" aria-live="polite"></div>
+
+        <div class="card speed-test-card">
+          <h3>Загрузка текущей страницы</h3>
+          <p class="speed-test-card-hint">Разбивка настоящей загрузки HTML. На повторном открытии часть файлов может прийти из кэша.</p>
+          <div class="speed-test-table-wrap">
+            <table class="speed-test-table"><tbody id="speedTestNavigationBody"><tr><td>Данные появятся после теста</td><td>—</td></tr></tbody></table>
+          </div>
+          <p id="speedTestNavigationBytes" class="speed-test-note"></p>
+        </div>
+
+        <div class="card speed-test-card">
+          <h3>Запросы за текущую сессию</h3>
+          <p class="speed-test-card-hint">Суммарное время не равно времени ожидания страницы: параллельные запросы перекрываются.</p>
+          <div class="speed-test-table-wrap">
+            <table class="speed-test-table speed-test-requests-table">
+              <thead><tr><th>Сервер</th><th>Шт.</th><th>Макс.</th><th>Сумма</th><th>Ошибки</th></tr></thead>
+              <tbody id="speedTestRequestsBody"><tr><td colspan="5">Запросы пока не зафиксированы</td></tr></tbody>
+            </table>
+          </div>
+          <p id="speedTestLongTasks" class="speed-test-note"></p>
+        </div>
+
+        <div class="card speed-test-card">
+          <h3>Что вероятнее всего тормозит</h3>
+          <ul id="speedTestRecommendations" class="speed-test-recommendations"><li>Рекомендации появятся после теста.</li></ul>
+          <p id="speedTestEnvironment" class="speed-test-environment"></p>
+        </div>
+
+        <div class="card speed-test-card">
+          <div class="speed-test-history-heading">
+            <div>
+              <h3>История на этом устройстве</h3>
+              <p class="speed-test-card-hint">До 20 последних загрузок — удобно сравнивать VPN и обычное соединение.</p>
+            </div>
+            <button type="button" id="speedTestClearBtn" class="speed-test-clear-btn">Очистить</button>
+          </div>
+          <div class="speed-test-table-wrap">
+            <table class="speed-test-table speed-test-history-table">
+              <thead><tr><th>Дата / страница</th><th>Загрузка</th><th>Запросы</th><th>Supabase max</th><th>JS max</th></tr></thead>
+              <tbody id="speedTestHistoryBody"><tr><td colspan="5">История появится после первых загрузок сайта</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <script type="module" src="./js/boot-route.js"></script>
 
     <div id="cellTooltip" class="cell-tooltip" aria-hidden="true"></div>
@@ -2377,7 +2445,7 @@
       }
     })();
   </script>
-  <script type="module" src="./js/main.js?v=41"></script>
+  <script type="module" src="./js/main.js?v=42"></script>
   <script type="module">
     /* HTML — network-first; /js/* может прийти из старого SW-кэша.
        Поднимаем раздел даже если section-nav ещё без обработчика. */
