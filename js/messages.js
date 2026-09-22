@@ -31,7 +31,10 @@ const ORDER_TOKEN_RE = /\[\[order:(\d+)\]\]/g;
 /** Максимальная высота поля ввода сообщения (как в CSS max-height). */
 const COMPOSER_INPUT_MAX_HEIGHT_PX = 120;
 const SUGGEST_DEBOUNCE_MS = 120;
-const UNREAD_POLL_MS = 90_000;
+const UNREAD_POLL_FALLBACK_MS = 180_000;
+const UNREAD_POLL_REALTIME_MS = 10 * 60_000;
+const UNREAD_POLL_BACKOFF_MAX_MS = 30 * 60_000;
+const DELIVERY_ACK_MIN_INTERVAL_MS = 60_000;
 const FEED_POLL_MS = 15_000;
 const FEED_POLL_REALTIME_MS = 120_000;
 const CHAT_LIST_POLL_MS = 30_000;
@@ -75,6 +78,7 @@ let lastFeedMessageAt = null;
 let messagesRealtimeChannel = null;
 let messagesRealtimeUid = null;
 let messagesRealtimeActive = false;
+let messagesRealtimeConnecting = false;
 let messagesLiveSyncInited = false;
 let chatVisibilityHeartbeatTimer = null;
 let messagesResumeTimer = null;
@@ -83,6 +87,8 @@ let unreadBadgeTimer = null;
 let pollNewMessagesInFlight = false;
 let chatListLoadPromise = null;
 let unreadRefreshPromise = null;
+let deliveryAckPromise = null;
+let lastDeliveryAckAt = 0;
 let chatListPollFailures = 0;
 let unreadPollFailures = 0;
 let markConversationReadInFlight = null;
@@ -989,16 +995,70 @@ async function acknowledgeGroupMessagesDelivered() {
   }
   if (!chats.length) return;
 
-  const at = new Date().toISOString();
   const activeGroupId = isGroupChat() && messagesView === "dialog" ? parseGroupId() : null;
+  const chatIds = chats
+    .map((chat) => String(chat.id))
+    .filter((chatId) => chatId && chatId !== String(activeGroupId || ""));
+  if (!chatIds.length) return;
 
-  await Promise.all(
-    chats.map(async (chat) => {
-      // Открытый групповой чат помечается через markGroupChatRead.
-      if (activeGroupId && chat.id === activeGroupId) return;
-      await markGroupChatDelivered(chat.id, at);
-    }),
-  );
+  // Раньше на каждую группу выполнялись отдельные SELECT + UPDATE параллельно.
+  // На аккаунте с N группами это создавало 2N запросов при каждом resume/poll.
+  // Несколько пакетных операций сохраняют ту же семантику без fan-out.
+  const select = groupReceiptSelectColumns();
+  const { data, error } = await supabaseClient
+    .from("group_chat_reads")
+    .select(select)
+    .eq("user_id", uid)
+    .in("chat_id", chatIds);
+
+  if (error) {
+    if (noteGroupChatReadsSupport(error)) return;
+    if (noteGroupDeliveredAtSupport(error) && groupDeliveredAtSupported === false) return;
+    console.warn("Не удалось загрузить статусы доставки групп:", error);
+    return;
+  }
+
+  groupChatReadsSupported = true;
+  groupDeliveredAtSupported = true;
+  const existingIds = (data || []).map((row) => String(row.chat_id)).filter(Boolean);
+  const existingSet = new Set(existingIds);
+  const missingIds = chatIds.filter((chatId) => !existingSet.has(chatId));
+  const at = new Date().toISOString();
+
+  // UPDATE не трогает last_read_at и потому не может откатить параллельную отметку прочтения.
+  if (existingIds.length) {
+    const { error: updateError } = await supabaseClient
+      .from("group_chat_reads")
+      .update({ last_delivered_at: at })
+      .eq("user_id", uid)
+      .in("chat_id", existingIds);
+    if (updateError) {
+      if (noteGroupDeliveredAtSupport(updateError)) return;
+      if (!noteGroupChatReadsSupport(updateError)) {
+        console.warn("Не удалось пакетно обновить доставку групп:", updateError);
+      }
+      return;
+    }
+  }
+
+  if (missingIds.length) {
+    const payload = missingIds.map((chatId) => ({
+      chat_id: chatId,
+      user_id: uid,
+      last_read_at: "1970-01-01T00:00:00.000Z",
+      last_delivered_at: at,
+    }));
+    const { error: insertError } = await supabaseClient.from("group_chat_reads").upsert(payload, {
+      onConflict: "chat_id,user_id",
+      ignoreDuplicates: true,
+    });
+    if (insertError) {
+      if (noteGroupDeliveredAtSupport(insertError)) return;
+      if (!noteGroupChatReadsSupport(insertError)) {
+        console.warn("Не удалось пакетно создать доставку групп:", insertError);
+      }
+    }
+  }
 }
 
 function countUnreadGroupMessagesForChat(messages, uid, lastReadAt) {
@@ -3265,6 +3325,7 @@ function clearChatListUnreadForPeer(peerId) {
 }
 
 function scheduleUnreadBadgeRefresh() {
+  if (!isDocumentVisible()) return;
   if (unreadBadgeTimer) return;
   unreadBadgeTimer = window.setTimeout(() => {
     unreadBadgeTimer = null;
@@ -3442,6 +3503,10 @@ function handleRealtimeUserMessage(payload) {
 
   if (eventType && eventType !== "INSERT") return;
 
+  if (String(row.recipient_id) === String(uid) && row.id != null) {
+    void markIncomingMessagesDelivered([row.id]);
+  }
+
   if (messagesView === "dialog" && isPeerChat() && messageBelongsToPeer(row, activePeerId, uid)) {
     appendMessagesToFeed([row]);
     if (canMarkMessagesRead()) void markActiveConversationRead();
@@ -3473,6 +3538,11 @@ function handleRealtimeGroupMessage(payload) {
 
   if (eventType && eventType !== "INSERT") return;
 
+  const uid = getCurrentUserId();
+  if (uid && String(row.sender_id) !== String(uid)) {
+    void markGroupChatDelivered(chatId, row.created_at || new Date().toISOString());
+  }
+
   if (messagesView === "dialog" && isGroupChat() && parseGroupId() === chatId) {
     appendMessagesToFeed([row]);
     if (canMarkMessagesRead()) void markActiveConversationRead();
@@ -3498,23 +3568,30 @@ function stopMessagesRealtime() {
   if (!messagesRealtimeChannel) {
     messagesRealtimeUid = null;
     messagesRealtimeActive = false;
+    messagesRealtimeConnecting = false;
     return;
   }
   const channel = messagesRealtimeChannel;
   messagesRealtimeChannel = null;
   messagesRealtimeUid = null;
   messagesRealtimeActive = false;
+  messagesRealtimeConnecting = false;
   void supabaseClient.removeChannel(channel);
 }
 
 function startMessagesRealtime() {
   const uid = getCurrentUserId();
   if (!uid) return;
-  if (messagesRealtimeChannel && messagesRealtimeUid === String(uid) && messagesRealtimeActive) {
+  if (
+    messagesRealtimeChannel &&
+    messagesRealtimeUid === String(uid) &&
+    (messagesRealtimeActive || messagesRealtimeConnecting)
+  ) {
     return;
   }
   if (messagesRealtimeChannel) stopMessagesRealtime();
   messagesRealtimeUid = String(uid);
+  messagesRealtimeConnecting = true;
 
   const channel = supabaseClient
     .channel(`messages-sync:${uid}`)
@@ -3541,9 +3618,15 @@ function startMessagesRealtime() {
 
   channel.subscribe((status) => {
     messagesRealtimeActive = status === "SUBSCRIBED";
-    if (status === "SUBSCRIBED") restartVisiblePolling();
+    if (status === "SUBSCRIBED") {
+      messagesRealtimeConnecting = false;
+      restartVisiblePolling();
+      restartUnreadPollingSchedule();
+    }
     if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
       messagesRealtimeActive = false;
+      messagesRealtimeConnecting = false;
+      restartUnreadPollingSchedule();
     }
   });
 
@@ -3554,6 +3637,8 @@ async function syncMessagesAfterResume() {
   reportChatVisibilityToSw();
   startMessagesRealtime();
   if (!getCurrentUserId()) return;
+  startUnreadPolling({ refreshNow: false });
+  void acknowledgeIncomingDelivered();
   void refreshMessagesUnreadBadge();
   if (!isMessagesSectionActive()) {
     stopMessagesFeedPolling();
@@ -3638,6 +3723,7 @@ function initMessagesLiveSync() {
     else {
       stopMessagesFeedPolling();
       stopChatListPolling();
+      stopUnreadPolling();
     }
   });
   window.addEventListener("focus", () => {
@@ -3693,36 +3779,46 @@ async function markIncomingMessagesDelivered(ids) {
   }
 }
 
-/** Mark undelivered incoming as delivered without reading (badge / background poll). */
-async function acknowledgeIncomingDelivered() {
+/** Mark undelivered incoming as delivered without reading. */
+async function acknowledgeIncomingDeliveredOnce() {
   const uid = getCurrentUserId();
   if (!uid) return;
 
   if (deliveredAtSupported !== false) {
-    const { data, error } = await fetchAllSupabaseRows(() =>
-      supabaseClient
-        .from("user_messages")
-        .select("id")
-        .eq("recipient_id", uid)
-        .is("delivered_at", null)
-        .is("read_at", null)
-        .order("id", { ascending: true }),
-    );
+    // Один UPDATE вместо SELECT всех id + серии UPDATE по 200 строк.
+    const { error } = await supabaseClient
+      .from("user_messages")
+      .update({ delivered_at: new Date().toISOString() })
+      .eq("recipient_id", uid)
+      .is("delivered_at", null)
+      .is("read_at", null);
 
     if (error) {
       if (!noteDeliveredAtSupport(error)) {
-        console.warn("Не удалось проверить недоставленные входящие:", error);
+        console.warn("Не удалось отметить доставленные входящие:", error);
       }
     } else {
       deliveredAtSupported = true;
-      const ids = (data || []).map((row) => row.id);
-      if (ids.length) {
-        await markIncomingMessagesDelivered(ids);
-      }
     }
   }
 
   await acknowledgeGroupMessagesDelivered();
+}
+
+/** Resume/focus могут приходить серией; выполняем один пакет доставки не чаще раза в минуту. */
+function acknowledgeIncomingDelivered({ force = false } = {}) {
+  if (deliveryAckPromise) return deliveryAckPromise;
+  if (!force && Date.now() - lastDeliveryAckAt < DELIVERY_ACK_MIN_INTERVAL_MS) {
+    return Promise.resolve();
+  }
+  lastDeliveryAckAt = Date.now();
+  const current = acknowledgeIncomingDeliveredOnce().catch((error) => {
+    console.warn("Не удалось обновить доставку сообщений:", error);
+  });
+  deliveryAckPromise = current;
+  return current.finally(() => {
+    if (deliveryAckPromise === current) deliveryAckPromise = null;
+  });
 }
 
 /** Число непрочитанных входящих в групповых чатах текущего пользователя. */
@@ -3767,9 +3863,6 @@ async function refreshMessagesUnreadBadgeOnce() {
   }
 
   startMessagesRealtime();
-
-  // While the app is open, acknowledge delivery without marking as read.
-  await acknowledgeIncomingDelivered();
 
   let query = supabaseClient
     .from("user_messages")
@@ -3832,21 +3925,38 @@ export function refreshMessagesUnreadBadge() {
   });
 }
 
-function startUnreadPolling() {
+function startUnreadPolling({ refreshNow = true } = {}) {
   if (unreadPollTimer) return;
-  void refreshMessagesUnreadBadge();
+  if (!isDocumentVisible()) return;
+  if (refreshNow) {
+    void acknowledgeIncomingDelivered();
+    void refreshMessagesUnreadBadge();
+  }
   scheduleNextUnreadPoll();
 }
 
 function scheduleNextUnreadPoll() {
-  if (unreadPollTimer) return;
-  const delayMs = Math.min(UNREAD_POLL_MS * 2 ** unreadPollFailures, POLL_BACKOFF_MAX_MS);
+  if (unreadPollTimer || !isDocumentVisible()) return;
+  const baseMs = messagesRealtimeActive ? UNREAD_POLL_REALTIME_MS : UNREAD_POLL_FALLBACK_MS;
+  const delayMs = Math.min(baseMs * 2 ** unreadPollFailures, UNREAD_POLL_BACKOFF_MAX_MS);
   unreadPollTimer = window.setTimeout(async () => {
     unreadPollTimer = null;
+    if (!isDocumentVisible()) return;
     const ok = await refreshMessagesUnreadBadge();
     unreadPollFailures = ok === false ? Math.min(unreadPollFailures + 1, 3) : 0;
     scheduleNextUnreadPoll();
   }, delayMs);
+}
+
+function stopUnreadPolling() {
+  if (!unreadPollTimer) return;
+  window.clearTimeout(unreadPollTimer);
+  unreadPollTimer = null;
+}
+
+function restartUnreadPollingSchedule() {
+  stopUnreadPolling();
+  if (isDocumentVisible()) scheduleNextUnreadPoll();
 }
 
 function getTextareaCaret(el) {
