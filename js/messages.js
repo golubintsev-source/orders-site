@@ -2280,6 +2280,8 @@ async function hydrateGroupAvatars(root = document) {
 
 let loadChatListGeneration = 0;
 let loadMessagesGeneration = 0;
+/** Временная фиксация ленты внизу во время первоначальной раскладки открытого чата. */
+let messagesFeedBottomPin = null;
 
 function whenIdle(timeout = 1500) {
   return new Promise((resolve) => {
@@ -2765,6 +2767,7 @@ function prepareMessagesDialogForPeer(peerId) {
     return false;
   }
   loadMessagesGeneration += 1;
+  stopMessagesFeedBottomPin();
   lastFeedMessageAt = null;
   clearComposerContext();
   hideMessageActionMenu();
@@ -2779,6 +2782,7 @@ export function showMessagesChatList() {
   activePeerId = null;
   lastFeedMessageAt = null;
   loadMessagesGeneration += 1;
+  stopMessagesFeedBottomPin();
   clearComposerContext();
   hideMessageActionMenu();
   clearFeedMessageCache();
@@ -2820,13 +2824,13 @@ export async function openMessagesDialog(peerId) {
     syncComposerForActivePeer();
     if (isGroupChat()) applyGroupOutgoingReceiptsToFeed();
   }).catch((error) => console.warn("Фоновая загрузка данных диалога:", error));
-  await loadMessages();
+  await loadMessages({ forceBottom: true });
   if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
   startMessagesFeedPolling();
   reportChatVisibilityToSw();
 }
 
-export async function loadMessages() {
+export async function loadMessages({ forceBottom = false } = {}) {
   const feed = document.getElementById("messagesFeed");
   const msg = document.getElementById("messagesPageMessage");
   if (!feed) return;
@@ -2865,13 +2869,15 @@ export async function loadMessages() {
       ? "Пока нет сообщений в этом групповом чате. Напишите первое."
       : "Пока нет сообщений в этой переписке. Напишите первое.";
 
-    const stickBottom = isFeedAtBottom(feed, 80) || !feed.querySelector("[data-message-id]");
+    const stickBottom =
+      forceBottom || isFeedAtBottom(feed, 80) || !feed.querySelector("[data-message-id]");
     feed.dataset.peerId = String(peerAtStart);
     feed.innerHTML = visibleRows.length
       ? visibleRows.map(renderMessageItem).join("")
       : `<p class="messages-empty">${emptyText}</p>`;
 
-    if (stickBottom) scrollMessagesFeedToBottom(feed);
+    if (forceBottom) startMessagesFeedBottomPin(feed, peerAtStart);
+    else if (stickBottom) scrollMessagesFeedToBottom(feed);
     // Фото, задачи, реакции и групповые квитанции обогащают уже видимую ленту.
     // Ни один из этих запросов не участвует в time-to-first-message.
     void hydrateMessageAttachments(feed);
@@ -2960,6 +2966,97 @@ function getFeedMessageIds() {
 
 function isFeedAtBottom(feed, threshold = 48) {
   return feed.scrollHeight - feed.scrollTop - feed.clientHeight <= threshold;
+}
+
+function stopMessagesFeedBottomPin() {
+  const pin = messagesFeedBottomPin;
+  if (!pin) return;
+  messagesFeedBottomPin = null;
+  clearTimeout(pin.timeoutId);
+  pin.mutationObserver?.disconnect();
+  pin.resizeObserver?.disconnect();
+  for (const [target, type, listener, options] of pin.listeners) {
+    target.removeEventListener(type, listener, options);
+  }
+}
+
+/**
+ * При открытии диалога его высота меняется ещё несколько раз: приходят реакции,
+ * статусы группы, подсветка задач, заканчивается раскладка шрифтов и фото.
+ * До первого действия пользователя удерживаем последнее сообщение в поле зрения.
+ */
+function startMessagesFeedBottomPin(feed, peerId) {
+  stopMessagesFeedBottomPin();
+  if (!feed) return;
+
+  const pin = {
+    feed,
+    peerId: String(peerId || ""),
+    frameId: 0,
+    timeoutId: 0,
+    listeners: [],
+    mutationObserver: null,
+    resizeObserver: null,
+  };
+  messagesFeedBottomPin = pin;
+
+  const isCurrent = () =>
+    messagesFeedBottomPin === pin &&
+    messagesView === "dialog" &&
+    String(activePeerId || "") === pin.peerId &&
+    isMessagesFeedForPeer(pin.peerId);
+  const pinNow = () => {
+    if (!isCurrent()) return;
+    feed.scrollTop = feed.scrollHeight;
+  };
+  const schedulePin = () => {
+    if (!isCurrent() || pin.frameId) return;
+    pin.frameId = requestAnimationFrame(() => {
+      pin.frameId = 0;
+      pinNow();
+    });
+  };
+  const cancelOnUserAction = () => stopMessagesFeedBottomPin();
+  const addCancelListener = (target, type, options = false) => {
+    target.addEventListener(type, cancelOnUserAction, options);
+    pin.listeners.push([target, type, cancelOnUserAction, options]);
+  };
+
+  addCancelListener(feed, "wheel", { passive: true });
+  addCancelListener(feed, "touchstart", { passive: true });
+  addCancelListener(feed, "pointerdown", { passive: true });
+  const cancelOnScrollKey = (event) => {
+    if (["ArrowUp", "PageUp", "Home"].includes(event.key)) cancelOnUserAction();
+  };
+  window.addEventListener("keydown", cancelOnScrollKey);
+  pin.listeners.push([window, "keydown", cancelOnScrollKey, false]);
+
+  pin.mutationObserver = new MutationObserver(schedulePin);
+  pin.mutationObserver.observe(feed, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["class", "hidden", "style"],
+  });
+
+  if (typeof ResizeObserver === "function") {
+    pin.resizeObserver = new ResizeObserver(schedulePin);
+    pin.resizeObserver.observe(feed);
+    for (const item of feed.querySelectorAll(".message-item")) {
+      pin.resizeObserver.observe(item);
+    }
+  }
+
+  document.fonts?.ready?.then(schedulePin).catch(() => {});
+  pin.timeoutId = setTimeout(() => {
+    if (isCurrent()) pinNow();
+    stopMessagesFeedBottomPin();
+  }, 8000);
+  pinNow();
+  requestAnimationFrame(() => {
+    pinNow();
+    requestAnimationFrame(pinNow);
+  });
 }
 
 /** Прокрутка к последнему сообщению с учётом отложенной раскладки flex/картинок. */

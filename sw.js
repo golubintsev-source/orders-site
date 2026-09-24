@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v45: пакетная доставка сообщений и редкий polling при активном Realtime.
-const STATIC_CACHE = "orders-site-static-v45";
+// v46: при открытии чата последнее сообщение остаётся видимым после отложенной раскладки.
+const STATIC_CACHE = "orders-site-static-v46";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
