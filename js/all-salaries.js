@@ -2,7 +2,7 @@ import { supabaseClient } from "./config.js";
 import { formatAmount } from "./format.js";
 import { getCalcDisplayAuthor, getCalcDisplayComment } from "./calculations.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
-import { groupSalaryRowsByMonth } from "./all-salaries-utils.js";
+import { groupSalaryRowsByMonth, SALARY_COMMENT_TERMS } from "./all-salaries-utils.js";
 
 const MONTH_NAMES = [
   "Январь",
@@ -176,7 +176,7 @@ async function loadAllSalariesOnce() {
         .from("calculations")
         .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
         .is("deleted_at", null)
-        .ilike("comment", "%ЗП%")
+        .or(SALARY_COMMENT_TERMS.map((term) => `comment.ilike.%${term}%`).join(","))
         .order("created_at", { ascending: false })
         .order("id", { ascending: false }),
     ));

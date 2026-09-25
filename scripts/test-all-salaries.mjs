@@ -14,9 +14,17 @@ const manualSalary = {
 
 assert.equal(isSalaryCalculationRow(manualSalary), true);
 assert.equal(isSalaryCalculationRow({ ...manualSalary, comment: "аванс зп; Алексей" }), true);
-assert.equal(isSalaryCalculationRow({ ...manualSalary, comment: "Аванс; Алексей" }), false);
+assert.equal(isSalaryCalculationRow({ ...manualSalary, comment: "Аванс; Алексей" }), true);
+assert.equal(isSalaryCalculationRow({ ...manualSalary, comment: "ЗАРПЛАТА Марии; Алексей" }), true);
+assert.equal(isSalaryCalculationRow({ ...manualSalary, comment: "ПреМиЯ за август; Алексей" }), true);
+assert.equal(isSalaryCalculationRow({ ...manualSalary, comment: "бонус Марии; Алексей" }), true);
+assert.equal(isSalaryCalculationRow({ ...manualSalary, comment: "Покупка материалов" }), false);
 assert.equal(
   isSalaryCalculationRow({ ...manualSalary, comment: "[AUTO_ORDER_DELTA] клиент ЗП" }),
+  false,
+);
+assert.equal(
+  isSalaryCalculationRow({ ...manualSalary, comment: "[AUTO_EXCESS_DELTA] премия" }),
   false,
 );
 assert.equal(isSalaryCalculationRow({ ...manualSalary, deleted_at: "2026-08-20T00:00:00Z" }), false);
