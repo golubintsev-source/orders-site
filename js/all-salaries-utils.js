@@ -3,14 +3,19 @@ export const AUTOMATIC_CALCULATION_COMMENT_PREFIXES = [
   "[AUTO_EXCESS_DELTA]",
 ];
 
-/** Зарплата — ручная строка расчётов, в комментарии которой встречается «ЗП». */
+export const SALARY_COMMENT_TERMS = ["ЗП", "зарплата", "аванс", "премия", "бонус"];
+
+/** Зарплата — ручная строка с одним из зарплатных обозначений в комментарии. */
 export function isSalaryCalculationRow(row) {
   if (!row || row.deleted_at != null) return false;
   const comment = String(row.comment ?? "");
   if (AUTOMATIC_CALCULATION_COMMENT_PREFIXES.some((prefix) => comment.startsWith(prefix))) {
     return false;
   }
-  return /зп/i.test(comment);
+  const normalizedComment = comment.toLocaleLowerCase("ru-RU");
+  return SALARY_COMMENT_TERMS.some((term) =>
+    normalizedComment.includes(term.toLocaleLowerCase("ru-RU")),
+  );
 }
 
 export function salaryMonthKey(createdAt) {
