@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   groupSalaryRowsByMonth,
   isSalaryCalculationRow,
+  salaryMonthKey,
 } from "../js/all-salaries-utils.js";
 
 const manualSalary = {
@@ -29,10 +30,46 @@ assert.equal(
 );
 assert.equal(isSalaryCalculationRow({ ...manualSalary, deleted_at: "2026-08-20T00:00:00Z" }), false);
 
+const monthForms = [
+  ["январь", "января", "январе"],
+  ["февраль", "февраля", "феврале"],
+  ["март", "марта", "марте"],
+  ["апрель", "апреля", "апреле"],
+  ["май", "мая", "мае"],
+  ["июнь", "июня", "июне"],
+  ["июль", "июля", "июле"],
+  ["август", "августа", "августе"],
+  ["сентябрь", "сентября", "сентябре"],
+  ["октябрь", "октября", "октябре"],
+  ["ноябрь", "ноября", "ноябре"],
+  ["декабрь", "декабря", "декабре"],
+];
+
+for (const [monthIndex, forms] of monthForms.entries()) {
+  for (const form of forms) {
+    assert.equal(
+      salaryMonthKey("2026-07-15T10:00:00.000Z", `ЗП за ${form} 2026`),
+      `2026-${String(monthIndex + 1).padStart(2, "0")}`,
+    );
+  }
+}
+
+assert.equal(salaryMonthKey("2026-10-05T10:00:00.000Z", "ЗП за сентябрь"), "2026-09");
+assert.equal(salaryMonthKey("2027-01-05T10:00:00.000Z", "Премия за декабрь"), "2026-12");
+assert.equal(salaryMonthKey("2027-01-05T10:00:00.000Z", "ЗП за декабрь 2025"), "2025-12");
+assert.equal(salaryMonthKey("2026-08-15T10:00:00.000Z", "Майя бонус"), "2026-08");
+
 const groups = groupSalaryRowsByMonth([
   manualSalary,
   { ...manualSalary, id: 2, created_at: "2026-08-20T10:00:00.000Z", amount: "8000" },
   { ...manualSalary, id: 3, created_at: "2026-09-01T10:00:00.000Z", amount: 15000 },
+  {
+    ...manualSalary,
+    id: 5,
+    created_at: "2026-09-05T10:00:00.000Z",
+    amount: 5000,
+    comment: "премия за август; Алексей",
+  },
   { ...manualSalary, id: 4, comment: "Покупка материалов" },
 ]);
 
@@ -40,7 +77,7 @@ assert.deepEqual(
   groups.map((group) => ({ monthKey: group.monthKey, total: group.total, ids: group.rows.map((r) => r.id) })),
   [
     { monthKey: "2026-09", total: 15000, ids: [3] },
-    { monthKey: "2026-08", total: 20000, ids: [2, 1] },
+    { monthKey: "2026-08", total: 25000, ids: [5, 2, 1] },
   ],
 );
 

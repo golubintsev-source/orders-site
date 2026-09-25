@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v48: расширен поиск зарплатных выплат по комментариям.
-const STATIC_CACHE = "orders-site-static-v48";
+// v49: месяц выплаты можно указать в комментарии к расчёту.
+const STATIC_CACHE = "orders-site-static-v49";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
