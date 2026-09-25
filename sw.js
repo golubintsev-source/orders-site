@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v46: при открытии чата последнее сообщение остаётся видимым после отложенной раскладки.
-const STATIC_CACHE = "orders-site-static-v46";
+// v47: добавлен раздел «Все зарплаты» с помесячной детализацией.
+const STATIC_CACHE = "orders-site-static-v47";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -47,6 +47,8 @@ const PRECACHE_URLS = [
   "/js/messages.js",
   "/js/messages-body.js",
   "/js/messages-sync-utils.js",
+  "/js/all-salaries.js",
+  "/js/all-salaries-utils.js",
   "/js/format.js",
   "/js/user-names.js",
   "/js/supabase-fetch.js",
@@ -146,6 +148,7 @@ const APP_SHELL_PATHS = new Set([
   "/all",
   "/new",
   "/calculations",
+  "/all-salaries",
   "/excess",
   "/tasks-all",
   "/changes-all",

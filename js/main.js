@@ -102,6 +102,7 @@ async function initSecondarySections(opts = {}) {
   const run = async () => {
     const [
       { bindCalculationsSection, loadCalculations },
+      { initAllSalariesSection, loadAllSalaries },
       { bindExcessSection, loadExcesses },
       { initRouteSheetSection },
       { initOrderTasksSection },
@@ -116,6 +117,7 @@ async function initSecondarySections(opts = {}) {
       { initManagerSalarySection, loadManagerSalary },
     ] = await Promise.all([
       import("./calculations.js"),
+      import("./all-salaries.js"),
       import("./excess.js?v=37"),
       import("./route-sheet.js"),
       import("./tasks.js"),
@@ -144,6 +146,13 @@ async function initSecondarySections(opts = {}) {
       bindCalculationsSection();
       if (getCurrentSectionId() === "calculations") {
         void loadCalculations();
+      }
+    }
+
+    if (canAccessSection("all-salaries")) {
+      initAllSalariesSection();
+      if (getCurrentSectionId() === "all-salaries") {
+        void loadAllSalaries();
       }
     }
 
@@ -283,6 +292,7 @@ async function init() {
       sectionNow === "order-tasks" ||
       sectionNow === "tasks-all" ||
       sectionNow === "calculations" ||
+      sectionNow === "all-salaries" ||
       sectionNow === "excess" ||
       sectionNow === "route-sheet" ||
       sectionNow === "changes-all" ||
