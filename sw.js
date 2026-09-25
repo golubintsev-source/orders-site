@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v50: заказ, история и автопроводки сохраняются одной транзакцией.
-const STATIC_CACHE = "orders-site-static-v50";
+// v51: детализация «Все зарплаты» начинается под названием месяца.
+const STATIC_CACHE = "orders-site-static-v51";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

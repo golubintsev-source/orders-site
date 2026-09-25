@@ -1914,6 +1914,12 @@ h2 {
 .all-salaries-month-row--expanded > th,
 .all-salaries-month-row--expanded > td {
   background: #f8fbff;
+  border-bottom: 0 !important;
+}
+
+.all-salaries-details-row > td {
+  padding-top: 0 !important;
+  background: #f8fbff;
 }
 
 .all-salaries-total-btn,
@@ -1949,7 +1955,7 @@ h2 {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
+  min-height: 20px;
   color: #64748b;
   font-size: 12px;
 }
@@ -2043,6 +2049,11 @@ h2 {
   .all-salaries-table > tbody > tr > th {
     width: 118px;
     white-space: normal;
+  }
+
+  .all-salaries-details-row > td {
+    padding-right: 8px !important;
+    padding-left: 8px !important;
   }
 }
 

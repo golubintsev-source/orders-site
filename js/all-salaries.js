@@ -69,10 +69,6 @@ function renderSalaryDetails(group) {
 
   return `
     <div class="all-salaries-details" id="allSalariesDetails-${group.monthKey}">
-      <div class="all-salaries-details-toolbar">
-        <span>${group.rows.length} ${salaryRowsWord(group.rows.length)}</span>
-        <button type="button" class="all-salaries-collapse-btn" data-month-key="${group.monthKey}">Свернуть</button>
-      </div>
       <div class="all-salaries-details-scroll">
         <table class="all-salaries-detail-table">
           <thead>
@@ -115,19 +111,34 @@ function renderAllSalaries() {
   tbody.innerHTML = salaryGroups
     .map((group) => {
       const expanded = expandedMonthKeys.has(group.monthKey);
-      const amountContent = expanded
-        ? renderSalaryDetails(group)
-        : `<button
+      if (expanded) {
+        return `
+          <tr class="all-salaries-month-row all-salaries-month-row--expanded">
+            <th scope="row">${escapeHtml(formatSalaryMonth(group.monthKey))}</th>
+            <td>
+              <div class="all-salaries-details-toolbar">
+                <span>${group.rows.length} ${salaryRowsWord(group.rows.length)}</span>
+                <button type="button" class="all-salaries-collapse-btn" data-month-key="${group.monthKey}">Свернуть</button>
+              </div>
+            </td>
+          </tr>
+          <tr class="all-salaries-details-row">
+            <td colspan="2">${renderSalaryDetails(group)}</td>
+          </tr>
+        `;
+      }
+      return `
+        <tr class="all-salaries-month-row">
+          <th scope="row">${escapeHtml(formatSalaryMonth(group.monthKey))}</th>
+          <td>
+            <button
              type="button"
              class="all-salaries-total-btn"
              data-month-key="${group.monthKey}"
              aria-expanded="false"
              aria-controls="allSalariesDetails-${group.monthKey}"
-           >${escapeHtml(formatAmount(group.total))}&nbsp;₽</button>`;
-      return `
-        <tr class="all-salaries-month-row${expanded ? " all-salaries-month-row--expanded" : ""}">
-          <th scope="row">${escapeHtml(formatSalaryMonth(group.monthKey))}</th>
-          <td>${amountContent}</td>
+            >${escapeHtml(formatAmount(group.total))}&nbsp;₽</button>
+          </td>
         </tr>
       `;
     })
