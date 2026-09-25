@@ -2,7 +2,11 @@ import { supabaseClient } from "./config.js";
 import { formatAmount } from "./format.js";
 import { getCalcDisplayAuthor, getCalcDisplayComment } from "./calculations.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
-import { groupSalaryRowsByMonth, SALARY_COMMENT_TERMS } from "./all-salaries-utils.js";
+import {
+  groupSalaryRowsByEmployee,
+  groupSalaryRowsByMonth,
+  SALARY_COMMENT_TERMS,
+} from "./all-salaries-utils.js";
 
 const MONTH_NAMES = [
   "Январь",
@@ -23,6 +27,7 @@ let salaryGroups = [];
 let loadGeneration = 0;
 let allSalariesLoadPromise = null;
 const expandedMonthKeys = new Set();
+const salaryViewByMonth = new Map();
 
 function escapeHtml(value) {
   if (value == null) return "";
@@ -88,6 +93,56 @@ function renderSalaryDetails(group) {
   `;
 }
 
+function renderSalaryEmployees(group) {
+  const rows = groupSalaryRowsByEmployee(group.rows)
+    .map(
+      (employee) => `
+        <tr>
+          <td>${escapeHtml(employee.employee)}</td>
+          <td class="all-salaries-detail-amount">${escapeHtml(formatAmount(employee.total))}&nbsp;₽</td>
+        </tr>
+      `,
+    )
+    .join("");
+
+  return `
+    <div class="all-salaries-details" id="allSalariesDetails-${group.monthKey}">
+      <div class="all-salaries-details-scroll">
+        <table class="all-salaries-detail-table all-salaries-employee-table">
+          <thead>
+            <tr>
+              <th>Сотрудник</th>
+              <th>Сумма</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderSalaryViewToggle(group, currentView) {
+  return `
+    <div class="all-salaries-view-toggle" role="group" aria-label="Группировка выплат">
+      <button
+        type="button"
+        class="all-salaries-view-btn${currentView === "payments" ? " is-active" : ""}"
+        data-month-key="${group.monthKey}"
+        data-salary-view="payments"
+        aria-pressed="${currentView === "payments"}"
+      >По выплатам</button>
+      <button
+        type="button"
+        class="all-salaries-view-btn${currentView === "employees" ? " is-active" : ""}"
+        data-month-key="${group.monthKey}"
+        data-salary-view="employees"
+        aria-pressed="${currentView === "employees"}"
+      >По сотрудникам</button>
+    </div>
+  `;
+}
+
 function salaryRowsWord(count) {
   const mod100 = count % 100;
   const mod10 = count % 10;
@@ -112,18 +167,25 @@ function renderAllSalaries() {
     .map((group) => {
       const expanded = expandedMonthKeys.has(group.monthKey);
       if (expanded) {
+        const currentView = salaryViewByMonth.get(group.monthKey) || "payments";
+        const details = currentView === "employees"
+          ? renderSalaryEmployees(group)
+          : renderSalaryDetails(group);
         return `
           <tr class="all-salaries-month-row all-salaries-month-row--expanded">
             <th scope="row">${escapeHtml(formatSalaryMonth(group.monthKey))}</th>
             <td>
               <div class="all-salaries-details-toolbar">
-                <span>${group.rows.length} ${salaryRowsWord(group.rows.length)}</span>
+                <div class="all-salaries-details-controls">
+                  <span>${group.rows.length} ${salaryRowsWord(group.rows.length)}</span>
+                  ${renderSalaryViewToggle(group, currentView)}
+                </div>
                 <button type="button" class="all-salaries-collapse-btn" data-month-key="${group.monthKey}">Свернуть</button>
               </div>
             </td>
           </tr>
           <tr class="all-salaries-details-row">
-            <td colspan="2">${renderSalaryDetails(group)}</td>
+            <td colspan="2">${details}</td>
           </tr>
         `;
       }
@@ -149,8 +211,13 @@ function renderAllSalaries() {
 
 function toggleSalaryMonth(monthKey) {
   if (!monthKey) return;
-  if (expandedMonthKeys.has(monthKey)) expandedMonthKeys.delete(monthKey);
-  else expandedMonthKeys.add(monthKey);
+  if (expandedMonthKeys.has(monthKey)) {
+    expandedMonthKeys.delete(monthKey);
+    salaryViewByMonth.delete(monthKey);
+  } else {
+    expandedMonthKeys.add(monthKey);
+    salaryViewByMonth.set(monthKey, "payments");
+  }
   renderAllSalaries();
 }
 
@@ -161,6 +228,16 @@ export function initAllSalariesSection() {
   sectionBound = true;
   const table = document.getElementById("allSalariesTable");
   table?.addEventListener("click", (event) => {
+    const viewButton = event.target.closest("[data-salary-view]");
+    if (viewButton && table.contains(viewButton)) {
+      const monthKey = viewButton.dataset.monthKey;
+      const view = viewButton.dataset.salaryView;
+      if (monthKey && (view === "payments" || view === "employees")) {
+        salaryViewByMonth.set(monthKey, view);
+        renderAllSalaries();
+      }
+      return;
+    }
     const button = event.target.closest("[data-month-key]");
     if (!button || !table.contains(button)) return;
     toggleSalaryMonth(button.dataset.monthKey);
@@ -210,7 +287,10 @@ async function loadAllSalariesOnce() {
   salaryGroups = groupSalaryRowsByMonth(data || []);
   const availableKeys = new Set(salaryGroups.map((group) => group.monthKey));
   for (const key of expandedMonthKeys) {
-    if (!availableKeys.has(key)) expandedMonthKeys.delete(key);
+    if (!availableKeys.has(key)) {
+      expandedMonthKeys.delete(key);
+      salaryViewByMonth.delete(key);
+    }
   }
   renderAllSalaries();
 }

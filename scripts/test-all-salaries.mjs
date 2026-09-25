@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import {
+  getSalaryEmployeeName,
+  groupSalaryRowsByEmployee,
   groupSalaryRowsByMonth,
   isSalaryCalculationRow,
   salaryMonthKey,
@@ -29,6 +31,27 @@ assert.equal(
   false,
 );
 assert.equal(isSalaryCalculationRow({ ...manualSalary, deleted_at: "2026-08-20T00:00:00Z" }), false);
+
+assert.equal(getSalaryEmployeeName("зп Иван Сотников возврат долг 1980=459 503; Лена"), "Иван Сотников");
+assert.equal(getSalaryEmployeeName("зп Леша; Лена"), "Леша");
+assert.equal(getSalaryEmployeeName("Мария ЗП; Алексей"), "Мария");
+assert.equal(getSalaryEmployeeName("Премия Марии за сентябрь; Алексей"), "Марии");
+assert.equal(getSalaryEmployeeName("зп леша; Лена"), "Леша");
+assert.equal(getSalaryEmployeeName("Премия за сентябрь; Алексей"), "");
+
+assert.deepEqual(
+  groupSalaryRowsByEmployee([
+    { amount: 10000, comment: "зп Леша; Лена" },
+    { amount: "5000", comment: "премия Леша; Алексей" },
+    { amount: 7000, comment: "зп Иван Сотников; Лена" },
+    { amount: 1000, comment: "аванс; Лена" },
+  ]).map(({ employee, total, count }) => ({ employee, total, count })),
+  [
+    { employee: "Леша", total: 15000, count: 2 },
+    { employee: "Иван Сотников", total: 7000, count: 1 },
+    { employee: "Не указан", total: 1000, count: 1 },
+  ],
+);
 
 const monthForms = [
   ["январь", "января", "январе"],

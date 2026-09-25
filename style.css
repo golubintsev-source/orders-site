@@ -1952,12 +1952,51 @@ h2 {
 
 .all-salaries-details-toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   min-height: 20px;
   color: #64748b;
   font-size: 12px;
+}
+
+.all-salaries-details-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.all-salaries-view-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.all-salaries-view-btn {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.all-salaries-view-btn:hover,
+.all-salaries-view-btn:focus-visible {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.all-salaries-view-btn.is-active {
+  color: #fff;
+  background: #2563eb;
 }
 
 .all-salaries-collapse-btn {
@@ -1979,6 +2018,16 @@ h2 {
   min-width: 760px;
   border-collapse: collapse;
   font-size: 13px;
+}
+
+.all-salaries-employee-table {
+  min-width: 360px;
+}
+
+.all-salaries-employee-table th:last-child,
+.all-salaries-employee-table td:last-child {
+  width: 180px;
+  text-align: right;
 }
 
 .all-salaries-detail-table th,
@@ -2054,6 +2103,21 @@ h2 {
   .all-salaries-details-row > td {
     padding-right: 8px !important;
     padding-left: 8px !important;
+  }
+
+  .all-salaries-details-toolbar {
+    align-items: flex-end;
+    flex-direction: column-reverse;
+  }
+
+  .all-salaries-details-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .all-salaries-view-btn {
+    padding-right: 7px;
+    padding-left: 7px;
   }
 }
 

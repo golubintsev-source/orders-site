@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v51: детализация «Все зарплаты» начинается под названием месяца.
-const STATIC_CACHE = "orders-site-static-v51";
+// v52: выплаты за месяц можно агрегировать по сотрудникам.
+const STATIC_CACHE = "orders-site-static-v52";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

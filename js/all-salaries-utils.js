@@ -1,3 +1,5 @@
+import { isKnownUserDisplayName } from "./user-names.js";
+
 export const AUTOMATIC_CALCULATION_COMMENT_PREFIXES = [
   "[AUTO_ORDER_DELTA]",
   "[AUTO_EXCESS_DELTA]",
@@ -21,6 +23,131 @@ const RUSSIAN_MONTH_BY_FORM = new Map(
     [11, ["декабрь", "декабря", "декабре"]],
   ].flatMap(([monthIndex, forms]) => forms.map((form) => [form, monthIndex])),
 );
+
+const SALARY_TERM_FORMS = new Set([
+  "зп",
+  "зарплата",
+  "зарплаты",
+  "зарплату",
+  "аванс",
+  "аванса",
+  "премия",
+  "премии",
+  "премию",
+  "бонус",
+  "бонуса",
+]);
+
+const EMPLOYEE_NAME_SKIP_WORDS = new Set([
+  "за",
+  "в",
+  "на",
+  "по",
+  "для",
+  "и",
+  "к",
+  "от",
+  "до",
+  "месяц",
+  ...RUSSIAN_MONTH_BY_FORM.keys(),
+]);
+
+function stripManualCalculationAuthor(comment) {
+  const text = String(comment ?? "").trim();
+  const match = text.match(/;\s*([^;]+)$/);
+  if (!match) return text;
+  const author = match[1].trim();
+  if (author === "неизв.." || /\.\.$/.test(author) || isKnownUserDisplayName(author)) {
+    return text.slice(0, match.index).trim();
+  }
+  return text;
+}
+
+function salaryCommentWords(comment) {
+  return [...stripManualCalculationAuthor(comment).matchAll(/[а-яё]+(?:-[а-яё]+)*/giu)].map(
+    (match) => ({
+      value: match[0],
+      normalized: match[0].toLocaleLowerCase("ru-RU"),
+    }),
+  );
+}
+
+function isEmployeeNameWord(word) {
+  return /^[А-ЯЁ]/u.test(word.value) && !EMPLOYEE_NAME_SKIP_WORDS.has(word.normalized);
+}
+
+function employeeNameAfterSalaryTerm(words, termIndex) {
+  let start = termIndex + 1;
+  while (
+    start < words.length &&
+    (SALARY_TERM_FORMS.has(words[start].normalized) || EMPLOYEE_NAME_SKIP_WORDS.has(words[start].normalized))
+  ) {
+    start += 1;
+  }
+  if (start >= words.length) return "";
+
+  if (isEmployeeNameWord(words[start])) {
+    const name = [];
+    for (let index = start; index < words.length && name.length < 3; index += 1) {
+      if (!isEmployeeNameWord(words[index])) break;
+      name.push(words[index].value);
+    }
+    return name.join(" ");
+  }
+
+  // Поддержка комментариев, целиком набранных строчными буквами: «зп леша».
+  const fallback = words[start];
+  if (
+    fallback &&
+    !SALARY_TERM_FORMS.has(fallback.normalized) &&
+    !EMPLOYEE_NAME_SKIP_WORDS.has(fallback.normalized)
+  ) {
+    return fallback.value.charAt(0).toLocaleUpperCase("ru-RU") + fallback.value.slice(1);
+  }
+  return "";
+}
+
+function employeeNameBeforeSalaryTerm(words, termIndex) {
+  const name = [];
+  for (let index = termIndex - 1; index >= 0 && name.length < 3; index -= 1) {
+    if (!isEmployeeNameWord(words[index])) break;
+    name.unshift(words[index].value);
+  }
+  return name.join(" ");
+}
+
+/** Имя получателя выплаты из ручного комментария расчёта. */
+export function getSalaryEmployeeName(comment) {
+  const words = salaryCommentWords(comment);
+  const termIndex = words.findIndex((word) => SALARY_TERM_FORMS.has(word.normalized));
+  if (termIndex < 0) return "";
+  return (
+    employeeNameAfterSalaryTerm(words, termIndex) ||
+    employeeNameBeforeSalaryTerm(words, termIndex)
+  );
+}
+
+/** Одна строка на сотрудника; выплаты без распознанного имени не теряются. */
+export function groupSalaryRowsByEmployee(rows) {
+  const byEmployee = new Map();
+  for (const row of rows || []) {
+    const amount = Number(row?.amount);
+    if (!Number.isFinite(amount)) continue;
+    const employee = getSalaryEmployeeName(row?.comment) || "Не указан";
+    const key = employee.toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+    let group = byEmployee.get(key);
+    if (!group) {
+      group = { employee, total: 0, count: 0, rows: [] };
+      byEmployee.set(key, group);
+    }
+    group.total += amount;
+    group.count += 1;
+    group.rows.push(row);
+  }
+  return [...byEmployee.values()].sort(
+    (a, b) => b.total - a.total || a.employee.localeCompare(b.employee, "ru"),
+  );
+}
 
 /** Зарплата — ручная строка с одним из зарплатных обозначений в комментарии. */
 export function isSalaryCalculationRow(row) {
