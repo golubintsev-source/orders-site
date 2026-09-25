@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v49: месяц выплаты можно указать в комментарии к расчёту.
-const STATIC_CACHE = "orders-site-static-v49";
+// v50: заказ, история и автопроводки сохраняются одной транзакцией.
+const STATIC_CACHE = "orders-site-static-v50";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -29,6 +29,7 @@ const PRECACHE_URLS = [
   "/js/state.js",
   "/js/auth.js",
   "/js/orders.js",
+  "/js/order-atomic-save.js",
   "/js/offline-cache.js",
   "/js/dom.js",
   "/js/ui.js",

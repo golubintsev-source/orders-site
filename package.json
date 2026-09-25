@@ -5,7 +5,8 @@
     "update-supabase": "node scripts/update-supabase.js",
     "test:all-salaries": "node scripts/test-all-salaries.mjs",
     "test:messages-sync": "node scripts/test-messages-sync.mjs",
-    "test:messages-body": "node scripts/test-messages-body.mjs"
+    "test:messages-body": "node scripts/test-messages-body.mjs",
+    "test:order-atomic-save": "node scripts/test-order-atomic-save.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",

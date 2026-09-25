@@ -76,13 +76,11 @@ import {
   isNetworkFetchError,
   isOfflineDataMode,
   isBrowserOffline,
-  shouldFallbackSaveOrderToLocal,
   persistEmergencyOrdersView,
   readEmergencyOrdersBaseForMerge,
   readPendingOrderEditsQueue,
   addOrAppendPendingServerOrderEdit,
   raceWithTimeout,
-  insertOrUpsertNewOrder,
 } from "./offline-cache.js";
 import { shortLoginByEmail } from "./user-names.js";
 import { getEditors } from "./settings.js";
@@ -92,6 +90,12 @@ import {
   recoverLostMoneyRecipientsInOrderData,
   shouldLockKassaBeznalRecipientSelect,
 } from "./order-money-recipients.js";
+import {
+  ATOMIC_ORDER_ID_PLACEHOLDER,
+  buildAtomicOrderRequestSignature,
+  createAtomicOrderRequestId,
+  saveOrderAtomic,
+} from "./order-atomic-save.js";
 
 function mergedLocalOrdersForOfflineDisplayMeta() {
   const snap = readSnapshot();
@@ -724,27 +728,6 @@ function buildOrderDeltaCalculationInsertRows({
     amount: r.amount,
     comment: r.comment,
   }));
-}
-
-async function writeOrderDeltaCalculations({
-  orderId,
-  wasEditing,
-  initialSums,
-  initialParticipants,
-  orderData,
-}) {
-  const payload = buildOrderDeltaCalculationInsertRows({
-    orderId,
-    wasEditing,
-    initialSums,
-    initialParticipants,
-    orderData,
-  });
-  if (payload.length === 0) return;
-  const { error } = await supabaseClient.from("calculations").insert(payload);
-  if (error) {
-    console.error("Автозапись дельт в calculations:", error);
-  }
 }
 
 function queueOrderDeltaCalculationsForOffline({
@@ -2502,47 +2485,6 @@ function buildOrderHistoryComment(prev, next, wasEditing) {
   return buildOrderHistoryComments(prev, next, wasEditing).join("; ");
 }
 
-function isOrderHistoryUniqueViolation(err) {
-  const code = err?.code;
-  const msg = String(err?.message || "");
-  return code === "23505" || /duplicate key|unique constraint|violates unique/i.test(msg);
-}
-
-/**
- * Записать каждое изменение отдельной строкой в order_history.
- * При UNIQUE(order_id, user_email, comment) вставляем по одной строке,
- * чтобы повтор того же «Кому остаток» не откатывал остальные поля того же сохранения.
- * @param {number|string} orderId
- * @param {string[]} comments
- * @param {{ created_at?: string }} [opts]
- */
-async function insertOrderHistoryComments(orderId, comments, opts = {}) {
-  if (!orderId || !state.currentUser?.email) return;
-  const list = (comments || []).map((c) => String(c || "").trim()).filter(Boolean);
-  if (list.length === 0) return;
-  const rows = list.map((comment) => {
-    const row = {
-      order_id: orderId,
-      user_email: state.currentUser.email,
-      comment,
-    };
-    if (opts.created_at) row.created_at = opts.created_at;
-    return row;
-  });
-  const { error } = await supabaseClient.from("order_history").insert(rows);
-  if (!error) return;
-  if (!isOrderHistoryUniqueViolation(error)) {
-    console.error("Ошибка записи в историю изменений:", error);
-    return;
-  }
-  for (const row of rows) {
-    const { error: oneErr } = await supabaseClient.from("order_history").insert(row);
-    if (oneErr && !isOrderHistoryUniqueViolation(oneErr)) {
-      console.error("Ошибка записи в историю изменений:", oneErr);
-    }
-  }
-}
-
 function selectOptionValues(selectId) {
   const sel = document.getElementById(selectId);
   if (!sel) return [];
@@ -3320,6 +3262,8 @@ export async function editOrder(orderId) {
     return;
   }
 
+  orderFormAtomicRequest = null;
+
   state.viewingOrderId = null;
   hideOrderViewQr();
   syncOrderIdInUrl(null);
@@ -3538,6 +3482,7 @@ let orderFormSaveInFlight = false;
  * не должен создавать второй заказ.
  */
 let orderFormNewOrderIdempotencyKey = null;
+let orderFormAtomicRequest = null;
 
 function ensureOrderFormNewOrderIdempotencyKey() {
   if (orderFormNewOrderIdempotencyKey) return orderFormNewOrderIdempotencyKey;
@@ -3550,6 +3495,36 @@ function ensureOrderFormNewOrderIdempotencyKey() {
 
 function clearOrderFormNewOrderIdempotencyKey() {
   orderFormNewOrderIdempotencyKey = null;
+  orderFormAtomicRequest = null;
+}
+
+function ensureOrderFormAtomicRequestId(payload) {
+  const signature = buildAtomicOrderRequestSignature(payload);
+  if (orderFormAtomicRequest?.signature === signature) {
+    return orderFormAtomicRequest.requestId;
+  }
+  orderFormAtomicRequest = {
+    signature,
+    requestId: createAtomicOrderRequestId(),
+  };
+  return orderFormAtomicRequest.requestId;
+}
+
+function buildExpectedOrderMoney(initialSums, initialParticipants) {
+  if (!initialSums && !initialParticipants) return null;
+  const participant = (value) => {
+    const normalized = String(value ?? "").trim();
+    return normalized || null;
+  };
+  return {
+    amount: initialSums?.amount ?? null,
+    prepayment: initialSums?.prepayment ?? null,
+    prepayment_to: participant(initialParticipants?.prepayment_to),
+    remaining_amount: initialSums?.remaining_amount ?? null,
+    remaining_to: participant(initialParticipants?.remaining_to),
+    installer_payment_amount: initialSums?.installer_payment_amount ?? null,
+    installer_payment_by: participant(initialParticipants?.installer_payment_by),
+  };
 }
 
 function setOrderFormSaveButtonsBusy(busy) {
@@ -3756,101 +3731,51 @@ export async function submitOrderForm(event) {
     return;
   }
 
-  let error = null;
-  let savedOrderId = state.editingOrderId;
   const wasEditing = Boolean(state.editingOrderId);
-  const saveIdempotencyKey = !wasEditing ? orderFormNewOrderIdempotencyKey : null;
-
-  try {
-    if (state.editingOrderId) {
-      const result = await raceWithTimeout(
-        supabaseClient.from("orders").update(orderData).eq("id", state.editingOrderId).select().single(),
-      );
-
-      error = result.error;
-
-      if (!error && result.data) {
-        savedOrderId = result.data.id;
-      }
-    } else {
-      const result = await raceWithTimeout(insertOrUpsertNewOrder(orderData, saveIdempotencyKey));
-
-      error = result.error;
-
-      if (!error && result.data) {
-        savedOrderId = result.data.id;
-      }
-    }
-  } catch (e) {
-    error = e;
-  }
-
-  // Восстановление после таймаутов:
-  // если клиент не получил ответ, но запись могла появиться на сервере,
-  // найдём её по save_idempotency_key.
-  if (error && !wasEditing && saveIdempotencyKey) {
-    try {
-      const existing = await raceWithTimeout(
-        supabaseClient
-          .from("orders")
-          .select("id")
-          .eq("save_idempotency_key", saveIdempotencyKey)
-          .maybeSingle(),
-      );
-      if (!existing.error && existing.data?.id != null) {
-        savedOrderId = existing.data.id;
-        error = null;
-      }
-    } catch {
-      // оставляем error как есть
-    }
-  }
-
-  if (error && !wasEditing && shouldFallbackSaveOrderToLocal(error)) {
-    applyOfflineModeFromDbUnavailable();
-    commitOrderFormToOfflineStorage(orderData, false);
-    saveFinishedOk = true;
-    return;
-  }
-
-  if (
-    error &&
-    wasEditing &&
-    state.editingOrderId &&
-    !isOfflineClientOrderId(state.editingOrderId) &&
-    shouldFallbackSaveOrderToLocal(error)
-  ) {
-    applyOfflineModeFromDbUnavailable();
-    if (!commitServerOrderEditToOfflineStorage(orderData)) {
-      return;
-    }
-    saveFinishedOk = true;
-    return;
-  }
-
-  if (error) {
-    console.error("Ошибка сохранения:", error);
-    const detail = error.message || error.hint || String(error.code);
-    setMessage((wasEditing ? "Ошибка при обновлении заявки. " : "Ошибка при сохранении заявки. ") + detail, "#d32f2f");
-    return;
-  }
-
-  await uploadFiles(savedOrderId);
-
-  await writeOrderDeltaCalculations({
-    orderId: savedOrderId,
+  const calculationOrderId = wasEditing ? state.editingOrderId : ATOMIC_ORDER_ID_PLACEHOLDER;
+  const historyComments = wasEditing
+    ? buildEditOrderHistoryComments(orderData)
+    : buildOrderHistoryComments(null, orderData, false);
+  const calculations = buildOrderDeltaCalculationInsertRows({
+    orderId: calculationOrderId,
     wasEditing,
     initialSums: state.initialOrderSums,
     initialParticipants: state.initialOrderParticipants,
     orderData,
   });
+  const atomicPayload = {
+    orderId: wasEditing ? state.editingOrderId : null,
+    orderData,
+    historyComments,
+    calculations,
+    expectedMoney: wasEditing
+      ? buildExpectedOrderMoney(state.initialOrderSums, state.initialOrderParticipants)
+      : null,
+  };
+  const requestId = ensureOrderFormAtomicRequestId(atomicPayload);
+  let savedOrderId = state.editingOrderId;
+  let error = null;
 
-  if (savedOrderId && state.currentUser?.email) {
-    const historyComments = wasEditing
-      ? buildEditOrderHistoryComments(orderData)
-      : buildOrderHistoryComments(null, orderData, false);
-    await insertOrderHistoryComments(savedOrderId, historyComments);
+  try {
+    savedOrderId = await raceWithTimeout(
+      saveOrderAtomic(supabaseClient, { requestId, ...atomicPayload }),
+    );
+  } catch (e) {
+    error = e;
   }
+
+  if (error) {
+    console.error("Ошибка атомарного сохранения:", error);
+    const detail = error.message || error.hint || String(error.code);
+    setMessage(
+      (wasEditing ? "Изменения не сохранены. " : "Заявка не сохранена. ") +
+        `Транзакция полностью отменена. ${detail}`,
+      "#d32f2f",
+    );
+    return;
+  }
+
+  await uploadFiles(savedOrderId);
 
   await leaveOrderFormAfterSave(savedOrderId);
   saveFinishedOk = true;
@@ -4147,58 +4072,33 @@ export async function createOrderFromVoicePayload(draft) {
     return saveVoiceOrderOffline();
   }
 
-  let error = null;
+  const historyComments = buildOrderHistoryComments(null, orderData, false);
+  const calculations = buildOrderDeltaCalculationInsertRows({
+    orderId: ATOMIC_ORDER_ID_PLACEHOLDER,
+    wasEditing: false,
+    orderData,
+  });
   let savedOrderId = null;
+  let error = null;
   try {
-    const result = await raceWithTimeout(insertOrUpsertNewOrder(orderData, saveIdempotencyKey));
-    error = result.error;
-    if (!error && result.data) savedOrderId = result.data.id;
+    savedOrderId = await raceWithTimeout(
+      saveOrderAtomic(supabaseClient, {
+        requestId: createAtomicOrderRequestId(),
+        orderData,
+        historyComments,
+        calculations,
+      }),
+    );
   } catch (e) {
     error = e;
   }
 
-  if (error && saveIdempotencyKey) {
-    try {
-      const existing = await raceWithTimeout(
-        supabaseClient
-          .from("orders")
-          .select("id")
-          .eq("save_idempotency_key", saveIdempotencyKey)
-          .maybeSingle(),
-      );
-      if (!existing.error && existing.data?.id != null) {
-        savedOrderId = existing.data.id;
-        error = null;
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  if (error && shouldFallbackSaveOrderToLocal(error)) {
-    applyOfflineModeFromDbUnavailable();
-    return saveVoiceOrderOffline();
-  }
-
   if (error) {
-    console.error("voice create order:", error);
+    console.error("voice create order atomic:", error);
     return {
       ok: false,
-      message: `Ошибка при сохранении заявки. ${error.message || error.hint || String(error.code || error)}`,
+      message: `Заявка не сохранена, транзакция полностью отменена. ${error.message || error.hint || String(error.code || error)}`,
     };
-  }
-
-  await writeOrderDeltaCalculations({
-    orderId: savedOrderId,
-    wasEditing: false,
-    orderData,
-  });
-
-  if (savedOrderId && state.currentUser?.email) {
-    await insertOrderHistoryComments(
-      savedOrderId,
-      buildOrderHistoryComments(null, orderData, false)
-    );
   }
 
   await loadOrders();
@@ -4534,64 +4434,34 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
 
   let error = null;
   let savedOrderId = idNum;
-  try {
-    const result = await raceWithTimeout(
-      supabaseClient.from("orders").update(orderData).eq("id", idNum).select().single()
-    );
-    error = result.error;
-    if (!error && result.data) savedOrderId = result.data.id;
-  } catch (e) {
-    error = e;
-  }
-
-  if (error && shouldFallbackSaveOrderToLocal(error)) {
-    applyOfflineModeFromDbUnavailable();
-    const changedAt = new Date().toISOString();
-    addOrAppendPendingServerOrderEdit({
-      orderId: idNum,
-      orderData,
-      prevSnapshot,
-      historyComments,
-      user_email: state.currentUser?.email || "",
-      changedAt,
-      initialSums,
-      initialParticipants,
-    });
-    queueOrderDeltaCalculationsForOffline({
-      orderTempId: idNum,
-      wasEditing: true,
-      initialSums,
-      initialParticipants,
-      orderData,
-    });
-    rebaselineAllOrdersFromStateAndPendingQueue();
-    syncDbUnavailableBanner();
-    return {
-      ok: true,
-      orderId: idNum,
-      offline: true,
-      message: `Изменения заказа ${idNum} сохранены на устройстве; отправка в базу при появлении связи.`,
-    };
-  }
-
-  if (error) {
-    console.error("voice update order:", error);
-    return {
-      ok: false,
-      message: `Ошибка при обновлении заявки. ${error.message || error.hint || String(error.code || error)}`,
-    };
-  }
-
-  await writeOrderDeltaCalculations({
-    orderId: savedOrderId,
+  const calculations = buildOrderDeltaCalculationInsertRows({
+    orderId: idNum,
     wasEditing: true,
     initialSums,
     initialParticipants,
     orderData,
   });
+  try {
+    savedOrderId = await raceWithTimeout(
+      saveOrderAtomic(supabaseClient, {
+        requestId: createAtomicOrderRequestId(),
+        orderId: idNum,
+        orderData,
+        historyComments,
+        calculations,
+        expectedMoney: buildExpectedOrderMoney(initialSums, initialParticipants),
+      }),
+    );
+  } catch (e) {
+    error = e;
+  }
 
-  if (savedOrderId && state.currentUser?.email) {
-    await insertOrderHistoryComments(savedOrderId, historyComments);
+  if (error) {
+    console.error("voice update order atomic:", error);
+    return {
+      ok: false,
+      message: `Изменения не сохранены, транзакция полностью отменена. ${error.message || error.hint || String(error.code || error)}`,
+    };
   }
 
   await loadOrders();
