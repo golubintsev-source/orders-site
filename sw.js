@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v53: суммы по сотрудникам полностью помещаются на экране телефона.
-const STATIC_CACHE = "orders-site-static-v53";
+// v54: фотографии в мобильном чате занимают около 2/3 ширины экрана.
+const STATIC_CACHE = "orders-site-static-v54";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

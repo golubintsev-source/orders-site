@@ -9935,6 +9935,12 @@ html.keyboard-open .messages-composer {
     max-width: 92%;
   }
 
+  /* Фото в сообщении занимает примерно 2/3 ширины экрана телефона.
+     !important перекрывает рассчитанную по старым размерам файла inline-ширину. */
+  .message-item-attachment {
+    width: min(100%, 66.6667vw) !important;
+  }
+
   .messages-chat-item {
     padding: 12px 12px;
   }
