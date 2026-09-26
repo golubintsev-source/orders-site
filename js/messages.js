@@ -41,6 +41,11 @@ const CHAT_LIST_POLL_MS = 30_000;
 const CHAT_LIST_POLL_REALTIME_MS = 180_000;
 const POLL_BACKOFF_MAX_MS = 180_000;
 const CHAT_VISIBILITY_HEARTBEAT_MS = 25_000;
+/**
+ * Safari/iOS может оставить fetch к Supabase незавершённым после заморозки PWA.
+ * Без собственного таймаута такой запрос навсегда блокирует обновление диалога.
+ */
+const MESSAGE_REQUEST_TIMEOUT_MS = 12_000;
 /** Сколько недавних DM тянуть для превью списка чатов (не всю историю). */
 const CHAT_LIST_DM_PREVIEW_LIMIT = 800;
 /** Первый проход списка чатов: только недавние DM за MESSAGES_FAST_LOAD_DAYS. */
@@ -85,6 +90,7 @@ let messagesResumeTimer = null;
 let chatListRefreshTimer = null;
 let unreadBadgeTimer = null;
 let pollNewMessagesInFlight = false;
+let pollNewMessagesRunId = 0;
 let chatListLoadPromise = null;
 let unreadRefreshPromise = null;
 let deliveryAckPromise = null;
@@ -96,6 +102,29 @@ let markConversationReadInFlight = null;
 let messagesView = "list";
 /** @type {string | null} null на списке; uuid пользователя или group:<uuid> в диалоге */
 let activePeerId = null;
+
+function withMessagesRequestTimeout(promise, ms = MESSAGE_REQUEST_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(Object.assign(new Error("Превышено время ожидания загрузки сообщений."), { code: "TIMEOUT" }));
+    }, ms);
+    Promise.resolve(promise).then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function invalidateMessagesPoll() {
+  pollNewMessagesRunId += 1;
+  pollNewMessagesInFlight = false;
+}
 /** @type {Map<string, { id: string, name: string, memberIds: string[], avatarStoragePath?: string|null, created_at?: string, created_by?: string }>} */
 let groupChatsById = new Map();
 /** @type {Map<string, { id: string, email: string }>} */
@@ -2759,9 +2788,9 @@ function applyDialogHeaderPlaceholder(peerId) {
  * Если в ленте ещё чужой диалог — сразу очищаем DOM, не дожидаясь fetch.
  * Иначе при входе в другой чат 1–2 секунды видна предыдущая переписка.
  */
-function prepareMessagesDialogForPeer(peerId) {
+function prepareMessagesDialogForPeer(peerId, { forceReset = false } = {}) {
   const feed = document.getElementById("messagesFeed");
-  const switchingChat = shouldResetDialogFeed(feed?.dataset.peerId, peerId);
+  const switchingChat = forceReset || shouldResetDialogFeed(feed?.dataset.peerId, peerId);
   if (!switchingChat) {
     if (feed) feed.dataset.peerId = String(peerId);
     return false;
@@ -2779,6 +2808,7 @@ function prepareMessagesDialogForPeer(peerId) {
 }
 
 export function showMessagesChatList() {
+  invalidateMessagesPoll();
   activePeerId = null;
   lastFeedMessageAt = null;
   loadMessagesGeneration += 1;
@@ -2797,7 +2827,10 @@ export function showMessagesChatList() {
 export async function openMessagesDialog(peerId) {
   if (!peerId) return;
   loadChatListGeneration += 1;
-  prepareMessagesDialogForPeer(peerId);
+  invalidateMessagesPoll();
+  // Повторное открытие того же peer тоже начинает с чистой ленты: сохранённый
+  // iOS DOM не должен оставаться на экране, если новый запрос завис или упал.
+  prepareMessagesDialogForPeer(peerId, { forceReset: true });
   activePeerId = peerId;
   lastFeedMessageAt = null;
   clearComposerContext();
@@ -2824,9 +2857,14 @@ export async function openMessagesDialog(peerId) {
     syncComposerForActivePeer();
     if (isGroupChat()) applyGroupOutgoingReceiptsToFeed();
   }).catch((error) => console.warn("Фоновая загрузка данных диалога:", error));
-  await loadMessages({ forceBottom: true });
+  const initialLoadOk = await loadMessages({ forceBottom: true });
   if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
   startMessagesFeedPolling();
+  if (initialLoadOk === false) {
+    window.setTimeout(() => {
+      if (activePeerId === peerAtStart && messagesView === "dialog") void pollNewMessages();
+    }, 1000);
+  }
   reportChatVisibilityToSw();
 }
 
@@ -2909,19 +2947,28 @@ export async function loadMessages({ forceBottom = false } = {}) {
 
   // Фаза 1: последние сообщения независимо от даты. Так старый диалог не показывает
   // ложное «нет сообщений» до фоновой догрузки, а LIMIT сохраняет быстрый ответ.
-  const fast = await fetchDialogRows({ since: null, limit: DIALOG_INITIAL_MESSAGE_LIMIT });
+  let fast;
+  try {
+    fast = await withMessagesRequestTimeout(
+      fetchDialogRows({ since: null, limit: DIALOG_INITIAL_MESSAGE_LIMIT }),
+    );
+  } catch (error) {
+    fast = { rows: [], error };
+  }
   if (!isCurrentDialogLoad(gen, peerAtStart)) return;
 
   if (fast.error) {
     console.error("Ошибка загрузки сообщений:", fast.error);
     if (msg) {
-      msg.textContent = isGroupChat()
-        ? "Ошибка загрузки сообщений группового чата."
-        : "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
+      msg.textContent = fast.error?.code === "TIMEOUT"
+        ? "Не удалось загрузить сообщения. Повторяем попытку…"
+        : isGroupChat()
+          ? "Ошибка загрузки сообщений группового чата."
+          : "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
       msg.classList.add("messages-page-message--error");
     }
     feed.innerHTML = "";
-    return;
+    return false;
   }
 
   await renderDialogRows(fast.rows, { markRead: true });
@@ -2930,7 +2977,14 @@ export async function loadMessages({ forceBottom = false } = {}) {
   void (async () => {
     await whenIdle(2000);
     if (!isCurrentDialogLoad(gen, peerAtStart)) return;
-    const fuller = await fetchDialogRows({ since: null, limit: DIALOG_HISTORY_MESSAGE_LIMIT });
+    let fuller;
+    try {
+      fuller = await withMessagesRequestTimeout(
+        fetchDialogRows({ since: null, limit: DIALOG_HISTORY_MESSAGE_LIMIT }),
+      );
+    } catch {
+      return;
+    }
     if (!isCurrentDialogLoad(gen, peerAtStart)) return;
     if (fuller.error) return;
     rememberFeedMessages(fuller.rows);
@@ -2942,6 +2996,7 @@ export async function loadMessages({ forceBottom = false } = {}) {
     if (!hasOlderNotShown) return;
     prependOlderMessagesToFeed(fuller.rows);
   })();
+  return true;
 }
 
 export function onMessagesSectionEnter(opts = {}) {
@@ -3213,18 +3268,38 @@ async function pollNewMessages() {
   const feed = document.getElementById("messagesFeed");
   const uid = getCurrentUserId();
   if (!feed || !uid || messagesView !== "dialog" || !activePeerId) return;
+  const runId = ++pollNewMessagesRunId;
   pollNewMessagesInFlight = true;
   try {
-    await pollNewMessagesUnlocked();
+    await withMessagesRequestTimeout(pollNewMessagesUnlocked(runId));
+  } catch (error) {
+    if (error?.code === "TIMEOUT") {
+      console.warn("Таймаут проверки новых сообщений.");
+    } else {
+      console.warn("Ошибка проверки новых сообщений:", error);
+    }
   } finally {
-    pollNewMessagesInFlight = false;
+    if (runId === pollNewMessagesRunId) pollNewMessagesInFlight = false;
   }
 }
 
-async function pollNewMessagesUnlocked() {
+async function pollNewMessagesUnlocked(runId) {
   const uid = getCurrentUserId();
   if (!uid || messagesView !== "dialog" || !activePeerId) return;
   const peerAtStart = activePeerId;
+  const isCurrentPoll = () =>
+    runId === pollNewMessagesRunId &&
+    activePeerId === peerAtStart &&
+    messagesView === "dialog" &&
+    isMessagesFeedForPeer(peerAtStart);
+
+  // После восстановления вкладки состояние времени последнего сообщения могло
+  // быть потеряно. В этом случае берём ограниченный набор последних сообщений,
+  // а не всю историю по возрастанию.
+  if (!lastFeedMessageAt) {
+    await loadMessages({ forceBottom: true });
+    return;
+  }
 
   if (isGroupChat()) {
     const groupId = parseGroupId();
@@ -3274,7 +3349,7 @@ async function pollNewMessagesUnlocked() {
       return;
     }
     const rows = data || [];
-    if (activePeerId !== peerAtStart || messagesView !== "dialog" || !isMessagesFeedForPeer(peerAtStart)) {
+    if (!isCurrentPoll()) {
       return;
     }
     if (rows.length) {
@@ -3336,7 +3411,7 @@ async function pollNewMessagesUnlocked() {
   }
 
   const rows = data || [];
-  if (activePeerId !== peerAtStart || messagesView !== "dialog" || !isMessagesFeedForPeer(peerAtStart)) {
+  if (!isCurrentPoll()) {
     return;
   }
   if (rows.length) {
@@ -3744,6 +3819,9 @@ async function syncMessagesAfterResume() {
   }
   restartVisiblePolling();
   if (messagesView === "dialog") {
+    // Запрос, начатый до заморозки iOS/PWA, больше не имеет права блокировать
+    // или обновлять активную ленту после возврата приложения.
+    invalidateMessagesPoll();
     await pollNewMessages();
     if (canMarkMessagesRead()) void markActiveConversationRead();
   } else if (messagesView === "list") {
