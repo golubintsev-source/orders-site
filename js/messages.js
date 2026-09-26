@@ -1395,6 +1395,7 @@ function renderMessageItem(row) {
   const bodyForDisplay = stripRecipientMentionFromBody(row.body, row.recipient_email);
   const bodyHtml = renderMessageBodyHtml(bodyForDisplay);
   const attachmentHtml = renderMessageAttachmentHtml(row);
+  const attachmentClass = attachmentHtml ? " message-item--with-attachment" : "";
   const replyHtml = renderReplyQuoteHtml(row);
   const groupId = showPeer ? parseGroupId() : null;
   const groupChat = groupId ? groupChatsById.get(groupId) : null;
@@ -1432,7 +1433,7 @@ function renderMessageItem(row) {
   const reactionsHtml = renderMessageReactionsHtml(row, messageKind);
   const taskClass = messageHasActiveTask(messageKind, row.id) ? " message-item--has-active-task" : "";
   return `
-    <article class="${messageItemClass(row)}${taskClass}" data-message-id="${row.id}" data-message-kind="${messageKind}"${statusAttr}${ownAttr}>
+    <article class="${messageItemClass(row)}${attachmentClass}${taskClass}" data-message-id="${row.id}" data-message-kind="${messageKind}"${statusAttr}${ownAttr}>
       ${headerHtml}
       ${replyHtml}
       ${attachmentHtml}

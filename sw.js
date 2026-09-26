@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v55: зависшие после сна iOS запросы чата больше не блокируют новые сообщения.
-const STATIC_CACHE = "orders-site-static-v55";
+// v56: все фото в мобильном чате занимают одинаковые 2/3 ширины экрана.
+const STATIC_CACHE = "orders-site-static-v56";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
