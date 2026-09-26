@@ -2119,6 +2119,26 @@ h2 {
     padding-right: 7px;
     padding-left: 7px;
   }
+
+  .all-salaries-employee-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .all-salaries-employee-table th:first-child,
+  .all-salaries-employee-table td:first-child {
+    width: auto;
+    white-space: normal;
+  }
+
+  .all-salaries-employee-table th:last-child,
+  .all-salaries-employee-table td:last-child {
+    width: 1%;
+    padding-right: 6px;
+    padding-left: 6px;
+    white-space: nowrap;
+  }
 }
 
 /* ——— Излишки ——— */

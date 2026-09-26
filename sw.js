@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v52: выплаты за месяц можно агрегировать по сотрудникам.
-const STATIC_CACHE = "orders-site-static-v52";
+// v53: суммы по сотрудникам полностью помещаются на экране телефона.
+const STATIC_CACHE = "orders-site-static-v53";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
