@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v56: все фото в мобильном чате занимают одинаковые 2/3 ширины экрана.
-const STATIC_CACHE = "orders-site-static-v56";
+// v57: миниатюра фото в чате не выше половины экрана телефона.
+const STATIC_CACHE = "orders-site-static-v57";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

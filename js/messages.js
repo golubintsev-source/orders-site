@@ -485,6 +485,13 @@ function chatPhotoSlotStyleAttr(naturalW, naturalH) {
   return `style="width:min(100%,${slot.width}px);aspect-ratio:${slot.ratio};height:auto"`;
 }
 
+/** Ширина фото при ограничении его высоты половиной экрана, в единицах svh. */
+function chatPhotoHeightLimitedWidthSvh(naturalW, naturalH) {
+  const slot = chatPhotoSlotSize(naturalW, naturalH);
+  const ratio = slot.width / slot.height;
+  return Math.max(0.01, ratio * 50).toFixed(4);
+}
+
 function escapeHtml(s) {
   if (s == null) return "";
   const div = document.createElement("div");
@@ -1396,6 +1403,9 @@ function renderMessageItem(row) {
   const bodyHtml = renderMessageBodyHtml(bodyForDisplay);
   const attachmentHtml = renderMessageAttachmentHtml(row);
   const attachmentClass = attachmentHtml ? " message-item--with-attachment" : "";
+  const attachmentSizeStyle = attachmentHtml
+    ? ` style="--chat-photo-max-width-by-height:${chatPhotoHeightLimitedWidthSvh(row.attachment_width, row.attachment_height)}svh"`
+    : "";
   const replyHtml = renderReplyQuoteHtml(row);
   const groupId = showPeer ? parseGroupId() : null;
   const groupChat = groupId ? groupChatsById.get(groupId) : null;
@@ -1433,7 +1443,7 @@ function renderMessageItem(row) {
   const reactionsHtml = renderMessageReactionsHtml(row, messageKind);
   const taskClass = messageHasActiveTask(messageKind, row.id) ? " message-item--has-active-task" : "";
   return `
-    <article class="${messageItemClass(row)}${attachmentClass}${taskClass}" data-message-id="${row.id}" data-message-kind="${messageKind}"${statusAttr}${ownAttr}>
+    <article class="${messageItemClass(row)}${attachmentClass}${taskClass}" data-message-id="${row.id}" data-message-kind="${messageKind}"${statusAttr}${ownAttr}${attachmentSizeStyle}>
       ${headerHtml}
       ${replyHtml}
       ${attachmentHtml}
@@ -1482,11 +1492,19 @@ async function hydrateMessageAttachments(root = document.getElementById("message
         return;
       }
 
-      // Слот уже зафиксирован при рендере — после load размер НЕ трогаем.
       img.src = previewUrl;
       link.href = fullUrl || previewUrl;
       link.hidden = false;
       await waitForImageSettle(img);
+      // У старых сообщений размеры могли не сохраниться в БД. После загрузки
+      // уточняем пропорции, чтобы вертикальное фото тоже стало не выше 1/2 экрана.
+      if (!el.hasAttribute("data-width") && img.naturalWidth > 0 && img.naturalHeight > 0) {
+        el.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+        el.closest(".message-item--with-attachment")?.style.setProperty(
+          "--chat-photo-max-width-by-height",
+          `${chatPhotoHeightLimitedWidthSvh(img.naturalWidth, img.naturalHeight)}svh`,
+        );
+      }
       if (loading) loading.remove();
       el.dataset.hydrated = "1";
     }),

@@ -9938,11 +9938,12 @@ html.keyboard-open .messages-composer {
   /* Ширину задаём и пузырю, и фото. Иначе старый маленький размер из БД
      сжимает родительский пузырь и не даёт картинке вырасти до 2/3 экрана. */
   .message-item--with-attachment {
-    width: 66.6667vw;
+    width: min(66.6667vw, var(--chat-photo-max-width-by-height, 42.8571svh));
   }
 
   .message-item--with-attachment .message-item-attachment {
     width: 100% !important;
+    max-height: 50svh;
   }
 
   .messages-chat-item {
