@@ -8,6 +8,7 @@ import {
   attachStorageFileToOrder,
   cropImageAttachment,
   getSignedFileUrl,
+  getSignedFileUrls,
   isCroppableImageFile,
   uploadChatPhoto,
 } from "./files.js";
@@ -73,6 +74,8 @@ const CHAT_PHOTO_MAX_W = 240;
 const CHAT_PHOTO_MAX_H = 280;
 /** Фиксированный слот без известных размеров — никогда не растёт после load. */
 const CHAT_PHOTO_FALLBACK_RATIO = `${CHAT_PHOTO_MAX_W} / ${CHAT_PHOTO_MAX_H}`;
+const CHAT_PHOTO_LOAD_CONCURRENCY = 4;
+const CHAT_PHOTO_LAZY_ROOT_MARGIN = "900px 0px";
 
 let usersCache = null;
 let usersCachePromise = null;
@@ -171,6 +174,12 @@ let groupFormAvatarExistingPath = null;
 let groupFormAvatarRemoved = false;
 /** @type {{ file: File, previewUrl: string } | null} */
 let pendingChatPhoto = null;
+let chatPhotoIntersectionObserver = null;
+let chatPhotoObserverRoot = null;
+let chatPhotoHydrationFlushScheduled = false;
+const pendingChatPhotoHydration = new Set();
+const chatPhotoLoadQueue = [];
+let activeChatPhotoLoads = 0;
 /** Фото из чата, которое пользователь хочет прикрепить к заказу через список заказов. */
 /** @type {{ storagePath: string, thumbnailPath: string, fileName: string, mimeType: string, fileSize: number|null } | null} */
 let pendingAttachPhotoToOrder = null;
@@ -1363,7 +1372,7 @@ function renderMessageAttachmentHtml(row) {
   return `<div class="message-item-attachment" ${sizeStyle} data-storage-path="${escapeHtml(row.attachment_storage_path || "")}" data-thumb-path="${escapeHtml(row.attachment_thumbnail_path || "")}" data-mime-type="${mime}" data-file-name="${escapeHtml(fileName)}" data-file-size="${escapeHtml(size)}"${dimAttrs}>
       <div class="message-item-photo-loading" aria-hidden="true">Загрузка…</div>
       <a class="message-item-photo-link" href="#" target="_blank" rel="noopener noreferrer" title="Открыть полное изображение" hidden>
-        <img class="message-item-photo" alt="${alt}" width="${slot.width}" height="${slot.height}" decoding="async" />
+        <img class="message-item-photo" alt="${alt}" width="${slot.width}" height="${slot.height}" loading="lazy" decoding="async" />
       </a>
     </div>`;
 }
@@ -1454,61 +1463,171 @@ function renderMessageItem(row) {
 }
 
 function waitForImageSettle(img, timeoutMs = 4000) {
-  if (!img) return Promise.resolve();
-  if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+  if (!img) return Promise.resolve(false);
+  if (img.complete) return Promise.resolve(img.naturalWidth > 0);
   return new Promise((resolve) => {
-    const finish = () => {
+    const cleanup = () => {
       clearTimeout(timer);
-      resolve();
+      img.removeEventListener("load", onLoad);
+      img.removeEventListener("error", onError);
     };
-    const timer = setTimeout(finish, timeoutMs);
-    img.addEventListener("load", finish, { once: true });
-    img.addEventListener("error", finish, { once: true });
+    const finish = (loaded) => {
+      cleanup();
+      resolve(loaded);
+    };
+    const onLoad = () => finish(true);
+    const onError = () => finish(false);
+    const timer = setTimeout(() => finish(img.naturalWidth > 0), timeoutMs);
+    img.addEventListener("load", onLoad, { once: true });
+    img.addEventListener("error", onError, { once: true });
   });
 }
 
-async function hydrateMessageAttachments(root = document.getElementById("messagesFeed")) {
-  if (!root) return;
-  const nodes = [...root.querySelectorAll(".message-item-attachment[data-storage-path]")];
+async function loadChatPhotoPreview(img, previewUrl, fullUrl) {
+  img.src = previewUrl;
+  let loaded = await waitForImageSettle(img);
+  if (!loaded && fullUrl && fullUrl !== previewUrl) {
+    img.src = fullUrl;
+    loaded = await waitForImageSettle(img);
+  }
+  return loaded;
+}
 
-  await Promise.all(
-    nodes.map(async (el) => {
-      if (el.dataset.hydrated === "1") return;
-      const storagePath = el.getAttribute("data-storage-path") || "";
-      const thumbPath = el.getAttribute("data-thumb-path") || "";
-      if (!storagePath) return;
-      // В пузыре (~240 CSS-px, на Retina до ~720 физ. px) старые thumb ~280px мылят «квадратами».
-      // Показываем уже сжатый полный файл — объём в storage/БД не растёт; thumb остаётся для списков.
-      let previewUrl = await getSignedFileUrl(storagePath);
-      if (!previewUrl && thumbPath) {
-        previewUrl = await getSignedFileUrl(thumbPath);
-      }
-      const fullUrl = previewUrl;
-      const loading = el.querySelector(".message-item-photo-loading");
-      const link = el.querySelector(".message-item-photo-link");
-      const img = el.querySelector(".message-item-photo");
-      if (!previewUrl || !link || !img) {
-        if (loading) loading.textContent = "Фото недоступно";
-        return;
-      }
+async function hydrateMessageAttachmentElement(el, signedUrls) {
+  if (!el?.isConnected || el.dataset.hydrated === "1") return;
+  const storagePath = el.getAttribute("data-storage-path") || "";
+  const thumbPath = el.getAttribute("data-thumb-path") || "";
+  const fullUrl = signedUrls.get(storagePath) || null;
+  const previewUrl = (thumbPath && signedUrls.get(thumbPath)) || fullUrl;
+  const loading = el.querySelector(".message-item-photo-loading");
+  const link = el.querySelector(".message-item-photo-link");
+  const img = el.querySelector(".message-item-photo");
+  if (!previewUrl || !link || !img) {
+    if (loading) loading.textContent = "Фото недоступно";
+    delete el.dataset.hydrationQueued;
+    return;
+  }
 
-      img.src = previewUrl;
-      link.href = fullUrl || previewUrl;
-      link.hidden = false;
-      await waitForImageSettle(img);
-      // У старых сообщений размеры могли не сохраниться в БД. После загрузки
-      // уточняем пропорции, чтобы вертикальное фото тоже стало не выше 1/2 экрана.
-      if (!el.hasAttribute("data-width") && img.naturalWidth > 0 && img.naturalHeight > 0) {
-        el.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
-        el.closest(".message-item--with-attachment")?.style.setProperty(
-          "--chat-photo-max-width-by-height",
-          `${chatPhotoHeightLimitedWidthSvh(img.naturalWidth, img.naturalHeight)}svh`,
-        );
-      }
-      if (loading) loading.remove();
-      el.dataset.hydrated = "1";
-    }),
+  link.href = fullUrl || previewUrl;
+  link.hidden = false;
+  const loaded = await loadChatPhotoPreview(img, previewUrl, fullUrl);
+  if (!loaded) {
+    if (loading) loading.textContent = "Фото недоступно";
+    delete el.dataset.hydrationQueued;
+    return;
+  }
+
+  // У старых сообщений размеры могли не сохраниться в БД. После загрузки
+  // уточняем пропорции, чтобы вертикальное фото тоже стало не выше 1/2 экрана.
+  if (!el.hasAttribute("data-width") && img.naturalWidth > 0 && img.naturalHeight > 0) {
+    el.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+    el.closest(".message-item--with-attachment")?.style.setProperty(
+      "--chat-photo-max-width-by-height",
+      `${chatPhotoHeightLimitedWidthSvh(img.naturalWidth, img.naturalHeight)}svh`,
+    );
+  }
+  if (loading) loading.remove();
+  el.dataset.hydrated = "1";
+}
+
+function drainChatPhotoLoadQueue() {
+  while (activeChatPhotoLoads < CHAT_PHOTO_LOAD_CONCURRENCY && chatPhotoLoadQueue.length) {
+    const task = chatPhotoLoadQueue.shift();
+    activeChatPhotoLoads += 1;
+    Promise.resolve()
+      .then(task)
+      .catch((error) => console.warn("Ошибка загрузки миниатюры сообщения:", error))
+      .finally(() => {
+        activeChatPhotoLoads -= 1;
+        drainChatPhotoLoadQueue();
+      });
+  }
+}
+
+function enqueueChatPhotoLoad(task) {
+  chatPhotoLoadQueue.push(task);
+  drainChatPhotoLoadQueue();
+}
+
+async function flushPendingChatPhotoHydration() {
+  chatPhotoHydrationFlushScheduled = false;
+  const nodes = [...pendingChatPhotoHydration].filter(
+    (el) => el?.isConnected && el.dataset.hydrated !== "1",
   );
+  pendingChatPhotoHydration.clear();
+  if (!nodes.length) return;
+
+  const paths = [];
+  for (const el of nodes) {
+    const storagePath = el.getAttribute("data-storage-path") || "";
+    const thumbPath = el.getAttribute("data-thumb-path") || "";
+    if (storagePath) paths.push(storagePath);
+    if (thumbPath) paths.push(thumbPath);
+  }
+
+  let signedUrls;
+  try {
+    signedUrls = await getSignedFileUrls(paths);
+  } catch (error) {
+    console.warn("Ошибка пакетной подготовки фотографий чата:", error);
+    for (const el of nodes) delete el.dataset.hydrationQueued;
+    return;
+  }
+  for (const el of nodes) {
+    enqueueChatPhotoLoad(() => hydrateMessageAttachmentElement(el, signedUrls));
+  }
+}
+
+function queueMessageAttachmentsForHydration(nodes) {
+  for (const el of nodes || []) {
+    if (!el?.isConnected || el.dataset.hydrated === "1" || el.dataset.hydrationQueued === "1") continue;
+    el.dataset.hydrationQueued = "1";
+    pendingChatPhotoHydration.add(el);
+  }
+  if (!pendingChatPhotoHydration.size || chatPhotoHydrationFlushScheduled) return;
+  chatPhotoHydrationFlushScheduled = true;
+  queueMicrotask(() => void flushPendingChatPhotoHydration());
+}
+
+function getChatPhotoIntersectionObserver(feed) {
+  if (chatPhotoIntersectionObserver && chatPhotoObserverRoot === feed) {
+    return chatPhotoIntersectionObserver;
+  }
+  chatPhotoIntersectionObserver?.disconnect();
+  chatPhotoObserverRoot = feed;
+  chatPhotoIntersectionObserver = new IntersectionObserver(
+    (entries, observer) => {
+      const visible = [];
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        observer.unobserve(entry.target);
+        visible.push(entry.target);
+      }
+      queueMessageAttachmentsForHydration(visible);
+    },
+    { root: feed, rootMargin: CHAT_PHOTO_LAZY_ROOT_MARGIN },
+  );
+  return chatPhotoIntersectionObserver;
+}
+
+function hydrateMessageAttachments(root = document.getElementById("messagesFeed")) {
+  if (!root) return;
+  const selector = ".message-item-attachment[data-storage-path]";
+  const nodes = [];
+  if (root.matches?.(selector)) nodes.push(root);
+  nodes.push(...root.querySelectorAll(selector));
+  const pending = nodes.filter(
+    (el) => el.dataset.hydrated !== "1" && el.dataset.hydrationQueued !== "1",
+  );
+  if (!pending.length) return;
+
+  const feed = document.getElementById("messagesFeed");
+  if (feed && typeof IntersectionObserver === "function") {
+    const observer = getChatPhotoIntersectionObserver(feed);
+    for (const el of pending) observer.observe(el);
+    return;
+  }
+  queueMessageAttachmentsForHydration(pending);
 }
 
 function getMessagesFastLoadSinceIso(days = MESSAGES_FAST_LOAD_DAYS) {

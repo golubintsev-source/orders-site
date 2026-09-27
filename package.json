@@ -6,6 +6,7 @@
     "test:all-salaries": "node scripts/test-all-salaries.mjs",
     "test:messages-sync": "node scripts/test-messages-sync.mjs",
     "test:messages-body": "node scripts/test-messages-body.mjs",
+    "test:chat-photo-performance": "node scripts/test-chat-photo-performance.mjs",
     "test:order-atomic-save": "node scripts/test-order-atomic-save.mjs"
   },
   "dependencies": {

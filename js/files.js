@@ -587,14 +587,6 @@ export async function renderExistingOrderFilesInForm(orderId) {
   list.appendChild(frag);
 }
 
-/** Целевой размер от исходного (~в ~20 раз меньше для многомегабайтных фото; сильнее чем раньше). */
-function targetCompressedBytes(originalSize) {
-  if (originalSize >= 2 * 1024 * 1024) return Math.floor(originalSize * 0.055);
-  if (originalSize >= 1024 * 1024) return Math.floor(originalSize * 0.065);
-  if (originalSize >= 500 * 1024) return Math.floor(originalSize * 0.09);
-  return Math.floor(originalSize * 0.14);
-}
-
 let _canvasSupportsWebpCached;
 function canvasSupportsWebp() {
   if (_canvasSupportsWebpCached !== undefined) return _canvasSupportsWebpCached;
@@ -668,11 +660,12 @@ export async function buildThumbnailBlob(imageFile) {
 
 /** Подписанные URL: полный файл и превью (если есть в БД). */
 async function getSignedUrlsForOrderFileRow(fileRow) {
-  const fullPromise = getSignedFileUrl(fileRow.storage_path);
-  const thumbPromise = fileRow.thumbnail_storage_path
-    ? getSignedFileUrl(fileRow.thumbnail_storage_path)
-    : Promise.resolve(null);
-  const [fullUrl, thumbUrl] = await Promise.all([fullPromise, thumbPromise]);
+  const paths = [fileRow.storage_path, fileRow.thumbnail_storage_path].filter(Boolean);
+  const urls = await getSignedFileUrls(paths);
+  const fullUrl = urls.get(fileRow.storage_path) || null;
+  const thumbUrl = fileRow.thumbnail_storage_path
+    ? urls.get(fileRow.thumbnail_storage_path) || null
+    : null;
   return {
     fullUrl,
     /** Для превью: миниатюра или запасной вариант — полный файл (старые записи). */
@@ -689,7 +682,9 @@ async function blobAtOrBelowTarget(canvas, mime, targetBytes, minQuality = 0.26)
   let hi = 0.88;
   if (lo > hi) lo = hi;
   let best = null;
-  for (let i = 0; i < 16; i++) {
+  // Восьми шагов достаточно для размера файла с точностью около 1%; 16 шагов
+  // вдвое дольше держали CPU телефона перед отправкой фотографии.
+  for (let i = 0; i < 8; i++) {
     const q = (lo + hi) / 2;
     const blob = await canvasToBlob(canvas, mime, q);
     if (!blob) {
@@ -708,13 +703,16 @@ async function blobAtOrBelowTarget(canvas, mime, targetBytes, minQuality = 0.26)
   return fallback;
 }
 
-const COMPRESS_MIN_BYTES = 380 * 1024;
-const COMPRESS_MIN_LONG_EDGE = 2100;
-const COMPRESS_INITIAL_MAX_EDGE = 1600;
+const COMPRESS_MAX_LONG_EDGE = 1600;
+const COMPRESS_TARGET_MAX_BYTES = 320 * 1024;
+const COMPRESS_WEBP_QUALITY = 0.8;
+const COMPRESS_JPEG_QUALITY = 0.82;
+const COMPRESS_MIN_QUALITY = 0.58;
 
 /**
- * Сжимает крупные растровые фото под веб (WebP или JPEG), цель сильного уменьшения (~×20 от исходного для тяжёлых фото).
- * GIF/SVG не трогаем; при ошибке декодирования — исходный файл.
+ * Обрабатывает каждое растровое фото: ограничивает длинную сторону 1600 px и
+ * перекодирует в WebP/JPEG. Если исходник уже эффективнее результата, оставляет
+ * исходник — увеличение файла не является сжатием. GIF/SVG не трогаем.
  */
 export async function compressImageForWebIfNeeded(file) {
   if (!file?.type?.startsWith("image/")) return file;
@@ -730,41 +728,29 @@ export async function compressImageForWebIfNeeded(file) {
 
   const iw = bitmap.width;
   const ih = bitmap.height;
-  const longEdge = Math.max(iw, ih);
-  const worthCompressing =
-    file.size >= COMPRESS_MIN_BYTES || longEdge >= COMPRESS_MIN_LONG_EDGE;
-  if (!worthCompressing) {
+  const outMime = canvasSupportsWebp() ? "image/webp" : "image/jpeg";
+  const { w, h } = scaleToMaxLongEdge(iw, ih, COMPRESS_MAX_LONG_EDGE);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
     bitmap.close();
     return file;
   }
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bitmap, 0, 0, w, h);
 
-  const targetBytes = targetCompressedBytes(file.size);
-  const outMime = canvasSupportsWebp() ? "image/webp" : "image/jpeg";
-
-  let maxEdge = COMPRESS_INITIAL_MAX_EDGE;
-  let bestBlob = null;
-  let bestSize = Infinity;
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { w, h } = scaleToMaxLongEdge(iw, ih, maxEdge);
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      bitmap.close();
-      return file;
-    }
-    ctx.drawImage(bitmap, 0, 0, w, h);
-
-    const blob = await blobAtOrBelowTarget(canvas, outMime, targetBytes);
-    if (blob && blob.size < file.size && blob.size < bestSize) {
-      bestBlob = blob;
-      bestSize = blob.size;
-      if (blob.size <= targetBytes * 1.2) break;
-    }
-    maxEdge = Math.round(maxEdge * 0.7);
-    if (maxEdge < 600) break;
+  const initialQuality = outMime === "image/webp" ? COMPRESS_WEBP_QUALITY : COMPRESS_JPEG_QUALITY;
+  let bestBlob = await canvasToBlob(canvas, outMime, initialQuality);
+  if (bestBlob && bestBlob.size > COMPRESS_TARGET_MAX_BYTES) {
+    bestBlob = await blobAtOrBelowTarget(
+      canvas,
+      outMime,
+      COMPRESS_TARGET_MAX_BYTES,
+      COMPRESS_MIN_QUALITY,
+    );
   }
 
   bitmap.close();
@@ -1056,17 +1042,100 @@ export async function loadOrderFiles(orderId) {
   return data || [];
 }
 
-export async function getSignedFileUrl(storagePath) {
-  const { data, error } = await supabaseClient.storage
-    .from("order-files")
-    .createSignedUrl(storagePath, 60 * 10);
+const SIGNED_FILE_URL_TTL_SECONDS = 60 * 10;
+const SIGNED_FILE_URL_CACHE_MS = 9 * 60 * 1000;
+const SIGNED_FILE_URL_CACHE_MAX = 500;
+const SIGNED_FILE_URL_FALLBACK_CONCURRENCY = 4;
+/** @type {Map<string, { url: string, expiresAt: number }>} */
+const signedFileUrlCache = new Map();
 
-  if (error) {
-    console.error("Ошибка получения ссылки:", error);
+function readCachedSignedFileUrl(storagePath) {
+  const cached = signedFileUrlCache.get(String(storagePath || ""));
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    signedFileUrlCache.delete(String(storagePath || ""));
     return null;
   }
+  return cached.url;
+}
 
-  return data?.signedUrl || null;
+function rememberSignedFileUrl(storagePath, url) {
+  if (!storagePath || !url) return;
+  signedFileUrlCache.delete(String(storagePath));
+  while (signedFileUrlCache.size >= SIGNED_FILE_URL_CACHE_MAX) {
+    const oldestKey = signedFileUrlCache.keys().next().value;
+    if (oldestKey == null) break;
+    signedFileUrlCache.delete(oldestKey);
+  }
+  signedFileUrlCache.set(String(storagePath), {
+    url: String(url),
+    expiresAt: Date.now() + SIGNED_FILE_URL_CACHE_MS,
+  });
+}
+
+/**
+ * Получить временные ссылки одним запросом и повторно использовать их до истечения TTL.
+ * @returns {Promise<Map<string, string>>}
+ */
+export async function getSignedFileUrls(storagePaths) {
+  const paths = [...new Set((storagePaths || []).map((path) => String(path || "").trim()).filter(Boolean))];
+  const result = new Map();
+  const missing = [];
+
+  for (const path of paths) {
+    const cached = readCachedSignedFileUrl(path);
+    if (cached) result.set(path, cached);
+    else missing.push(path);
+  }
+  if (!missing.length) return result;
+
+  const bucket = supabaseClient.storage.from("order-files");
+  const { data, error } = await bucket.createSignedUrls(missing, SIGNED_FILE_URL_TTL_SECONDS);
+  if (!error) {
+    for (const row of data || []) {
+      const path = String(row?.path || "");
+      const url = row?.signedUrl || row?.signedURL || null;
+      if (!path || !url) continue;
+      rememberSignedFileUrl(path, url);
+      result.set(path, url);
+    }
+  } else {
+    console.warn("Ошибка пакетного получения ссылок, используем одиночные запросы:", error);
+  }
+
+  const unresolved = missing.filter((path) => !result.has(path));
+  if (unresolved.length) {
+    let nextIndex = 0;
+    const rows = [];
+    const workers = Array.from(
+      { length: Math.min(SIGNED_FILE_URL_FALLBACK_CONCURRENCY, unresolved.length) },
+      async () => {
+        while (nextIndex < unresolved.length) {
+          const path = unresolved[nextIndex++];
+          const { data: singleData, error: singleError } = await bucket.createSignedUrl(
+            path,
+            SIGNED_FILE_URL_TTL_SECONDS,
+          );
+          rows.push([path, singleError ? null : singleData?.signedUrl || null]);
+        }
+      },
+    );
+    await Promise.all(workers);
+    for (const [path, url] of rows) {
+      if (!url) continue;
+      rememberSignedFileUrl(path, url);
+      result.set(path, url);
+    }
+  }
+  return result;
+}
+
+export async function getSignedFileUrl(storagePath) {
+  if (!storagePath) return null;
+  const urls = await getSignedFileUrls([storagePath]);
+  const url = urls.get(String(storagePath)) || null;
+  if (!url) console.error("Ошибка получения ссылки:", storagePath);
+  return url;
 }
 
 export function isImageFile(file) {

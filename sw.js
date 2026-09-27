@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v57: миниатюра фото в чате не выше половины экрана телефона.
-const STATIC_CACHE = "orders-site-static-v57";
+// v58: миниатюры чата загружаются лениво, пакетно и с ограничением параллельности.
+const STATIC_CACHE = "orders-site-static-v58";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
