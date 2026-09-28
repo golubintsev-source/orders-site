@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v61: новое сохранение без фото сначала показывает мотивирующее напоминание.
-const STATIC_CACHE = "orders-site-static-v61";
+// v62: адреса в подсказках переносятся на несколько строк без дублирующего подзаголовка.
+const STATIC_CACHE = "orders-site-static-v62";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

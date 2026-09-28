@@ -90,7 +90,6 @@ function localAddressSuggestions(query) {
   return getFieldSuggestions("address", query).map((item) => ({
     value: item.name,
     title: item.name,
-    subtitle: "Из предыдущих заказов",
     count: item.count,
     source: "orders",
   }));
@@ -135,7 +134,6 @@ async function fetchRemoteAddressSuggestions(query, signal) {
     .map((item) => ({
       value: String(item?.value || "").trim(),
       title: String(item?.title || item?.value || "").trim(),
-      subtitle: String(item?.subtitle || "").trim(),
       source: "dadata",
     }))
     .filter((item) => item.value);
@@ -451,7 +449,7 @@ function attachAddressAutocomplete({ input, list, wrap }) {
       li.setAttribute("role", "option");
       li.dataset.index = String(index);
       const badge = item.source === "orders" ? String(item.count || "") : "DaData";
-      li.innerHTML = `<span class="address-suggestion-content"><span class="client-suggestion-text">${escapeHtml(item.title || item.value)}</span>${item.subtitle ? `<span class="address-suggestion-subtitle">${escapeHtml(item.subtitle)}</span>` : ""}</span><span class="client-suggestion-count address-suggestion-source">${escapeHtml(badge)}</span>`;
+      li.innerHTML = `<span class="address-suggestion-content"><span class="client-suggestion-text">${escapeHtml(item.title || item.value)}</span></span><span class="client-suggestion-count address-suggestion-source">${escapeHtml(badge)}</span>`;
       li.addEventListener("mousedown", (event) => {
         event.preventDefault();
         pickSuggestion(item);

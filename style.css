@@ -940,17 +940,15 @@ h2 {
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
-  flex-direction: column;
-  gap: 2px;
 }
 
-#section-new #addressSuggestions .address-suggestion-subtitle {
-  overflow: hidden;
-  color: #6b7280;
-  font-size: 12px;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+#section-new #addressSuggestions .client-suggestion-text {
+  display: block;
+  overflow: visible;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 #section-new #addressSuggestions .address-suggestion-source {

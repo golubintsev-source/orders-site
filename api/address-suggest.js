@@ -64,18 +64,10 @@ function mapDadataSuggestions(payload) {
   const seen = new Set();
   for (const row of Array.isArray(payload?.suggestions) ? payload.suggestions : []) {
     const value = String(row?.value || row?.unrestricted_value || "").trim();
-    const locality = String(
-      row?.data?.city_with_type ||
-        row?.data?.settlement_with_type ||
-        row?.data?.region_with_type ||
-        "",
-    ).trim();
-    const postalCode = String(row?.data?.postal_code || "").trim();
-    const subtitle = [locality, postalCode ? `индекс ${postalCode}` : ""].filter(Boolean).join(" · ");
     const key = value.toLocaleLowerCase("ru-RU").replace(/\s+/g, " ");
     if (!value || seen.has(key)) continue;
     seen.add(key);
-    items.push({ value, title: value, subtitle });
+    items.push({ value, title: value });
     if (items.length >= 10) break;
   }
   return items;
