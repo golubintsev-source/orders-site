@@ -1,9 +1,17 @@
 import { state } from "./state.js";
 import { phoneInput } from "./dom.js";
+import { supabaseClient } from "./config.js";
 
 const MIN_CHARS = 3;
 const DEBOUNCE_MS = 220;
 const MAX_ITEMS = 15;
+const ADDRESS_MAX_ITEMS = 10;
+const ADDRESS_DEBOUNCE_MS = 280;
+const ADDRESS_CACHE_TTL_MS = 10 * 60 * 1000;
+const ADDRESS_CACHE_MAX = 80;
+
+/** @type {Map<string, { expiresAt: number, items: Array<object> }>} */
+const remoteAddressCache = new Map();
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -44,6 +52,95 @@ function getFieldSuggestions(field, query) {
   }
   out.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ru"));
   return out.slice(0, MAX_ITEMS);
+}
+
+function normalizeSuggestionKey(value) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("ru-RU")
+    .replace(/\s+/g, " ");
+}
+
+function rememberRemoteAddressSuggestions(query, items) {
+  const key = normalizeSuggestionKey(query);
+  remoteAddressCache.delete(key);
+  while (remoteAddressCache.size >= ADDRESS_CACHE_MAX) {
+    const oldestKey = remoteAddressCache.keys().next().value;
+    if (oldestKey == null) break;
+    remoteAddressCache.delete(oldestKey);
+  }
+  remoteAddressCache.set(key, {
+    expiresAt: Date.now() + ADDRESS_CACHE_TTL_MS,
+    items,
+  });
+}
+
+function readRemoteAddressSuggestions(query) {
+  const key = normalizeSuggestionKey(query);
+  const cached = remoteAddressCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    remoteAddressCache.delete(key);
+    return null;
+  }
+  return cached.items;
+}
+
+function localAddressSuggestions(query) {
+  return getFieldSuggestions("address", query).map((item) => ({
+    value: item.name,
+    title: item.name,
+    subtitle: "Из предыдущих заказов",
+    count: item.count,
+    source: "orders",
+  }));
+}
+
+function mergeAddressSuggestions(localItems, remoteItems) {
+  const merged = [];
+  const seen = new Set();
+  const local = localItems || [];
+  // Сохраняем несколько часто используемых адресов сверху, но не даём истории
+  // заказов полностью вытеснить новые адреса из внешнего справочника.
+  const candidates = [...local.slice(0, 3), ...(remoteItems || []), ...local.slice(3)];
+  for (const item of candidates) {
+    const value = String(item?.value || item?.title || "").trim();
+    const key = normalizeSuggestionKey(value);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push({ ...item, value, title: String(item?.title || value).trim() || value });
+    if (merged.length >= ADDRESS_MAX_ITEMS) break;
+  }
+  return merged;
+}
+
+async function fetchRemoteAddressSuggestions(query, signal) {
+  const cached = readRemoteAddressSuggestions(query);
+  if (cached) return cached;
+
+  const { data } = await supabaseClient.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) return [];
+
+  const params = new URLSearchParams({ text: query.trim() });
+  const response = await fetch(`/api/address-suggest?${params}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) return [];
+  const body = await response.json();
+  const items = (Array.isArray(body?.items) ? body.items : [])
+    .map((item) => ({
+      value: String(item?.value || "").trim(),
+      title: String(item?.title || item?.value || "").trim(),
+      subtitle: String(item?.subtitle || "").trim(),
+      source: "dadata",
+    }))
+    .filter((item) => item.value);
+  rememberRemoteAddressSuggestions(query, items);
+  return items;
 }
 
 /**
@@ -298,6 +395,190 @@ function initFieldAutocomplete({ inputId, listId, wrapSelector, field, onPick })
   });
 }
 
+/** Подсказки адресов: сначала локальные совпадения, затем справочник ФИАС/ГАР DaData. */
+function attachAddressAutocomplete({ input, list, wrap }) {
+  if (!input || !list || !wrap) return () => {};
+
+  let debounceTimer = null;
+  let blurTimer = null;
+  let requestController = null;
+  let requestGeneration = 0;
+  let highlightedIndex = -1;
+  let currentItems = [];
+  let suppressUntilValueChange = null;
+
+  input.setAttribute("aria-autocomplete", "list");
+  input.setAttribute("aria-controls", list.id);
+  input.setAttribute("aria-expanded", "false");
+
+  const hide = () => {
+    list.hidden = true;
+    list.innerHTML = "";
+    highlightedIndex = -1;
+    currentItems = [];
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+  };
+
+  const isSuppressed = () =>
+    suppressUntilValueChange !== null && input.value === suppressUntilValueChange;
+
+  const pickSuggestion = (item) => {
+    const value = String(item?.value || "").trim();
+    if (!value) return;
+    input.value = value;
+    input.classList.remove("address-invalid");
+    suppressUntilValueChange = value;
+    requestController?.abort();
+    hide();
+    input.focus();
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    applyClientAndPhoneFromAddressPick(value);
+  };
+
+  const render = (items) => {
+    currentItems = items;
+    highlightedIndex = -1;
+    list.innerHTML = "";
+    if (!items.length || document.activeElement !== input) {
+      hide();
+      return;
+    }
+
+    items.forEach((item, index) => {
+      const li = document.createElement("li");
+      li.id = `${list.id}-option-${index}`;
+      li.setAttribute("role", "option");
+      li.dataset.index = String(index);
+      const badge = item.source === "orders" ? String(item.count || "") : "DaData";
+      li.innerHTML = `<span class="address-suggestion-content"><span class="client-suggestion-text">${escapeHtml(item.title || item.value)}</span>${item.subtitle ? `<span class="address-suggestion-subtitle">${escapeHtml(item.subtitle)}</span>` : ""}</span><span class="client-suggestion-count address-suggestion-source">${escapeHtml(badge)}</span>`;
+      li.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        pickSuggestion(item);
+      });
+      list.appendChild(li);
+    });
+    list.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  };
+
+  const refresh = async () => {
+    const query = input.value.trim();
+    if (query.length < MIN_CHARS || isSuppressed()) {
+      hide();
+      return;
+    }
+
+    const generation = ++requestGeneration;
+    requestController?.abort();
+    const controller = new AbortController();
+    requestController = controller;
+    const localItems = localAddressSuggestions(query);
+    render(mergeAddressSuggestions(localItems, []));
+
+    try {
+      const remoteItems = await fetchRemoteAddressSuggestions(query, controller.signal);
+      if (
+        generation !== requestGeneration ||
+        controller.signal.aborted ||
+        input.value.trim() !== query ||
+        isSuppressed()
+      ) {
+        return;
+      }
+      render(mergeAddressSuggestions(localItems, remoteItems));
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        console.warn("Подсказки адресов DaData недоступны:", error);
+      }
+    }
+  };
+
+  const onInput = () => {
+    input.classList.remove("address-invalid");
+    if (suppressUntilValueChange !== null && input.value !== suppressUntilValueChange) {
+      suppressUntilValueChange = null;
+    }
+    clearTimeout(debounceTimer);
+    requestController?.abort();
+    requestGeneration += 1;
+    if (input.value.trim().length < MIN_CHARS || isSuppressed()) {
+      hide();
+      return;
+    }
+    debounceTimer = setTimeout(() => void refresh(), ADDRESS_DEBOUNCE_MS);
+  };
+
+  const onFocus = () => {
+    if (input.value.trim().length >= MIN_CHARS && !isSuppressed()) {
+      clearTimeout(debounceTimer);
+      void refresh();
+    }
+  };
+
+  const onBlur = () => {
+    clearTimeout(blurTimer);
+    blurTimer = setTimeout(hide, 180);
+  };
+
+  const updateHighlight = (nextIndex) => {
+    const options = [...list.querySelectorAll("li")];
+    highlightedIndex = nextIndex;
+    options.forEach((option, index) => {
+      option.setAttribute("aria-selected", index === highlightedIndex ? "true" : "false");
+    });
+    const active = options[highlightedIndex];
+    if (active) {
+      input.setAttribute("aria-activedescendant", active.id);
+      active.scrollIntoView({ block: "nearest" });
+    } else {
+      input.removeAttribute("aria-activedescendant");
+    }
+  };
+
+  const onKeydown = (event) => {
+    if (event.key === "Escape" && !list.hidden) {
+      event.preventDefault();
+      requestController?.abort();
+      hide();
+      return;
+    }
+    if (list.hidden || !currentItems.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      updateHighlight(Math.min(highlightedIndex + 1, currentItems.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      updateHighlight(highlightedIndex <= 0 ? -1 : highlightedIndex - 1);
+    } else if (event.key === "Enter" && highlightedIndex >= 0) {
+      event.preventDefault();
+      pickSuggestion(currentItems[highlightedIndex]);
+    }
+  };
+
+  const onDocClick = (event) => {
+    if (!wrap.contains(event.target)) hide();
+  };
+
+  input.addEventListener("input", onInput);
+  input.addEventListener("focus", onFocus);
+  input.addEventListener("blur", onBlur);
+  input.addEventListener("keydown", onKeydown);
+  document.addEventListener("click", onDocClick);
+
+  return () => {
+    clearTimeout(debounceTimer);
+    clearTimeout(blurTimer);
+    requestController?.abort();
+    input.removeEventListener("input", onInput);
+    input.removeEventListener("focus", onFocus);
+    input.removeEventListener("blur", onBlur);
+    input.removeEventListener("keydown", onKeydown);
+    document.removeEventListener("click", onDocClick);
+    hide();
+  };
+}
+
 export function initClientAutocomplete() {
   initFieldAutocomplete({
     inputId: "client",
@@ -309,11 +590,9 @@ export function initClientAutocomplete() {
 }
 
 export function initAddressAutocomplete() {
-  initFieldAutocomplete({
-    inputId: "address",
-    listId: "addressSuggestions",
-    wrapSelector: ".address-input-wrap",
-    field: "address",
-    onPick: applyClientAndPhoneFromAddressPick,
-  });
+  const input = document.getElementById("address");
+  const list = document.getElementById("addressSuggestions");
+  const wrap = document.querySelector(".address-input-wrap");
+  if (!(input instanceof HTMLInputElement) || !list || !wrap) return;
+  attachAddressAutocomplete({ input, list, wrap });
 }

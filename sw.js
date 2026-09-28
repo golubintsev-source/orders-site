@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v58: миниатюры чата загружаются лениво, пакетно и с ограничением параллельности.
-const STATIC_CACHE = "orders-site-static-v58";
+// v59: адрес формы заказа дополнен сетевыми подсказками DaData.
+const STATIC_CACHE = "orders-site-static-v59";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
