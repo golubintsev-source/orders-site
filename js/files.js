@@ -42,6 +42,14 @@ export function isCroppableImageFile(file) {
   return true;
 }
 
+/** Есть ли среди выбранных вложений хотя бы одно изображение. */
+export function hasPendingPhotoAttachment() {
+  return pendingAttachments.some((file) => {
+    if (String(file?.type || "").toLowerCase().startsWith("image/")) return true;
+    return /\.(?:avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)$/i.test(String(file?.name || ""));
+  });
+}
+
 /**
  * Загрузить библиотеки обрезки и открыть модалку (как при выборе фото к заявке).
  * @returns {Promise<File | null>} null — отмена

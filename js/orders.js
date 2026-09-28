@@ -30,6 +30,7 @@ import {
   resetFileUpload,
   clearExistingOrderFilesInForm,
   renderExistingOrderFilesInForm,
+  hasPendingPhotoAttachment,
 } from "./files.js";
 import {
   formatAmount,
@@ -43,6 +44,7 @@ import {
 } from "./format.js";
 import { applyOrdersTableMobileFit } from "./ordersTableMobileFit.js";
 import { orderSearchMatchesValues } from "./order-search-utils.js";
+import { shouldPauseNewOrderSaveForPhoto } from "./order-photo-reminder-utils.js";
 import {
   canMutateOrders,
   canDeleteOrders,
@@ -3161,6 +3163,7 @@ export function resetFormMode() {
   if (submitBtn) submitBtn.textContent = "Сохранить заказ";
   if (submitBtnTop) submitBtnTop.textContent = "Сохранить заказ";
   clearOrderFormNewOrderIdempotencyKey();
+  newOrderPhotoReminderAcknowledged = false;
   setOrderFormSaveButtonsBusy(false);
 
   if (formTitle) {
@@ -3478,6 +3481,22 @@ function commitOrderFormToOfflineStorage(orderData, editingOffline) {
 
 /** Флаг и UI-блокировка кнопок «Сохранить», чтобы не создавать дубликаты при повторных нажатиях. */
 let orderFormSaveInFlight = false;
+let newOrderPhotoReminderAcknowledged = false;
+
+function showNewOrderPhotoReminder() {
+  const reminder = document.getElementById("orderPhotoReminder");
+  if (!reminder) return;
+  reminder.hidden = false;
+  reminder.classList.remove("order-photo-reminder--attention");
+  // Повторный запуск анимации помогает заметить уже показанный блок.
+  void reminder.offsetWidth;
+  reminder.classList.add("order-photo-reminder--attention");
+  try {
+    reminder.scrollIntoView({ behavior: "smooth", block: "center" });
+  } catch {
+    reminder.scrollIntoView();
+  }
+}
 
 /**
  * Идемпотентный ключ для создания нового заказа:
@@ -3705,6 +3724,23 @@ export async function submitOrderForm(event) {
   const prepaymentNum = tryParseRublesInteger(document.getElementById("prepayment")?.value).value;
   if (amountNum != null && prepaymentNum != null && prepaymentNum > amountNum) {
     setMessage("Предоплата не может быть больше суммы заказа", "#d32f2f");
+    return;
+  }
+
+  const hasPendingPhoto = hasPendingPhotoAttachment();
+  if (
+    shouldPauseNewOrderSaveForPhoto({
+      editingOrderId: state.editingOrderId,
+      hasPhoto: hasPendingPhoto,
+      alreadyPrompted: newOrderPhotoReminderAcknowledged,
+    })
+  ) {
+    newOrderPhotoReminderAcknowledged = true;
+    showNewOrderPhotoReminder();
+    setMessage(
+      "Заказ пока не сохранён: прикрепите фото или нажмите «Сохранить заказ» ещё раз.",
+      "#9a5a00",
+    );
     return;
   }
 

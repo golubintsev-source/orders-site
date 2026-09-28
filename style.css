@@ -6983,6 +6983,83 @@ th {
   background: #f3f4f6;
 }
 
+.order-photo-reminder {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 13px 14px;
+  border: 1px solid #f4c95d;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fffbea 0%, #fff4cf 100%);
+  color: #5f4300;
+  box-shadow: 0 4px 14px rgba(146, 92, 0, 0.1);
+}
+
+.order-photo-reminder[hidden] {
+  display: none;
+}
+
+.order-photo-reminder-illustration {
+  position: relative;
+  flex: 0 0 54px;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(146, 92, 0, 0.14);
+}
+
+.order-photo-reminder-camera {
+  font-size: 31px;
+  line-height: 1;
+}
+
+.order-photo-reminder-spark {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  font-size: 18px;
+}
+
+.order-photo-reminder-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 14px;
+  line-height: 1.42;
+}
+
+.order-photo-reminder-copy strong {
+  color: #704d00;
+  font-size: 15px;
+}
+
+.order-photo-reminder-fallback {
+  margin-top: 2px;
+  color: #805d12;
+  font-weight: 600;
+}
+
+.order-photo-reminder--attention {
+  animation: order-photo-reminder-pop 0.45s ease-out;
+}
+
+@keyframes order-photo-reminder-pop {
+  0% { transform: scale(0.97); opacity: 0.55; }
+  65% { transform: scale(1.012); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .order-photo-reminder--attention {
+    animation: none;
+  }
+}
+
 .upload-area {
   display: flex;
   flex-wrap: wrap;
@@ -7722,6 +7799,22 @@ th {
   .upload-btn {
     width: 100%;
     min-width: 0;
+  }
+
+  .order-photo-reminder {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .order-photo-reminder-illustration {
+    flex-basis: 46px;
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
+  }
+
+  .order-photo-reminder-camera {
+    font-size: 27px;
   }
 
   /* Файлы в модалке: крупное превью сверху на узком экране */

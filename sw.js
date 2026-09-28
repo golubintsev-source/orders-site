@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v60: поиск по заказам охватывает все видимые значения строки таблицы.
-const STATIC_CACHE = "orders-site-static-v60";
+// v61: новое сохранение без фото сначала показывает мотивирующее напоминание.
+const STATIC_CACHE = "orders-site-static-v61";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
