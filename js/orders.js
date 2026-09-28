@@ -42,6 +42,7 @@ import {
   MSG_SUM_INTEGER_ONLY,
 } from "./format.js";
 import { applyOrdersTableMobileFit } from "./ordersTableMobileFit.js";
+import { orderSearchMatchesValues } from "./order-search-utils.js";
 import {
   canMutateOrders,
   canDeleteOrders,
@@ -1303,20 +1304,23 @@ export function getFilteredOrders() {
 
   const query = clientSearch?.value.trim().toLowerCase() || "";
   if (query) {
-    list = list.filter((order) => {
-      const phone = (order.phone || "").toLowerCase();
-      const name = (order.client || "").toLowerCase();
-      const orderType = (order.order_type || "").toLowerCase();
-      const address = (order.address || "").toLowerCase();
-      const number = (order.order_number || "").toLowerCase();
-      const description = (order.description || "").toLowerCase();
-      return phone.includes(query)
-        || name.includes(query)
-        || orderType.includes(query)
-        || address.includes(query)
-        || number.includes(query)
-        || description.includes(query);
-    });
+    list = list.filter((order) =>
+      orderSearchMatchesValues(
+        [
+          ...getOrderRowValuesForExcel(order),
+          // Сохраняем поиск по этим полям, даже если в таблице тип показан
+          // только буквой в чипе, а внутренний номер заказа не выведен.
+          order.order_number,
+          order.order_type,
+          // Полные даты дополняют короткие даты, видимые в таблице.
+          order.order_date,
+          order.delivery_date,
+          order.installation_date,
+          order.reveals_date,
+        ],
+        query,
+      ),
+    );
   }
 
   const df = state.orderDateFilterFrom;

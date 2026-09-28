@@ -44,6 +44,6 @@ assert.match(source, /ADDRESS_DEBOUNCE_MS = 280/);
 assert.match(apiSource, /env\("DADATA_API_KEY"\)/);
 assert.match(apiSource, /suggestions\.dadata\.ru\/suggestions\/api\/4_1\/rs\/suggest\/address/);
 assert.match(apiSource, /locations_boost: \[\{ kladr_id: VOLGOGRAD_KLADR_ID \}\]/);
-assert.match(swSource, /orders-site-static-v59/);
+assert.match(swSource, /orders-site-static-v60/);
 
 console.log("address suggest tests: ok");
