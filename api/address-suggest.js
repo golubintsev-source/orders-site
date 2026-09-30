@@ -72,9 +72,36 @@ function typedAddressPart(type, value, fallbackType = "") {
  */
 function formatDadataAddress(row) {
   const data = row?.data || {};
+  const rawValue = String(row?.value || row?.unrestricted_value || "").trim();
   const street =
     String(data.street_with_type || "").trim() ||
     typedAddressPart(data.street_type, data.street);
+
+  // У садовых товариществ улицы часто нет. В таком адресе наиболее полезная
+  // часть — название СНТ, поэтому переносим её в начало, не теряя остальные
+  // части исходной подсказки DaData.
+  if (!street && rawValue) {
+    const rawParts = rawValue.split(/\s*,\s*/).map((part) => part.trim()).filter(Boolean);
+    const sntIndex = rawParts.findIndex((part) =>
+      /(?:^|\s)СНТ(?:\s|$)|садоводческ\S*\s+некоммерческ\S*\s+товариществ\S*/iu.test(part),
+    );
+    if (sntIndex > 0) {
+      const structuredRest = [
+        data.settlement_with_type,
+        data.city_with_type,
+        data.city_district_with_type,
+        data.area_with_type,
+        data.region_with_type,
+      ].map((part) => String(part || "").trim()).filter(Boolean);
+      return [
+        rawParts[sntIndex],
+        ...(structuredRest.length
+          ? structuredRest
+          : rawParts.filter((_, index) => index !== sntIndex)),
+      ].join(", ");
+    }
+  }
+
   const priorityParts = [
     street,
     typedAddressPart(data.stead_type, data.stead, "уч"),
@@ -84,7 +111,7 @@ function formatDadataAddress(row) {
     typedAddressPart(data.room_type, data.room),
   ];
   if (!priorityParts.some(Boolean)) {
-    return String(row?.value || row?.unrestricted_value || "").trim();
+    return rawValue;
   }
 
   const remainingParts = [

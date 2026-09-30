@@ -75,6 +75,17 @@ assert.equal(
   }),
   "ул Рабоче-Крестьянская, д 20, стр 1, кв 14, г Волгоград",
 );
+assert.equal(
+  handler.formatDadataAddress({
+    value: "Волгоградская обл, Городищенский р-н, село Виновка, тер. СНТ Серебряные родники",
+    data: {
+      region_with_type: "Волгоградская обл",
+      area_with_type: "Городищенский р-н",
+      settlement_with_type: "село Виновка",
+    },
+  }),
+  "тер. СНТ Серебряные родники, село Виновка, Городищенский р-н, Волгоградская обл",
+);
 assert.match(source, /fetch\(`\/api\/address-suggest\?\$\{params\}`/);
 assert.match(source, /Authorization: `Bearer \$\{token\}`/);
 assert.match(source, /mergeAddressSuggestions\(localItems, remoteItems\)/);
