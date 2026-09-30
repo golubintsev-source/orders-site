@@ -197,6 +197,14 @@ export function initOrdersTableStickyHeader() {
         document.getElementById("statusFilterBtn")?.click();
         return;
       }
+      const addressWidthBtn = e.target.closest(".address-column-width-btn");
+      if (addressWidthBtn && wrap.contains(addressWidthBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        document.getElementById("ordersAddressWidthBtn")?.click();
+        return;
+      }
       const dateTh = e.target.closest("th.th-order-date-header");
       if (dateTh && wrap.contains(dateTh)) {
         const dateBtn = dateTh.querySelector(".orders-filter-heading-btn");

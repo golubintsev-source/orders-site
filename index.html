@@ -661,7 +661,7 @@
             <col span="2" />
             <col class="orders-col-150" />
             <col />
-            <col class="orders-col-150" />
+            <col class="orders-col-address" />
             <col class="orders-col-150" />
             <col class="orders-col-status" />
             <col span="16" />
@@ -688,10 +688,11 @@
                   <span class="orders-filter-heading-label">Опл.</span>
                 </button>
               </th>
-              <th class="th-orders-col-150">
-                <div class="th-status-header-inner">
-                  <span class="th-status-label">Адрес</span>
-                </div>
+              <th class="th-order-address-header th-order-filter-heading-cell">
+                <button type="button" class="orders-filter-heading-btn address-column-width-btn" id="ordersAddressWidthBtn" title="Изменить ширину столбца «Адрес»" aria-haspopup="dialog" aria-expanded="false" aria-controls="ordersAddressWidthModal">
+                  <span class="orders-filter-heading-label">Адрес</span>
+                  <span class="address-column-width-icon" aria-hidden="true">↔</span>
+                </button>
               </th>
               <th class="th-orders-col-150">
                 <div class="th-status-header-inner">
@@ -2321,6 +2322,27 @@
         </table>
       </div>
     </div>
+  </div>
+
+  <div id="ordersAddressWidthModal" class="orders-address-width-modal" hidden role="dialog" aria-modal="true" aria-labelledby="ordersAddressWidthTitle">
+    <button type="button" class="orders-address-width-backdrop" data-address-width-close aria-label="Закрыть окно"></button>
+    <form id="ordersAddressWidthForm" class="orders-address-width-panel">
+      <div class="orders-address-width-header">
+        <h3 id="ordersAddressWidthTitle">Ширина столбца «Адрес»</h3>
+        <button type="button" class="orders-address-width-close" data-address-width-close aria-label="Закрыть" title="Закрыть">×</button>
+      </div>
+      <label for="ordersAddressWidthInput">Ширина в пикселях</label>
+      <div class="orders-address-width-input-row">
+        <input type="number" id="ordersAddressWidthInput" min="80" max="600" step="1" inputmode="numeric" required />
+        <span>px</span>
+      </div>
+      <p class="orders-address-width-hint">Допустимое значение: от 80 до 600 пикселей. Настройка сохраняется отдельно для вашего пользователя.</p>
+      <p id="ordersAddressWidthStatus" class="orders-address-width-status" role="status" aria-live="polite"></p>
+      <div class="orders-address-width-actions">
+        <button type="button" class="orders-address-width-btn orders-address-width-btn--secondary" data-address-width-close>Отмена</button>
+        <button type="submit" id="ordersAddressWidthSaveBtn" class="orders-address-width-btn orders-address-width-btn--primary">Сохранить</button>
+      </div>
+    </form>
   </div>
 
   <!-- Обрезка фото перед добавлением в заявку (Cropper.js) -->

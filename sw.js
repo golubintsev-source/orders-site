@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v62: адреса в подсказках переносятся на несколько строк без дублирующего подзаголовка.
-const STATIC_CACHE = "orders-site-static-v62";
+// v63: персональная ширина столбца «Адрес» в таблице заказов.
+const STATIC_CACHE = "orders-site-static-v63";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

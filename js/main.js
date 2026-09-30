@@ -15,6 +15,7 @@ import { setMessage } from "./dom.js";
 import { initOrdersTableStickyHeader } from "./ordersTableStickyHeader.js";
 import { initOrdersTableMobileFit } from "./ordersTableMobileFit.js";
 import { initOrdersTablePinchZoom } from "./ordersTablePinchZoom.js";
+import { initOrdersAddressColumnWidth } from "./orders-address-column-width.js";
 import {
   refreshSectionNavAfterProfile,
   switchSection,
@@ -209,6 +210,7 @@ async function init() {
     if (!user) return;
 
     updateTopbarUserName(user.email);
+    initOrdersAddressColumnWidth(user);
 
     void flushPendingAccessLogs(user);
 

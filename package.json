@@ -10,6 +10,7 @@
     "test:address-suggest": "node scripts/test-address-suggest.mjs",
     "test:orders-search": "node scripts/test-orders-search.mjs",
     "test:order-photo-reminder": "node scripts/test-order-photo-reminder.mjs",
+    "test:orders-address-width": "node scripts/test-orders-address-width.mjs",
     "test:order-atomic-save": "node scripts/test-order-atomic-save.mjs"
   },
   "dependencies": {

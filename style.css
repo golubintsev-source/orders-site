@@ -5057,6 +5057,11 @@ button:active {
   min-width: 100px;
 }
 
+#ordersTable col.orders-col-address {
+  width: var(--orders-address-column-width, 100px);
+  min-width: var(--orders-address-column-width, 100px);
+}
+
 #ordersTable th.th-orders-col-150,
 #ordersTableStickyHeadTable th.th-orders-col-150 {
   width: 100px;
@@ -5091,6 +5096,30 @@ button:active {
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: middle;
+}
+
+#ordersTable th.th-order-address-header,
+#ordersTableStickyHeadTable th.th-order-address-header,
+#ordersTable td.td-order-address {
+  width: var(--orders-address-column-width, 100px);
+  min-width: var(--orders-address-column-width, 100px);
+  max-width: var(--orders-address-column-width, 100px);
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.address-column-width-btn {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.address-column-width-icon {
+  margin-left: 3px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 #ordersTable td.td-order-client[data-fulltext]:not([data-fulltext=""]),
@@ -5213,6 +5242,152 @@ button:active {
 
 #ordersTableStickyHeadTable .th-status-label {
   flex-shrink: 0;
+}
+
+.orders-address-width-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.orders-address-width-modal[hidden] {
+  display: none;
+}
+
+.orders-address-width-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.46);
+  cursor: default;
+}
+
+.orders-address-width-panel {
+  position: relative;
+  z-index: 1;
+  width: min(390px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 18px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.24);
+}
+
+.orders-address-width-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.orders-address-width-header h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 19px;
+}
+
+.orders-address-width-close {
+  display: grid;
+  flex: 0 0 34px;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #4b5563;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.orders-address-width-panel > label {
+  display: block;
+  margin-bottom: 7px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.orders-address-width-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.orders-address-width-input-row input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 17px;
+}
+
+.orders-address-width-input-row span {
+  color: #64748b;
+  font-size: 15px;
+}
+
+.orders-address-width-hint,
+.orders-address-width-status {
+  margin: 9px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.orders-address-width-status:empty {
+  display: none;
+}
+
+.orders-address-width-status[data-kind="error"] {
+  color: #b42318;
+}
+
+.orders-address-width-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.orders-address-width-btn {
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.orders-address-width-btn--primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.orders-address-width-btn--secondary {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.orders-address-width-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 /* На телефоне: верхнюю «полосу прокрутки» не показываем — на iOS она всё равно не видна, а высота 16px даёт пустой зазор */
