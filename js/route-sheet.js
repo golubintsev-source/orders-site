@@ -952,6 +952,29 @@ async function osrmTripDrivingResolved(officeLon, officeLat, stops) {
   }
 }
 
+/**
+ * Маршрут без оптимизации: офис → остановки строго в переданном порядке.
+ * Каждый участок строится отдельно, чтобы OSRM не мог переставить ручные точки.
+ * @returns {Promise<{ latLngs: Array<[number, number]>, distanceM: number } | null>}
+ */
+async function osrmDrivingRouteInGivenOrder(officeLon, officeLat, stops) {
+  if (!Array.isArray(stops) || !stops.length) return null;
+  const segments = [];
+  let distanceM = 0;
+  let fromLon = officeLon;
+  let fromLat = officeLat;
+  for (const stop of stops) {
+    const leg = await osrmFetchDrivingRoutesResolved(fromLon, fromLat, stop.lon, stop.lat);
+    if (!leg?.latLngs?.length || !Number.isFinite(leg.distanceMeters)) return null;
+    segments.push(leg.latLngs);
+    distanceM += leg.distanceMeters;
+    fromLon = stop.lon;
+    fromLat = stop.lat;
+  }
+  const latLngs = mergeAdjacentRoutePolylines(segments);
+  return latLngs?.length ? { latLngs, distanceM } : null;
+}
+
 function bindDeliveryMarkerPopupOpenRoute(marker) {
   marker.on("popupopen", () => {
     if (routeDeliveryComposedRouteActive) return;
@@ -977,11 +1000,11 @@ function clearRouteDeliveryTripTimeEstimate() {
   el.hidden = true;
 }
 
-function setRouteDeliveryTripComposePending(myGen) {
+function setRouteDeliveryTripComposePending(myGen, text = "составляем маршрут") {
   const el = document.getElementById("routeSheetRouteTimeEstimate");
   if (!el) return;
   if (myGen !== routeDeliveryComposeGeneration) return;
-  el.textContent = "составляем маршрут";
+  el.textContent = text;
   el.classList.add(ROUTE_SHEET_COMPOSE_PENDING_CLASS);
   el.hidden = false;
 }
@@ -1089,10 +1112,12 @@ async function showDeliveryRoadRouteFromOffice(destLatLng) {
 }
 
 function setComposeRouteButtonBusy(busy) {
-  const btn = document.getElementById("routeSheetComposeRouteBtn");
-  if (!btn) return;
-  btn.disabled = Boolean(busy);
-  btn.setAttribute("aria-busy", busy ? "true" : "false");
+  for (const id of ["routeSheetComposeRouteBtn", "routeSheetRefreshRouteBtn"]) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.disabled = Boolean(busy);
+    btn.setAttribute("aria-busy", busy ? "true" : "false");
+  }
 }
 
 /**
@@ -1249,6 +1274,154 @@ function reorderRouteSheetDeliveryTbodyByOrderedStops(orderedStops) {
   }
   for (const tr of tail) tbody.appendChild(tr);
   syncRouteSheetDeliveryAddressTitles();
+}
+
+/**
+ * Читает ручные номера из первого столбца и связывает их с точками на карте.
+ * Одинаковый номер допустим только у заказов с одной и той же точкой доставки.
+ */
+function getManualDeliveryRoutePlan() {
+  const tbody = document.querySelector("#routeSheetTableDelivery tbody");
+  if (!tbody) return { error: "Таблица доставки не найдена." };
+
+  const numberedRows = [];
+  const pointByOrderId = new Map();
+  const allRows = Array.from(tbody.querySelectorAll("tr"));
+  for (const [rowIndex, tr] of allRows.entries()) {
+    const input = tr.querySelector("input.route-sheet-route-point-num");
+    if (!input) continue;
+    const raw = String(input.value ?? "").trim();
+    if (!raw) continue;
+    const pointNum = Number(raw);
+    if (!Number.isSafeInteger(pointNum) || pointNum <= 0) {
+      return { error: "Номера точек должны быть целыми числами больше нуля." };
+    }
+    const orderId = String(
+      tr.querySelector("td.td-order-id")?.getAttribute("data-order-id") ?? "",
+    ).trim();
+    if (!orderId) continue;
+    numberedRows.push({ tr, rowIndex, pointNum, orderId });
+    pointByOrderId.set(orderId, pointNum);
+  }
+  if (!numberedRows.length) {
+    return { error: "Сначала укажите номера точек в первом столбце." };
+  }
+
+  const matchedOrderIds = new Set();
+  const pointToStop = new Map();
+  const orderedStops = [];
+  for (const stop of routeDeliveryTripStops) {
+    const ordersHere = (stop.ordersHere || []).filter((order) =>
+      pointByOrderId.has(String(order.id ?? "")),
+    );
+    if (!ordersHere.length) continue;
+    const pointNums = new Set(
+      ordersHere.map((order) => pointByOrderId.get(String(order.id ?? ""))),
+    );
+    if (pointNums.size !== 1) {
+      return { error: "У заказов с одним адресом указаны разные номера точек." };
+    }
+    const pointNum = pointNums.values().next().value;
+    if (pointToStop.has(pointNum)) {
+      return { error: `Номер точки ${pointNum} указан для разных адресов.` };
+    }
+    for (const order of ordersHere) matchedOrderIds.add(String(order.id ?? ""));
+    const plannedStop = { lat: stop.lat, lon: stop.lon, ordersHere, pointNum };
+    pointToStop.set(pointNum, plannedStop);
+    orderedStops.push(plannedStop);
+  }
+
+  const missingPoint = numberedRows.find(({ orderId }) => !matchedOrderIds.has(orderId));
+  if (missingPoint) {
+    return {
+      error: `Для точки ${missingPoint.pointNum} нет координат. Укажите координаты или дождитесь загрузки карты.`,
+    };
+  }
+  orderedStops.sort((a, b) => a.pointNum - b.pointNum);
+  numberedRows.sort((a, b) => a.pointNum - b.pointNum || a.rowIndex - b.rowIndex);
+  return { tbody, allRows, numberedRows, orderedStops };
+}
+
+function reorderRouteSheetDeliveryTbodyByManualNumbers(plan) {
+  const routedRows = new Set(plan.numberedRows.map(({ tr }) => tr));
+  for (const { tr } of plan.numberedRows) plan.tbody.appendChild(tr);
+  for (const tr of plan.allRows) {
+    if (!routedRows.has(tr)) plan.tbody.appendChild(tr);
+  }
+  syncRouteSheetDeliveryAddressTitles();
+}
+
+async function refreshDeliveryRouteFromPointNumbers() {
+  const L = globalThis.L;
+  if (!L || !routeDeliveryMap || !routeDeliveryRouteLayer || !routeDeliveryMarkersLayer) {
+    setRouteDeliveryMapStatus("Карта ещё не готова. Подождите загрузки точек.", true);
+    return;
+  }
+
+  const plan = getManualDeliveryRoutePlan();
+  if (plan.error) {
+    setRouteDeliveryMapStatus(plan.error, true);
+    return;
+  }
+  reorderRouteSheetDeliveryTbodyByManualNumbers(plan);
+
+  const myGen = ++routeDeliveryComposeGeneration;
+  setComposeRouteButtonBusy(true);
+  setRouteDeliveryTripComposePending(myGen, "обновляем маршрут");
+  try {
+    const picked = await osrmDrivingRouteInGivenOrder(
+      ROUTE_SHEET_OFFICE_LON,
+      ROUTE_SHEET_OFFICE_LAT,
+      plan.orderedStops,
+    );
+    if (myGen !== routeDeliveryComposeGeneration) return;
+    if (!picked) {
+      clearRouteDeliveryTripTimeEstimate();
+      setRouteDeliveryMapStatus(
+        deliveryNoCrossBarrierLonLatPair()
+          ? "Не удалось обновить маршрут без пересечения красной линии. Проверьте порядок точек."
+          : "Не удалось построить маршрут в указанном порядке. Попробуйте позже.",
+        true,
+      );
+      return;
+    }
+
+    clearRouteDeliveryMapLayersOnly();
+    L.polyline(picked.latLngs, {
+      color: "#1d4ed8",
+      weight: 5,
+      opacity: 0.9,
+      lineJoin: "round",
+      lineCap: "round",
+    }).addTo(routeDeliveryRouteLayer);
+
+    for (const stop of plan.orderedStops) {
+      const marker = L.marker(L.latLng(stop.lat, stop.lon), {
+        icon: deliveryMapMarkerIconNumbered(L, stop.ordersHere, stop.pointNum),
+      });
+      marker.bindPopup(buildDeliveryPopupHtml(stop.ordersHere));
+      bindDeliveryMarkerPopupOpenRoute(marker);
+      marker.addTo(routeDeliveryMarkersLayer);
+    }
+
+    routeDeliveryComposedRouteActive = true;
+    setRouteDeliveryTripTimeEstimate(
+      formatApproxTravelTimeAt20Kmh(picked.distanceM, plan.orderedStops.length),
+    );
+    const bounds = L.latLngBounds(picked.latLngs);
+    bounds.extend(routeSheetOfficeLatLng(L));
+    routeDeliveryMap.fitBounds(bounds, { padding: [32, 32], maxZoom: 15 });
+    setRouteDeliveryMapStatus("");
+    scheduleInvalidateRouteDeliveryMap();
+  } catch (error) {
+    console.error("refreshDeliveryRouteFromPointNumbers:", error);
+    if (myGen === routeDeliveryComposeGeneration) {
+      clearRouteDeliveryTripTimeEstimate();
+      setRouteDeliveryMapStatus("Ошибка при обновлении маршрута.", true);
+    }
+  } finally {
+    setComposeRouteButtonBusy(false);
+  }
 }
 
 async function composeDeliveryRoute() {
@@ -4006,6 +4179,11 @@ export function initRouteSheetSection() {
   if (composeRouteBtn && !composeRouteBtn.dataset.routeSheetBound) {
     composeRouteBtn.dataset.routeSheetBound = "1";
     composeRouteBtn.addEventListener("click", () => void composeDeliveryRoute());
+  }
+  const refreshRouteBtn = document.getElementById("routeSheetRefreshRouteBtn");
+  if (refreshRouteBtn && !refreshRouteBtn.dataset.routeSheetBound) {
+    refreshRouteBtn.dataset.routeSheetBound = "1";
+    refreshRouteBtn.addEventListener("click", () => void refreshDeliveryRouteFromPointNumbers());
   }
 
   initRouteSheetAddressGeoPopover();

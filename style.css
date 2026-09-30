@@ -6088,6 +6088,29 @@ table {
   border-radius: 8px;
 }
 
+.route-sheet-refresh-route-btn {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.route-sheet-refresh-route-btn:hover:not(:disabled) {
+  background: #eff6ff;
+}
+
+.route-sheet-refresh-route-btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .route-sheet-route-time-estimate {
   font-size: 12px;
   font-weight: 600;
