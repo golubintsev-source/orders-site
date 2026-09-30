@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v64: ручное обновление маршрута по номерам точек маршрутного листа.
-const STATIC_CACHE = "orders-site-static-v64";
+// v65: адреса DaData начинаются с улицы, дома и квартиры.
+const STATIC_CACHE = "orders-site-static-v65";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

@@ -59,12 +59,60 @@ async function hasValidSession(req) {
   }
 }
 
+function typedAddressPart(type, value, fallbackType = "") {
+  const cleanValue = String(value || "").trim();
+  if (!cleanValue) return "";
+  const cleanType = String(type || fallbackType || "").trim();
+  return cleanType ? `${cleanType} ${cleanValue}` : cleanValue;
+}
+
+/**
+ * На телефоне начало адреса видно всегда, поэтому самые полезные части ставим
+ * первыми: улица → дом/корпус → квартира, а географию переносим в конец.
+ */
+function formatDadataAddress(row) {
+  const data = row?.data || {};
+  const street =
+    String(data.street_with_type || "").trim() ||
+    typedAddressPart(data.street_type, data.street);
+  const priorityParts = [
+    street,
+    typedAddressPart(data.stead_type, data.stead, "уч"),
+    typedAddressPart(data.house_type, data.house, "д"),
+    typedAddressPart(data.block_type, data.block),
+    typedAddressPart(data.flat_type, data.flat, "кв"),
+    typedAddressPart(data.room_type, data.room),
+  ];
+  if (!priorityParts.some(Boolean)) {
+    return String(row?.value || row?.unrestricted_value || "").trim();
+  }
+
+  const remainingParts = [
+    data.settlement_with_type,
+    data.city_with_type,
+    data.city_district_with_type,
+    data.area_with_type,
+    data.region_with_type,
+  ];
+  const result = [];
+  const seen = new Set();
+  for (const rawPart of [...priorityParts, ...remainingParts]) {
+    const part = String(rawPart || "").trim();
+    const key = part.toLocaleLowerCase("ru-RU").replace(/\s+/g, " ");
+    if (!part || seen.has(key)) continue;
+    seen.add(key);
+    result.push(part);
+  }
+  return result.join(", ");
+}
+
 function mapDadataSuggestions(payload) {
   const items = [];
   const seen = new Set();
   for (const row of Array.isArray(payload?.suggestions) ? payload.suggestions : []) {
-    const value = String(row?.value || row?.unrestricted_value || "").trim();
-    const key = value.toLocaleLowerCase("ru-RU").replace(/\s+/g, " ");
+    const value = formatDadataAddress(row);
+    const sourceValue = String(row?.value || row?.unrestricted_value || value).trim();
+    const key = sourceValue.toLocaleLowerCase("ru-RU").replace(/\s+/g, " ");
     if (!value || seen.has(key)) continue;
     seen.add(key);
     items.push({ value, title: value });
@@ -136,3 +184,4 @@ module.exports = async (req, res) => {
 };
 
 module.exports.mapDadataSuggestions = mapDadataSuggestions;
+module.exports.formatDadataAddress = formatDadataAddress;
