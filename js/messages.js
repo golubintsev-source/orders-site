@@ -1999,7 +1999,15 @@ function buildPeerInfoMap(rows, unreadRows, uid) {
   return map;
 }
 
-function buildChatListEntries(peerInfo, rows, groupChats, lastGroupMessages, groupUnreadByChat, dmUnreadByPeer) {
+function buildChatListEntries(
+  peerInfo,
+  rows,
+  groupChats,
+  lastGroupMessages,
+  groupUnreadByChat,
+  dmUnreadByPeer,
+  { groupMessagesPending = false } = {},
+) {
   const uid = getCurrentUserId();
   const byPeer = new Map();
 
@@ -2056,6 +2064,7 @@ function buildChatListEntries(peerInfo, rows, groupChats, lastGroupMessages, gro
       avatarStoragePath: chat.avatarStoragePath || null,
       memberIds: chat.memberIds || [],
       unreadCount,
+      lastPending: groupMessagesPending && !last,
       last: last
         ? {
             ...last,
@@ -2208,12 +2217,16 @@ function renderGroupAvatarHtml(groupAvatarPath, avatarKey) {
   return `<span class="messages-chat-avatar messages-chat-avatar--loading" data-avatar-path="${escapeHtml(groupAvatarPath)}" data-avatar-key="${escapeHtml(avatarKey)}" aria-hidden="true"></span>`;
 }
 
+function chatListPreviewText(entry) {
+  const last = entry?.last;
+  if (last) return previewMessageBody(last.body, last.recipient_email, last);
+  return entry?.lastPending ? "Загрузка…" : "Нет сообщений";
+}
+
 function renderChatListItem(entry, groupReceiptsByChat = null) {
   const uid = getCurrentUserId();
   const last = entry.last;
-  const preview = last
-    ? previewMessageBody(last.body, last.recipient_email, last)
-    : "Нет сообщений";
+  const preview = chatListPreviewText(entry);
   const time = last ? formatChatListTime(last.created_at) : "";
   const chatId = entry.kind === "group" ? parseGroupId(entry.peerId) : null;
   const receiptsByUser =
@@ -2268,8 +2281,7 @@ function renderChatListItem(entry, groupReceiptsByChat = null) {
 function buildChatListSignature(entries) {
   return entries
     .map((entry) => {
-      const last = entry.last;
-      const preview = last ? previewMessageBody(last.body, last.recipient_email, last) : "";
+      const preview = chatListPreviewText(entry);
       return `${entry.peerId}|${entry.sortAt}|${entry.unreadCount}|${entry.name}|${preview}`;
     })
     .join("\n");
@@ -2340,9 +2352,7 @@ function replaceChatListItemAvatar(button, entry) {
 function updateChatListItemEl(button, entry, groupReceiptsByChat) {
   const uid = getCurrentUserId();
   const last = entry.last;
-  const preview = last
-    ? previewMessageBody(last.body, last.recipient_email, last)
-    : "Нет сообщений";
+  const preview = chatListPreviewText(entry);
   const time = last ? formatChatListTime(last.created_at) : "";
   const chatId = entry.kind === "group" ? parseGroupId(entry.peerId) : null;
   const receiptsByUser =
@@ -2359,13 +2369,24 @@ function updateChatListItemEl(button, entry, groupReceiptsByChat) {
   const nameEl = button.querySelector(".messages-chat-item-name");
   if (nameEl) nameEl.textContent = entry.name;
 
-  const timeEl = button.querySelector(".messages-chat-item-time");
-  if (timeEl) timeEl.textContent = time;
+  // Пока последнее сообщение группы ещё загружается, не затираем корректные
+  // текст и дату, восстановленные из снимка предыдущего открытия приложения.
+  // Старое ошибочное «Нет сообщений» из снимка предыдущей версии заменяем
+  // честным промежуточным состоянием.
+  if (entry.lastPending) {
+    const previewEl = button.querySelector(".messages-chat-item-preview");
+    if (previewEl?.textContent.trim() === "Нет сообщений") {
+      previewEl.textContent = "Загрузка…";
+    }
+  } else {
+    const timeEl = button.querySelector(".messages-chat-item-time");
+    if (timeEl) timeEl.textContent = time;
 
-  updateChatListItemTicks(button.querySelector(".messages-chat-item-time-wrap"), ticks);
+    updateChatListItemTicks(button.querySelector(".messages-chat-item-time-wrap"), ticks);
 
-  const previewEl = button.querySelector(".messages-chat-item-preview");
-  if (previewEl) previewEl.textContent = preview || " ";
+    const previewEl = button.querySelector(".messages-chat-item-preview");
+    if (previewEl) previewEl.textContent = preview || " ";
+  }
 
   updateChatListItemUnreadBadge(button.querySelector(".messages-chat-item-bottom"), countLabel);
 
@@ -2556,7 +2577,7 @@ function paintChatListEntries(
   lastGroupMessages,
   groupUnreadByChat,
   groupReceiptsByChat,
-  { partial = false, announce = false } = {},
+  { partial = false, announce = false, groupMessagesPending = false } = {},
 ) {
   const uid = getCurrentUserId();
   const dmUnreadByPeer = buildDmUnreadByPeer(unreadRows);
@@ -2568,6 +2589,7 @@ function paintChatListEntries(
     lastGroupMessages,
     groupUnreadByChat,
     dmUnreadByPeer,
+    { groupMessagesPending },
   );
   const signature = buildChatListSignature(entries);
   if (!partial) {
@@ -2582,7 +2604,8 @@ function paintChatListEntries(
   void hydrateGroupAvatars(list);
   void preloadChatListAvatarsForEntries(entries);
   if (announce) document.dispatchEvent(new CustomEvent("chat-list-painted"));
-  saveChatListSnapshot(list);
+  // Не сохраняем промежуточное «Загрузка…» вместо настоящего превью.
+  if (!entries.some((entry) => entry.lastPending)) saveChatListSnapshot(list);
   return entries;
 }
 
@@ -2609,7 +2632,7 @@ async function paintChatListFromData(
       new Map(),
       new Map(),
       new Map(),
-      { partial, announce: true },
+      { partial, announce: true, groupMessagesPending: true },
     );
 
     if (!chatIds.length) return;

@@ -8,6 +8,9 @@ import {
   shouldResetDialogFeed,
   mergePartialChatListPeerIds,
 } from "../js/messages-sync-utils.js";
+import { readFile } from "node:fs/promises";
+
+const messagesSource = await readFile(new URL("../js/messages.js", import.meta.url), "utf8");
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
@@ -125,6 +128,23 @@ if (shouldResetDialogFeed(paintedPeer, "b")) {
 }
 assert(html === "Загрузка…", "feed must drop previous chat messages immediately");
 assert(paintedPeer === "b", "feed peer must match the chat being opened");
+
+assert(
+  /return entry\?\.lastPending \? "Загрузка…" : "Нет сообщений"/.test(messagesSource),
+  "pending group preview must not claim there are no messages",
+);
+assert(
+  /if \(entry\.lastPending\) \{[\s\S]*textContent\.trim\(\) === "Нет сообщений"[\s\S]*textContent = "Загрузка…"/.test(messagesSource),
+  "stale empty preview from an old snapshot must become a loading state",
+);
+assert(
+  /\} else \{[\s\S]*previewEl\.textContent = preview/.test(messagesSource),
+  "snapshot preview must stay visible while the latest group message loads",
+);
+assert(
+  /groupMessagesPending: true/.test(messagesSource),
+  "progressive group paint must mark the preview as pending",
+);
 
 {
   const feed = { innerHTML: "messages of A", dataset: { peerId: "a" } };

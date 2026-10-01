@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v66: стабильный фокус и прокрутка чата при клавиатуре iPhone.
-const STATIC_CACHE = "orders-site-static-v66";
+// v67: не показываем ложное «Нет сообщений», пока превью группового чата загружается.
+const STATIC_CACHE = "orders-site-static-v67";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
