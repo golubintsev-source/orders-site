@@ -84,7 +84,69 @@ assert.equal(
       settlement_with_type: "село Виновка",
     },
   }),
-  "тер. СНТ Серебряные родники, село Виновка, Городищенский р-н, Волгоградская обл",
+  "село Виновка, тер. СНТ Серебряные родники, Городищенский р-н, Волгоградская обл",
+);
+assert.equal(
+  handler.formatDadataAddress({
+    value: "Волгоградская обл, г Камышин, ул Ленина, д 12",
+    data: {
+      region_with_type: "Волгоградская обл",
+      city_with_type: "г Камышин",
+      street_with_type: "ул Ленина",
+      house_type: "д",
+      house: "12",
+    },
+  }),
+  "г Камышин, ул Ленина, д 12, Волгоградская обл",
+);
+assert.equal(
+  handler.formatDadataAddress({
+    value: "г Волжский, ул Мира, д 25, Волгоградская обл",
+    data: {
+      region_with_type: "Волгоградская обл",
+      city_with_type: "г Волжский",
+      street_with_type: "ул Мира",
+      house_type: "д",
+      house: "25",
+    },
+  }),
+  "г Волжский, ул Мира, д 25, Волгоградская обл",
+);
+assert.equal(
+  handler.formatDadataAddress({
+    value: "город Волжский, пр-кт Ленина, д 3",
+    data: {
+      city_with_type: "город Волжский",
+      street_with_type: "пр-кт Ленина",
+      house_type: "д",
+      house: "3",
+    },
+  }),
+  "город Волжский, пр-кт Ленина, д 3",
+);
+assert.equal(
+  handler.formatDadataAddress({
+    value: "Волгоградская область, Среднеахтубинский район, рп Средняя Ахтуба, ул Октябрьская, д 8",
+    data: {
+      region_with_type: "Волгоградская область",
+      area_with_type: "Среднеахтубинский район",
+      settlement_with_type: "рп Средняя Ахтуба",
+    },
+  }),
+  "рп Средняя Ахтуба, ул Октябрьская, д 8, Среднеахтубинский район, Волгоградская область",
+);
+assert.equal(
+  handler.formatDadataAddress({
+    value: "Ростовская обл, г Ростов-на-Дону, ул Пушкинская, д 1",
+    data: {
+      region_with_type: "Ростовская обл",
+      city_with_type: "г Ростов-на-Дону",
+      street_with_type: "ул Пушкинская",
+      house_type: "д",
+      house: "1",
+    },
+  }),
+  "Ростовская обл, г Ростов-на-Дону, ул Пушкинская, д 1",
 );
 assert.match(source, /fetch\(`\/api\/address-suggest\?\$\{params\}`/);
 assert.match(source, /Authorization: `Bearer \$\{token\}`/);

@@ -66,41 +66,77 @@ function typedAddressPart(type, value, fallbackType = "") {
   return cleanType ? `${cleanType} ${cleanValue}` : cleanValue;
 }
 
+function splitAddressParts(value) {
+  return String(value || "").split(/\s*,\s*/).map((part) => part.trim()).filter(Boolean);
+}
+
+function normalizeAddressPart(value) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("ru-RU")
+    .replace(/[.]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function isVolgogradRegion(part) {
+  return /^волгоградская\s+(?:обл(?:асть)?|область)(?:\s|$)/iu.test(normalizeAddressPart(part));
+}
+
+function isVolgogradCity(part) {
+  return /^(?:(?:г|город)\s+)?волгоград(?:\s|$)/iu.test(normalizeAddressPart(part));
+}
+
+function isVolzhskyCity(part) {
+  return /^(?:(?:г|город)\s+)?волжский(?:\s|$)/iu.test(normalizeAddressPart(part));
+}
+
+function isDistrictPart(part, areaWithType) {
+  const normalizedPart = normalizeAddressPart(part);
+  const normalizedArea = normalizeAddressPart(areaWithType);
+  return Boolean(
+    normalizedPart && (
+      (normalizedArea && normalizedPart === normalizedArea) ||
+      /(?:^|\s)(?:р-н|район)(?:\s|$)/iu.test(normalizedPart)
+    )
+  );
+}
+
+function addUniqueAddressPart(result, seen, rawPart) {
+  const part = String(rawPart || "").trim();
+  const key = normalizeAddressPart(part);
+  if (!part || !key || seen.has(key)) return;
+  seen.add(key);
+  result.push(part);
+}
+
 /**
- * На телефоне начало адреса видно всегда, поэтому самые полезные части ставим
- * первыми: улица → дом/корпус → квартира, а географию переносим в конец.
+ * Меняем порядок только для Волгограда и Волгоградской области:
+ * - в Волгограде ставим вперёд улицу, дом/корпус и квартиру;
+ * - область и следующий за ней район переносим в конец;
+ * - область без района переносим в конец одна;
+ * - Волжский и остальные адреса оставляем в порядке DaData.
  */
 function formatDadataAddress(row) {
   const data = row?.data || {};
   const rawValue = String(row?.value || row?.unrestricted_value || "").trim();
+  const rawParts = splitAddressParts(rawValue);
+  const firstPart = rawParts[0] || "";
+
+  if (!rawValue || isVolzhskyCity(firstPart)) return rawValue;
+
+  if (isVolgogradRegion(firstPart)) {
+    const prefixLength = isDistrictPart(rawParts[1], data.area_with_type) ? 2 : 1;
+    const geographicTail = prefixLength === 2
+      ? [rawParts[1], rawParts[0]]
+      : [rawParts[0]];
+    return [...rawParts.slice(prefixLength), ...geographicTail].join(", ");
+  }
+
+  if (!isVolgogradCity(firstPart)) return rawValue;
+
   const street =
     String(data.street_with_type || "").trim() ||
     typedAddressPart(data.street_type, data.street);
-
-  // У садовых товариществ улицы часто нет. В таком адресе наиболее полезная
-  // часть — название СНТ, поэтому переносим её в начало, не теряя остальные
-  // части исходной подсказки DaData.
-  if (!street && rawValue) {
-    const rawParts = rawValue.split(/\s*,\s*/).map((part) => part.trim()).filter(Boolean);
-    const sntIndex = rawParts.findIndex((part) =>
-      /(?:^|\s)СНТ(?:\s|$)|садоводческ\S*\s+некоммерческ\S*\s+товариществ\S*/iu.test(part),
-    );
-    if (sntIndex > 0) {
-      const structuredRest = [
-        data.settlement_with_type,
-        data.city_with_type,
-        data.city_district_with_type,
-        data.area_with_type,
-        data.region_with_type,
-      ].map((part) => String(part || "").trim()).filter(Boolean);
-      return [
-        rawParts[sntIndex],
-        ...(structuredRest.length
-          ? structuredRest
-          : rawParts.filter((_, index) => index !== sntIndex)),
-      ].join(", ");
-    }
-  }
 
   const priorityParts = [
     street,
@@ -114,22 +150,17 @@ function formatDadataAddress(row) {
     return rawValue;
   }
 
-  const remainingParts = [
+  const result = [];
+  const seen = new Set();
+  for (const part of priorityParts) addUniqueAddressPart(result, seen, part);
+  for (const part of rawParts) addUniqueAddressPart(result, seen, part);
+  for (const part of [
     data.settlement_with_type,
     data.city_with_type,
     data.city_district_with_type,
     data.area_with_type,
     data.region_with_type,
-  ];
-  const result = [];
-  const seen = new Set();
-  for (const rawPart of [...priorityParts, ...remainingParts]) {
-    const part = String(rawPart || "").trim();
-    const key = part.toLocaleLowerCase("ru-RU").replace(/\s+/g, " ");
-    if (!part || seen.has(key)) continue;
-    seen.add(key);
-    result.push(part);
-  }
+  ]) addUniqueAddressPart(result, seen, part);
   return result.join(", ");
 }
 
