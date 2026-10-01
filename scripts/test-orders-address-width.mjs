@@ -32,6 +32,6 @@ assert.match(moduleSource, /supabaseClient\.auth\.updateUser/);
 assert.match(mainSource, /initOrdersAddressColumnWidth\(user\)/);
 assert.match(stickySource, /\.address-column-width-btn/);
 assert.match(styleSource, /--orders-address-column-width/);
-assert.match(swSource, /orders-site-static-v65/);
+assert.match(swSource, /orders-site-static-v66/);
 
 console.log("orders address width tests: ok");

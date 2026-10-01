@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v65: адреса DaData начинаются с улицы, дома и квартиры.
-const STATIC_CACHE = "orders-site-static-v65";
+// v66: стабильный фокус и прокрутка чата при клавиатуре iPhone.
+const STATIC_CACHE = "orders-site-static-v66";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

@@ -194,6 +194,10 @@ function isTextInputFocused() {
 export function initKeyboardOpenClass() {
   const root = document.documentElement;
   let focusOutTimer = 0;
+  let stableViewportHeight = Math.max(
+    window.innerHeight,
+    window.visualViewport?.height || 0,
+  );
   const sync = () => {
     const vv = window.visualViewport;
     if (!vv) {
@@ -201,9 +205,22 @@ export function initKeyboardOpenClass() {
       root.style.removeProperty("--app-visible-height");
       return;
     }
-    const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    const textInputFocused = isTextInputFocused();
+    if (!textInputFocused) {
+      stableViewportHeight = Math.max(window.innerHeight, vv.height);
+    }
+    // `offsetTop` — это сдвиг visual viewport при автопрокрутке Safari к курсору,
+    // а не часть высоты клавиатуры. На некоторых iPhone он почти равен потере
+    // высоты; прежнее вычитание ошибочно снимало keyboard-open прямо при фокусе.
+    // Сохранённая высота нужна для версий iOS, где вместе с visualViewport
+    // уменьшается и window.innerHeight.
+    const overlap = Math.max(
+      0,
+      stableViewportHeight - vv.height,
+      window.innerHeight - vv.height,
+    );
     // Нижняя панель Safari/Chrome тоже уменьшает visualViewport — это не клавиатура.
-    const open = isTextInputFocused() && overlap > 120;
+    const open = textInputFocused && overlap > 120;
     root.classList.toggle("keyboard-open", open);
     if (open) {
       root.style.setProperty("--app-visible-height", `${Math.round(vv.height)}px`);

@@ -96,6 +96,6 @@ assert.match(apiSource, /locations_boost: \[\{ kladr_id: VOLGOGRAD_KLADR_ID \}\]
 assert.doesNotMatch(source, /address-suggestion-subtitle/);
 assert.doesNotMatch(apiSource, /postal_code/);
 assert.match(styleSource, /#addressSuggestions \.client-suggestion-text[\s\S]*white-space: normal/);
-assert.match(swSource, /orders-site-static-v65/);
+assert.match(swSource, /orders-site-static-v66/);
 
 console.log("address suggest tests: ok");

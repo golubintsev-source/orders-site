@@ -6,6 +6,7 @@
     "test:all-salaries": "node scripts/test-all-salaries.mjs",
     "test:messages-sync": "node scripts/test-messages-sync.mjs",
     "test:messages-body": "node scripts/test-messages-body.mjs",
+    "test:messages-ios-composer": "node scripts/test-messages-ios-composer.mjs",
     "test:chat-photo-performance": "node scripts/test-chat-photo-performance.mjs",
     "test:address-suggest": "node scripts/test-address-suggest.mjs",
     "test:orders-search": "node scripts/test-orders-search.mjs",

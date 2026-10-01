@@ -6337,9 +6337,37 @@ export function initMessagesSection() {
 
   if (input) {
     let debounceTimer = null;
+    let composerViewportFrame = 0;
+    let composerViewportTimer = 0;
+    const keepActiveComposerAtBottom = () => {
+      if (
+        document.activeElement !== input ||
+        messagesView !== "dialog" ||
+        !activePeerId
+      ) {
+        return;
+      }
+      const activeFeed = document.getElementById("messagesFeed");
+      if (!activeFeed || !isMessagesFeedForPeer()) return;
+      if (composerViewportFrame) cancelAnimationFrame(composerViewportFrame);
+      composerViewportFrame = requestAnimationFrame(() => {
+        composerViewportFrame = 0;
+        scrollMessagesFeedToBottom(activeFeed);
+      });
+    };
+    const settleActiveComposerViewport = () => {
+      keepActiveComposerAtBottom();
+      window.clearTimeout(composerViewportTimer);
+      composerViewportTimer = window.setTimeout(keepActiveComposerAtBottom, 320);
+    };
     resizeMessagesComposerInput(input);
+    input.addEventListener("focus", () => {
+      stopMessagesFeedBottomPin();
+      settleActiveComposerViewport();
+    });
     input.addEventListener("input", () => {
       resizeMessagesComposerInput(input);
+      settleActiveComposerViewport();
       if (msgEl) msgEl.classList.remove("messages-page-message--error");
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
@@ -6372,8 +6400,11 @@ export function initMessagesSection() {
     });
 
     input.addEventListener("blur", () => {
+      window.clearTimeout(composerViewportTimer);
       setTimeout(hideSuggestions, 150);
     });
+    window.visualViewport?.addEventListener("resize", keepActiveComposerAtBottom);
+    window.visualViewport?.addEventListener("scroll", keepActiveComposerAtBottom);
   }
 
   void loadUsersDirectory();

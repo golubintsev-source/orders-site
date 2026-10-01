@@ -9152,7 +9152,9 @@ th {
 .messages-feed {
   flex: 1 1 auto;
   overflow-y: auto;
-  overflow-anchor: auto;
+  /* Позицию ленты сохраняет JS. Нативный scroll anchoring Safari при открытии
+     клавиатуры способен выбрать старый пузырь и увести чат на недели назад. */
+  overflow-anchor: none;
   /* Без нижнего поля: иначе между последним пузырём и композером
      просвечивает зелёный фон диалога. */
   padding: 16px 16px 0;
@@ -10040,6 +10042,8 @@ html.keyboard-open .messages-composer {
   overflow-x: hidden;
   overflow-y: auto;
   background: #fff;
+  color: #111827;
+  caret-color: #059669;
   box-sizing: border-box;
 }
 
