@@ -6362,6 +6362,17 @@ export function initMessagesSection() {
     let debounceTimer = null;
     let composerViewportFrame = 0;
     let composerViewportTimer = 0;
+    const resetChatDocumentScroll = () => {
+      const messagesSection = document.getElementById("section-messages");
+      if (!messagesSection?.classList.contains("active")) return;
+      const scrollingElement = document.scrollingElement;
+      if (scrollingElement && scrollingElement.scrollTop !== 0) {
+        scrollingElement.scrollTop = 0;
+      }
+      if (window.scrollX !== 0 || window.scrollY !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
     const keepActiveComposerAtBottom = () => {
       if (
         document.activeElement !== input ||
@@ -6375,6 +6386,10 @@ export function initMessagesSection() {
       if (composerViewportFrame) cancelAnimationFrame(composerViewportFrame);
       composerViewportFrame = requestAnimationFrame(() => {
         composerViewportFrame = 0;
+        // iOS Safari сам прокручивает весь layout viewport к textarea. Из-за
+        // этого композер оказывается сверху, хотя высота чата уже уменьшена под
+        // visualViewport. Возвращаем документ к началу; лента имеет свой scroll.
+        resetChatDocumentScroll();
         scrollMessagesFeedToBottom(activeFeed);
       });
     };
@@ -6424,6 +6439,8 @@ export function initMessagesSection() {
 
     input.addEventListener("blur", () => {
       window.clearTimeout(composerViewportTimer);
+      if (composerViewportFrame) cancelAnimationFrame(composerViewportFrame);
+      composerViewportFrame = 0;
       setTimeout(hideSuggestions, 150);
     });
     window.visualViewport?.addEventListener("resize", keepActiveComposerAtBottom);

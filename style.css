@@ -10257,6 +10257,16 @@ html.keyboard-open .messages-composer {
     max-height: var(--app-visible-height, 100svh);
   }
 
+  /* Safari при фокусе textarea пытается прокрутить весь документ, хотя чат
+     уже ужат под visualViewport. Скролл должен оставаться только у ленты. */
+  html.keyboard-open:has(#section-messages.content-section.active),
+  html.keyboard-open:has(#section-messages.content-section.active) body {
+    height: var(--app-visible-height, 100svh);
+    max-height: var(--app-visible-height, 100svh);
+    overflow: hidden;
+    overscroll-behavior-y: none;
+  }
+
   #section-messages.content-section.active {
     flex: 1 1 auto;
     display: flex;

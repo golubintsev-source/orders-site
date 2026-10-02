@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v68: выгрузка таблицы «Зарплата менеджера» в Excel.
-const STATIC_CACHE = "orders-site-static-v68";
+// v69: поле сообщения остаётся над клавиатурой и не улетает вверх на iPhone.
+const STATIC_CACHE = "orders-site-static-v69";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

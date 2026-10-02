@@ -12,8 +12,12 @@ assert.doesNotMatch(navSource, /window\.innerHeight - vv\.height - vv\.offsetTop
 assert.match(messagesSource, /function keepActiveComposerAtBottom|const keepActiveComposerAtBottom/);
 assert.match(messagesSource, /input\.addEventListener\("focus"/);
 assert.match(messagesSource, /visualViewport\?\.addEventListener\("resize", keepActiveComposerAtBottom\)/);
+assert.match(messagesSource, /function resetChatDocumentScroll|const resetChatDocumentScroll/);
+assert.match(messagesSource, /scrollingElement\.scrollTop = 0/);
+assert.match(messagesSource, /window\.scrollTo\(0, 0\)/);
 assert.match(styleSource, /\.messages-feed[\s\S]*?overflow-anchor: none/);
 assert.match(styleSource, /\.messages-composer-input[\s\S]*?caret-color: #059669/);
-assert.match(swSource, /orders-site-static-v68/);
+assert.match(styleSource, /html\.keyboard-open:has\(#section-messages\.content-section\.active\)[\s\S]*?overflow: hidden/);
+assert.match(swSource, /orders-site-static-v69/);
 
 console.log("messages iOS composer tests: ok");
