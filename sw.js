@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v67: не показываем ложное «Нет сообщений», пока превью группового чата загружается.
-const STATIC_CACHE = "orders-site-static-v67";
+// v68: выгрузка таблицы «Зарплата менеджера» в Excel.
+const STATIC_CACHE = "orders-site-static-v68";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

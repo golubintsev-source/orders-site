@@ -14,6 +14,6 @@ assert.match(messagesSource, /input\.addEventListener\("focus"/);
 assert.match(messagesSource, /visualViewport\?\.addEventListener\("resize", keepActiveComposerAtBottom\)/);
 assert.match(styleSource, /\.messages-feed[\s\S]*?overflow-anchor: none/);
 assert.match(styleSource, /\.messages-composer-input[\s\S]*?caret-color: #059669/);
-assert.match(swSource, /orders-site-static-v67/);
+assert.match(swSource, /orders-site-static-v68/);
 
 console.log("messages iOS composer tests: ok");

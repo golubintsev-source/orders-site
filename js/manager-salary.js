@@ -9,6 +9,8 @@ import {
 import { formatAmount, formatAmountWholeRubles, formatDateShortRU, formatOrderIdTypeChip } from "./format.js";
 import { orderHasActiveTask } from "./order-task-links.js";
 import { getManagerSalaryParams } from "./settings.js";
+import { ensureXlsx } from "./lazy-cdn.js";
+import { downloadXlsxBuffer } from "./xlsxDownload.js";
 
 /** Статусы с «Производство» и далее, включая «Заказ закрыт». */
 const MANAGER_SALARY_STATUSES = new Set([
@@ -53,7 +55,24 @@ let loadedSelectionKey = null;
 
 let bound = false;
 let saveInFlight = false;
+let exportInFlight = false;
 let loadToken = 0;
+
+const MANAGER_SALARY_EXCEL_HEADERS = [
+  "Учитывать",
+  "Номер",
+  "Дата",
+  "Клиент",
+  "Опл.",
+  "Адрес",
+  "Описание",
+  "Статус",
+  "Стоимость",
+  "Предоплата",
+  "Кому предоплата",
+  "Остаток",
+  "Кому остаток",
+];
 
 function localDateToYmd(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -301,6 +320,22 @@ function setSaveMessage(text, isError = false) {
   el.classList.toggle("is-error", Boolean(isError));
 }
 
+function setExportMessage(text, isError = false) {
+  const el = document.getElementById("managerSalaryExportMessage");
+  if (!el) return;
+  el.hidden = !text;
+  el.textContent = text || "";
+  el.classList.toggle("is-error", Boolean(isError));
+}
+
+function updateExportButtonState(orders = null) {
+  const btn = document.getElementById("managerSalaryExportExcelBtn");
+  if (!btn) return;
+  const hasRows = Array.isArray(orders) ? orders.length > 0 : getManagerSalaryOrders().length > 0;
+  btn.disabled = exportInFlight || !hasRows;
+  btn.textContent = exportInFlight ? "Готовим Excel…" : "Выгрузить в Excel";
+}
+
 function updateSaveButtonState() {
   const btn = document.getElementById("managerSalarySaveChecksBtn");
   if (!btn) return;
@@ -431,6 +466,89 @@ function buildRowHtml(order) {
   `;
 }
 
+function excelCellNumber(raw) {
+  const value = parseLooseNumber(raw);
+  return value == null ? (raw ?? "") : value;
+}
+
+export function getManagerSalaryRowValuesForExcel(order) {
+  const statusDisplayText =
+    order.payment_status === "нет"
+      ? "Контакт с клиентом"
+      : (order.payment_status ?? "Контакт с клиентом");
+  const hasAmount = order.amount != null && order.amount !== "";
+  return [
+    isOrderChecked(order) ? "Да" : "Нет",
+    order.id != null ? formatOrderIdTypeChip(order.id, order.order_type) : "",
+    formatDateShortRU(order.order_date),
+    order.client ?? "",
+    hasAmount ? (isOrderPaid(order) ? "да" : "нет") : "",
+    order.address ?? "",
+    order.description ?? "",
+    statusDisplayText,
+    excelCellNumber(order.amount),
+    excelCellNumber(order.prepayment),
+    order.prepayment_to ?? "",
+    excelCellNumber(order.remaining_amount),
+    order.remaining_to ?? "",
+  ];
+}
+
+function applyExcelColumnWidths(ws, rows) {
+  const columnCount = Math.max(0, ...rows.map((row) => row.length));
+  ws["!cols"] = Array.from({ length: columnCount }, (_, columnIndex) => {
+    let maxLength = 0;
+    for (const row of rows) {
+      const value = row[columnIndex];
+      if (value == null || value === "") continue;
+      maxLength = Math.max(maxLength, String(value).length);
+    }
+    return { wch: Math.min(Math.max(maxLength + 2, 8), 80) };
+  });
+}
+
+function excelFileNameTimestamp() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
+}
+
+async function exportManagerSalaryToExcel() {
+  if (exportInFlight) return;
+  const orders = getManagerSalaryOrders();
+  if (!orders.length) {
+    setExportMessage("Нет строк для выгрузки.", true);
+    updateExportButtonState(orders);
+    return;
+  }
+
+  exportInFlight = true;
+  setExportMessage("");
+  updateExportButtonState(orders);
+  try {
+    const XLSX = await ensureXlsx();
+    const rows = orders.map((order) => getManagerSalaryRowValuesForExcel(order));
+    const data = [MANAGER_SALARY_EXCEL_HEADERS, ...rows];
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    applyExcelColumnWidths(worksheet, data);
+    worksheet["!autofilter"] = { ref: `A1:M${data.length}` };
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Зарплата менеджера");
+    const manager = getManagerById(selectedManagerId);
+    const filename = `zarplata_${manager.id}_${selectedFromYmd}_${selectedToYmd}_${excelFileNameTimestamp()}.xlsx`;
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    downloadXlsxBuffer(buffer, filename);
+    setExportMessage(`Файл Excel: ${orders.length} строк`);
+  } catch (error) {
+    console.error("Выгрузка зарплаты менеджера в Excel:", error);
+    setExportMessage("Не удалось сформировать Excel. Обновите страницу и попробуйте ещё раз.", true);
+  } finally {
+    exportInFlight = false;
+    updateExportButtonState(orders);
+  }
+}
+
 function applyCellTitles(tbody) {
   tbody.querySelectorAll(".td-order-client, .td-order-address, .td-order-description, .td-order-status").forEach((cell) => {
     const full = cell.getAttribute("data-fulltext");
@@ -552,6 +670,7 @@ export function renderManagerSalary() {
     }
     updateSummary([]);
     updateSaveButtonState();
+    updateExportButtonState([]);
     return;
   }
 
@@ -563,6 +682,7 @@ export function renderManagerSalary() {
     }
     updateSummary([]);
     updateSaveButtonState();
+    updateExportButtonState([]);
     return;
   }
 
@@ -580,6 +700,7 @@ export function renderManagerSalary() {
     }
     updateSummary([]);
     updateSaveButtonState();
+    updateExportButtonState([]);
     return;
   }
 
@@ -587,6 +708,7 @@ export function renderManagerSalary() {
   tbody.innerHTML = orders.map(buildRowHtml).join("");
   updateSummary(orders);
   updateSaveButtonState();
+  updateExportButtonState(orders);
 
   requestAnimationFrame(() => applyCellTitles(tbody));
 }
@@ -660,6 +782,13 @@ export function initManagerSalarySection() {
   if (saveBtn) {
     saveBtn.addEventListener("click", () => {
       void saveUncheckedSelection();
+    });
+  }
+
+  const exportBtn = document.getElementById("managerSalaryExportExcelBtn");
+  if (exportBtn) {
+    exportBtn.addEventListener("click", () => {
+      void exportManagerSalaryToExcel();
     });
   }
 

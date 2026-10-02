@@ -3550,6 +3550,31 @@ h2 {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+#section-manager-salary .manager-salary-export-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 14px;
+}
+#section-manager-salary .manager-salary-export-excel-btn {
+  min-height: 38px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+#section-manager-salary .manager-salary-export-excel-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+#section-manager-salary .manager-salary-export-message {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+#section-manager-salary .manager-salary-export-message.is-error {
+  color: #d32f2f;
+}
 #managerSalaryTable {
   width: max-content;
   min-width: 100%;
