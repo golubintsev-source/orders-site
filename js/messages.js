@@ -189,6 +189,10 @@ let feedMessagesById = new Map();
 let composerReplyTo = null;
 /** @type {object | null} сообщение, которое редактируем */
 let composerEditing = null;
+/** @type {Promise<void> | null} одна активная отправка — защита от pointerdown + click */
+let composerSendPromise = null;
+/** timestamp отправки, запущенной касанием; следующий синтетический click iOS игнорируем */
+let composerSendTouchHandledAt = 0;
 /** @type {string | null} id сообщения под меню действий */
 let actionMenuMessageId = null;
 /** true, если меню открыли долгим нажатием / ПКМ по фото */
@@ -5664,6 +5668,16 @@ async function sendMessage() {
   await loadMessages();
 }
 
+function requestSendMessage() {
+  if (composerSendPromise) return composerSendPromise;
+  composerSendPromise = Promise.resolve()
+    .then(() => sendMessage())
+    .finally(() => {
+      composerSendPromise = null;
+    });
+  return composerSendPromise;
+}
+
 function onFeedClick(e) {
   if (longPressTriggered) {
     longPressTriggered = false;
@@ -6190,7 +6204,24 @@ export function initMessagesSection() {
   }
 
   if (sendBtn) {
-    sendBtn.addEventListener("click", () => void sendMessage());
+    // На iPhone при открытой клавиатуре кнопка меняет положение между началом
+    // касания и click. Safari считает, что палец отпущен уже не над кнопкой,
+    // закрывает клавиатуру и теряет первую отправку. Для touch/pen отправляем
+    // на pointerdown и не даём кнопке забрать фокус у textarea.
+    sendBtn.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+      if (sendBtn.disabled) return;
+      e.preventDefault();
+      composerSendTouchHandledAt = Date.now();
+      void requestSendMessage();
+    });
+    sendBtn.addEventListener("click", (e) => {
+      if (Date.now() - composerSendTouchHandledAt < 800) {
+        e.preventDefault();
+        return;
+      }
+      void requestSendMessage();
+    });
   }
 
   const msgEl = document.getElementById("messagesPageMessage");

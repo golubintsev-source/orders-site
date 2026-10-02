@@ -15,9 +15,14 @@ assert.match(messagesSource, /visualViewport\?\.addEventListener\("resize", keep
 assert.match(messagesSource, /function resetChatDocumentScroll|const resetChatDocumentScroll/);
 assert.match(messagesSource, /scrollingElement\.scrollTop = 0/);
 assert.match(messagesSource, /window\.scrollTo\(0, 0\)/);
+assert.match(messagesSource, /sendBtn\.addEventListener\("pointerdown"/);
+assert.match(messagesSource, /e\.pointerType !== "touch" && e\.pointerType !== "pen"/);
+assert.match(messagesSource, /composerSendTouchHandledAt < 800/);
+assert.match(messagesSource, /function requestSendMessage/);
+assert.match(messagesSource, /if \(composerSendPromise\) return composerSendPromise/);
 assert.match(styleSource, /\.messages-feed[\s\S]*?overflow-anchor: none/);
 assert.match(styleSource, /\.messages-composer-input[\s\S]*?caret-color: #059669/);
 assert.match(styleSource, /html\.keyboard-open:has\(#section-messages\.content-section\.active\)[\s\S]*?overflow: hidden/);
-assert.match(swSource, /orders-site-static-v69/);
+assert.match(swSource, /orders-site-static-v70/);
 
 console.log("messages iOS composer tests: ok");

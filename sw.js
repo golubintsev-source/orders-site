@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v69: поле сообщения остаётся над клавиатурой и не улетает вверх на iPhone.
-const STATIC_CACHE = "orders-site-static-v69";
+// v70: первое касание кнопки отправляет сообщение при открытой клавиатуре iPhone.
+const STATIC_CACHE = "orders-site-static-v70";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
