@@ -16,6 +16,7 @@ import {
   expandOrderHistoryCommentLines,
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { displayNameByEmail } from "./user-names.js";
 
 /** YYYY-MM-DD в локальной календарной дате. */
 function ymdLocal(d = new Date()) {
@@ -90,14 +91,6 @@ function applyAllChangesFilter() {
     const haystack = (tr.textContent ?? "").toLowerCase();
     tr.hidden = !haystack.includes(q);
   }
-}
-
-/** Первые 5 символов логина (без «…»). */
-function formatLoginFive(raw) {
-  if (raw == null || raw === "") return "—";
-  const s = String(raw).trim();
-  if (!s) return "—";
-  return s.slice(0, 5);
 }
 
 function buildOrderTypeByIdMap() {
@@ -268,7 +261,7 @@ function paintAllChangesFromBaseRows(
     lines.push(`
     <tr class="all-changes-row${offlineCls}" data-order-id="${escapeHtml(row.order_id || "")}">
       <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
-      <td>${escapeHtml(formatLoginFive(row.user_email))}</td>
+      <td>${escapeHtml(displayNameByEmail(row.user_email) || "—")}</td>
       <td>${escapeHtml(row.chip || "—")}</td>
       <td class="all-changes-text-cell">${escapeHtml(row.comment || "")}</td>
     </tr>`);
