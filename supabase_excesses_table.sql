@@ -7,11 +7,13 @@ CREATE TABLE IF NOT EXISTS public.excesses (
   amount numeric NOT NULL,
   paid_to text,
   created_by text,
+  save_idempotency_key text,
   deleted_at timestamptz NULL
 );
 
 ALTER TABLE public.excesses
-  ADD COLUMN IF NOT EXISTS paid_to text;
+  ADD COLUMN IF NOT EXISTS paid_to text,
+  ADD COLUMN IF NOT EXISTS save_idempotency_key text;
 
 ALTER TABLE public.excesses ENABLE ROW LEVEL SECURITY;
 

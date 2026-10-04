@@ -20,6 +20,8 @@ let excessesRowsCache = [];
 let rowSeq = 0;
 /** @type {number|null} */
 let editingExcessId = null;
+/** @type {Promise<void> | null} одна активная операция сохранения */
+let excessSavePromise = null;
 
 const EXCESS_ICON_EDIT_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 const EXCESS_ICON_DELETE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -35,6 +37,13 @@ const EXCESS_WHO_OPTIONS = [
   { value: "Безнал", label: "Безнал" },
   { value: "Касса", label: "Касса" },
 ];
+
+function createExcessSaveIdempotencyKey() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `excess-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -383,6 +392,7 @@ function createExcessRow(initial = { client: "", amount: "", paid_to: "", change
   const row = document.createElement("div");
   row.className = "excess-row";
   row.dataset.rowId = String(id);
+  row.dataset.saveIdempotencyKey = createExcessSaveIdempotencyKey();
   if (clientReadonly || showChangeField) row.classList.add("excess-row--edit");
 
   row.innerHTML = `
@@ -533,6 +543,7 @@ function collectRowsFromDom() {
       clientInput,
       whoSelect,
       hasChangeField: Boolean(changeInput),
+      saveIdempotencyKey: row.dataset.saveIdempotencyKey || createExcessSaveIdempotencyKey(),
     });
   });
   return rows;
@@ -676,6 +687,7 @@ async function saveExcessRows() {
       paid_to: paidTo,
       created_by: state.currentUser?.email || null,
       created_at: new Date().toISOString(),
+      save_idempotency_key: row.saveIdempotencyKey,
     });
   }
 
@@ -688,13 +700,19 @@ async function saveExcessRows() {
   if (saveBtn) saveBtn.disabled = true;
 
   try {
-    const result = await raceWithTimeout(
-      supabaseClient.from("excesses").insert(payloads).select(),
-    );
+    const result = await raceWithTimeout(insertExcessesIdempotently(payloads));
     if (result?.error) {
       console.error("excesses insert:", result.error);
+      const errorText = String(result.error?.message || "");
+      const idempotencyNotInstalled =
+        result.error?.code === "42703" ||
+        result.error?.code === "PGRST204" ||
+        (/save_idempotency_key/i.test(errorText) &&
+          /column|schema cache|could not find/i.test(errorText));
       setFormMessage(
-        "Не удалось сохранить излишки. Проверьте таблицу excesses и поле paid_to в Supabase (supabase_excesses_paid_to.sql).",
+        idempotencyNotInstalled
+          ? "Защита от дублей ещё не установлена. Выполните supabase_excesses_idempotency.sql в Supabase."
+          : "Не удалось сохранить излишки. Проверьте интернет и повторите попытку.",
         true,
       );
       return;
@@ -735,6 +753,44 @@ async function saveExcessRows() {
   } finally {
     if (saveBtn) saveBtn.disabled = false;
   }
+}
+
+async function insertExcessesIdempotently(payloads) {
+  const rows = Array.isArray(payloads) ? payloads : [];
+  const insertResult = await supabaseClient.from("excesses").insert(rows).select();
+  if (!insertResult?.error) return insertResult;
+
+  const code = String(insertResult.error?.code || "");
+  const message = String(insertResult.error?.message || "");
+  const isDuplicate = code === "23505" || /duplicate excess save_idempotency_key/i.test(message);
+  if (!isDuplicate) return insertResult;
+
+  const keys = rows.map((row) => row.save_idempotency_key).filter(Boolean);
+  if (keys.length !== rows.length || keys.length === 0) return insertResult;
+
+  const existing = await supabaseClient
+    .from("excesses")
+    .select("id, created_at, client, amount, paid_to, created_by, save_idempotency_key")
+    .in("save_idempotency_key", keys)
+    .is("deleted_at", null);
+  if (existing.error) return insertResult;
+
+  const byKey = new Map(
+    (existing.data || []).map((row) => [String(row.save_idempotency_key || ""), row]),
+  );
+  const restoredRows = keys.map((key) => byKey.get(String(key))).filter(Boolean);
+  if (restoredRows.length !== keys.length) return insertResult;
+  return { data: restoredRows, error: null, duplicateRetry: true };
+}
+
+function requestSaveExcessRows() {
+  if (excessSavePromise) return excessSavePromise;
+  excessSavePromise = Promise.resolve()
+    .then(() => saveExcessRows())
+    .finally(() => {
+      excessSavePromise = null;
+    });
+  return excessSavePromise;
 }
 
 async function saveEditedExcess() {
@@ -1046,7 +1102,7 @@ export function bindExcessSection() {
   });
 
   document.getElementById("excessSaveBtn")?.addEventListener("click", () => {
-    void saveExcessRows();
+    void requestSaveExcessRows();
   });
 
   document.querySelector("#excessesTable tbody")?.addEventListener("click", (e) => {

@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v71: на странице «Все изменения» показывается имя автора вместо логина.
-const STATIC_CACHE = "orders-site-static-v71";
+// v72: идемпотентное сохранение излишков защищает от дублей при повторе запроса.
+const STATIC_CACHE = "orders-site-static-v72";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
