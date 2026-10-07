@@ -16,7 +16,8 @@
     "test:route-sheet-manual-route": "node scripts/test-route-sheet-manual-route.mjs",
     "test:order-atomic-save": "node scripts/test-order-atomic-save.mjs",
     "test:all-changes-author": "node scripts/test-all-changes-author.mjs",
-    "test:excess-idempotency": "node scripts/test-excess-idempotency.mjs"
+    "test:excess-idempotency": "node scripts/test-excess-idempotency.mjs",
+    "test:calculations-user-edit": "node scripts/test-calculations-user-edit.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",

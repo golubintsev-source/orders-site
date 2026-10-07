@@ -69,6 +69,11 @@ export function canSelectKassaBeznal() {
   return isAdmin() || state.currentRole === "user";
 }
 
+/** Редактирование ручных строк на странице «Расчёты» — admin и user. */
+export function canEditManualCalculations() {
+  return isAdmin() || state.currentRole === "user";
+}
+
 /** Сохранение выбора чекбоксов на «Зарплата менеджера» — только admin и user. */
 export function canSaveManagerSalaryChecks() {
   return isAdmin() || state.currentRole === "user";

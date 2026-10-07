@@ -12,6 +12,6 @@ assert.doesNotMatch(source, /function formatLoginFive/);
 const table = html.match(/<table id="allChangesTable">[\s\S]*?<\/table>/)?.[0] || "";
 assert.match(table, /<th>Автор<\/th>/);
 assert.doesNotMatch(table, /<th>Логин<\/th>/);
-assert.match(sw, /orders-site-static-v72/);
+assert.match(sw, /orders-site-static-v73/);
 
 console.log("all changes author tests: ok");

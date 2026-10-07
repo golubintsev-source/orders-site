@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v72: идемпотентное сохранение излишков защищает от дублей при повторе запроса.
-const STATIC_CACHE = "orders-site-static-v72";
+// v73: роль user может редактировать ручные строки на странице «Расчёты».
+const STATIC_CACHE = "orders-site-static-v73";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

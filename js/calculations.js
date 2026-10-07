@@ -1,7 +1,13 @@
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile } from "./auth.js";
 import { formatAmount, formatAmountWholeRubles, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY, refreshRublesIntegerInputState } from "./format.js";
-import { canAccessSection, canSelectKassaBeznal, isAdmin, KASSA_BEZNAL_PLACES } from "./roles.js";
+import {
+  canAccessSection,
+  canEditManualCalculations,
+  canSelectKassaBeznal,
+  isAdmin,
+  KASSA_BEZNAL_PLACES,
+} from "./roles.js";
 import { hrefToHome } from "./app-routes.js";
 import {
   applySavedScroll,
@@ -44,6 +50,14 @@ const CALC_COMMENT_EMPTY = "[__]";
 let currentUserEmail = "";
 
 const EXCESS_DELTA_CALC_COMMENT_PREFIX = "[AUTO_EXCESS_DELTA]";
+
+function isSystemDeltaCalculationComment(comment) {
+  const text = String(comment ?? "");
+  return (
+    text.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX) ||
+    text.startsWith(EXCESS_DELTA_CALC_COMMENT_PREFIX)
+  );
+}
 
 const CALC_FROM_OPTIONS = new Set(["Вова", "Дима", "Касса", "Безнал", "Другое"]);
 const CALC_TO_OPTIONS = new Set([
@@ -1009,22 +1023,18 @@ function renderCalculationsTableFromCache() {
       ? `<td class="td-money"><span class="status-value">${escapeHtml(expense)}</span></td>`
       : `<td class="td-money"></td>`;
     const isOfflineRow = row.__offlinePendingSync === true;
-    const actionsCell = isOfflineRow
-      ? isAdmin()
-        ? `<td class="td-actions">
+    const canEditRow = canEditManualCalculations() && !isSystemDeltaRow;
+    let actionsCell = `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`;
+    if (isOfflineRow && isAdmin()) {
+      actionsCell = `<td class="td-actions">
         <button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" data-offline-pending="1" title="Удалить локальную запись (ещё не в базе)">${CALC_ICON_DELETE_SVG}</button>
-      </td>`
-        : `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`
-      : isAdmin() && !isSystemDeltaRow
-        ? `<td class="td-actions">
-        <button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>
-        <button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>
-      </td>`
-        : isAdmin() && isSystemDeltaRow
-          ? `<td class="td-actions">
-        <button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>
-      </td>`
-          : `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`;
+      </td>`;
+    } else if (!isOfflineRow && (canEditRow || isAdmin())) {
+      actionsCell = `<td class="td-actions">
+        ${canEditRow ? `<button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>` : ""}
+        ${isAdmin() ? `<button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>` : ""}
+      </td>`;
+    }
     const tr = document.createElement("tr");
     if (isSystemDeltaRow) tr.classList.add("calc-row-system");
     if (isOfflineRow) tr.classList.add("tr-order-offline-pending");
@@ -1041,10 +1051,12 @@ function renderCalculationsTableFromCache() {
     tbody.appendChild(tr);
   });
 
-  if (isAdmin()) {
+  if (canEditManualCalculations()) {
     tbody.querySelectorAll(".btn-edit").forEach((btn) => {
       btn.addEventListener("click", () => startEdit(Number(btn.dataset.id)));
     });
+  }
+  if (isAdmin()) {
     tbody.querySelectorAll(".btn-delete-calc").forEach((btn) => {
       const id = Number(btn.dataset.id);
       if (btn.dataset.offlinePending === "1") {
@@ -1220,7 +1232,7 @@ function resetForm() {
 }
 
 function startEdit(id) {
-  if (!isAdmin()) return;
+  if (!canEditManualCalculations()) return;
   if (isOfflineDataMode() && typeof id === "number" && id < 0) {
     setMessage("Локальную запись нельзя редактировать.", true);
     return;
@@ -1241,6 +1253,11 @@ function startEdit(id) {
     .then(({ data, error }) => {
       if (error || !data) {
         setMessage("Ошибка загрузки записи.", true);
+        return;
+      }
+      if (isSystemDeltaCalculationComment(data.comment)) {
+        setMessage("Автоматические строки расчётов редактировать нельзя.", true);
+        resetForm();
         return;
       }
       editingCreatedAt = data.created_at;
@@ -1293,8 +1310,23 @@ async function submitForm(e) {
       setMessage("Без связи с базой нельзя изменять сохранённые в базе расчёты.", true);
       return;
     }
-    if (!isAdmin()) {
-      setMessage("Изменение записей доступно только администратору.", true);
+    if (!canEditManualCalculations()) {
+      setMessage("Изменение записей недоступно для вашей роли.", true);
+      resetForm();
+      return;
+    }
+    const { data: currentRow, error: currentRowError } = await supabaseClient
+      .from("calculations")
+      .select("comment")
+      .eq("id", editingId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (currentRowError || !currentRow) {
+      setMessage("Не удалось проверить редактируемую запись.", true);
+      return;
+    }
+    if (isSystemDeltaCalculationComment(currentRow.comment)) {
+      setMessage("Автоматические строки расчётов редактировать нельзя.", true);
       resetForm();
       return;
     }
