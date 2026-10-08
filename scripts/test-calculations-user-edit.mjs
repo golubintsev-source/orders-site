@@ -15,6 +15,7 @@ assert.equal(canEditManualCalculations(), false);
 state.currentRole = previousRole;
 
 const source = await readFile(new URL("../js/calculations.js", import.meta.url), "utf8");
+const style = await readFile(new URL("../style.css", import.meta.url), "utf8");
 const sw = await readFile(new URL("../sw.js", import.meta.url), "utf8");
 
 assert.match(source, /const canEditRow = canEditManualCalculations\(\) && !isSystemDeltaRow/);
@@ -22,6 +23,8 @@ assert.match(source, /if \(canEditManualCalculations\(\)\) \{[\s\S]*?querySelect
 assert.match(source, /if \(!canEditManualCalculations\(\)\) return/);
 assert.match(source, /isSystemDeltaCalculationComment\(data\.comment\)/);
 assert.match(source, /isSystemDeltaCalculationComment\(currentRow\.comment\)/);
-assert.match(sw, /orders-site-static-v76/);
+assert.match(source, /class="calc-actions-grid"/);
+assert.match(style, /\.calc-actions-grid \.btn-delete-calc[\s\S]*grid-column:\s*2/);
+assert.match(sw, /orders-site-static-v77/);
 
 console.log("calculations user edit tests: ok");

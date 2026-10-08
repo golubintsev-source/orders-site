@@ -33,6 +33,6 @@ assert.match(ordersSource, /\.\.\.getOrderRowValuesForExcel\(order\)/);
 assert.match(ordersSource, /orderSearchMatchesValues\(/);
 assert.match(ordersSource, /order\.order_number/);
 assert.match(indexSource, /placeholder="Поиск по всем полям заказа…"/);
-assert.match(swSource, /orders-site-static-v76/);
+assert.match(swSource, /orders-site-static-v77/);
 
 console.log("orders search tests: ok");

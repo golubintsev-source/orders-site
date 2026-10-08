@@ -1342,15 +1342,17 @@ function renderCalculationsTableFromCache() {
       : `<td class="td-money"></td>`;
     const isOfflineRow = row.__offlinePendingSync === true;
     const canEditRow = canEditManualCalculations() && !isSystemDeltaRow;
-    let actionsCell = `<td class="td-actions td-actions--readonly" aria-hidden="true"></td>`;
+    let actionsCell = `<td class="td-actions td-actions--readonly" aria-hidden="true"><span class="calc-actions-grid"></span></td>`;
     if (isOfflineRow && isAdmin()) {
       actionsCell = `<td class="td-actions">
-        <button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" data-offline-pending="1" title="Удалить локальную запись (ещё не в базе)">${CALC_ICON_DELETE_SVG}</button>
+        <span class="calc-actions-grid"><button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" data-offline-pending="1" title="Удалить локальную запись (ещё не в базе)">${CALC_ICON_DELETE_SVG}</button></span>
       </td>`;
     } else if (!isOfflineRow && (canEditRow || isAdmin())) {
       actionsCell = `<td class="td-actions">
-        ${canEditRow ? `<button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>` : ""}
-        ${isAdmin() ? `<button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>` : ""}
+        <span class="calc-actions-grid">
+          ${canEditRow ? `<button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>` : ""}
+          ${isAdmin() ? `<button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>` : ""}
+        </span>
       </td>`;
     }
     const tr = document.createElement("tr");

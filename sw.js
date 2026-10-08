@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v76: компактные плашки фильтров в заголовках таблицы расчётов.
-const STATIC_CACHE = "orders-site-static-v76";
+// v77: выравнивание кнопок удаления в таблице расчётов.
+const STATIC_CACHE = "orders-site-static-v77";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

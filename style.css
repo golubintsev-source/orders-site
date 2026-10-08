@@ -2050,8 +2050,22 @@ h2 {
   padding: 4px 2px;
 }
 
-#calculationsTable .td-actions .btn-icon + .btn-icon {
-  margin-left: 2px;
+#calculationsTable .calc-actions-grid {
+  display: inline-grid;
+  grid-template-columns: 26px 26px;
+  align-items: center;
+  gap: 2px;
+  width: 54px;
+  min-width: 54px;
+  vertical-align: middle;
+}
+
+#calculationsTable .calc-actions-grid .btn-edit {
+  grid-column: 1;
+}
+
+#calculationsTable .calc-actions-grid .btn-delete-calc {
+  grid-column: 2;
 }
 /* Иконки действий — как у #ordersTable .btn-icon */
 #calculationsTable .btn-icon {
