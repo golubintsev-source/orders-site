@@ -19,6 +19,6 @@ assert.match(schema, /save_idempotency_key text/);
 assert.match(migration, /pg_advisory_xact_lock/);
 assert.match(migration, /Duplicate excess save_idempotency_key/);
 assert.doesNotMatch(migration, /DELETE\s+FROM/i);
-assert.match(sw, /orders-site-static-v75/);
+assert.match(sw, /orders-site-static-v76/);
 
 console.log("excess idempotency tests: ok");

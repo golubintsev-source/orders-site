@@ -916,9 +916,9 @@ function calcFilterHeadingSummary(type) {
   if (type === "time") {
     const from = formatCalcFilterDateTime(calcColumnFilters.timeFrom);
     const to = formatCalcFilterDateTime(calcColumnFilters.timeTo);
-    if (from && to) return `${from} — ${to}`;
-    if (from) return `от ${from}`;
-    if (to) return `до ${to}`;
+    if (from && to) return `с ${from}\nпо ${to}`;
+    if (from) return `с ${from}`;
+    if (to) return `по ${to}`;
     return "";
   }
   if (["author", "from", "to"].includes(type)) return calcColumnFilters[type] || "";

@@ -23,6 +23,8 @@ assert.match(calculations, /calc-column-filter-find">Найти/);
 assert.match(calculations, /calc-column-filter-reset">Сбросить/);
 assert.match(calculations, /function updateCalcFilterHeadingStates/);
 assert.match(style, /\.calc-filter-heading-btn\.is-filtered[\s\S]*font-weight:\s*800/);
-assert.match(style, /\.calc-filter-heading-btn\.is-filtered \.calc-filter-heading-value[\s\S]*display:\s*block/);
+assert.match(style, /\.calc-filter-heading-btn\.is-filtered \.calc-filter-heading-value[\s\S]*visibility:\s*visible/);
+assert.match(style, /\.calc-filter-heading-btn > span::after/);
+assert.doesNotMatch(style, /\.calc-filter-heading-btn[\s\S]{0,800}text-decoration:\s*underline/);
 
 console.log("calculations column filters tests: ok");
