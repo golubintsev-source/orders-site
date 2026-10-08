@@ -22,6 +22,6 @@ assert.match(source, /if \(canEditManualCalculations\(\)\) \{[\s\S]*?querySelect
 assert.match(source, /if \(!canEditManualCalculations\(\)\) return/);
 assert.match(source, /isSystemDeltaCalculationComment\(data\.comment\)/);
 assert.match(source, /isSystemDeltaCalculationComment\(currentRow\.comment\)/);
-assert.match(sw, /orders-site-static-v73/);
+assert.match(sw, /orders-site-static-v74/);
 
 console.log("calculations user edit tests: ok");

@@ -874,13 +874,20 @@ h2 {
   width: 100%;
 }
 
+#section-calculations .calculations-comment-wrap,
+.calculations-page .calculations-comment-wrap {
+  position: relative;
+}
+
 #section-new .address-input-wrap input {
   width: 100%;
   box-sizing: border-box;
 }
 
 #section-new .client-suggestions,
-#section-excess .client-suggestions {
+#section-excess .client-suggestions,
+#section-calculations .client-suggestions,
+.calculations-page .client-suggestions {
   position: absolute;
   left: 0;
   right: 0;
@@ -898,7 +905,9 @@ h2 {
 }
 
 #section-new .client-suggestions li,
-#section-excess .client-suggestions li {
+#section-excess .client-suggestions li,
+#section-calculations .client-suggestions li,
+.calculations-page .client-suggestions li {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -912,12 +921,18 @@ h2 {
 #section-new .client-suggestions li[aria-selected="true"],
 #section-new .client-suggestions li:hover,
 #section-excess .client-suggestions li[aria-selected="true"],
-#section-excess .client-suggestions li:hover {
+#section-excess .client-suggestions li:hover,
+#section-calculations .client-suggestions li[aria-selected="true"],
+#section-calculations .client-suggestions li:hover,
+.calculations-page .client-suggestions li[aria-selected="true"],
+.calculations-page .client-suggestions li:hover {
   background: #f3f4f6;
 }
 
 #section-new .client-suggestions .client-suggestion-text,
-#section-excess .client-suggestions .client-suggestion-text {
+#section-excess .client-suggestions .client-suggestion-text,
+#section-calculations .client-suggestions .client-suggestion-text,
+.calculations-page .client-suggestions .client-suggestion-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -925,7 +940,9 @@ h2 {
 }
 
 #section-new .client-suggestions .client-suggestion-count,
-#section-excess .client-suggestions .client-suggestion-count {
+#section-excess .client-suggestions .client-suggestion-count,
+#section-calculations .client-suggestions .client-suggestion-count,
+.calculations-page .client-suggestions .client-suggestion-count {
   flex-shrink: 0;
   font-size: 12px;
   font-weight: 600;

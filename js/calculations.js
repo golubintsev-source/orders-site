@@ -38,6 +38,7 @@ import {
   raceWithTimeout,
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows, fetchSupabaseByIdsInChunks } from "./supabase-fetch.js";
+import { attachFieldAutocomplete } from "./clientAutocomplete.js";
 
 let editingId = null;
 let editingCreatedAt = null;
@@ -59,6 +60,13 @@ function isSystemDeltaCalculationComment(comment) {
   );
 }
 
+function normalizeCalcCommentSuggestion(value) {
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("ru-RU")
+    .replace(/\s+/g, " ");
+}
+
 const CALC_FROM_OPTIONS = new Set(["Вова", "Дима", "Касса", "Безнал", "Другое"]);
 const CALC_TO_OPTIONS = new Set([
   "Вова",
@@ -74,6 +82,8 @@ const DEFAULT_VOICE_EXPENSE_TO = "Покупка";
 
 /** Полные строки с сервера; фильтр поиска применяется при отрисовке. */
 let calculationsRowsCache = [];
+/** Ранее введённые ручные комментарии: нормализованное значение → подпись и частота. */
+let calcCommentSuggestionCounts = new Map();
 /** Адреса заказов для автозаписей (id → address), подставляются в комментарий при отображении. */
 let calcOrderAddressById = new Map();
 /** Непустая строка — текстовый поиск активен. */
@@ -94,6 +104,55 @@ const CALC_INCOME_TO_PLACES = new Set(["Вова", "Дима", "Касса", "Б
 /** Полный HTML опций «Откуда»/«Куда» до ограничений по роли. */
 const calcPlaceSelectHtmlBackup = new Map();
 const CALC_PLACE_SELECT_IDS = ["calcFrom", "calcTo"];
+
+function rebuildCalcCommentSuggestions(rows) {
+  const next = new Map();
+  for (const row of rows || []) {
+    if (isSystemDeltaCalculationComment(row?.comment)) continue;
+    const name = stripAuthorFromManualComment(row?.comment).trim();
+    const key = normalizeCalcCommentSuggestion(name);
+    if (!key) continue;
+    const current = next.get(key);
+    if (current) current.count += 1;
+    else next.set(key, { name, count: 1 });
+  }
+  calcCommentSuggestionCounts = next;
+}
+
+function getCalcCommentSuggestions(query) {
+  const needle = normalizeCalcCommentSuggestion(query);
+  if (!needle) return [];
+  return [...calcCommentSuggestionCounts.values()]
+    .filter((item) => normalizeCalcCommentSuggestion(item.name).includes(needle))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ru"))
+    .slice(0, 15);
+}
+
+async function loadCalcCommentSuggestions() {
+  if (isBrowserOffline()) {
+    rebuildCalcCommentSuggestions(readSnapshot()?.calculations || calculationsRowsCache);
+    return;
+  }
+  try {
+    const result = await raceWithTimeout(
+      fetchAllSupabaseRows(() =>
+        supabaseClient
+          .from("calculations")
+          .select("comment, created_at")
+          .is("deleted_at", null)
+          .not("comment", "is", null)
+          .not("comment", "like", `${ORDER_DELTA_CALC_COMMENT_PREFIX}%`)
+          .not("comment", "like", `${EXCESS_DELTA_CALC_COMMENT_PREFIX}%`)
+          .order("created_at", { ascending: false }),
+      ),
+    );
+    if (result?.error) throw result.error;
+    rebuildCalcCommentSuggestions(result?.data || []);
+  } catch (error) {
+    console.warn("Не удалось загрузить подсказки комментариев расчётов:", error);
+    rebuildCalcCommentSuggestions(readSnapshot()?.calculations || calculationsRowsCache);
+  }
+}
 
 /**
  * «Касса» и «Безнал» в «Откуда»/«Куда» — только для admin/user.
@@ -1357,6 +1416,7 @@ async function submitForm(e) {
       setMessage("Запись сохранена на устройстве; отправка в базу при появлении связи.", false);
       resetForm();
       await loadCalculations();
+      void loadCalcCommentSuggestions();
       return;
     }
     const { error } = await supabaseClient.from("calculations").insert([insertPayload]);
@@ -1382,6 +1442,7 @@ async function submitForm(e) {
     resetForm();
   }
   await loadCalculations();
+  void loadCalcCommentSuggestions();
 }
 
 function formatCalcHistoryAmount(v) {
@@ -1514,6 +1575,28 @@ function setupCalculationsForm() {
   if (amountEl) {
     amountEl.addEventListener("blur", formatCalcAmountInput);
     amountEl.addEventListener("input", () => refreshRublesIntegerInputState(amountEl, amountEl.value));
+  }
+
+  const commentEl = document.getElementById("calcComment");
+  const commentSuggestions = document.getElementById("calcCommentSuggestions");
+  const commentWrap = commentEl?.closest(".calculations-comment-wrap");
+  if (
+    commentEl instanceof HTMLInputElement &&
+    commentSuggestions &&
+    commentWrap &&
+    !commentEl.dataset.autocompleteBound
+  ) {
+    commentEl.dataset.autocompleteBound = "1";
+    attachFieldAutocomplete({
+      input: commentEl,
+      list: commentSuggestions,
+      wrap: commentWrap,
+      field: "comment",
+      getSuggestions: getCalcCommentSuggestions,
+      minChars: 1,
+      countAriaLabel: "Использований",
+    });
+    void loadCalcCommentSuggestions();
   }
 
   const fromEl = document.getElementById("calcFrom");

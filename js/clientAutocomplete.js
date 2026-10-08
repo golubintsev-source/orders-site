@@ -226,9 +226,24 @@ function applyClientAndPhoneFromAddressPick(address) {
  *   field: string,
  *   onPick?: (value: string) => void,
  *   clearInvalidClass?: string,
+ *   getSuggestions?: (query: string) => Array<{ name: string, count: number }>,
+ *   minChars?: number,
+ *   debounceMs?: number,
+ *   countAriaLabel?: string,
  * }} opts
  */
-export function attachFieldAutocomplete({ input, list, wrap, field, onPick, clearInvalidClass }) {
+export function attachFieldAutocomplete({
+  input,
+  list,
+  wrap,
+  field,
+  onPick,
+  clearInvalidClass,
+  getSuggestions,
+  minChars = MIN_CHARS,
+  debounceMs = DEBOUNCE_MS,
+  countAriaLabel = "Заказов",
+}) {
   if (!input || !list || !wrap) return () => {};
 
   let debounceTimer = null;
@@ -271,7 +286,7 @@ export function attachFieldAutocomplete({ input, list, wrap, field, onPick, clea
       const li = document.createElement("li");
       li.setAttribute("role", "option");
       li.dataset.index = String(i);
-      li.innerHTML = `<span class="client-suggestion-text">${escapeHtml(item.name)}</span><span class="client-suggestion-count" aria-label="Заказов">${item.count}</span>`;
+      li.innerHTML = `<span class="client-suggestion-text">${escapeHtml(item.name)}</span><span class="client-suggestion-count" aria-label="${escapeHtml(countAriaLabel)}">${item.count}</span>`;
       li.addEventListener("mousedown", (e) => {
         e.preventDefault();
         pickSuggestion(item.name);
@@ -287,11 +302,15 @@ export function attachFieldAutocomplete({ input, list, wrap, field, onPick, clea
       return;
     }
     const q = input.value;
-    if (q.trim().length < MIN_CHARS) {
+    if (q.trim().length < minChars) {
       hide();
       return;
     }
-    renderAndShow(getFieldSuggestions(field, q));
+    const items =
+      typeof getSuggestions === "function"
+        ? getSuggestions(q)
+        : getFieldSuggestions(field, q);
+    renderAndShow(items);
   };
 
   const onInput = () => {
@@ -304,12 +323,12 @@ export function attachFieldAutocomplete({ input, list, wrap, field, onPick, clea
       hide();
       return;
     }
-    debounceTimer = setTimeout(refresh, DEBOUNCE_MS);
+    debounceTimer = setTimeout(refresh, debounceMs);
   };
 
   const onFocus = () => {
     if (isSuppressed()) return;
-    if (input.value.trim().length >= MIN_CHARS) {
+    if (input.value.trim().length >= minChars) {
       clearTimeout(debounceTimer);
       refresh();
     }
