@@ -26,5 +26,7 @@ assert.match(style, /\.calc-filter-heading-btn\.is-filtered[\s\S]*font-weight:\s
 assert.match(style, /\.calc-filter-heading-btn\.is-filtered \.calc-filter-heading-value[\s\S]*visibility:\s*visible/);
 assert.match(style, /\.calc-filter-heading-btn > span::after/);
 assert.doesNotMatch(style, /\.calc-filter-heading-btn[\s\S]{0,800}text-decoration:\s*underline/);
+assert.match(style, /data-calc-filter="time"[\s\S]*width:\s*auto/);
+assert.match(style, /th:nth-child\(1\),[\s\S]*td:nth-child\(1\)[\s\S]*padding-right:\s*5px/);
 
 console.log("calculations column filters tests: ok");

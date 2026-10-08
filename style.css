@@ -1605,7 +1605,8 @@ h2 {
 }
 
 #calculationsTable .calc-filter-heading-btn[data-calc-filter="time"] {
-  width: 132px;
+  width: auto;
+  min-width: 0;
 }
 
 #calculationsTable .calc-filter-heading-btn > span {
@@ -2021,6 +2022,16 @@ h2 {
   }
   #calculationsTable th:nth-child(7),
   #calculationsTable td:nth-child(7) {
+    padding-left: 0;
+  }
+
+  /* Между «Время» и «Автор» оставляем только компактные 5px. */
+  #calculationsTable th:nth-child(1),
+  #calculationsTable td:nth-child(1) {
+    padding-right: 5px;
+  }
+  #calculationsTable th:nth-child(2),
+  #calculationsTable td:nth-child(2) {
     padding-left: 0;
   }
 

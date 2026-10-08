@@ -13,6 +13,6 @@ assert.match(source, /downloadXlsxBuffer\(buffer, filename\)/);
 assert.match(source, /exportBtn\.addEventListener\("click"/);
 assert.match(source, /"Учитывать"[\s\S]*"Кому остаток"/);
 assert.match(style, /\.manager-salary-export-row/);
-assert.match(sw, /orders-site-static-v77/);
+assert.match(sw, /orders-site-static-v78/);
 
 console.log("manager salary Excel tests: ok");
