@@ -25,6 +25,6 @@ assert.match(source, /isSystemDeltaCalculationComment\(data\.comment\)/);
 assert.match(source, /isSystemDeltaCalculationComment\(currentRow\.comment\)/);
 assert.match(source, /class="calc-actions-grid"/);
 assert.match(style, /\.calc-actions-grid \.btn-delete-calc[\s\S]*grid-column:\s*2/);
-assert.match(sw, /orders-site-static-v78/);
+assert.match(sw, /orders-site-static-v79/);
 
 console.log("calculations user edit tests: ok");

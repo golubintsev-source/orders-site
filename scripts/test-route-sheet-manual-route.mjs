@@ -16,6 +16,6 @@ assert.match(routeSource, /deliveryMapMarkerIconNumbered\(L, stop\.ordersHere, s
 assert.match(routeSource, /formatApproxTravelTimeAt20Kmh\(picked\.distanceM, plan\.orderedStops\.length\)/);
 assert.match(routeSource, /refreshRouteBtn\.addEventListener\("click"/);
 assert.match(styleSource, /\.route-sheet-refresh-route-btn/);
-assert.match(swSource, /orders-site-static-v78/);
+assert.match(swSource, /orders-site-static-v79/);
 
 console.log("route sheet manual route tests: ok");

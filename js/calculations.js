@@ -1360,12 +1360,12 @@ function renderCalculationsTableFromCache() {
     if (isOfflineRow) tr.classList.add("tr-order-offline-pending");
     tr.innerHTML = `
       <td><span class="status-value">${escapeHtml(formatCalcTimeRu(row.created_at))}</span></td>
-      <td class="td-calc-author">${displayAuthor ? `<span class="status-value">${escapeHtml(displayAuthor)}</span>` : ""}</td>
-      <td>${escapeHtml(row.from_place)}</td>
-      <td>${escapeHtml(row.to_place)}</td>
+      <td class="td-calc-comment" data-comment-full="${escapeHtmlAttr(displayComment)}" tabindex="0" role="button" aria-label="Показать полный комментарий"><span class="calc-table-cell-text">${escapedComment}</span></td>
       ${incomeCell}
       ${expenseCell}
-      <td class="td-calc-comment" data-comment-full="${escapeHtmlAttr(displayComment)}" tabindex="0" role="button" aria-label="Показать полный комментарий"><span class="calc-table-cell-text">${escapedComment}</span></td>
+      <td>${escapeHtml(row.from_place)}</td>
+      <td>${escapeHtml(row.to_place)}</td>
+      <td class="td-calc-author">${displayAuthor ? `<span class="status-value">${escapeHtml(displayAuthor)}</span>` : ""}</td>
       ${actionsCell}
     `;
     tbody.appendChild(tr);

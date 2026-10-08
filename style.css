@@ -1586,11 +1586,11 @@ h2 {
   display: inline-grid;
   grid-template-rows: auto 22px;
   align-items: start;
-  min-width: 76px;
+  min-width: 0;
   max-width: 132px;
   min-height: 52px;
   margin: 0;
-  padding: 6px 8px 5px;
+  padding: 6px 4px 5px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
@@ -1855,8 +1855,6 @@ h2 {
 /* «Узкие» колонки: 1% от таблицы как нижняя граница, фактически — max(1%, min-content) — без растягивания пустотой */
 #calculationsTable th:nth-child(1),
 #calculationsTable td:nth-child(1),
-#calculationsTable th:nth-child(2),
-#calculationsTable td:nth-child(2),
 #calculationsTable th:nth-child(3),
 #calculationsTable td:nth-child(3),
 #calculationsTable th:nth-child(4),
@@ -1865,6 +1863,8 @@ h2 {
 #calculationsTable td:nth-child(5),
 #calculationsTable th:nth-child(6),
 #calculationsTable td:nth-child(6),
+#calculationsTable th:nth-child(7),
+#calculationsTable td:nth-child(7),
 #calculationsTable th:nth-child(8),
 #calculationsTable td:nth-child(8) {
   width: 1%;
@@ -1874,7 +1874,7 @@ h2 {
  * Узкий экран: горизонтальный скролл (.table-wrap).
  * iPhone: не задавать min-width таблице и не растягивать «узкие» колонки до 96/80px —
  * иначе между текстами огромные пустые поля (кажется «зазором между столбцами»).
- * Таблица по ширине = сумма колонок (max-content); 3px — только padding между ячейками.
+ * Таблица по ширине = сумма колонок (max-content); 5px — только padding между ячейками.
  */
 @media (max-width: 768px) {
   #calculationsTable {
@@ -1889,8 +1889,6 @@ h2 {
   /* Перекрываем width:1% — колонки ровно по содержимому + padding */
   #calculationsTable th:nth-child(1),
   #calculationsTable td:nth-child(1),
-  #calculationsTable th:nth-child(2),
-  #calculationsTable td:nth-child(2),
   #calculationsTable th:nth-child(3),
   #calculationsTable td:nth-child(3),
   #calculationsTable th:nth-child(4),
@@ -1899,14 +1897,16 @@ h2 {
   #calculationsTable td:nth-child(5),
   #calculationsTable th:nth-child(6),
   #calculationsTable td:nth-child(6),
+  #calculationsTable th:nth-child(7),
+  #calculationsTable td:nth-child(7),
   #calculationsTable th:nth-child(8),
   #calculationsTable td:nth-child(8) {
     width: max-content;
     min-width: 0;
   }
 
-  #calculationsTable th:nth-child(7),
-  #calculationsTable td:nth-child(7) {
+  #calculationsTable th:nth-child(2),
+  #calculationsTable td:nth-child(2) {
     width: auto;
     min-width: 0;
   }
@@ -1919,8 +1919,8 @@ h2 {
     box-sizing: border-box;
   }
 
-  #calculationsTable td:nth-child(5) .status-value,
-  #calculationsTable td:nth-child(6) .status-value {
+  #calculationsTable td:nth-child(3) .status-value,
+  #calculationsTable td:nth-child(4) .status-value {
     padding: 3px 6px;
     font-size: 12px;
   }
@@ -1938,7 +1938,7 @@ h2 {
   white-space: nowrap;
 }
 
-/* Время, Автор, Откуда, Куда, Доход, Расход, Комментарий — 3px между соседними столбцами */
+/* Между каждой парой видимых столбцов — ровно 5px. */
 #calculationsTable th:nth-child(1),
 #calculationsTable td:nth-child(1),
 #calculationsTable th:nth-child(2),
@@ -1950,13 +1950,11 @@ h2 {
 #calculationsTable th:nth-child(5),
 #calculationsTable td:nth-child(5),
 #calculationsTable th:nth-child(6),
-#calculationsTable td:nth-child(6) {
-  padding-left: 0;
-  padding-right: 3px;
-}
+#calculationsTable td:nth-child(6),
 #calculationsTable th:nth-child(7),
 #calculationsTable td:nth-child(7) {
   padding-left: 0;
+  padding-right: 5px;
 }
 #calculationsTable td.td-calc-comment {
   max-width: 100%;
@@ -2004,7 +2002,7 @@ h2 {
     padding-bottom: 8px;
   }
 
-  /* ~4px между колонками без border-spacing (он даёт разрывы заливки) */
+  /* 5px между колонками без border-spacing (он даёт разрывы заливки). */
   #calculationsTable th:nth-child(1),
   #calculationsTable td:nth-child(1),
   #calculationsTable th:nth-child(2),
@@ -2016,23 +2014,11 @@ h2 {
   #calculationsTable th:nth-child(5),
   #calculationsTable td:nth-child(5),
   #calculationsTable th:nth-child(6),
-  #calculationsTable td:nth-child(6) {
-    padding-left: 0;
-    padding-right: 4px;
-  }
+  #calculationsTable td:nth-child(6),
   #calculationsTable th:nth-child(7),
   #calculationsTable td:nth-child(7) {
     padding-left: 0;
-  }
-
-  /* Между «Время» и «Автор» оставляем только компактные 5px. */
-  #calculationsTable th:nth-child(1),
-  #calculationsTable td:nth-child(1) {
     padding-right: 5px;
-  }
-  #calculationsTable th:nth-child(2),
-  #calculationsTable td:nth-child(2) {
-    padding-left: 0;
   }
 
   #calculationsTable td.td-actions {
