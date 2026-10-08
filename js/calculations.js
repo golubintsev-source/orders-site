@@ -97,6 +97,24 @@ let appliedCalcDateToYmd = "";
 let appliedCalcAmountFrom = null;
 let appliedCalcAmountTo = null;
 
+/** Независимые фильтры, открываемые из заголовков таблицы. */
+const calcColumnFilters = {
+  timeFrom: "",
+  timeTo: "",
+  author: "",
+  from: "",
+  to: "",
+  incomeFrom: null,
+  incomeTo: null,
+  expenseFrom: null,
+  expenseTo: null,
+  comment: "",
+};
+
+let calcFilterPopoverEl = null;
+let calcFilterPopoverType = "";
+let calcFiltersInitialized = false;
+
 const CALC_SALDO_PARTICIPANTS = ["Вова", "Дима", "Касса", "Безнал"];
 /** «Куда» = доход: Вова, Дима, Касса, Безнал; иначе сумма в колонке «Расход». */
 const CALC_INCOME_TO_PLACES = new Set(["Вова", "Дима", "Касса", "Безнал"]);
@@ -247,15 +265,13 @@ function filterCalcRowsByDateRange(rows, fromYmd, toYmd) {
   return (rows || []).filter((r) => rowCreatedAtInYmdRange(r.created_at, fromYmd, toYmd));
 }
 
-/** Выставить поля дат и applied-диапазон по умолчанию (сегодня … сегодня). */
+/** При первом открытии, как и раньше, показываем расчёты за сегодня. */
 export function initCalculationsDateRangeDefaults() {
+  if (calcFiltersInitialized) return;
   const { fromYmd, toYmd } = defaultCalcDateRangeYmd();
-  const fromEl = document.getElementById("calcDateFrom");
-  const toEl = document.getElementById("calcDateTo");
-  if (fromEl) fromEl.value = fromYmd;
-  if (toEl) toEl.value = toYmd;
-  appliedCalcDateFromYmd = fromYmd;
-  appliedCalcDateToYmd = toYmd;
+  calcColumnFilters.timeFrom = `${fromYmd}T00:00`;
+  calcColumnFilters.timeTo = `${toYmd}T23:59`;
+  calcFiltersInitialized = true;
 }
 
 function readCalcPeriodInputs() {
@@ -825,13 +841,255 @@ export function getFilteredCalculationRows() {
 }
 
 function filterVisibleCalculationRows(rows) {
-  const q =
-    appliedCalculationsSearchQuery != null ? String(appliedCalculationsSearchQuery).trim() : "";
-  const needle = q ? q.toLowerCase() : "";
   return (rows || []).filter((row) => {
-    if (needle && !rowMatchesCalculationsSearch(row, needle)) return false;
-    return rowMatchesAmountRange(row, appliedCalcAmountFrom, appliedCalcAmountTo);
+    const createdMs = new Date(row?.created_at || "").getTime();
+    const fromMs = calcColumnFilters.timeFrom
+      ? calcDateTimeInputMs(calcColumnFilters.timeFrom, false)
+      : null;
+    const toMs = calcColumnFilters.timeTo
+      ? calcDateTimeInputMs(calcColumnFilters.timeTo, true)
+      : null;
+    if (fromMs != null && (!Number.isFinite(createdMs) || createdMs < fromMs)) return false;
+    if (toMs != null && (!Number.isFinite(createdMs) || createdMs > toMs)) return false;
+
+    const author = getCalcDisplayAuthor(row?.comment);
+    if (calcColumnFilters.author && author !== calcColumnFilters.author) return false;
+    if (calcColumnFilters.from && String(row?.from_place || "") !== calcColumnFilters.from) return false;
+    if (calcColumnFilters.to && String(row?.to_place || "") !== calcColumnFilters.to) return false;
+
+    const amount = Number(row?.amount);
+    const isIncome = CALC_INCOME_TO_PLACES.has(row?.to_place);
+    if (calcColumnFilters.incomeFrom != null || calcColumnFilters.incomeTo != null) {
+      if (!isIncome || !Number.isFinite(amount)) return false;
+      if (calcColumnFilters.incomeFrom != null && amount < calcColumnFilters.incomeFrom) return false;
+      if (calcColumnFilters.incomeTo != null && amount > calcColumnFilters.incomeTo) return false;
+    }
+    if (calcColumnFilters.expenseFrom != null || calcColumnFilters.expenseTo != null) {
+      if (isIncome || !Number.isFinite(amount)) return false;
+      if (calcColumnFilters.expenseFrom != null && amount < calcColumnFilters.expenseFrom) return false;
+      if (calcColumnFilters.expenseTo != null && amount > calcColumnFilters.expenseTo) return false;
+    }
+
+    const commentNeedle = normalizeCalcFilterText(calcColumnFilters.comment);
+    if (
+      commentNeedle &&
+      !normalizeCalcFilterText(getCalcDisplayComment(row?.comment)).includes(commentNeedle)
+    ) {
+      return false;
+    }
+    return true;
   });
+}
+
+function calcDateTimeInputMs(value, includeWholeMinute) {
+  const ms = new Date(value).getTime();
+  if (!Number.isFinite(ms)) return NaN;
+  return includeWholeMinute ? ms + 59_999 : ms;
+}
+
+/** Для комментария игнорируем регистр, пробелы, пунктуацию и прочие знаки. */
+function normalizeCalcFilterText(value) {
+  return String(value ?? "")
+    .toLocaleLowerCase("ru-RU")
+    .replace(/[\p{P}\p{S}\s]+/gu, "");
+}
+
+function uniqueCalcFilterValues(type) {
+  const values = calculationsRowsCache.map((row) => {
+    if (type === "author") return getCalcDisplayAuthor(row?.comment);
+    if (type === "from") return String(row?.from_place || "").trim();
+    if (type === "to") return String(row?.to_place || "").trim();
+    return "";
+  });
+  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru"));
+}
+
+function formatCalcFilterDateTime(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function calcFilterHeadingSummary(type) {
+  if (type === "time") {
+    const from = formatCalcFilterDateTime(calcColumnFilters.timeFrom);
+    const to = formatCalcFilterDateTime(calcColumnFilters.timeTo);
+    if (from && to) return `${from} — ${to}`;
+    if (from) return `от ${from}`;
+    if (to) return `до ${to}`;
+    return "";
+  }
+  if (["author", "from", "to"].includes(type)) return calcColumnFilters[type] || "";
+  if (type === "comment") return calcColumnFilters.comment || "";
+  const from = calcColumnFilters[`${type}From`];
+  const to = calcColumnFilters[`${type}To`];
+  if (from != null && to != null) return `${formatAmountWholeRubles(from)}–${formatAmountWholeRubles(to)}`;
+  if (from != null) return `от ${formatAmountWholeRubles(from)}`;
+  if (to != null) return `до ${formatAmountWholeRubles(to)}`;
+  return "";
+}
+
+function updateCalcFilterHeadingStates() {
+  document.querySelectorAll(".calc-filter-heading-btn[data-calc-filter]").forEach((btn) => {
+    const summary = calcFilterHeadingSummary(btn.dataset.calcFilter);
+    btn.classList.toggle("is-filtered", Boolean(summary));
+    const valueEl = btn.querySelector(".calc-filter-heading-value");
+    if (valueEl) {
+      valueEl.textContent = summary;
+      valueEl.title = summary;
+    }
+  });
+}
+
+function closeCalcFilterPopover() {
+  if (!calcFilterPopoverEl) return;
+  calcFilterPopoverEl.hidden = true;
+  calcFilterPopoverType = "";
+  document.querySelectorAll(".calc-filter-heading-btn[aria-expanded=\"true\"]").forEach((btn) => {
+    btn.setAttribute("aria-expanded", "false");
+  });
+}
+
+function calcFilterPopoverFields(type) {
+  if (type === "time") {
+    return `
+      <label class="calc-column-filter-field"><span>От</span><input id="calcFilterTimeFrom" type="datetime-local" value="${escapeHtmlAttr(calcColumnFilters.timeFrom)}"></label>
+      <label class="calc-column-filter-field"><span>До</span><input id="calcFilterTimeTo" type="datetime-local" value="${escapeHtmlAttr(calcColumnFilters.timeTo)}"></label>`;
+  }
+  if (["author", "from", "to"].includes(type)) {
+    const current = calcColumnFilters[type];
+    const options = uniqueCalcFilterValues(type)
+      .map((value) => `<option value="${escapeHtmlAttr(value)}"${value === current ? " selected" : ""}>${escapeHtml(value)}</option>`)
+      .join("");
+    return `<label class="calc-column-filter-field"><span>Значение</span><select id="calcFilterSelect"><option value="">Все</option>${options}</select></label>`;
+  }
+  if (type === "income" || type === "expense") {
+    const from = calcColumnFilters[`${type}From`];
+    const to = calcColumnFilters[`${type}To`];
+    return `
+      <label class="calc-column-filter-field"><span>От</span><input id="calcFilterAmountFrom" type="text" inputmode="numeric" value="${from == null ? "" : escapeHtmlAttr(formatAmountWholeRubles(from))}"></label>
+      <label class="calc-column-filter-field"><span>До</span><input id="calcFilterAmountTo" type="text" inputmode="numeric" value="${to == null ? "" : escapeHtmlAttr(formatAmountWholeRubles(to))}"></label>`;
+  }
+  return `<label class="calc-column-filter-field"><span>Текст комментария</span><input id="calcFilterComment" type="search" autocomplete="off" value="${escapeHtmlAttr(calcColumnFilters.comment)}" placeholder="Введите текст"></label>`;
+}
+
+function ensureCalcFilterPopover() {
+  if (calcFilterPopoverEl) return calcFilterPopoverEl;
+  const el = document.createElement("div");
+  el.id = "calcColumnFilterPopover";
+  el.className = "calc-column-filter-popover";
+  el.setAttribute("role", "dialog");
+  el.hidden = true;
+  document.body.appendChild(el);
+  calcFilterPopoverEl = el;
+  return el;
+}
+
+async function applyCalcColumnFilter(type) {
+  const popover = ensureCalcFilterPopover();
+  if (type === "time") {
+    const from = popover.querySelector("#calcFilterTimeFrom")?.value || "";
+    const to = popover.querySelector("#calcFilterTimeTo")?.value || "";
+    if (from && to && calcDateTimeInputMs(from, false) > calcDateTimeInputMs(to, true)) {
+      setMessage("В фильтре времени значение «от» не может быть позже «до».", true);
+      return;
+    }
+    calcColumnFilters.timeFrom = from;
+    calcColumnFilters.timeTo = to;
+  } else if (["author", "from", "to"].includes(type)) {
+    calcColumnFilters[type] = popover.querySelector("#calcFilterSelect")?.value || "";
+  } else if (type === "income" || type === "expense") {
+    const fromRaw = popover.querySelector("#calcFilterAmountFrom")?.value || "";
+    const toRaw = popover.querySelector("#calcFilterAmountTo")?.value || "";
+    const from = fromRaw.trim() ? parseCalcAmountInput(fromRaw) : null;
+    const to = toRaw.trim() ? parseCalcAmountInput(toRaw) : null;
+    if (from === undefined || to === undefined) {
+      setMessage(MSG_SUM_INTEGER_ONLY, true);
+      return;
+    }
+    if (from != null && to != null && from > to) {
+      setMessage("Сумма «от» не может быть больше суммы «до».", true);
+      return;
+    }
+    calcColumnFilters[`${type}From`] = from;
+    calcColumnFilters[`${type}To`] = to;
+  } else {
+    calcColumnFilters.comment = popover.querySelector("#calcFilterComment")?.value.trim() || "";
+  }
+  setMessage("");
+  closeCalcFilterPopover();
+  if (type === "time") await loadCalculations();
+  else renderCalculationsTableFromCache();
+}
+
+async function resetCalcColumnFilter(type) {
+  if (type === "time") {
+    calcColumnFilters.timeFrom = "";
+    calcColumnFilters.timeTo = "";
+  } else if (["author", "from", "to", "comment"].includes(type)) {
+    calcColumnFilters[type] = "";
+  } else {
+    calcColumnFilters[`${type}From`] = null;
+    calcColumnFilters[`${type}To`] = null;
+  }
+  setMessage("");
+  closeCalcFilterPopover();
+  if (type === "time") await loadCalculations();
+  else renderCalculationsTableFromCache();
+}
+
+function openCalcFilterPopover(type, anchor) {
+  const popover = ensureCalcFilterPopover();
+  calcFilterPopoverType = type;
+  popover.innerHTML = `
+    <div class="calc-column-filter-fields">${calcFilterPopoverFields(type)}</div>
+    <div class="calc-column-filter-actions">
+      <button type="button" class="calc-column-filter-find">Найти</button>
+      <button type="button" class="calc-column-filter-reset">Сбросить</button>
+    </div>`;
+  popover.hidden = false;
+  document.querySelectorAll(".calc-filter-heading-btn").forEach((btn) => {
+    btn.setAttribute("aria-expanded", btn === anchor ? "true" : "false");
+  });
+  const rect = anchor.getBoundingClientRect();
+  const width = Math.min(320, Math.max(240, window.innerWidth - 16));
+  popover.style.width = `${width}px`;
+  popover.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+  popover.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - popover.offsetHeight - 8)}px`;
+  popover.querySelector(".calc-column-filter-find")?.addEventListener("click", () => void applyCalcColumnFilter(type));
+  popover.querySelector(".calc-column-filter-reset")?.addEventListener("click", () => void resetCalcColumnFilter(type));
+  popover.querySelector("input, select")?.focus({ preventScroll: true });
+}
+
+function setupCalcColumnFilters() {
+  const table = document.getElementById("calculationsTable");
+  if (!table || table.dataset.columnFiltersBound) return;
+  table.dataset.columnFiltersBound = "1";
+  table.querySelectorAll(".calc-filter-heading-btn[data-calc-filter]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const type = btn.dataset.calcFilter;
+      if (!type) return;
+      if (!calcFilterPopoverEl?.hidden && calcFilterPopoverType === type) {
+        closeCalcFilterPopover();
+        return;
+      }
+      openCalcFilterPopover(type, btn);
+    });
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (calcFilterPopoverEl?.hidden) return;
+    if (calcFilterPopoverEl?.contains(event.target)) return;
+    if (event.target.closest?.(".calc-filter-heading-btn")) return;
+    closeCalcFilterPopover();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeCalcFilterPopover();
+  });
+  window.addEventListener("resize", closeCalcFilterPopover);
+  updateCalcFilterHeadingStates();
 }
 
 /** Несколько слов в «Что искать»: каждое должно встретиться в данных (%слово1% И %слово2% …). */
@@ -1046,6 +1304,7 @@ function renderCalculationsTableFromCache() {
   if (!tbody) return;
 
   tbody.innerHTML = "";
+  updateCalcFilterHeadingStates();
 
   const rows = filterVisibleCalculationRows(calculationsRowsCache);
 
@@ -1137,27 +1396,27 @@ export async function loadCalculations() {
   const tbody = document.querySelector("#calculationsTable tbody");
   if (!tbody) return;
 
-  if (!appliedCalcDateFromYmd || !appliedCalcDateToYmd) {
-    initCalculationsDateRangeDefaults();
-  }
-
-  const dateFromInput = document.getElementById("calcDateFrom");
-  const dateToInput = document.getElementById("calcDateTo");
-  if (dateFromInput) dateFromInput.value = appliedCalcDateFromYmd;
-  if (dateToInput) dateToInput.value = appliedCalcDateToYmd;
-
-  const fromIso = new Date(localYmdStartMs(appliedCalcDateFromYmd)).toISOString();
-  const toIso = new Date(localYmdEndMs(appliedCalcDateToYmd)).toISOString();
-
-  const calculationsQuery = () =>
-    supabaseClient
+  const calculationsQuery = () => {
+    let query = supabaseClient
       .from("calculations")
       .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
-      .is("deleted_at", null)
-      .gte("created_at", fromIso)
-      .lte("created_at", toIso)
+      .is("deleted_at", null);
+    if (calcColumnFilters.timeFrom) {
+      query = query.gte(
+        "created_at",
+        new Date(calcDateTimeInputMs(calcColumnFilters.timeFrom, false)).toISOString(),
+      );
+    }
+    if (calcColumnFilters.timeTo) {
+      query = query.lte(
+        "created_at",
+        new Date(calcDateTimeInputMs(calcColumnFilters.timeTo, true)).toISOString(),
+      );
+    }
+    return query
       .order("created_at", { ascending: false })
       .order("id", { ascending: false });
+  };
 
   let data = null;
   let error = null;
@@ -1183,11 +1442,7 @@ export async function loadCalculations() {
     console.error("Ошибка загрузки расчетов:", error);
     setMessage("Показана копия с устройства; локальные несинхронизированные строки — с жёлтой заливкой.", true);
     const merged = mergeCalculationRows(readSnapshot()?.calculations || []);
-    calculationsRowsCache = filterCalcRowsByDateRange(
-      merged,
-      appliedCalcDateFromYmd,
-      appliedCalcDateToYmd
-    );
+    calculationsRowsCache = merged;
     await refreshCalcOrderAddressesForRows(calculationsRowsCache);
     renderCalculationsTableFromCache();
     return;
@@ -1195,11 +1450,7 @@ export async function loadCalculations() {
 
   setMessage("");
   const merged = mergeCalculationRows(data || []);
-  calculationsRowsCache = filterCalcRowsByDateRange(
-    merged,
-    appliedCalcDateFromYmd,
-    appliedCalcDateToYmd
-  );
+  calculationsRowsCache = merged;
   persistCalculationsSnapshot(calculationsRowsCache);
   await refreshCalcOrderAddressesForRows(calculationsRowsCache);
   renderCalculationsTableFromCache();
@@ -1611,6 +1862,7 @@ function setupCalculationsForm() {
   }
   bindCalcPlaceSelectRoleGuards();
   applyCalcPlaceSelectsForRole();
+  setupCalcColumnFilters();
 
   const searchBtn = document.getElementById("calcSearchBtn");
   const searchInput = document.getElementById("calcSearchInput");

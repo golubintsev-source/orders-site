@@ -35,6 +35,6 @@ assert.doesNotMatch(ordersSource, /reminder\.hidden = true/);
 assert.match(indexSource, /id="orderPhotoReminder"/);
 assert.match(indexSource, /мы великодушно пропустим заказ без него/);
 assert.match(styleSource, /\.order-photo-reminder/);
-assert.match(swSource, /orders-site-static-v74/);
+assert.match(swSource, /orders-site-static-v75/);
 
 console.log("order photo reminder tests: ok");

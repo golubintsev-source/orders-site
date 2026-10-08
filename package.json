@@ -18,7 +18,8 @@
     "test:all-changes-author": "node scripts/test-all-changes-author.mjs",
     "test:excess-idempotency": "node scripts/test-excess-idempotency.mjs",
     "test:calculations-user-edit": "node scripts/test-calculations-user-edit.mjs",
-    "test:calculations-comment-autocomplete": "node scripts/test-calculations-comment-autocomplete.mjs"
+    "test:calculations-comment-autocomplete": "node scripts/test-calculations-comment-autocomplete.mjs",
+    "test:calculations-column-filters": "node scripts/test-calculations-column-filters.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",

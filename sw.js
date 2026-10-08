@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v74: подсказки ранее введённых ручных комментариев на странице «Расчёты».
-const STATIC_CACHE = "orders-site-static-v74";
+// v75: фильтры расчётов в заголовках таблицы и Excel-кнопка под таблицей.
+const STATIC_CACHE = "orders-site-static-v75";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

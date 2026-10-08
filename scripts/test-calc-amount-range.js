@@ -33,40 +33,30 @@ assert(rowMatchesAmountRange({ amount: 0 }, 0, 10), "ноль входит в д
 
 const root = path.join(__dirname, "..");
 const calcJs = fs.readFileSync(path.join(root, "js/calculations.js"), "utf8");
-assert(calcJs.includes("function rowMatchesAmountRange("), "в calculations.js есть rowMatchesAmountRange");
-assert(calcJs.includes("appliedCalcAmountFrom"), "в calculations.js есть appliedCalcAmountFrom");
-assert(calcJs.includes("calcAmountFrom"), "в calculations.js читается calcAmountFrom");
-assert(calcJs.includes("calcAmountTo"), "в calculations.js читается calcAmountTo");
+assert(calcJs.includes("incomeFrom"), "есть отдельная нижняя граница дохода");
+assert(calcJs.includes("incomeTo"), "есть отдельная верхняя граница дохода");
+assert(calcJs.includes("expenseFrom"), "есть отдельная нижняя граница расхода");
+assert(calcJs.includes("expenseTo"), "есть отдельная верхняя граница расхода");
+assert(calcJs.includes('id="calcFilterAmountFrom"'), "попап содержит сумму «от»");
+assert(calcJs.includes('id="calcFilterAmountTo"'), "попап содержит сумму «до»");
 
 for (const file of ["index.html", "calculations.html"]) {
   const html = fs.readFileSync(path.join(root, file), "utf8");
-  assert(html.includes('id="calcAmountFrom"'), `${file}: поле суммы «от»`);
-  assert(html.includes('id="calcAmountTo"'), `${file}: поле суммы «до»`);
-  assert(html.includes('calculations-form-row--amounts'), `${file}: строка диапазона сумм ниже дат`);
-  assert(html.includes('class="calculations-amount-input"'), `${file}: класс полей суммы`);
-  assert(/id="calcAmountFrom"[^>]*size="8"/.test(html), `${file}: компактный size у «от»`);
-  assert(/id="calcAmountTo"[^>]*size="8"/.test(html), `${file}: компактный size у «до»`);
-  const dateIdx = html.indexOf('calculations-form-row--dates');
-  const amountIdx = html.indexOf('calculations-form-row--amounts');
-  assert(dateIdx >= 0 && amountIdx > dateIdx, `${file}: поля сумм идут ниже полей дат`);
+  assert(html.includes('data-calc-filter="income"'), `${file}: фильтр дохода в заголовке`);
+  assert(html.includes('data-calc-filter="expense"'), `${file}: фильтр расхода в заголовке`);
+  assert(!html.includes('id="calcAmountFrom"'), `${file}: старое поле суммы «от» убрано`);
+  assert(!html.includes('calculations-form-row--amounts'), `${file}: старый блок сумм убран`);
 }
 
 const css = fs.readFileSync(path.join(root, "style.css"), "utf8");
 assert(
-  /#calcAmountFrom[\s\S]*font-size:\s*16px/.test(css),
-  "style.css: поля «от»/«до» с font-size 16px (без зума iOS)"
-);
-assert(
-  /#calcAmountFrom[\s\S]*width:\s*6\.8rem/.test(css),
-  "style.css: ширина полей сумм как у дат (6.8rem)"
+  /\.calc-column-filter-field input[\s\S]*font-size:\s*16px/.test(css),
+  "style.css: поля попапа с font-size 16px (без зума iOS)"
 );
 assert(
   /#calcAmount\s*,[\s\S]*font-size:\s*16px/.test(css) || /#calcAmount \{[\s\S]*font-size:\s*16px/.test(css),
   "style.css: поле «Сумма» с font-size 16px"
 );
-assert(
-  css.includes("calculations-form-row--amounts") && css.includes("flex-direction: row"),
-  "style.css: «от» и «до» в одну строку"
-);
+assert(css.includes("calc-column-filter-actions"), "style.css: действия попапа оформлены");
 
 console.log("test-calc-amount-range: ok");
