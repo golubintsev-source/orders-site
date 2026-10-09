@@ -392,6 +392,11 @@ export function switchSection(sectionId, opts = {}) {
   updateOrdersSearchBtnVisibility(sectionId);
   syncIosFormControlLocks(sectionId);
 
+  if ((sectionId === "all" || sectionId === "new") && prevSectionId !== sectionId && !state.allOrders?.length) {
+    // Загружаем заказы только при первом переходе к заказам; повторные
+    // переходы во время запроса объединяет loadOrders.
+    void import("./orders.js").then((m) => m.loadOrders());
+  }
   if (sectionId === "balance") {
     loadBalance({ recordView: true });
   }
