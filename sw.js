@@ -9,7 +9,7 @@
  */
 const BADGE_CACHE = "orders-site-badge-v1";
 // v80: доход и расход перед комментарием в таблице расчётов.
-const STATIC_CACHE = "orders-site-static-v80";
+const STATIC_CACHE = "orders-site-static-v81";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -20,39 +20,7 @@ const PRECACHE_URLS = [
   "/",
   "/index.html",
   "/style.css",
-  "/js/performance-monitor.js",
-  "/js/chat-boot.js",
-  "/js/vendor/supabase.js",
-  "/js/boot-route.js",
-  "/js/main.js",
-  "/js/config.js",
-  "/js/state.js",
-  "/js/auth.js",
-  "/js/orders.js",
-  "/js/order-atomic-save.js",
-  "/js/offline-cache.js",
-  "/js/dom.js",
-  "/js/ui.js",
-  "/js/cell-tooltip.js",
-  "/js/section-nav.js",
-  "/js/speed-test.js",
-  "/js/app-routes.js",
-  "/js/settings.js",
-  "/js/roles.js",
-  "/js/files.js",
-  "/js/manager-salary.js",
-  "/js/debts.js",
-  "/js/debts-matrix.js",
-  "/js/register-sw.js",
   // Раздел «Чаты» открывают чаще всего — держим его модули готовыми к первому кадру.
-  "/js/messages.js",
-  "/js/messages-body.js",
-  "/js/messages-sync-utils.js",
-  "/js/all-salaries.js",
-  "/js/all-salaries-utils.js",
-  "/js/format.js",
-  "/js/user-names.js",
-  "/js/supabase-fetch.js",
   "/manifest.webmanifest",
   "/img/icon-192.png?v=20260803",
 ];
