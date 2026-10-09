@@ -412,7 +412,10 @@ export function switchSection(sectionId, opts = {}) {
     void import("./route-sheet.js").then((m) => m.bumpRouteDeliveryMapGeneration());
   }
   if (sectionId === "calculations") {
-    void import("./calculations.js").then((m) => m.loadCalculations());
+    void import("./calculations.js").then((m) => {
+      m.bindCalculationsSection();
+      return m.loadCalculations();
+    });
   }
   if (sectionId === "all-salaries") {
     void import("./all-salaries.js").then((m) => {
