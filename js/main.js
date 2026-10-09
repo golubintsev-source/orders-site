@@ -102,7 +102,7 @@ async function initSecondarySections(opts = {}) {
 
   const run = async () => {
     const [
-      { bindCalculationsSection, loadCalculations },
+      { bindCalculationsSection },
       { initAllSalariesSection, loadAllSalaries },
       { bindExcessSection, loadExcesses },
       { initRouteSheetSection },
@@ -145,9 +145,7 @@ async function initSecondarySections(opts = {}) {
 
     if (canAccessSection("calculations")) {
       bindCalculationsSection();
-      if (getCurrentSectionId() === "calculations") {
-        void loadCalculations();
-      }
+      // Загрузка выполняется маршрутизатором при открытии раздела.
     }
 
     if (canAccessSection("all-salaries")) {
