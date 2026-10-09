@@ -23,6 +23,6 @@ assert.match(messagesSource, /if \(composerSendPromise\) return composerSendProm
 assert.match(styleSource, /\.messages-feed[\s\S]*?overflow-anchor: none/);
 assert.match(styleSource, /\.messages-composer-input[\s\S]*?caret-color: #059669/);
 assert.match(styleSource, /html\.keyboard-open:has\(#section-messages\.content-section\.active\)[\s\S]*?overflow: hidden/);
-assert.match(swSource, /orders-site-static-v79/);
+assert.match(swSource, /orders-site-static-v80/);
 
 console.log("messages iOS composer tests: ok");

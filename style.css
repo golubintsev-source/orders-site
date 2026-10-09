@@ -1855,10 +1855,10 @@ h2 {
 /* «Узкие» колонки: 1% от таблицы как нижняя граница, фактически — max(1%, min-content) — без растягивания пустотой */
 #calculationsTable th:nth-child(1),
 #calculationsTable td:nth-child(1),
+#calculationsTable th:nth-child(2),
+#calculationsTable td:nth-child(2),
 #calculationsTable th:nth-child(3),
 #calculationsTable td:nth-child(3),
-#calculationsTable th:nth-child(4),
-#calculationsTable td:nth-child(4),
 #calculationsTable th:nth-child(5),
 #calculationsTable td:nth-child(5),
 #calculationsTable th:nth-child(6),
@@ -1889,10 +1889,10 @@ h2 {
   /* Перекрываем width:1% — колонки ровно по содержимому + padding */
   #calculationsTable th:nth-child(1),
   #calculationsTable td:nth-child(1),
+  #calculationsTable th:nth-child(2),
+  #calculationsTable td:nth-child(2),
   #calculationsTable th:nth-child(3),
   #calculationsTable td:nth-child(3),
-  #calculationsTable th:nth-child(4),
-  #calculationsTable td:nth-child(4),
   #calculationsTable th:nth-child(5),
   #calculationsTable td:nth-child(5),
   #calculationsTable th:nth-child(6),
@@ -1905,8 +1905,8 @@ h2 {
     min-width: 0;
   }
 
-  #calculationsTable th:nth-child(2),
-  #calculationsTable td:nth-child(2) {
+  #calculationsTable th:nth-child(4),
+  #calculationsTable td:nth-child(4) {
     width: auto;
     min-width: 0;
   }
@@ -1919,8 +1919,8 @@ h2 {
     box-sizing: border-box;
   }
 
-  #calculationsTable td:nth-child(3) .status-value,
-  #calculationsTable td:nth-child(4) .status-value {
+  #calculationsTable td:nth-child(2) .status-value,
+  #calculationsTable td:nth-child(3) .status-value {
     padding: 3px 6px;
     font-size: 12px;
   }
