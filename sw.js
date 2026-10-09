@@ -17,12 +17,13 @@ const CHAT_VISIBILITY_KEY = "/chat-visibility";
 const LEGACY_CACHE_PREFIXES = ["orders-site-static-"];
 
 const PRECACHE_URLS = [
-  "/",
-  "/index.html",
-  "/style.css",
-  // Раздел «Чаты» открывают чаще всего — держим его модули готовыми к первому кадру.
-  "/manifest.webmanifest",
-  "/img/icon-192.png?v=20260803",
+  "/", "/index.html", "/style.css", "/js/vendor/supabase.js",
+  "/js/boot-route.js", "/js/main.js", "/js/config.js", "/js/state.js",
+  "/js/auth.js", "/js/orders.js", "/js/offline-cache.js", "/js/dom.js",
+  "/js/ui.js", "/js/section-nav.js", "/js/app-routes.js",
+  "/js/settings.js", "/js/roles.js", "/js/files.js",
+  "/js/format.js", "/js/user-names.js", "/js/supabase-fetch.js",
+  "/js/register-sw.js", "/manifest.webmanifest",
 ];
 
 self.addEventListener("install", (event) => {
