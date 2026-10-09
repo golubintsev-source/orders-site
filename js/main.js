@@ -251,7 +251,11 @@ async function init() {
     }
 
     // На «Чатах» заказы нужны только компоновщику и фильтру упоминаний — не в первом кадре.
-    const ordersPromise = messagesFirst ? whenIdle().then(() => loadOrders()) : loadOrders();
+    const initialSection = getRouteSectionFromUrl();
+    // Полный архив заказов нужен только списку и форме заказа. Для остальных
+    // разделов не запускаем дорогостоящий запрос при первом показе.
+    const needsOrdersOnBoot = initialSection === "all" || initialSection === "new";
+    const ordersPromise = needsOrdersOnBoot ? loadOrders() : Promise.resolve();
 
     await Promise.all([loadProfile(), loadSettings()]);
     const { applySettingsAdminBlocksVisibility } = await import("./settings.js");
