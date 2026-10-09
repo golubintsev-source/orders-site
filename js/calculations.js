@@ -1971,4 +1971,8 @@ async function init() {
   await applySavedScroll(readSavedPlaceForCurrentPage(user.id));
 }
 
-init();
+// В SPA раздел инициализируется из main.js / section-nav.js.
+// Самостоятельный запуск допустим только на отдельной странице calculations.html.
+if (document.getElementById("section-calculations") == null) {
+  void init();
+}
