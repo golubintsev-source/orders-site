@@ -1,0 +1,28 @@
+name: Performance regression checks
+on:
+  pull_request:
+    paths:
+      - 'js/**'
+      - 'sw.js'
+      - 'tests/**'
+      - '.github/workflows/performance-regression.yml'
+  workflow_dispatch:
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check changed application modules
+        run: |
+          node --check js/main.js
+          node --check js/calculations.js
+          node --check js/orders.js
+          node --check js/section-nav.js
+          node --check js/offline-cache.js
+          node --check js/register-sw.js
+          node --check sw.js
+      - name: Performance regression checks
+        run: node --test tests/performance-priority.test.mjs
