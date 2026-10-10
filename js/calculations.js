@@ -36,6 +36,7 @@ import {
   isOfflineDataMode,
   isBrowserOffline,
   raceWithTimeout,
+  raceReadWithTimeout,
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows, fetchSupabaseByIdsInChunks } from "./supabase-fetch.js";
 import { attachFieldAutocomplete } from "./clientAutocomplete.js";
@@ -152,7 +153,7 @@ async function loadCalcCommentSuggestions() {
     return;
   }
   try {
-    const result = await raceWithTimeout(
+    const result = await raceReadWithTimeout(
       fetchAllSupabaseRows(() =>
         supabaseClient
           .from("calculations")
@@ -812,7 +813,7 @@ async function refreshCalcOrderAddressesForRows(rows) {
   }
 
   try {
-    const { data, error } = await raceWithTimeout(
+    const { data, error } = await raceReadWithTimeout(
       fetchSupabaseByIdsInChunks(
         (chunkIds) =>
           supabaseClient
@@ -1394,7 +1395,11 @@ function renderCalculationsTableFromCache() {
   renderCalculationsSaldoTable(rows);
 }
 
+let calculationsLoadGeneration = 0;
 export async function loadCalculations() {
+  // Поздний ответ предыдущего фильтра не должен перетирать новый результат.
+  const generation = ++calculationsLoadGeneration;
+  initCalculationsDateRangeDefaults();
   const tbody = document.querySelector("#calculationsTable tbody");
   if (!tbody) return;
 
@@ -1426,7 +1431,7 @@ export async function loadCalculations() {
     error = { message: "offline" };
   } else {
     try {
-      const res = await raceWithTimeout(fetchAllSupabaseRows(calculationsQuery));
+      const res = await raceReadWithTimeout(fetchAllSupabaseRows(calculationsQuery));
       data = res.data;
       error = res.error;
     } catch (e) {
@@ -1439,6 +1444,8 @@ export async function loadCalculations() {
       }
     }
   }
+
+  if (generation !== calculationsLoadGeneration) return;
 
   if (error) {
     console.error("Ошибка загрузки расчетов:", error);
@@ -1971,4 +1978,8 @@ async function init() {
   await applySavedScroll(readSavedPlaceForCurrentPage(user.id));
 }
 
-init();
+// В SPA раздел инициализируется из main.js / section-nav.js.
+// Самостоятельный запуск допустим только на отдельной странице calculations.html.
+if (document.getElementById("section-calculations") == null) {
+  void init();
+}

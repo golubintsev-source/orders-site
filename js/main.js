@@ -102,7 +102,7 @@ async function initSecondarySections(opts = {}) {
 
   const run = async () => {
     const [
-      { bindCalculationsSection, loadCalculations },
+      { bindCalculationsSection },
       { initAllSalariesSection, loadAllSalaries },
       { bindExcessSection, loadExcesses },
       { initRouteSheetSection },
@@ -145,9 +145,7 @@ async function initSecondarySections(opts = {}) {
 
     if (canAccessSection("calculations")) {
       bindCalculationsSection();
-      if (getCurrentSectionId() === "calculations") {
-        void loadCalculations();
-      }
+      // Загрузка выполняется маршрутизатором при открытии раздела.
     }
 
     if (canAccessSection("all-salaries")) {
@@ -253,7 +251,16 @@ async function init() {
     }
 
     // На «Чатах» заказы нужны только компоновщику и фильтру упоминаний — не в первом кадре.
-    const ordersPromise = messagesFirst ? whenIdle().then(() => loadOrders()) : loadOrders();
+    const initialSection = getRouteSectionFromUrl();
+    // Полный архив заказов нужен только списку и форме заказа. Для остальных
+    // разделов не запускаем дорогостоящий запрос при первом показе.
+    const pendingOrderId = getOrderIdFromUrl();
+    const savedBootApp = readSavedPlaceForCurrentPage(user.id)?.app;
+    const needsOrdersOnBoot = initialSection === "all" || initialSection === "new" ||
+      pendingOrderId != null ||
+      (savedBootApp?.sectionId === "new" &&
+        (savedBootApp.viewingOrderId != null || savedBootApp.editingOrderId != null));
+    const ordersPromise = needsOrdersOnBoot ? loadOrders() : Promise.resolve();
 
     await Promise.all([loadProfile(), loadSettings()]);
     const { applySettingsAdminBlocksVisibility } = await import("./settings.js");

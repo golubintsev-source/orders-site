@@ -9,52 +9,20 @@
  */
 const BADGE_CACHE = "orders-site-badge-v1";
 // v80: доход и расход перед комментарием в таблице расчётов.
-const STATIC_CACHE = "orders-site-static-v80";
+const STATIC_CACHE = "orders-site-static-v81";
 const BADGE_COUNT_KEY = "/badge-count";
-const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
 
 const LEGACY_CACHE_PREFIXES = ["orders-site-static-"];
 
 const PRECACHE_URLS = [
-  "/",
-  "/index.html",
-  "/style.css",
-  "/js/performance-monitor.js",
-  "/js/chat-boot.js",
-  "/js/vendor/supabase.js",
-  "/js/boot-route.js",
-  "/js/main.js",
-  "/js/config.js",
-  "/js/state.js",
-  "/js/auth.js",
-  "/js/orders.js",
-  "/js/order-atomic-save.js",
-  "/js/offline-cache.js",
-  "/js/dom.js",
-  "/js/ui.js",
-  "/js/cell-tooltip.js",
-  "/js/section-nav.js",
-  "/js/speed-test.js",
-  "/js/app-routes.js",
-  "/js/settings.js",
-  "/js/roles.js",
-  "/js/files.js",
-  "/js/manager-salary.js",
-  "/js/debts.js",
-  "/js/debts-matrix.js",
-  "/js/register-sw.js",
-  // Раздел «Чаты» открывают чаще всего — держим его модули готовыми к первому кадру.
-  "/js/messages.js",
-  "/js/messages-body.js",
-  "/js/messages-sync-utils.js",
-  "/js/all-salaries.js",
-  "/js/all-salaries-utils.js",
-  "/js/format.js",
-  "/js/user-names.js",
-  "/js/supabase-fetch.js",
-  "/manifest.webmanifest",
-  "/img/icon-192.png?v=20260803",
+  "/", "/index.html", "/style.css", "/js/vendor/supabase.js",
+  "/js/boot-route.js", "/js/main.js", "/js/config.js", "/js/state.js",
+  "/js/auth.js", "/js/orders.js", "/js/offline-cache.js", "/js/dom.js",
+  "/js/ui.js", "/js/section-nav.js", "/js/app-routes.js",
+  "/js/settings.js", "/js/roles.js", "/js/files.js",
+  "/js/format.js", "/js/user-names.js", "/js/supabase-fetch.js",
+  "/js/register-sw.js", "/manifest.webmanifest",
 ];
 
 self.addEventListener("install", (event) => {
@@ -71,7 +39,7 @@ self.addEventListener("install", (event) => {
           }
         }),
       );
-      await self.skipWaiting();
+      // Новый worker останется waiting до закрытия вкладок предыдущей версии.
     })(),
   );
 });
@@ -90,10 +58,7 @@ self.addEventListener("activate", (event) => {
           )
           .map((k) => caches.delete(k)),
       );
-      await self.clients.claim();
-      // После смены STATIC_CACHE старый JS мог остаться в памяти вкладки —
-      // всегда просим оболочку перезагрузиться.
-      await notifyShellUpdated();
+      // Не вызываем clients.claim(): старые открытые вкладки не перехватываем.
       const count = await getBadgeCount();
       if (count > 0) await applyAppBadge(count);
     })(),
@@ -143,6 +108,23 @@ async function staleWhileRevalidate(request) {
   return new Response("Offline", { status: 503, statusText: "Offline" });
 }
 
+/** JS/CSS фиксируются на время жизни версии worker'а.
+ * Не скачиваем модули при каждом переходе и не смешиваем разные релизы.
+ * Динамические файлы, отсутствующие в precache, сохраняются после первого запроса.
+ */
+async function cacheFirstVersioned(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  try {
+    const response = await fetch(request);
+    if (response?.ok) await cache.put(request, response.clone());
+    return response;
+  } catch {
+    return new Response("Offline", { status: 503, statusText: "Offline" });
+  }
+}
+
 /** Пути, которые vercel.json переписывает на index.html (см. rewrites). */
 const APP_SHELL_PATHS = new Set([
   "/",
@@ -187,9 +169,12 @@ async function staleWhileRevalidateShell(request, event) {
     .then(async (res) => {
       if (!res || !res.ok) return res;
       const freshText = await res.clone().text();
-      await cache.put("/", res.clone());
-      await cache.put("/index.html", res.clone());
-      if (cachedText != null && freshText !== cachedText) await notifyShellUpdated();
+      // Не смешиваем новый HTML со старыми JS-модулями в текущем cache version.
+      // Новый HTML придёт вместе с новой версией service worker.
+      if (cachedText == null || cachedText === freshText) {
+        await cache.put("/", res.clone());
+        await cache.put("/index.html", res.clone());
+      }
       return res;
     })
     .catch(() => null);
@@ -203,33 +188,6 @@ async function staleWhileRevalidateShell(request, event) {
   const network = await networkPromise;
   if (network) return network;
   return offlineNavigationResponse();
-}
-
-/**
- * Страница показана из кэша, а на сервере уже другая версия — см. js/register-sw.js.
- * Фоновая проверка часто заканчивается раньше, чем страница успеет подписаться на
- * сообщения, поэтому факт обновления ещё и запоминается до запроса клиента.
- */
-async function notifyShellUpdated() {
-  const cache = await caches.open(BADGE_CACHE);
-  await cache.put(SHELL_UPDATED_KEY, new Response("1"));
-  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-  for (const client of clients) {
-    client.postMessage({ type: "shell-updated" });
-  }
-}
-
-/** Читает и сразу гасит флаг: перезагрузка нужна ровно один раз. */
-async function consumeShellUpdatedFlag() {
-  try {
-    const cache = await caches.open(BADGE_CACHE);
-    const hit = await cache.match(SHELL_UPDATED_KEY);
-    if (!hit) return false;
-    await cache.delete(SHELL_UPDATED_KEY);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** Остальные HTML-страницы остаются network-first: они открываются редко. */
@@ -269,7 +227,7 @@ self.addEventListener("fetch", (event) => {
   if (isStaticAsset(url)) {
     // JS в PWA: не ждём сеть при нестабильном соединении (особенно на iOS/WebView),
     // иначе динамические import'ы могут "залипать" до таймаутов браузера.
-    event.respondWith(staleWhileRevalidate(request));
+    event.respondWith(cacheFirstVersioned(request));
     return;
   }
 
@@ -429,14 +387,6 @@ self.addEventListener("message", (event) => {
   }
   if (event.data?.type === "set-badge-count") {
     event.waitUntil(setBadgeCount(Number(event.data.count) || 0));
-    return;
-  }
-  if (event.data?.type === "get-shell-updated") {
-    event.waitUntil(
-      (async () => {
-        event.ports[0]?.postMessage({ updated: await consumeShellUpdatedFlag() });
-      })(),
-    );
     return;
   }
   if (event.data?.type === "get-badge-count") {

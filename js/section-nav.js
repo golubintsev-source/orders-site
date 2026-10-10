@@ -392,6 +392,11 @@ export function switchSection(sectionId, opts = {}) {
   updateOrdersSearchBtnVisibility(sectionId);
   syncIosFormControlLocks(sectionId);
 
+  if ((sectionId === "all" || sectionId === "new") && prevSectionId !== sectionId && !state.allOrders?.length) {
+    // Загружаем заказы только при первом переходе к заказам; повторные
+    // переходы во время запроса объединяет loadOrders.
+    void import("./orders.js").then((m) => m.loadOrders());
+  }
   if (sectionId === "balance") {
     loadBalance({ recordView: true });
   }
@@ -407,7 +412,10 @@ export function switchSection(sectionId, opts = {}) {
     void import("./route-sheet.js").then((m) => m.bumpRouteDeliveryMapGeneration());
   }
   if (sectionId === "calculations") {
-    void import("./calculations.js").then((m) => m.loadCalculations());
+    void import("./calculations.js").then((m) => {
+      m.bindCalculationsSection();
+      return m.loadCalculations();
+    });
   }
   if (sectionId === "all-salaries") {
     void import("./all-salaries.js").then((m) => {

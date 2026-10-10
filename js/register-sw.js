@@ -17,42 +17,10 @@
     }
   });
 
-  /**
-   * Оболочка отдаётся из кэша, поэтому сразу после выкатки открывается прошлая версия.
-   * После критичных фиксов (сохранение заказа) перезагружаем сразу, иначе в памяти
-   * остаётся старый JS с upsert ON CONFLICT.
-   */
-
-  /** Запрос гасит флаг в service worker, поэтому «да» получит ровно один вызов. */
-  function consumeShellUpdated(worker) {
-    if (!worker) return Promise.resolve(false);
-    return new Promise((resolve) => {
-      const channel = new MessageChannel();
-      const timer = setTimeout(() => resolve(false), 2000);
-      channel.port1.onmessage = (event) => {
-        clearTimeout(timer);
-        resolve(Boolean(event.data?.updated));
-      };
-      worker.postMessage({ type: "get-shell-updated" }, [channel.port2]);
-    });
-  }
-
-  let reloading = false;
-  async function reloadIfShellUpdated(worker) {
-    if (reloading) return;
-    if (!(await consumeShellUpdated(worker))) return;
-    if (reloading) return;
-    reloading = true;
-    window.location.reload();
-  }
-
-  // Фоновая проверка версии часто заканчивается раньше, чем страница успевает
-  // подписаться на сообщения, поэтому спрашиваем и сами при старте.
-  navigator.serviceWorker.ready.then((registration) => {
-    void reloadIfShellUpdated(registration.active);
-  });
-  navigator.serviceWorker.addEventListener("message", (event) => {
-    if (event.data?.type !== "shell-updated") return;
-    void reloadIfShellUpdated(navigator.serviceWorker.controller);
+  // Обновление не должно перезагружать PWA во время заполнения формы
+  // или пока в памяти находятся ещё не сохранённые изменения.
+  // Новый SW активируется штатно, свежая оболочка — при следующем запуске.
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    window.dispatchEvent(new CustomEvent("orders-sw-update-ready"));
   });
 })();
