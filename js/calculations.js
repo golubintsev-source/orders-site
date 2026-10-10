@@ -1394,7 +1394,11 @@ function renderCalculationsTableFromCache() {
   renderCalculationsSaldoTable(rows);
 }
 
+let calculationsLoadGeneration = 0;
 export async function loadCalculations() {
+  // Поздний ответ предыдущего фильтра не должен перетирать новый результат.
+  const generation = ++calculationsLoadGeneration;
+  initCalculationsDateRangeDefaults();
   const tbody = document.querySelector("#calculationsTable tbody");
   if (!tbody) return;
 
@@ -1439,6 +1443,8 @@ export async function loadCalculations() {
       }
     }
   }
+
+  if (generation !== calculationsLoadGeneration) return;
 
   if (error) {
     console.error("Ошибка загрузки расчетов:", error);
