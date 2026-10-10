@@ -361,7 +361,7 @@ function applyOrdersLoadError(error) {
  * затем в фоне — полный список.
  * Если уже есть кэш на экране — не сжимаем таблицу до 3 дней, сразу догружаем полное.
  */
-export async function loadOrders() {
+async function performLoadOrders() {
   const gen = ++loadOrdersGeneration;
   const hadPaintedCache = Array.isArray(state.allOrders) && state.allOrders.length > 0;
 
@@ -400,6 +400,18 @@ export async function loadOrders() {
     return;
   }
   applyOrdersLoadError(all.error);
+}
+
+// Объединяем одновременные вызовы от маршрутизатора и стартовой загрузки.
+let ordersLoadInFlight = null;
+export function loadOrders() {
+  if (ordersLoadInFlight) return ordersLoadInFlight;
+  const pending = performLoadOrders();
+  ordersLoadInFlight = pending;
+  void pending.finally(() => {
+    if (ordersLoadInFlight === pending) ordersLoadInFlight = null;
+  }).catch(() => {});
+  return pending;
 }
 
 async function loadOrdersFullInBackground(gen) {
