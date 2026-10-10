@@ -30,6 +30,11 @@ test("PWA does not forcibly take over active clients", () => {
 
 test("read timeouts remain separate from offline write queue", () => {
   const code = read("js/offline-cache.js");
+  assert.match(code, /export function raceReadWithTimeout/);
   assert.match(code, /export function raceWithTimeout/);
+  assert.match(code, /if \(!isOfflineWorkModeEnabled\(\)\) return Promise.resolve\(promise\)/);
+  const orders = read("js/orders.js");
+  assert.match(orders, /savedOrderId = await raceWithTimeout\(/);
+  assert.match(orders, /const res = await raceReadWithTimeout\(/);
   assert.match(code, /export const OFFLINE_SUPABASE_WAIT_MS/);
 });
