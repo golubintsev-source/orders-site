@@ -252,9 +252,8 @@ export function isBrowserOffline() {
 }
 
 export function raceWithTimeout(promise, ms = OFFLINE_SUPABASE_WAIT_MS) {
-  if (!isOfflineWorkModeEnabled()) {
-    return Promise.resolve(promise);
-  }
+  // Ограничиваем ожидание только вызывающего кода. Запись и синхронизация
+  // офлайн-очереди не должны автоматически отменяться из-за таймаута чтения.
   return new Promise((resolve, reject) => {
     const id = setTimeout(() => {
       reject(Object.assign(new Error("timeout"), { code: "TIMEOUT" }));
