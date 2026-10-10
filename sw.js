@@ -112,6 +112,23 @@ async function staleWhileRevalidate(request) {
   return new Response("Offline", { status: 503, statusText: "Offline" });
 }
 
+/** JS/CSS фиксируются на время жизни версии worker'а.
+ * Не скачиваем модули при каждом переходе и не смешиваем разные релизы.
+ * Динамические файлы, отсутствующие в precache, сохраняются после первого запроса.
+ */
+async function cacheFirstVersioned(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  try {
+    const response = await fetch(request);
+    if (response?.ok) await cache.put(request, response.clone());
+    return response;
+  } catch {
+    return new Response("Offline", { status: 503, statusText: "Offline" });
+  }
+}
+
 /** Пути, которые vercel.json переписывает на index.html (см. rewrites). */
 const APP_SHELL_PATHS = new Set([
   "/",
@@ -241,7 +258,7 @@ self.addEventListener("fetch", (event) => {
   if (isStaticAsset(url)) {
     // JS в PWA: не ждём сеть при нестабильном соединении (особенно на iOS/WebView),
     // иначе динамические import'ы могут "залипать" до таймаутов браузера.
-    event.respondWith(staleWhileRevalidate(request));
+    event.respondWith(cacheFirstVersioned(request));
     return;
   }
 
