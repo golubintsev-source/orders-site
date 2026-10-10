@@ -251,24 +251,21 @@ export function isBrowserOffline() {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
-export function raceWithTimeout(promise, ms = OFFLINE_SUPABASE_WAIT_MS) {
-  // Ограничиваем ожидание только вызывающего кода. Запись и синхронизация
-  // офлайн-очереди не должны автоматически отменяться из-за таймаута чтения.
+/** Только чтение: таймаут ограничивает ожидание интерфейса, но не отменяет fetch. */
+export function raceReadWithTimeout(promise, ms = OFFLINE_SUPABASE_WAIT_MS) {
   return new Promise((resolve, reject) => {
-    const id = setTimeout(() => {
-      reject(Object.assign(new Error("timeout"), { code: "TIMEOUT" }));
-    }, ms);
+    const id = setTimeout(() => reject(Object.assign(new Error("read timeout"), { code: "TIMEOUT" })), ms);
     Promise.resolve(promise).then(
-      (val) => {
-        clearTimeout(id);
-        resolve(val);
-      },
-      (err) => {
-        clearTimeout(id);
-        reject(err);
-      },
+      (value) => { clearTimeout(id); resolve(value); },
+      (error) => { clearTimeout(id); reject(error); },
     );
   });
+}
+
+/** Сохранённая семантика для существующих вызовов записи/офлайн-синхронизации. */
+export function raceWithTimeout(promise, ms = OFFLINE_SUPABASE_WAIT_MS) {
+  if (!isOfflineWorkModeEnabled()) return Promise.resolve(promise);
+  return raceReadWithTimeout(promise, ms);
 }
 
 /**
