@@ -40,7 +40,7 @@ self.addEventListener("install", (event) => {
           }
         }),
       );
-      await self.skipWaiting();
+      // Не захватываем открытые вкладки с незавершёнными формами.
     })(),
   );
 });
@@ -59,10 +59,10 @@ self.addEventListener("activate", (event) => {
           )
           .map((k) => caches.delete(k)),
       );
-      await self.clients.claim();
+      // Новый worker управляет вкладками только после их штатного закрытия.
       // После смены STATIC_CACHE старый JS мог остаться в памяти вкладки —
       // всегда просим оболочку перезагрузиться.
-      await notifyShellUpdated();
+      // Никаких принудительных перезагрузок открытых вкладок.
       const count = await getBadgeCount();
       if (count > 0) await applyAppBadge(count);
     })(),
@@ -156,9 +156,12 @@ async function staleWhileRevalidateShell(request, event) {
     .then(async (res) => {
       if (!res || !res.ok) return res;
       const freshText = await res.clone().text();
-      await cache.put("/", res.clone());
-      await cache.put("/index.html", res.clone());
-      if (cachedText != null && freshText !== cachedText) await notifyShellUpdated();
+      // Не смешиваем новый HTML со старыми JS-модулями в текущем cache version.
+      // Новый HTML придёт вместе с новой версией service worker.
+      if (cachedText == null || cachedText === freshText) {
+        await cache.put("/", res.clone());
+        await cache.put("/index.html", res.clone());
+      }
       return res;
     })
     .catch(() => null);
