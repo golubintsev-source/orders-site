@@ -389,14 +389,6 @@ self.addEventListener("message", (event) => {
     event.waitUntil(setBadgeCount(Number(event.data.count) || 0));
     return;
   }
-  if (event.data?.type === "get-shell-updated") {
-    event.waitUntil(
-      (async () => {
-        event.ports[0]?.postMessage({ updated: await consumeShellUpdatedFlag() });
-      })(),
-    );
-    return;
-  }
   if (event.data?.type === "get-badge-count") {
     event.waitUntil(
       (async () => {
