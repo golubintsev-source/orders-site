@@ -84,6 +84,7 @@ import {
   readPendingOrderEditsQueue,
   addOrAppendPendingServerOrderEdit,
   raceWithTimeout,
+  raceReadWithTimeout,
 } from "./offline-cache.js";
 import { shortLoginByEmail } from "./user-names.js";
 import { getEditors } from "./settings.js";
@@ -1658,7 +1659,7 @@ export async function getOrderRowForFullTooltip(orderId) {
   if (fromList) return isOrderHiddenForCurrentRole(fromList) ? null : fromList;
   if (isOfflineDataMode() || isOfflineClientOrderId(idNum)) return null;
   try {
-    const res = await raceWithTimeout(
+    const res = await raceReadWithTimeout(
       supabaseClient.from("orders").select(ORDERS_LIST_SELECT).eq("id", idNum).maybeSingle(),
     );
     if (res.error || !res.data) return null;
@@ -3200,7 +3201,7 @@ async function loadOrderRowForForm(orderId) {
     return fromList;
   }
   try {
-    const res = await raceWithTimeout(
+    const res = await raceReadWithTimeout(
       supabaseClient.from("orders").select("*").eq("id", orderId).single(),
     );
     if (!res.error && res.data) return res.data;
