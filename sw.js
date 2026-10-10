@@ -11,7 +11,6 @@ const BADGE_CACHE = "orders-site-badge-v1";
 // v80: доход и расход перед комментарием в таблице расчётов.
 const STATIC_CACHE = "orders-site-static-v81";
 const BADGE_COUNT_KEY = "/badge-count";
-const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
 
 const LEGACY_CACHE_PREFIXES = ["orders-site-static-"];
@@ -40,7 +39,7 @@ self.addEventListener("install", (event) => {
           }
         }),
       );
-      // Не захватываем открытые вкладки с незавершёнными формами.
+      // Новый worker останется waiting до закрытия вкладок предыдущей версии.
     })(),
   );
 });
@@ -59,10 +58,7 @@ self.addEventListener("activate", (event) => {
           )
           .map((k) => caches.delete(k)),
       );
-      // Новый worker управляет вкладками только после их штатного закрытия.
-      // После смены STATIC_CACHE старый JS мог остаться в памяти вкладки —
-      // всегда просим оболочку перезагрузиться.
-      // Никаких принудительных перезагрузок открытых вкладок.
+      // Не вызываем clients.claim(): старые открытые вкладки не перехватываем.
       const count = await getBadgeCount();
       if (count > 0) await applyAppBadge(count);
     })(),
@@ -192,33 +188,6 @@ async function staleWhileRevalidateShell(request, event) {
   const network = await networkPromise;
   if (network) return network;
   return offlineNavigationResponse();
-}
-
-/**
- * Страница показана из кэша, а на сервере уже другая версия — см. js/register-sw.js.
- * Фоновая проверка часто заканчивается раньше, чем страница успеет подписаться на
- * сообщения, поэтому факт обновления ещё и запоминается до запроса клиента.
- */
-async function notifyShellUpdated() {
-  const cache = await caches.open(BADGE_CACHE);
-  await cache.put(SHELL_UPDATED_KEY, new Response("1"));
-  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-  for (const client of clients) {
-    client.postMessage({ type: "shell-updated" });
-  }
-}
-
-/** Читает и сразу гасит флаг: перезагрузка нужна ровно один раз. */
-async function consumeShellUpdatedFlag() {
-  try {
-    const cache = await caches.open(BADGE_CACHE);
-    const hit = await cache.match(SHELL_UPDATED_KEY);
-    if (!hit) return false;
-    await cache.delete(SHELL_UPDATED_KEY);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** Остальные HTML-страницы остаются network-first: они открываются редко. */
