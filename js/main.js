@@ -254,7 +254,12 @@ async function init() {
     const initialSection = getRouteSectionFromUrl();
     // Полный архив заказов нужен только списку и форме заказа. Для остальных
     // разделов не запускаем дорогостоящий запрос при первом показе.
-    const needsOrdersOnBoot = initialSection === "all" || initialSection === "new";
+    const pendingOrderId = getOrderIdFromUrl();
+    const savedBootApp = readSavedPlaceForCurrentPage(user.id)?.app;
+    const needsOrdersOnBoot = initialSection === "all" || initialSection === "new" ||
+      pendingOrderId != null ||
+      (savedBootApp?.sectionId === "new" &&
+        (savedBootApp.viewingOrderId != null || savedBootApp.editingOrderId != null));
     const ordersPromise = needsOrdersOnBoot ? loadOrders() : Promise.resolve();
 
     await Promise.all([loadProfile(), loadSettings()]);
