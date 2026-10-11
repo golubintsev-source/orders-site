@@ -82,6 +82,8 @@ const DEFAULT_VOICE_EXPENSE_TO = "Покупка";
 
 /** Полные строки с сервера; фильтр поиска применяется при отрисовке. */
 let calculationsRowsCache = [];
+let calculationsLoadRequest = null;
+let calculationsSectionBound = false;
 /** Ранее введённые ручные комментарии: нормализованное значение → подпись и частота. */
 let calcCommentSuggestionCounts = new Map();
 /** Адреса заказов для автозаписей (id → address), подставляются в комментарий при отображении. */
@@ -600,7 +602,7 @@ export async function createCalculationFromVoicePayload(draft) {
       insertPayload,
     });
     try {
-      await loadCalculations();
+      await loadCalculations({ force: true });
     } catch {
       /* таблица обновится при открытии раздела */
     }
@@ -628,7 +630,7 @@ export async function createCalculationFromVoicePayload(draft) {
   }
 
   try {
-    await loadCalculations();
+    await loadCalculations({ force: true });
   } catch {
     /* не критично для ответа голосу */
   }
@@ -786,29 +788,29 @@ export function getCalcDisplayComment(comment) {
   return formatCalcCommentEmptyPlaceholders(stripAuthorFromOrderDeltaBody(display));
 }
 
-async function refreshCalcOrderAddressesForRows(rows) {
+async function fetchCalcOrderAddressesForRows(rows) {
   const orderIds = [];
   for (const row of rows || []) {
     const id = parseOrderDeltaCommentOrderId(row.comment);
     if (id != null) orderIds.push(id);
   }
   const uniqueIds = [...new Set(orderIds)];
-  calcOrderAddressById = new Map();
-  if (!uniqueIds.length) return;
+  const addresses = new Map();
+  if (!uniqueIds.length) return addresses;
 
   const fromSnapshot = () => {
     const snapOrders = readSnapshot()?.orders;
     if (!Array.isArray(snapOrders)) return;
     for (const o of snapOrders) {
       if (o?.id != null && uniqueIds.includes(o.id) && o.address != null) {
-        calcOrderAddressById.set(o.id, String(o.address).trim());
+        addresses.set(o.id, String(o.address).trim());
       }
     }
   };
 
   if (isOfflineDataMode()) {
     fromSnapshot();
-    return;
+    return addresses;
   }
 
   try {
@@ -826,13 +828,14 @@ async function refreshCalcOrderAddressesForRows(rows) {
     if (error) throw error;
     for (const o of data || []) {
       if (o?.id != null && o.address != null && String(o.address).trim()) {
-        calcOrderAddressById.set(o.id, String(o.address).trim());
+        addresses.set(o.id, String(o.address).trim());
       }
     }
   } catch (e) {
     console.warn("Адреса заказов для комментариев расчётов: используем кэш.", e);
     fromSnapshot();
   }
+  return addresses;
 }
 
 /** Строки, видимые в таблице (период уже в кэше; поиск и диапазон сумм). */
@@ -1383,7 +1386,7 @@ function renderCalculationsTableFromCache() {
         btn.addEventListener("click", () => {
           if (!confirm("Удалить локальную запись расчёта? Она ещё не отправлена в базу.")) return;
           removePendingCalcByTempId(id);
-          void loadCalculations();
+          void loadCalculations({ force: true });
         });
       } else {
         btn.addEventListener("click", () => softDeleteCalculationRow(id));
@@ -1394,25 +1397,44 @@ function renderCalculationsTableFromCache() {
   renderCalculationsSaldoTable(rows);
 }
 
-export async function loadCalculations() {
+export function loadCalculations({ force = false } = {}) {
   const tbody = document.querySelector("#calculationsTable tbody");
-  if (!tbody) return;
+  if (!tbody) return Promise.resolve();
+  initCalculationsDateRangeDefaults();
+  const period = { timeFrom: calcColumnFilters.timeFrom, timeTo: calcColumnFilters.timeTo };
+  const key = JSON.stringify([state.currentUser?.id, period.timeFrom, period.timeTo]);
+  if (!force && calculationsLoadRequest?.key === key) return calculationsLoadRequest.promise;
+  const request = { key, promise: null };
+  calculationsLoadRequest = request;
+  request.promise = Promise.resolve()
+    .then(() => performCalculationsLoad(request, period))
+    .finally(() => {
+      if (calculationsLoadRequest === request) calculationsLoadRequest = null;
+    });
+  return request.promise;
+}
+
+async function performCalculationsLoad(request, period) {
+  const isCurrent = () => calculationsLoadRequest === request;
+  if (!isCurrent()) return;
 
   const calculationsQuery = () => {
+    // Stop pagination of a superseded request without issuing another query.
+    if (!isCurrent()) return { range: async () => ({ data: [], error: null }) };
     let query = supabaseClient
       .from("calculations")
       .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
       .is("deleted_at", null);
-    if (calcColumnFilters.timeFrom) {
+    if (period.timeFrom) {
       query = query.gte(
         "created_at",
-        new Date(calcDateTimeInputMs(calcColumnFilters.timeFrom, false)).toISOString(),
+        new Date(calcDateTimeInputMs(period.timeFrom, false)).toISOString(),
       );
     }
-    if (calcColumnFilters.timeTo) {
+    if (period.timeTo) {
       query = query.lte(
         "created_at",
-        new Date(calcDateTimeInputMs(calcColumnFilters.timeTo, true)).toISOString(),
+        new Date(calcDateTimeInputMs(period.timeTo, true)).toISOString(),
       );
     }
     return query
@@ -1440,21 +1462,17 @@ export async function loadCalculations() {
     }
   }
 
-  if (error) {
-    console.error("Ошибка загрузки расчетов:", error);
-    setMessage("Показана копия с устройства; локальные несинхронизированные строки — с жёлтой заливкой.", true);
-    const merged = mergeCalculationRows(readSnapshot()?.calculations || []);
-    calculationsRowsCache = merged;
-    await refreshCalcOrderAddressesForRows(calculationsRowsCache);
-    renderCalculationsTableFromCache();
-    return;
-  }
-
-  setMessage("");
-  const merged = mergeCalculationRows(data || []);
+  if (!isCurrent()) return;
+  const merged = mergeCalculationRows(error ? readSnapshot()?.calculations || [] : data || []);
+  const addresses = await fetchCalcOrderAddressesForRows(merged);
+  if (!isCurrent()) return;
+  if (error) console.error("Ошибка загрузки расчетов:", error);
+  setMessage(error
+    ? "Показана копия с устройства; локальные несинхронизированные строки — с жёлтой заливкой."
+    : "", Boolean(error));
   calculationsRowsCache = merged;
-  persistCalculationsSnapshot(calculationsRowsCache);
-  await refreshCalcOrderAddressesForRows(calculationsRowsCache);
+  calcOrderAddressById = addresses;
+  if (!error) persistCalculationsSnapshot(merged);
   renderCalculationsTableFromCache();
 }
 
@@ -1668,7 +1686,7 @@ async function submitForm(e) {
       });
       setMessage("Запись сохранена на устройстве; отправка в базу при появлении связи.", false);
       resetForm();
-      await loadCalculations();
+      await loadCalculations({ force: true });
       void loadCalcCommentSuggestions();
       return;
     }
@@ -1694,7 +1712,7 @@ async function submitForm(e) {
     setMessage("");
     resetForm();
   }
-  await loadCalculations();
+  await loadCalculations({ force: true });
   void loadCalcCommentSuggestions();
 }
 
@@ -1761,7 +1779,7 @@ async function softDeleteCalculationRow(id) {
   if (typeof id === "number" && id < 0) {
     if (!confirm("Удалить локальную запись расчёта? Она ещё не отправлена в базу.")) return;
     removePendingCalcByTempId(id);
-    await loadCalculations();
+    await loadCalculations({ force: true });
     return;
   }
   if (isOfflineDataMode()) {
@@ -1817,7 +1835,7 @@ async function softDeleteCalculationRow(id) {
   } else {
     setMessage("Запись скрыта из списка.");
   }
-  await loadCalculations();
+  await loadCalculations({ force: true });
 }
 
 function setupCalculationsForm() {
@@ -1940,7 +1958,9 @@ function setupCalculationsForm() {
 export function bindCalculationsSection() {
   ensureCurrentUserEmail();
   initCalculationsDateRangeDefaults();
+  if (calculationsSectionBound) return;
   setupCalculationsForm();
+  calculationsSectionBound = true;
 }
 
 export async function initCalculationsSection() {
@@ -1948,7 +1968,7 @@ export async function initCalculationsSection() {
   await loadCalculations();
 }
 
-async function init() {
+export async function initCalculationsPage() {
   const user = await checkAuth();
   if (!user) return;
   await flushPendingAccessLogs(user);
@@ -1965,10 +1985,6 @@ async function init() {
     navigateWithUserPlace(hrefToHome());
   });
 
-  initCalculationsDateRangeDefaults();
-  setupCalculationsForm();
-  await loadCalculations();
+  await initCalculationsSection();
   await applySavedScroll(readSavedPlaceForCurrentPage(user.id));
 }
-
-init();

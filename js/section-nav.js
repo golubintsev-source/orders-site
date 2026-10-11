@@ -407,7 +407,11 @@ export function switchSection(sectionId, opts = {}) {
     void import("./route-sheet.js").then((m) => m.bumpRouteDeliveryMapGeneration());
   }
   if (sectionId === "calculations") {
-    void import("./calculations.js").then((m) => m.loadCalculations());
+    void import("./calculations.js")
+      .then((m) => {
+        if (currentSectionId === "calculations") return m.initCalculationsSection();
+      })
+      .catch((err) => console.error("Расчёты: не удалось загрузить раздел", err));
   }
   if (sectionId === "all-salaries") {
     void import("./all-salaries.js").then((m) => {
