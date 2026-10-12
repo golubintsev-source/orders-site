@@ -1,5 +1,5 @@
 import { state } from "./state.js";
-import { loadBalance } from "./balance.js";
+import { enterSection, leaveSection } from "./section-loader.js";
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
@@ -47,6 +47,11 @@ export function updateSectionNavRicherStat() {
 
   wrap.hidden = !isAdmin();
   if (!isAdmin()) return;
+
+  if (!state.ordersFullyLoaded && !state.allOrders?.length) {
+    el.textContent = "—";
+    return;
+  }
 
   let sum = 0;
   for (const order of state.allOrders || []) {
@@ -392,85 +397,11 @@ export function switchSection(sectionId, opts = {}) {
   updateOrdersSearchBtnVisibility(sectionId);
   syncIosFormControlLocks(sectionId);
 
-  if (sectionId === "balance") {
-    loadBalance({ recordView: true });
-  }
-  if (sectionId === "manager-salary") {
-    void import("./manager-salary.js")
-      .then((m) => m.loadManagerSalary())
-      .catch((err) => console.error("Зарплата менеджера: не удалось загрузить раздел", err));
-  }
-  if (sectionId === "route-sheet") {
-    void import("./route-sheet.js").then((m) => m.loadRouteSheet());
-  }
-  if (prevSectionId === "route-sheet" && sectionId !== "route-sheet") {
-    void import("./route-sheet.js").then((m) => m.bumpRouteDeliveryMapGeneration());
-  }
-  if (sectionId === "calculations") {
-    void import("./calculations.js")
-      .then((m) => {
-        if (currentSectionId === "calculations") return m.initCalculationsSection();
-      })
-      .catch((err) => console.error("Расчёты: не удалось загрузить раздел", err));
-  }
-  if (sectionId === "all-salaries") {
-    void import("./all-salaries.js").then((m) => {
-      m.initAllSalariesSection();
-      void m.loadAllSalaries();
-    });
-  }
-  if (sectionId === "excess") {
-    void import("./excess.js?v=37").then((m) => m.loadExcesses());
-  }
-
-  if (sectionId === "tasks-all") {
-    void import("./tasks.js").then((m) => {
-      m.loadAllTasks();
-      void m.ensureOrderTaskExecutorsLoaded();
-    });
-    void import("./push-notifications.js").then((m) => m.clearPushBadge());
-  }
-  if (sectionId === "order-tasks") {
-    void import("./tasks.js").then((m) => m.loadOrderTasks());
-    void import("./push-notifications.js").then((m) => m.clearPushBadge());
-  }
-  if (sectionId === "changes-all") {
-    void import("./all-changes.js").then((m) => m.loadAllChanges());
-  }
-  if (sectionId === "statistics") {
-    void import("./statistics.js").then((m) => m.loadStatistics({ refreshDefaultRange: true }));
-  }
-  if (sectionId === "statistics-balance") {
-    void import("./statistics-balance.js").then((m) =>
-      m.loadStatisticsBalance({ refreshDefaultRange: true }),
-    );
-  }
-  if (sectionId === "debts") {
-    void import("./debts.js").then((m) => m.loadDebts());
-  }
-  if (sectionId === "settings") {
-    void import("./settings.js").then((m) => m.applySettingsAdminBlocksVisibility());
-    void import("./push-notifications.js").then((m) => m.refreshPushNotificationsUi());
-  }
-  if (sectionId === "speed-test") {
-    void import("./speed-test.js")
-      .then((m) => m.onSpeedTestSectionEnter())
-      .catch((err) => console.error("Тест скорости: не удалось загрузить раздел", err));
-  }
-  if (prevSectionId === "messages" && sectionId !== "messages") {
-    void import("./messages.js").then((m) => m.stopMessagesPolling());
-  }
-  if (sectionId === "messages") {
-    void import("./messages.js").then((m) => {
-      m.onMessagesSectionEnter({ restoreFromUrl: Boolean(opts.restoreMessagesChat) });
-    });
-  }
-  if (prevSectionId === "voice" && sectionId !== "voice") {
-    void import("./voice.js").then((m) => m.onVoiceSectionLeave());
-  }
-  if (sectionId === "voice") {
-    void import("./voice.js").then((m) => m.onVoiceSectionEnter());
-  }
+  if (prevSectionId !== sectionId) leaveSection(prevSectionId);
+  if (sectionId === "order-tasks") opts = { ...opts, loadKey: state.tasksOrderId };
+  if (sectionId === "messages") opts = { ...opts, loadKey: window.location.search };
+  const ready = enterSection(sectionId, opts);
+  void ready.catch((error) => console.error("Не удалось открыть раздел:", sectionId, error));
 
   updateBackToOrdersBtnVisibility(sectionId);
   if (sectionId === "all") {
@@ -499,6 +430,7 @@ export function switchSection(sectionId, opts = {}) {
   }
 
   scheduleSaveUserPlace();
+  return ready;
 }
 
 /** Обновить только текст текущего раздела (например «Новый» ↔ «Редактирование»). */
@@ -575,6 +507,8 @@ export function initSectionNavDropdown(options = {}) {
 
   // Ранняя привязка: не зависит от import("./tasks.js") / idle.
   bindTopbarSectionNavButton("myTasksNavBtn", "tasks-all", onSectionItemSelect);
+  bindTopbarSectionNavButton("messagesNavBtn", "messages", onSectionItemSelect);
+  bindTopbarSectionNavButton("voiceNavBtn", "voice", onSectionItemSelect);
 
   if (currentBtn) {
     currentBtn.addEventListener("click", (e) => {

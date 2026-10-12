@@ -419,9 +419,7 @@ export function initPushNotificationsSection() {
 
 export async function initPushNotifications() {
   initPwaInstallPrompt();
-  initPushNotificationsSection();
   await syncPushSubscriptionIfGranted();
-  await refreshPushSettingsUi();
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {

@@ -597,6 +597,19 @@ function attachAddressAutocomplete({ input, list, wrap }) {
 }
 
 export function initClientAutocomplete() {
+  // The form itself does not load the order archive. Its local-history suggestions
+  // need it only when the user focuses these fields.
+  for (const id of ["client", "address"]) {
+    const input = document.getElementById(id);
+    if (!input || input.dataset.orderHistoryLazyBound) continue;
+    input.dataset.orderHistoryLazyBound = "1";
+    input.addEventListener("focus", () => {
+      void import("./orders-runtime.js").then((m) => m.ensureOrdersData())
+        .then(() => {
+          if (document.activeElement === input) input.dispatchEvent(new Event("input", { bubbles: true }));
+        }).catch((error) => console.warn("Подсказки заказов:", error));
+    });
+  }
   initFieldAutocomplete({
     inputId: "client",
     listId: "clientSuggestions",

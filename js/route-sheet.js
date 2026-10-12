@@ -4187,5 +4187,4 @@ export function initRouteSheetSection() {
   }
 
   initRouteSheetAddressGeoPopover();
-  loadRouteSheet();
 }

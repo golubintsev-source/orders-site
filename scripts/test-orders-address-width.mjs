@@ -29,9 +29,10 @@ assert.match(indexSource, /class="orders-col-address"/);
 assert.match(moduleSource, /orders_site_address_column_width_v1:/);
 assert.match(moduleSource, /orders_address_column_width_px/);
 assert.match(moduleSource, /supabaseClient\.auth\.updateUser/);
-assert.match(mainSource, /initOrdersAddressColumnWidth\(user\)/);
+const runtimeSource = await readFile(new URL("../js/orders-runtime.js", import.meta.url), "utf8");
+assert.match(runtimeSource, /initOrdersAddressColumnWidth\(state\.currentUser\)/);
 assert.match(stickySource, /\.address-column-width-btn/);
 assert.match(styleSource, /--orders-address-column-width/);
-assert.match(swSource, /orders-site-static-v81/);
+assert.match(swSource, /orders-site-static-v82/);
 
 console.log("orders address width tests: ok");

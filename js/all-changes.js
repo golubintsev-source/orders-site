@@ -1,3 +1,4 @@
+import { ensureOrderSummaries, getOrderSummary } from "./order-summary-cache.js";
 import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatAmount } from "./format.js";
@@ -125,7 +126,7 @@ function sortAllChangesDisplayRows(rows) {
  * @param {{ error: unknown | null }} opts
  * @returns {number} число отрисованных строк
  */
-function paintAllChangesFromBaseRows(
+async function paintAllChangesFromBaseRows(
   startIso,
   endIso,
   orderHistoryBaseRows,
@@ -141,6 +142,7 @@ function paintAllChangesFromBaseRows(
   if (!tbody) return 0;
   const { error } = opts;
 
+  await ensureOrderSummaries((orderHistoryBaseRows || []).map((row) => row.order_id));
   const orderTypeById = buildOrderTypeByIdMap();
   const displayRows = [];
 
@@ -148,7 +150,7 @@ function paintAllChangesFromBaseRows(
     rowInCreatedAtRange(r, startIso, endIso),
   );
   for (const row of orderRows) {
-    const orderType = orderTypeById.get(Number(row.order_id)) ?? "";
+    const orderType = orderTypeById.get(Number(row.order_id)) ?? getOrderSummary(row.order_id)?.order_type ?? "";
     if (isOrderHiddenForCurrentRole({ order_type: orderType })) continue;
     const chip = formatOrderIdTypeChip(row.order_id, orderType);
     const oid = row.order_id != null ? String(row.order_id) : "";
@@ -456,11 +458,11 @@ export async function loadAllChanges() {
         msg.textContent = "Ошибка загрузки истории изменений.";
         msg.classList.add("order-tasks-message--error");
       }
-      paintAllChangesFromBaseRows(startIso, endIso, [], [], [], [], [], [], { error: histRes.error });
+      await paintAllChangesFromBaseRows(startIso, endIso, [], [], [], [], [], [], { error: histRes.error });
       return;
     }
 
-    paintAllChangesFromBaseRows(
+    await paintAllChangesFromBaseRows(
       startIso,
       endIso,
       histRes.data || [],
@@ -524,7 +526,7 @@ export async function loadAllChanges() {
     error = { message: "offline" };
   } else {
     if (hasSnap) {
-      paintAllChangesFromBaseRows(
+      await paintAllChangesFromBaseRows(
         startIso,
         endIso,
         snapFiltered,
@@ -584,7 +586,7 @@ export async function loadAllChanges() {
   if (!error && Array.isArray(calcHistData)) persistCalculationHistorySnapshot(calcHistData);
   if (!error && Array.isArray(taskHistData)) persistTaskHistorySnapshot(taskHistData);
 
-  paintAllChangesFromBaseRows(
+  await paintAllChangesFromBaseRows(
     startIso,
     endIso,
     baseRows,

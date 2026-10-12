@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v81: единая загрузка расчётов после установки фильтров.
-const STATIC_CACHE = "orders-site-static-v81";
+// v82: только общая оболочка; модули разделов кэшируются по обращению.
+const STATIC_CACHE = "orders-site-static-v82";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -24,35 +24,28 @@ const PRECACHE_URLS = [
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",
   "/js/boot-route.js",
-  "/js/main.js",
+  "/js/main.js?v=43",
   "/js/config.js",
   "/js/state.js",
   "/js/auth.js",
-  "/js/orders.js",
-  "/js/order-atomic-save.js",
   "/js/offline-cache.js",
   "/js/dom.js",
-  "/js/ui.js",
-  "/js/cell-tooltip.js",
   "/js/section-nav.js",
-  "/js/speed-test.js",
+  "/js/section-loader.js",
+  "/js/section-lifecycle.js",
+  "/js/ordersTableStickyHeader.js",
+  "/js/ordersTableMobileFit.js",
   "/js/app-routes.js",
-  "/js/settings.js",
   "/js/roles.js",
-  "/js/files.js",
-  "/js/manager-salary.js",
-  "/js/debts.js",
-  "/js/debts-matrix.js",
-  "/js/register-sw.js",
-  // Раздел «Чаты» открывают чаще всего — держим его модули готовыми к первому кадру.
-  "/js/messages.js",
-  "/js/messages-body.js",
-  "/js/messages-sync-utils.js",
-  "/js/all-salaries.js",
-  "/js/all-salaries-utils.js",
   "/js/format.js",
   "/js/user-names.js",
-  "/js/supabase-fetch.js",
+  "/js/user-place.js",
+  "/js/secret-login.js",
+  "/js/access-log.js",
+  "/js/db-ping.js",
+  "/js/dbHealth.js",
+  "/js/motivationQuotes.js",
+  "/js/register-sw.js",
   "/manifest.webmanifest",
   "/img/icon-192.png?v=20260803",
 ];

@@ -123,6 +123,7 @@ export async function openTaskCreateDialog({
   sourceMessageKind = null,
   sourceOrderId = null,
 } = {}) {
+  initTaskCreateDialog();
   const { dialog, textInput, dueInput, executorsList, executorsHint } = getDialogEls();
   if (!dialog) return;
 

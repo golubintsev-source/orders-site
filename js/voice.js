@@ -1021,6 +1021,8 @@ async function handleUserText(rawText, { fromVoice = false } = {}) {
   setStatus(fromVoice ? `Принято: «${short}». Думаю…` : "Думаю…", false, { tone: "info" });
 
   try {
+    // A command needs order context; merely opening this screen does not.
+    await import("./orders-runtime.js").then((m) => m.ensureOrdersData());
     const data = await callVoiceAssistant(text);
     const speakText = String(data?.speak || "Готово.").trim();
     const action = data?.action || "answer";
@@ -1507,7 +1509,7 @@ export function initVoiceSection() {
   if (navBtn) {
     navBtn.addEventListener("click", () => {
       unlockTtsAudio();
-      import("./section-nav.js").then((m) => m.switchSection("voice"));
+      // Navigation is bound by the shared header; keep the iOS audio gesture here.
     });
   }
 

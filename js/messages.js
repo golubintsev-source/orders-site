@@ -2,16 +2,38 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
 import { avatarLogoUrl, displayNameByEmail } from "./user-names.js";
-import { buildOrderPickerRowHtml, viewOrder } from "./orders.js";
+let orderPickerModule = null;
+let orderPickerLoadPromise = null;
+async function ensureChatOrders() {
+  if (!orderPickerLoadPromise) {
+    orderPickerLoadPromise = import("./orders-runtime.js").then(async (runtime) => {
+      orderPickerModule = await runtime.ensureOrdersData({ current: isMessagesSectionActive });
+    }).catch((error) => {
+      orderPickerLoadPromise = null;
+      const message = document.getElementById("messagesPageMessage");
+      if (message) message.textContent = "Не удалось загрузить заказы. Попробуйте ещё раз.";
+      throw error;
+    }).finally(() => { orderPickerLoadPromise = null; });
+  }
+  return orderPickerLoadPromise;
+}
+function buildOrderPickerRowHtml(order) { return orderPickerModule.buildOrderPickerRowHtml(order); }
+async function viewOrder(id) {
+  const runtime = await import("./orders-runtime.js");
+  const orders = await runtime.ensureOrdersUI();
+  return orders.viewOrder(id);
+}
 import { isOrderHiddenForCurrentRole } from "./roles.js";
-import {
-  attachStorageFileToOrder,
-  cropImageAttachment,
-  getSignedFileUrl,
-  getSignedFileUrls,
-  isCroppableImageFile,
-  uploadChatPhoto,
-} from "./files.js";
+import { getSignedFileUrl, getSignedFileUrls, isCroppableImageFile } from "./storage-urls.js";
+async function attachStorageFileToOrder(...args) {
+  return (await import("./files.js")).attachStorageFileToOrder(...args);
+}
+async function cropImageAttachment(...args) {
+  return (await import("./files.js")).cropImageAttachment(...args);
+}
+async function uploadChatPhoto(...args) {
+  return (await import("./files.js")).uploadChatPhoto(...args);
+}
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { messageHasActiveTask } from "./message-task-links.js";
 import { getChatPeerFromUrl, syncChatPeerInUrl } from "./app-routes.js";
@@ -4445,7 +4467,7 @@ function applyOrderPick(input, order, ctx = null) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-function updateComposerSuggestions(input) {
+async function updateComposerSuggestions(input) {
   const caret = getTextareaCaret(input);
   const ctx = getTriggerContext(input.value, caret.start);
   if (!ctx) {
@@ -4457,12 +4479,15 @@ function updateComposerSuggestions(input) {
   syncPickerButtonStates();
 
   if (ctx.type === "order") {
+    const textBeforeLoad = input.value;
+    await ensureChatOrders();
+    if (!isMessagesSectionActive() || input.value !== textBeforeLoad || activePicker !== "order") return;
     const orders = filterOrders(ctx.query);
     showOrderSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order, ctx));
   }
 }
 
-function openOrderPicker(input) {
+async function openOrderPicker(input) {
   if (activePicker === "order") {
     hideSuggestions();
     return;
@@ -4470,6 +4495,8 @@ function openOrderPicker(input) {
   pendingAttachPhotoToOrder = null;
   activePicker = "order";
   syncPickerButtonStates();
+  await ensureChatOrders();
+  if (!isMessagesSectionActive() || activePicker !== "order") return;
   const orders = filterOrders("", { onlyOpen: true, limit: 0 });
   showOrderSuggestions(mapOrderPickerItems(orders), (item) => applyOrderPick(input, item.order));
   input.focus();
@@ -4489,7 +4516,7 @@ function readAttachPhotoMetaFromRow(row) {
   };
 }
 
-function openAttachPhotoToOrderPicker(meta) {
+async function openAttachPhotoToOrderPicker(meta) {
   if (
     activePicker === "attach-to-order" &&
     pendingAttachPhotoToOrder?.storagePath === meta?.storagePath
@@ -4499,6 +4526,8 @@ function openAttachPhotoToOrderPicker(meta) {
   }
   if (!meta?.storagePath) return;
 
+  await ensureChatOrders();
+  if (!isMessagesSectionActive()) return;
   const orders = filterOrders("", { onlyOpen: true, limit: 0 });
   if (!orders.length) {
     hideSuggestions();
@@ -5357,7 +5386,7 @@ function runMessageAction(action, messageId) {
     const meta = readAttachPhotoMetaFromRow(row);
     if (!meta) return false;
     // Открываем после текущего pointer/click, иначе document-слушатель сразу закроет список заказов.
-    queueMicrotask(() => openAttachPhotoToOrderPicker(meta));
+    queueMicrotask(() => { void openAttachPhotoToOrderPicker(meta).catch(console.error); });
     return true;
   }
   if (action === "delete") {
@@ -6101,6 +6130,7 @@ let messagesSectionInited = false;
 export function initMessagesSection() {
   if (messagesSectionInited) return;
   messagesSectionInited = true;
+  window.__messagesStatusReady = true;
   const navBtn = document.getElementById("messagesNavBtn");
   const sendBtn = document.getElementById("messagesSendBtn");
   const input = document.getElementById("messagesComposerInput");
@@ -6117,12 +6147,6 @@ export function initMessagesSection() {
   const groupAvatarClearBtn = document.getElementById("messagesCreateGroupAvatarClearBtn");
   const groupAvatarInput = document.getElementById("messagesCreateGroupAvatarInput");
   const createGroupNameInput = document.getElementById("messagesCreateGroupName");
-
-  if (navBtn) {
-    navBtn.addEventListener("click", () => {
-      import("./section-nav.js").then((m) => m.switchSection("messages"));
-    });
-  }
 
   if (backBtn) {
     backBtn.addEventListener("click", () => {
@@ -6282,7 +6306,7 @@ export function initMessagesSection() {
     orderPickBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       closeAttachPhotoMenu();
-      openOrderPicker(input);
+      void openOrderPicker(input).catch(console.error);
     });
   }
 
@@ -6440,7 +6464,7 @@ export function initMessagesSection() {
       if (msgEl) msgEl.classList.remove("messages-page-message--error");
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        void loadUsersDirectory().then(() => updateComposerSuggestions(input));
+        void updateComposerSuggestions(input).catch(console.error);
       }, SUGGEST_DEBOUNCE_MS);
     });
 

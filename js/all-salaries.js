@@ -1,6 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { formatAmount } from "./format.js";
-import { getCalcDisplayAuthor, getCalcDisplayComment } from "./calculations.js";
+import { getCalcDisplayAuthor, formatCalcDisplayComment as getCalcDisplayComment } from "./calculations-format.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import {
   groupSalaryRowsByEmployee,

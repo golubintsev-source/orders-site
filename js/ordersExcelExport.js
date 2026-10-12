@@ -28,6 +28,7 @@ function applyAutoColumnWidths(ws, aoa) {
 }
 
 export async function exportOrdersToExcel() {
+  await import("./orders-runtime.js").then((m) => m.ensureOrdersData());
   let XLSX;
   try {
     XLSX = await ensureXlsx();

@@ -1,4 +1,6 @@
+import { refreshMyTasksNavBadge } from "./task-badge.js";
 import { supabaseClient } from "./config.js";
+import { ensureOrderSummaries, getOrderSummary } from "./order-summary-cache.js";
 import { state } from "./state.js";
 import {
   formatTaskDateRu,
@@ -115,7 +117,7 @@ function renderMyTaskStatusCell(row) {
 }
 
 function formatTaskOrderLabel(orderId) {
-  const order = state.allOrders?.find((o) => Number(o.id) === orderId);
+  const order = getOrderSummary(orderId);
   return formatOrderIdTypeChip(orderId, order?.order_type) || String(orderId).padStart(4, "0");
 }
 
@@ -260,7 +262,7 @@ function setOrderTasksPageTitle(orderId) {
     titleEl.textContent = "Задачи заказа";
     return;
   }
-  const order = state.allOrders?.find((o) => Number(o.id) === oid);
+  const order = getOrderSummary(oid);
   const chip = formatOrderIdTypeChip(oid, order?.order_type) || `#${oid}`;
   titleEl.textContent = `Задачи заказа ${chip}`;
 }
@@ -317,12 +319,12 @@ function setOrderPageTaskCreateTitle(orderId) {
     titleEl.textContent = "Создать задачу";
     return;
   }
-  const order = state.allOrders?.find((o) => Number(o.id) === oid);
+  const order = getOrderSummary(oid);
   const chip = formatOrderIdTypeChip(oid, order?.order_type) || String(oid).padStart(4, "0");
   titleEl.textContent = `Создать задачу по заказу ${chip}`;
 }
 
-async function ensureOrderPageTaskExecutorsLoaded() {
+export async function ensureOrderPageTaskExecutorsLoaded() {
   const { executorsList, executorsHint } = getOrderPageTaskFormEls();
   await ensureTaskExecutorsInList(executorsList, executorsHint);
 }
@@ -726,6 +728,7 @@ export async function loadAllTasks() {
   const mergedAll = filterNotDeletedTasks(mergeOrderTasksRowsForAllTasks(baseRows));
   const executorRows = sortTasksByDueAt(filterMyExecutorTasks(mergedAll));
   const authorRows = sortTasksByDueAt(filterMyAuthorTasks(mergedAll));
+  await ensureOrderSummaries([...executorRows, ...authorRows].map((row) => row.order_id));
 
   executorTbody.innerHTML = executorRows
     .map((row) => renderMyTasksRow(row, { showOrder: true, showExecutors: false, orderPopup: true }))
@@ -752,6 +755,7 @@ export async function loadOrderTasks() {
   if (!executorTbody || !authorTbody) return;
 
   const orderId = state.tasksOrderId;
+  await ensureOrderSummaries([orderId]);
   setOrderTasksPageTitle(orderId);
   syncOrderPageTaskForm(orderId);
 
@@ -849,55 +853,7 @@ export async function createOrderTask() {
   void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
 }
 
-const MY_TASKS_BADGE_POLL_MS = 60_000;
-let myTasksBadgePollTimer = null;
-
-function countMyPendingExecutorTasks(rows) {
-  return (rows || []).filter((row) => isUserExecutorOfTask(row) && isActiveTask(row)).length;
-}
-
-export async function refreshMyTasksNavBadge() {
-  const badge = document.getElementById("myTasksPendingBadge");
-  const btn = document.getElementById("myTasksNavBtn");
-  if (!badge || !btn) return;
-
-  if (!state.currentUser) {
-    badge.hidden = true;
-    btn.classList.remove("my-tasks-nav-btn--has-pending");
-    return;
-  }
-
-  const { data, error } = await supabaseClient
-    .from("order_tasks")
-    .select("id, executor_emails, is_completed, created_at")
-    .eq("is_completed", false)
-    .is("deleted_at", null);
-
-  if (error) {
-    console.warn("Не удалось получить число невыполненных задач:", error);
-    badge.hidden = true;
-    btn.classList.remove("my-tasks-nav-btn--has-pending");
-    return;
-  }
-
-  const n = countMyPendingExecutorTasks(mergeOrderTasksRowsForAllTasks(data || []));
-  if (n > 0) {
-    badge.textContent = n > 99 ? "99+" : String(n);
-    badge.hidden = false;
-    btn.classList.add("my-tasks-nav-btn--has-pending");
-  } else {
-    badge.hidden = true;
-    btn.classList.remove("my-tasks-nav-btn--has-pending");
-  }
-}
-
-function startMyTasksBadgePolling() {
-  if (myTasksBadgePollTimer) return;
-  void refreshMyTasksNavBadge();
-  myTasksBadgePollTimer = window.setInterval(() => {
-    void refreshMyTasksNavBadge();
-  }, MY_TASKS_BADGE_POLL_MS);
-}
+export { refreshMyTasksNavBadge } from "./task-badge.js";
 
 let orderTasksSectionInited = false;
 
@@ -933,10 +889,7 @@ export function initOrderTasksSection() {
     });
   }
 
-  void ensureMyTasksExecutorsLoaded();
-  void ensureOrderPageTaskExecutorsLoaded();
-  startMyTasksBadgePolling();
-  void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
+  // Executors and badges are loaded by the active screen / shared navigation service.
 
   bindTaskCompletedCheckboxDelegation(document.getElementById("orderTasksExecutorTable"));
   bindTaskCompletedCheckboxDelegation(document.getElementById("orderTasksAuthorTable"));

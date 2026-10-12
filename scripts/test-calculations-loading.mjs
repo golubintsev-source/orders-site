@@ -46,6 +46,7 @@ async function harness() {
     };
   `, { context });
   await mod.link(async (specifier) => {
+    if (specifier === "./calculations-format.js") return new vm.SourceTextModule(read("js/calculations-format.js"), { context });
     if (specifier === "./supabase-fetch.js") return new vm.SourceTextModule(read("js/supabase-fetch.js"), { context });
     const imports = [...source.matchAll(/import\s*\{([^}]+)\}\s*from\s*"([^"]+)"/g)];
     const names = imports.find((match) => match[2] === specifier)[1].split(",").map((name) => name.trim()).filter(Boolean);
@@ -175,7 +176,8 @@ test("failed load falls back and a later call retries", async () => {
 test("standalone entry and navigation use explicit initialization; main does not preload", async () => {
   assert.match(read("calculations.html"), /src="\.\/js\/calculations-page\.js"/);
   assert.match(read("js/calculations-page.js"), /initCalculationsPage\(\)/);
-  assert.match(read("js/section-nav.js"), /m\.initCalculationsSection\(\)/);
+  assert.match(read("js/section-loader.js"), /m\.initCalculationsSection\(\)/);
+  assert.match(read("js/section-nav.js"), /enterSection\(sectionId, opts\)/);
   assert.doesNotMatch(read("js/main.js"), /loadCalculations|bindCalculationsSection/);
   const h = await harness();
   const ready = h.api.initCalculationsPage();

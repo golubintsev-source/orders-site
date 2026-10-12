@@ -191,17 +191,7 @@ export function applyOfflineModeFromDbUnavailable() {
 }
 
 function refreshOrdersDependentSections() {
-  if (getCurrentSectionId() === "tasks-all") {
-    refreshSectionNavLabel();
-    void import("./tasks.js").then((m) => m.loadAllTasks());
-  } else if (getCurrentSectionId() === "order-tasks") {
-    refreshSectionNavLabel();
-    void import("./tasks.js").then((m) => m.loadOrderTasks());
-  } else if (getCurrentSectionId() === "changes-all") {
-    void import("./all-changes.js").then((m) => m.loadAllChanges());
-  } else if (getCurrentSectionId() === "route-sheet") {
-    void import("./route-sheet.js").then((m) => m.loadRouteSheet());
-  }
+  document.dispatchEvent(new CustomEvent("orders-data-updated"));
 }
 
 /** Колонки для списка/фильтров/маршрутного листа — без select("*"), меньше JSON и быстрее ответ. */
@@ -253,8 +243,9 @@ function getOrdersFastLoadSinceYmd(days = ORDERS_FAST_LOAD_DAYS) {
   return `${y}-${m}-${day}`;
 }
 
-async function fetchOrdersFromDb({ sinceOrderDateYmd = null } = {}) {
+async function fetchOrdersFromDb({ sinceOrderDateYmd = null, shouldContinue = () => true } = {}) {
   const buildListQuery = () => {
+    if (!shouldContinue()) return { range: async () => ({ data: [], error: null }) };
     let query = supabaseClient
       .from("orders")
       .select(ORDERS_LIST_SELECT)
@@ -270,6 +261,7 @@ async function fetchOrdersFromDb({ sinceOrderDateYmd = null } = {}) {
 
   if (error) {
     const buildStarQuery = () => {
+      if (!shouldContinue()) return { range: async () => ({ data: [], error: null }) };
       let again = supabaseClient
         .from("orders")
         .select("*")
@@ -303,10 +295,10 @@ function commitOrdersToUi(rawOrders, { persistCache = true } = {}) {
   state.ordersFromCache = false;
   state.allOrders = normalizeOrdersPhones(finalData);
   syncDbUnavailableBanner();
-  applyFiltersAndRender();
+  if (getCurrentSectionId() === "all") applyFiltersAndRender();
   updateSectionNavRicherStat();
   refreshOrdersDependentSections();
-  refreshFilesCountMapInBackground();
+  if (getCurrentSectionId() === "all") refreshFilesCountMapInBackground();
 }
 
 function applyOrdersLoadError(error) {
@@ -361,8 +353,10 @@ function applyOrdersLoadError(error) {
  * затем в фоне — полный список.
  * Если уже есть кэш на экране — не сжимаем таблицу до 3 дней, сразу догружаем полное.
  */
-export async function loadOrders() {
+export async function loadOrders({ full = false, shouldContinue = () => true } = {}) {
   const gen = ++loadOrdersGeneration;
+  const current = () => gen === loadOrdersGeneration && shouldContinue();
+  state.ordersFullyLoaded = false;
   const hadPaintedCache = Array.isArray(state.allOrders) && state.allOrders.length > 0;
 
   if (isOfflineWorkModeEnabled()) {
@@ -374,11 +368,12 @@ export async function loadOrders() {
   }
 
   if (!hadPaintedCache) {
-    const recent = await fetchOrdersFromDb({ sinceOrderDateYmd: getOrdersFastLoadSinceYmd() });
-    if (gen !== loadOrdersGeneration) return;
+    const recent = await fetchOrdersFromDb({ sinceOrderDateYmd: getOrdersFastLoadSinceYmd(), shouldContinue: current });
+    if (!current()) return;
     if (!recent.error && recent.data) {
       commitOrdersToUi(recent.data, { persistCache: false });
-      void loadOrdersFullInBackground(gen);
+      if (full) await loadOrdersFullInBackground(gen, current);
+      else if (current() && ["all", "route-sheet", "manager-salary", "debts"].includes(getCurrentSectionId())) void loadOrdersFullInBackground(gen, current);
       return;
     }
     // Быстрый запрос не удался — ниже полный / ошибка.
@@ -387,10 +382,11 @@ export async function loadOrders() {
     }
   }
 
-  const all = await fetchOrdersFromDb({});
-  if (gen !== loadOrdersGeneration) return;
+  const all = await fetchOrdersFromDb({ shouldContinue: current });
+  if (!current()) return;
 
   if (!all.error && all.data) {
+    state.ordersFullyLoaded = true;
     commitOrdersToUi(all.data, { persistCache: true });
     return;
   }
@@ -402,10 +398,11 @@ export async function loadOrders() {
   applyOrdersLoadError(all.error);
 }
 
-async function loadOrdersFullInBackground(gen) {
-  const all = await fetchOrdersFromDb({});
-  if (gen !== loadOrdersGeneration) return;
+async function loadOrdersFullInBackground(gen, current) {
+  const all = await fetchOrdersFromDb({ shouldContinue: current });
+  if (!current()) return;
   if (!all.error && all.data) {
+    state.ordersFullyLoaded = true;
     commitOrdersToUi(all.data, { persistCache: true });
     return;
   }
@@ -3061,7 +3058,8 @@ async function applyPostOrderFormNavigation(returnSectionId, { savedOrderId = nu
   markSkipUserPlaceResume();
   // Затем уйти с формы: иначе resetFormMode() показывает «Новая заявка»,
   // а loadOrders() на мобильном может занять несколько секунд до switchSection.
-  switchSection(target);
+  if (reloadOrders) state.ordersFullyLoaded = false;
+  const sectionReady = switchSection(target);
   rememberUserPlaceNow(pathForRouteSection(target), {
     sectionId: target,
     viewingOrderId: null,
@@ -3069,7 +3067,7 @@ async function applyPostOrderFormNavigation(returnSectionId, { savedOrderId = nu
   });
   resetFormMode();
   if (!reloadOrders) return;
-  await loadOrders();
+  await sectionReady;
   if (target === "all" && savedOrderId != null) {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => highlightAndFocusSavedOrderRow(savedOrderId));
@@ -3204,6 +3202,7 @@ async function loadOrderRowForForm(orderId) {
 export async function viewOrder(orderId) {
   state.editingOrderId = null;
   state.viewingOrderId = orderId;
+  await import("./orders-runtime.js").then((m) => m.ensureOrderFormReady());
 
   let data = null;
   try {
@@ -3269,6 +3268,7 @@ export async function editOrder(orderId) {
     return;
   }
 
+  await import("./orders-runtime.js").then((m) => m.ensureOrderFormReady());
   orderFormAtomicRequest = null;
 
   state.viewingOrderId = null;
@@ -4141,7 +4141,7 @@ export async function createOrderFromVoicePayload(draft) {
     };
   }
 
-  await loadOrders();
+  state.ordersFullyLoaded = false;
   return {
     ok: true,
     orderId: savedOrderId,
@@ -4504,7 +4504,7 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
     };
   }
 
-  await loadOrders();
+  state.ordersFullyLoaded = false;
   return {
     ok: true,
     orderId: savedOrderId,

@@ -105,6 +105,8 @@ export async function loadLoginLinksSection() {
 export function initLoginLinksSection() {
   const card = document.getElementById("loginLinksCard");
   if (!card) return;
+  if (card.dataset.loginLinksBound) return;
+  card.dataset.loginLinksBound = "1";
 
   card.addEventListener("click", async (e) => {
     const copyBtn = e.target.closest(".login-links-copy");
