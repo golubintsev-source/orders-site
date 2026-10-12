@@ -170,7 +170,9 @@ function mapAccessLogToBalanceRow(logRow) {
   };
 }
 
+import { beginReadScope } from "./read-requests.js";
 export async function loadStatisticsBalance(opts = {}) {
+  const scope = beginReadScope("statistics-balance");
   if (!isAdmin()) return;
 
   const tbody = document.querySelector("#statisticsBalanceTable tbody");
@@ -199,8 +201,10 @@ export async function loadStatisticsBalance(opts = {}) {
       .lte("created_at", toIso)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false }),
+    { signal: scope.signal },
   );
 
+  if (!scope.current()) return;
   if (error) {
     console.error("Ошибка загрузки статистики баланса:", error);
     tbody.innerHTML = "";

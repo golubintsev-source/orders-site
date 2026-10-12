@@ -3,6 +3,7 @@ import { state } from "./state.js";
 let uiPromise = null;
 let settingsPromise = null;
 let dataPromise = null;
+let dataOwner = null;
 
 export function ensureOrderSettings() {
   if (!settingsPromise) {
@@ -56,13 +57,15 @@ export async function ensureOrdersData({ current = () => true, refresh = false }
   if (!current()) return;
   if (refresh || !state.ordersFullyLoaded) {
     if (!dataPromise) {
+      dataOwner = current;
       dataPromise = orders.loadOrders({ full: true, shouldContinue: current })
         .finally(() => { dataPromise = null; });
     }
+    const owner = dataOwner;
     await dataPromise;
     // An earlier consumer may have left its screen while we were waiting.
     if (current() && !state.ordersFullyLoaded && !state.ordersFromCache) {
-      await orders.loadOrders({ full: true, shouldContinue: current });
+      if (!owner?.()) await orders.loadOrders({ full: true, shouldContinue: current });
       if (current() && !state.ordersFullyLoaded && !state.ordersFromCache) throw new Error("Не удалось загрузить заказы");
     }
   }

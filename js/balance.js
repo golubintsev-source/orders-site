@@ -5,6 +5,7 @@ import { state } from "./state.js";
 import { persistBalanceOfflineView, readBalanceOfflineView, isOfflineDataMode } from "./offline-cache.js";
 import { isOfflineWorkModeEnabled } from "./config.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { beginReadScope } from "./read-requests.js";
 import { displayNameByEmail } from "./user-names.js";
 import { BALANCE_SNAPSHOT_PATH } from "./app-routes.js";
 
@@ -180,7 +181,7 @@ function tryPaintBalanceFromOfflineCache(messageEl, cacheHint) {
  * Все неудалённые расчёты для баланса.
  * Без пагинации Supabase молча обрезает ответ (~1000 строк) — С-1/С-2/С-3 становятся нулями.
  */
-async function fetchAllCalculationsForBalance() {
+async function fetchAllCalculationsForBalance(signal) {
   return fetchAllSupabaseRows(() =>
     supabaseClient
       .from("calculations")
@@ -188,6 +189,7 @@ async function fetchAllCalculationsForBalance() {
       .is("deleted_at", null)
       .order("created_at", { ascending: true })
       .order("id", { ascending: true }),
+    { signal },
   );
 }
 
@@ -239,6 +241,7 @@ async function recordBalanceViewSnapshot(balances) {
  * @param {{ recordView?: boolean }} [opts] — recordView: сохранить снимок «Сейчас» (вход в раздел).
  */
 export async function loadBalance(opts = {}) {
+  const scope = beginReadScope("balance");
   const { recordView = false } = opts;
   const messageEl = document.getElementById("balanceMessage");
   const theadRow = document.querySelector("#balanceTable thead tr");
@@ -257,13 +260,15 @@ export async function loadBalance(opts = {}) {
 
   let calcRes;
   try {
-    calcRes = await fetchAllCalculationsForBalance();
+    calcRes = await fetchAllCalculationsForBalance(scope.signal);
   } catch (e) {
+    if (!scope.current()) return;
     console.error("Ошибка загрузки расчётов для баланса:", e);
     if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса.";
     return;
   }
 
+  if (!scope.current()) return;
   if (calcRes.error) {
     console.error("Ошибка загрузки расчётов для баланса:", calcRes.error);
     if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса.";

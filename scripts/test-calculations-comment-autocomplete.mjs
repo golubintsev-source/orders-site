@@ -19,6 +19,6 @@ assert.match(autocomplete, /input\.value\.trim\(\)\.length >= minChars/);
 assert.match(html, /id="calcCommentSuggestions"/);
 assert.match(html, /aria-controls="calcCommentSuggestions"/);
 assert.match(style, /#section-calculations \.client-suggestions/);
-assert.match(sw, /orders-site-static-v82/);
+assert.match(sw, /orders-site-static-v83/);
 
 console.log("calculations comment autocomplete tests: ok");

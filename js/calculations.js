@@ -40,6 +40,7 @@ import {
   raceWithTimeout,
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows, fetchSupabaseByIdsInChunks } from "./supabase-fetch.js";
+import { beginReadScope } from "./read-requests.js";
 import { attachFieldAutocomplete } from "./clientAutocomplete.js";
 
 let editingId = null;
@@ -647,7 +648,7 @@ export function getCalcDisplayComment(comment) {
   return formatCalcDisplayComment(comment, calcOrderAddressById);
 }
 
-async function fetchCalcOrderAddressesForRows(rows) {
+async function fetchCalcOrderAddressesForRows(rows, signal) {
   const orderIds = [];
   for (const row of rows || []) {
     const id = parseOrderDeltaCommentOrderId(row.comment);
@@ -682,6 +683,7 @@ async function fetchCalcOrderAddressesForRows(rows) {
             .in("id", chunkIds)
             .is("deleted_at", null),
         uniqueIds,
+        { signal },
       ),
     );
     if (error) throw error;
@@ -1262,8 +1264,8 @@ export function loadCalculations({ force = false } = {}) {
   initCalculationsDateRangeDefaults();
   const period = { timeFrom: calcColumnFilters.timeFrom, timeTo: calcColumnFilters.timeTo };
   const key = JSON.stringify([state.currentUser?.id, period.timeFrom, period.timeTo]);
-  if (!force && calculationsLoadRequest?.key === key) return calculationsLoadRequest.promise;
-  const request = { key, promise: null };
+  if (!force && calculationsLoadRequest?.key === key && calculationsLoadRequest.scope.current()) return calculationsLoadRequest.promise;
+  const request = { key, promise: null, scope: beginReadScope("calculations") };
   calculationsLoadRequest = request;
   request.promise = Promise.resolve()
     .then(() => performCalculationsLoad(request, period))
@@ -1274,7 +1276,7 @@ export function loadCalculations({ force = false } = {}) {
 }
 
 async function performCalculationsLoad(request, period) {
-  const isCurrent = () => calculationsLoadRequest === request;
+  const isCurrent = () => calculationsLoadRequest === request && request.scope.current();
   if (!isCurrent()) return;
 
   const calculationsQuery = () => {
@@ -1307,7 +1309,7 @@ async function performCalculationsLoad(request, period) {
     error = { message: "offline" };
   } else {
     try {
-      const res = await raceWithTimeout(fetchAllSupabaseRows(calculationsQuery));
+      const res = await fetchAllSupabaseRows(calculationsQuery, { signal: request.scope.signal });
       data = res.data;
       error = res.error;
     } catch (e) {
@@ -1323,7 +1325,7 @@ async function performCalculationsLoad(request, period) {
 
   if (!isCurrent()) return;
   const merged = mergeCalculationRows(error ? readSnapshot()?.calculations || [] : data || []);
-  const addresses = await fetchCalcOrderAddressesForRows(merged);
+  const addresses = await fetchCalcOrderAddressesForRows(merged, request.scope.signal);
   if (!isCurrent()) return;
   if (error) console.error("Ошибка загрузки расчетов:", error);
   setMessage(error

@@ -10,7 +10,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 async function harness() {
   const queries = [], saved = [], rendered = [], messages = [];
   let authCalls = 0, bindings = 0;
-  const context = vm.createContext({ console, document: {
+  const context = vm.createContext({ console, AbortController, document: {
     querySelector: () => ({}), getElementById: () => null,
   }, recordRows: (rows) => rendered.push(rows), recordMessage: (...args) => messages.push(args),
   recordBinding: () => bindings++ });
@@ -21,8 +21,9 @@ async function harness() {
       in(column, ids) { filters.ids = ids; return this; },
       gte(column, value) { filters.from = value; return this; },
       lte(column, value) { filters.to = value; return this; },
-      range(from, to) { return new Promise((resolve) => queries.push({ table, filters, from, to, resolve })); },
-      then(resolve, reject) { return this.range().then(resolve, reject); },
+      range(from, to) { this.from = from; this.to = to; return this; },
+      abortSignal(signal) { this.signal = signal; return this; },
+      then(resolve, reject) { return new Promise((done) => queries.push({ table, filters, from: this.from, to: this.to, signal: this.signal, resolve: done })).then(resolve, reject); },
     };
     return query;
   } };
@@ -46,6 +47,7 @@ async function harness() {
     };
   `, { context });
   await mod.link(async (specifier) => {
+    if (specifier === "./read-requests.js") return new vm.SourceTextModule(read("js/read-requests.js"), { context });
     if (specifier === "./calculations-format.js") return new vm.SourceTextModule(read("js/calculations-format.js"), { context });
     if (specifier === "./supabase-fetch.js") return new vm.SourceTextModule(read("js/supabase-fetch.js"), { context });
     const imports = [...source.matchAll(/import\s*\{([^}]+)\}\s*from\s*"([^"]+)"/g)];
@@ -96,6 +98,8 @@ for (const staleError of [false, true]) {
     h.api.testState.period("2026-01-01T00:00", "2026-01-02T23:59");
     const latest = h.api.loadCalculations();
     await tick();
+    assert.equal(h.queries[0].signal.aborted, true);
+    assert.equal(h.queries[1].signal.aborted, false);
     h.queries[1].resolve({ data: [{ id: 2 }], error: null });
     await latest;
     h.queries[0].resolve({ data: [{ id: 1 }], error: staleError ? new Error("old") : null });

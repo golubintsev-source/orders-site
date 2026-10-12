@@ -1,3 +1,4 @@
+import { createReadFetch } from "./read-requests.js";
 const { createClient } = window.supabase;
 
 export function isOfflineWorkModeEnabled() {
@@ -19,4 +20,8 @@ export const SUPABASE_KEY =
  * Прямые запросы в Supabase (без Vercel /api/supabase-proxy).
  * Раньше прокси добавлял лишний hop и замедлял мобильный/PWA старт.
  */
-export const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+export const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  // One bounded attempt; retrying POST/RPC could duplicate a successful write.
+  db: { retry: false },
+  global: { fetch: createReadFetch((...args) => fetch(...args), { baseUrl: SUPABASE_URL }) },
+});

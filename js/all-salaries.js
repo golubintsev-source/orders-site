@@ -2,6 +2,7 @@ import { supabaseClient } from "./config.js";
 import { formatAmount } from "./format.js";
 import { getCalcDisplayAuthor, formatCalcDisplayComment as getCalcDisplayComment } from "./calculations-format.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { beginReadScope } from "./read-requests.js";
 import {
   groupSalaryRowsByEmployee,
   groupSalaryRowsByMonth,
@@ -244,7 +245,9 @@ export function initAllSalariesSection() {
   });
 }
 
+let salaryScope = null;
 async function loadAllSalariesOnce() {
+  const scope = salaryScope = beginReadScope("all-salaries");
   const tbody = document.querySelector("#allSalariesTable tbody");
   const message = document.getElementById("allSalariesMessage");
   if (!tbody) return;
@@ -267,12 +270,13 @@ async function loadAllSalariesOnce() {
         .or(SALARY_COMMENT_TERMS.map((term) => `comment.ilike.%${term}%`).join(","))
         .order("created_at", { ascending: false })
         .order("id", { ascending: false }),
+      { signal: scope.signal },
     ));
   } catch (loadError) {
     error = loadError;
   }
 
-  if (generation !== loadGeneration) return;
+  if (!scope.current() || generation !== loadGeneration) return;
   if (error) {
     console.error("Ошибка загрузки всех зарплат:", error);
     salaryGroups = [];
@@ -297,7 +301,7 @@ async function loadAllSalariesOnce() {
 
 /** Один запрос за раз: первоначальная маршрутизация и инициализация могут совпасть. */
 export function loadAllSalaries() {
-  if (allSalariesLoadPromise) return allSalariesLoadPromise;
+  if (allSalariesLoadPromise && salaryScope?.current()) return allSalariesLoadPromise;
   const current = loadAllSalariesOnce();
   allSalariesLoadPromise = current;
   return current.finally(() => {

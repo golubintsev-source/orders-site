@@ -2,6 +2,7 @@ import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { syncDbUnavailableBanner } from "./dbHealth.js";
 import { state } from "./state.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { beginReadScope } from "./read-requests.js";
 import {
   clientSearch,
   setMessage,
@@ -243,9 +244,8 @@ function getOrdersFastLoadSinceYmd(days = ORDERS_FAST_LOAD_DAYS) {
   return `${y}-${m}-${day}`;
 }
 
-async function fetchOrdersFromDb({ sinceOrderDateYmd = null, shouldContinue = () => true } = {}) {
+async function fetchOrdersFromDb({ sinceOrderDateYmd = null, shouldContinue = () => true, signal } = {}) {
   const buildListQuery = () => {
-    if (!shouldContinue()) return { range: async () => ({ data: [], error: null }) };
     let query = supabaseClient
       .from("orders")
       .select(ORDERS_LIST_SELECT)
@@ -257,11 +257,10 @@ async function fetchOrdersFromDb({ sinceOrderDateYmd = null, shouldContinue = ()
     return query;
   };
 
-  let { data, error } = await fetchAllSupabaseRows(buildListQuery);
+  let { data, error } = await fetchAllSupabaseRows(buildListQuery, { signal });
 
-  if (error) {
+  if (error && shouldContinue() && ["42703", "PGRST204"].includes(error.code)) {
     const buildStarQuery = () => {
-      if (!shouldContinue()) return { range: async () => ({ data: [], error: null }) };
       let again = supabaseClient
         .from("orders")
         .select("*")
@@ -272,7 +271,7 @@ async function fetchOrdersFromDb({ sinceOrderDateYmd = null, shouldContinue = ()
       }
       return again;
     };
-    const againStar = await fetchAllSupabaseRows(buildStarQuery);
+    const againStar = await fetchAllSupabaseRows(buildStarQuery, { signal });
     if (!againStar.error) {
       data = againStar.data;
       error = null;
@@ -354,8 +353,9 @@ function applyOrdersLoadError(error) {
  * Если уже есть кэш на экране — не сжимаем таблицу до 3 дней, сразу догружаем полное.
  */
 export async function loadOrders({ full = false, shouldContinue = () => true } = {}) {
+  const scope = beginReadScope("orders");
   const gen = ++loadOrdersGeneration;
-  const current = () => gen === loadOrdersGeneration && shouldContinue();
+  const current = () => scope.current() && gen === loadOrdersGeneration && shouldContinue();
   state.ordersFullyLoaded = false;
   const hadPaintedCache = Array.isArray(state.allOrders) && state.allOrders.length > 0;
 
@@ -368,21 +368,23 @@ export async function loadOrders({ full = false, shouldContinue = () => true } =
   }
 
   if (!hadPaintedCache) {
-    const recent = await fetchOrdersFromDb({ sinceOrderDateYmd: getOrdersFastLoadSinceYmd(), shouldContinue: current });
+    const recent = await fetchOrdersFromDb({ sinceOrderDateYmd: getOrdersFastLoadSinceYmd(), shouldContinue: current, signal: scope.signal });
     if (!current()) return;
     if (!recent.error && recent.data) {
       commitOrdersToUi(recent.data, { persistCache: false });
-      if (full) await loadOrdersFullInBackground(gen, current);
-      else if (current() && ["all", "route-sheet", "manager-salary", "debts"].includes(getCurrentSectionId())) void loadOrdersFullInBackground(gen, current);
+      if (full) await loadOrdersFullInBackground(gen, current, scope.signal);
+      else if (current() && ["all", "route-sheet", "manager-salary", "debts"].includes(getCurrentSectionId())) void loadOrdersFullInBackground(gen, current, scope.signal);
       return;
     }
     // Быстрый запрос не удался — ниже полный / ошибка.
     if (recent.error) {
       console.warn("Быстрая загрузка заказов (3 дня):", recent.error);
+      applyOrdersLoadError(recent.error);
+      return;
     }
   }
 
-  const all = await fetchOrdersFromDb({ shouldContinue: current });
+  const all = await fetchOrdersFromDb({ shouldContinue: current, signal: scope.signal });
   if (!current()) return;
 
   if (!all.error && all.data) {
@@ -398,8 +400,8 @@ export async function loadOrders({ full = false, shouldContinue = () => true } =
   applyOrdersLoadError(all.error);
 }
 
-async function loadOrdersFullInBackground(gen, current) {
-  const all = await fetchOrdersFromDb({ shouldContinue: current });
+async function loadOrdersFullInBackground(gen, current, signal) {
+  const all = await fetchOrdersFromDb({ shouldContinue: current, signal });
   if (!current()) return;
   if (!all.error && all.data) {
     state.ordersFullyLoaded = true;

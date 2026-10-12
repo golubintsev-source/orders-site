@@ -232,14 +232,16 @@ function renderMyTasksRow(row, { showOrder = false, showExecutors = true, orderP
   `;
 }
 
-async function fetchAllTasksFromServer() {
+import { beginReadScope } from "./read-requests.js";
+async function fetchAllTasksFromServer(signal) {
   const { data, error } = await fetchAllSupabaseRows(() =>
     supabaseClient.from("order_tasks").select(TASK_SELECT_FIELDS).is("deleted_at", null),
+    { signal },
   );
   return { data, error };
 }
 
-async function fetchTasksForOrderFromServer(orderId) {
+async function fetchTasksForOrderFromServer(orderId, signal) {
   const oid = Number(orderId);
   if (!Number.isFinite(oid) || oid <= 0) {
     return { data: [], error: null };
@@ -250,6 +252,7 @@ async function fetchTasksForOrderFromServer(orderId) {
       .select(TASK_SELECT_FIELDS)
       .eq("order_id", oid)
       .is("deleted_at", null),
+    { signal },
   );
   return { data, error };
 }
@@ -676,6 +679,7 @@ function bindTaskOrderLinkDelegation(root) {
 }
 
 export async function loadAllTasks() {
+  const scope = beginReadScope("tasks-all");
   const executorTbody = document.querySelector("#allTasksTable tbody");
   const authorTbody = document.querySelector("#myAuthorTasksTable tbody");
   const executorMsg = document.getElementById("allTasksMessage");
@@ -704,7 +708,8 @@ export async function loadAllTasks() {
     resetTaskFormDefaults();
   }
 
-  const { data, error } = await fetchAllTasksFromServer();
+  const { data, error } = await fetchAllTasksFromServer(scope.signal);
+  if (!scope.current()) return;
 
   if (error) {
     console.error("Ошибка загрузки задач:", error);
@@ -728,7 +733,8 @@ export async function loadAllTasks() {
   const mergedAll = filterNotDeletedTasks(mergeOrderTasksRowsForAllTasks(baseRows));
   const executorRows = sortTasksByDueAt(filterMyExecutorTasks(mergedAll));
   const authorRows = sortTasksByDueAt(filterMyAuthorTasks(mergedAll));
-  await ensureOrderSummaries([...executorRows, ...authorRows].map((row) => row.order_id));
+  await ensureOrderSummaries([...executorRows, ...authorRows].map((row) => row.order_id), scope.signal);
+  if (!scope.current()) return;
 
   executorTbody.innerHTML = executorRows
     .map((row) => renderMyTasksRow(row, { showOrder: true, showExecutors: false, orderPopup: true }))
@@ -748,6 +754,7 @@ export async function loadAllTasks() {
 }
 
 export async function loadOrderTasks() {
+  const scope = beginReadScope("order-tasks");
   const executorTbody = document.querySelector("#orderTasksExecutorTable tbody");
   const authorTbody = document.querySelector("#orderTasksAuthorTable tbody");
   const executorMsg = document.getElementById("orderTasksExecutorMessage");
@@ -755,7 +762,8 @@ export async function loadOrderTasks() {
   if (!executorTbody || !authorTbody) return;
 
   const orderId = state.tasksOrderId;
-  await ensureOrderSummaries([orderId]);
+  await ensureOrderSummaries([orderId], scope.signal);
+  if (!scope.current()) return;
   setOrderTasksPageTitle(orderId);
   syncOrderPageTaskForm(orderId);
 
@@ -783,7 +791,8 @@ export async function loadOrderTasks() {
     return;
   }
 
-  const { data, error } = await fetchTasksForOrderFromServer(oid);
+  const { data, error } = await fetchTasksForOrderFromServer(oid, scope.signal);
+  if (!scope.current()) return;
 
   if (error) {
     console.error("Ошибка загрузки задач заказа:", error);

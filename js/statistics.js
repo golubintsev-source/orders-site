@@ -148,7 +148,9 @@ function paintStatisticsTable(rows) {
   applyStatisticsFilter();
 }
 
+import { beginReadScope } from "./read-requests.js";
 export async function loadStatistics(opts = {}) {
+  const scope = beginReadScope("statistics");
   if (!isAdmin()) return;
 
   const tbody = document.querySelector("#statisticsTable tbody");
@@ -179,8 +181,10 @@ export async function loadStatistics(opts = {}) {
       .lte("created_at", toIso)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false }),
+    { signal: scope.signal },
   );
 
+  if (!scope.current()) return;
   if (error) {
     console.error("Ошибка загрузки статистики:", error);
     tbody.innerHTML = "";

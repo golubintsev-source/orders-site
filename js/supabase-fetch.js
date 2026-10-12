@@ -14,13 +14,17 @@ export const SUPABASE_PAGE_SIZE = 1000;
  * @param {{ pageSize?: number }} [options]
  * @returns {Promise<{ data: any[] | null, error: any }>}
  */
-export async function fetchAllSupabaseRows(buildQuery, { pageSize = SUPABASE_PAGE_SIZE } = {}) {
+export async function fetchAllSupabaseRows(buildQuery, { pageSize = SUPABASE_PAGE_SIZE, signal } = {}) {
   const size = Math.max(1, Number(pageSize) || SUPABASE_PAGE_SIZE);
   const all = [];
   let from = 0;
 
   for (;;) {
-    const { data, error } = await buildQuery().range(from, from + size - 1);
+    if (signal?.aborted) return { data: null, error: { name: "AbortError", code: "ABORTED" } };
+    let query = buildQuery().range(from, from + size - 1);
+    if (signal) query = query.abortSignal(signal);
+    const { data, error } = await query;
+    if (signal?.aborted) return { data: null, error: { name: "AbortError", code: "ABORTED" } };
     if (error) return { data: null, error };
 
     const rows = data || [];
@@ -38,7 +42,7 @@ export async function fetchAllSupabaseRows(buildQuery, { pageSize = SUPABASE_PAG
  * @param {any[]} ids
  * @param {{ chunkSize?: number }} [options]
  */
-export async function fetchSupabaseByIdsInChunks(fetchChunk, ids, { chunkSize = 200 } = {}) {
+export async function fetchSupabaseByIdsInChunks(fetchChunk, ids, { chunkSize = 200, signal } = {}) {
   const unique = [];
   const seen = new Set();
   for (const id of ids || []) {
@@ -51,8 +55,12 @@ export async function fetchSupabaseByIdsInChunks(fetchChunk, ids, { chunkSize = 
   const all = [];
 
   for (let i = 0; i < unique.length; i += size) {
+    if (signal?.aborted) return { data: null, error: { name: "AbortError", code: "ABORTED" } };
     const chunk = unique.slice(i, i + size);
-    const { data, error } = await fetchChunk(chunk);
+    let query = fetchChunk(chunk);
+    if (signal) query = query.abortSignal(signal);
+    const { data, error } = await query;
+    if (signal?.aborted) return { data: null, error: { name: "AbortError", code: "ABORTED" } };
     if (error) return { data: null, error };
     if (data?.length) all.push(...data);
   }

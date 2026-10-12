@@ -7,7 +7,7 @@ const summaries = new Map();
 export function getOrderSummary(id) {
   return state.allOrders.find((row) => Number(row.id) === Number(id)) || summaries.get(Number(id));
 }
-export async function ensureOrderSummaries(ids) {
+export async function ensureOrderSummaries(ids, signal) {
   const needed = [...new Set(ids.map(Number).filter((id) => id > 0 && !getOrderSummary(id)))];
   if (!needed.length) return;
   if (isOfflineDataMode()) {
@@ -15,7 +15,8 @@ export async function ensureOrderSummaries(ids) {
     return;
   }
   const { data, error } = await fetchSupabaseByIdsInChunks((chunk) => supabaseClient
-    .from("orders").select("id, order_type").in("id", chunk), needed);
+    .from("orders").select("id, order_type").in("id", chunk), needed, { signal });
+  if (signal?.aborted) return;
   if (error) throw error;
   for (const row of data || []) summaries.set(Number(row.id), row);
 }

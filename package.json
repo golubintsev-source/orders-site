@@ -2,6 +2,7 @@
   "name": "orders-site",
   "private": true,
   "scripts": {
+    "test:read-requests": "node scripts/test-read-requests.mjs",
     "test:lazy-sections": "node --experimental-vm-modules scripts/test-lazy-sections.mjs",
     "test:calculations-loading": "node --experimental-vm-modules scripts/test-calculations-loading.mjs",
     "update-supabase": "node scripts/update-supabase.js",

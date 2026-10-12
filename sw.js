@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v82: только общая оболочка; модули разделов кэшируются по обращению.
-const STATIC_CACHE = "orders-site-static-v82";
+// v83: независимые таймауты чтения и отмена устаревших запросов.
+const STATIC_CACHE = "orders-site-static-v83";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -24,8 +24,9 @@ const PRECACHE_URLS = [
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",
   "/js/boot-route.js",
-  "/js/main.js?v=43",
+  "/js/main.js?v=44",
   "/js/config.js",
+  "/js/read-requests.js",
   "/js/state.js",
   "/js/auth.js",
   "/js/offline-cache.js",

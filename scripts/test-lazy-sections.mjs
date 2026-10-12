@@ -109,6 +109,7 @@ async function registryHarness() {
   await mod.link(async (path) => {
     if (path === "./state.js") return synthetic({ state });
     if (path === "./roles.js") return synthetic({ isAdmin: () => true });
+    if (path === "./read-requests.js") return new vm.SourceTextModule(read("js/read-requests.js"), { context });
     return new vm.SourceTextModule(read("js/section-lifecycle.js"), { context });
   });
   await mod.evaluate();

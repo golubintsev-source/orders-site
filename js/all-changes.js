@@ -1,3 +1,4 @@
+import { beginReadScope } from "./read-requests.js";
 import { ensureOrderSummaries, getOrderSummary } from "./order-summary-cache.js";
 import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
@@ -143,6 +144,7 @@ async function paintAllChangesFromBaseRows(
   const { error } = opts;
 
   await ensureOrderSummaries((orderHistoryBaseRows || []).map((row) => row.order_id));
+  if (opts.current && !opts.current()) return 0;
   const orderTypeById = buildOrderTypeByIdMap();
   const displayRows = [];
 
@@ -280,7 +282,7 @@ async function paintAllChangesFromBaseRows(
   return lines.length;
 }
 
-async function fetchExcessHistoryRows(startIso, endIso) {
+async function fetchExcessHistoryRows(startIso, endIso, signal) {
   const { data, error } = await fetchAllSupabaseRows(() =>
     supabaseClient
       .from("excess_history")
@@ -289,6 +291,7 @@ async function fetchExcessHistoryRows(startIso, endIso) {
       .lte("created_at", endIso)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false }),
+    { signal },
   );
   if (error) {
     console.warn("История излишков недоступна:", error.message || error);
@@ -297,7 +300,7 @@ async function fetchExcessHistoryRows(startIso, endIso) {
   return { data: data || [], error: null };
 }
 
-async function fetchExcessesRows(startIso, endIso) {
+async function fetchExcessesRows(startIso, endIso, signal) {
   const { data, error } = await fetchAllSupabaseRows(() =>
     supabaseClient
       .from("excesses")
@@ -307,6 +310,7 @@ async function fetchExcessesRows(startIso, endIso) {
       .lte("created_at", endIso)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false }),
+    { signal },
   );
   if (error) {
     console.warn("Излишки для «Все изменения» недоступны:", error.message || error);
@@ -315,7 +319,7 @@ async function fetchExcessesRows(startIso, endIso) {
   return { data: data || [], error: null };
 }
 
-async function fetchSettingsHistoryRows(startIso, endIso) {
+async function fetchSettingsHistoryRows(startIso, endIso, signal) {
   const { data, error } = await fetchAllSupabaseRows(() =>
     supabaseClient
       .from("settings_history")
@@ -324,6 +328,7 @@ async function fetchSettingsHistoryRows(startIso, endIso) {
       .lte("created_at", endIso)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false }),
+    { signal },
   );
   if (error) {
     console.warn("История корректировок недоступна:", error.message || error);
@@ -332,7 +337,7 @@ async function fetchSettingsHistoryRows(startIso, endIso) {
   return { data: data || [], error: null };
 }
 
-async function fetchCalculationHistoryRows(startIso, endIso) {
+async function fetchCalculationHistoryRows(startIso, endIso, signal) {
   const { data, error } = await fetchAllSupabaseRows(() =>
     supabaseClient
       .from("calculation_history")
@@ -341,6 +346,7 @@ async function fetchCalculationHistoryRows(startIso, endIso) {
       .lte("created_at", endIso)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false }),
+    { signal },
   );
   if (error) {
     console.warn("История расчётов недоступна:", error.message || error);
@@ -349,7 +355,7 @@ async function fetchCalculationHistoryRows(startIso, endIso) {
   return { data: data || [], error: null };
 }
 
-async function fetchTaskHistoryRows(startIso, endIso) {
+async function fetchTaskHistoryRows(startIso, endIso, signal) {
   const { data, error } = await fetchAllSupabaseRows(() =>
     supabaseClient
       .from("task_history")
@@ -358,6 +364,7 @@ async function fetchTaskHistoryRows(startIso, endIso) {
       .lte("created_at", endIso)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false }),
+    { signal },
   );
   if (error) {
     console.warn("История задач недоступна:", error.message || error);
@@ -423,6 +430,7 @@ function taskHistoryQuery(startIso, endIso) {
 }
 
 export async function loadAllChanges() {
+  const scope = beginReadScope("changes-all");
   const tbody = document.querySelector("#allChangesTable tbody");
   const msg = document.getElementById("allChangesMessage");
   if (!tbody) return;
@@ -444,21 +452,23 @@ export async function loadAllChanges() {
             .lte("created_at", endIso)
             .order("created_at", { ascending: false })
             .order("id", { ascending: false }),
+          { signal: scope.signal },
         ),
-        fetchExcessHistoryRows(startIso, endIso),
-        fetchExcessesRows(startIso, endIso),
-        fetchSettingsHistoryRows(startIso, endIso),
-        fetchCalculationHistoryRows(startIso, endIso),
-        fetchTaskHistoryRows(startIso, endIso),
+        fetchExcessHistoryRows(startIso, endIso, scope.signal),
+        fetchExcessesRows(startIso, endIso, scope.signal),
+        fetchSettingsHistoryRows(startIso, endIso, scope.signal),
+        fetchCalculationHistoryRows(startIso, endIso, scope.signal),
+        fetchTaskHistoryRows(startIso, endIso, scope.signal),
       ]);
 
+    if (!scope.current()) return;
     if (histRes.error) {
       console.error("Ошибка загрузки истории изменений:", histRes.error);
       if (msg) {
         msg.textContent = "Ошибка загрузки истории изменений.";
         msg.classList.add("order-tasks-message--error");
       }
-      await paintAllChangesFromBaseRows(startIso, endIso, [], [], [], [], [], [], { error: histRes.error });
+      await paintAllChangesFromBaseRows(startIso, endIso, [], [], [], [], [], [], { error: histRes.error, current: scope.current });
       return;
     }
 
@@ -471,7 +481,7 @@ export async function loadAllChanges() {
       settingsHistRes.data || [],
       calcHistRes.data || [],
       taskHistRes.data || [],
-      { error: null },
+      { error: null, current: scope.current },
     );
     return;
   }
@@ -535,7 +545,7 @@ export async function loadAllChanges() {
         snapSettingsHist,
         snapCalcHist,
         snapTaskHist,
-        { error: null },
+        { error: null, current: scope.current },
       );
     }
     try {
@@ -543,12 +553,12 @@ export async function loadAllChanges() {
       const [histRes, excessHistRes, excessesRes, settingsHistRes, calcHistRes, taskHistRes] =
         await raceWithTimeout(
           Promise.all([
-            fetchAllSupabaseRows(historyQuery),
-            fetchAllSupabaseRows(excessHistoryQuery(startIso, endIso)),
-            fetchAllSupabaseRows(excessesQuery(startIso, endIso)),
-            fetchAllSupabaseRows(settingsHistoryQuery(startIso, endIso)),
-            fetchAllSupabaseRows(calculationHistoryQuery(startIso, endIso)),
-            fetchAllSupabaseRows(taskHistoryQuery(startIso, endIso)),
+            fetchAllSupabaseRows(historyQuery, { signal: scope.signal }),
+            fetchAllSupabaseRows(excessHistoryQuery(startIso, endIso), { signal: scope.signal }),
+            fetchAllSupabaseRows(excessesQuery(startIso, endIso), { signal: scope.signal }),
+            fetchAllSupabaseRows(settingsHistoryQuery(startIso, endIso), { signal: scope.signal }),
+            fetchAllSupabaseRows(calculationHistoryQuery(startIso, endIso), { signal: scope.signal }),
+            fetchAllSupabaseRows(taskHistoryQuery(startIso, endIso), { signal: scope.signal }),
           ]),
           waitMs,
         );
@@ -579,6 +589,7 @@ export async function loadAllChanges() {
     }
   }
 
+  if (!scope.current()) return;
   const baseRows = error ? snapFiltered : data || [];
   if (!error && data) persistOrderHistorySnapshot(data);
   if (!error && Array.isArray(excessHistData)) persistExcessHistorySnapshot(excessHistData);
@@ -595,7 +606,7 @@ export async function loadAllChanges() {
     error ? snapSettingsHist : settingsHistData || [],
     error ? snapCalcHist : calcHistData || [],
     error ? snapTaskHist : taskHistData || [],
-    { error },
+    { error, current: scope.current },
   );
 }
 

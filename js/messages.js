@@ -35,6 +35,7 @@ async function uploadChatPhoto(...args) {
   return (await import("./files.js")).uploadChatPhoto(...args);
 }
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { beginReadScope, cancelReadScope } from "./read-requests.js";
 import { messageHasActiveTask } from "./message-task-links.js";
 import { getChatPeerFromUrl, syncChatPeerInUrl } from "./app-routes.js";
 import {
@@ -128,9 +129,10 @@ let messagesView = "list";
 /** @type {string | null} null на списке; uuid пользователя или group:<uuid> в диалоге */
 let activePeerId = null;
 
-function withMessagesRequestTimeout(promise, ms = MESSAGE_REQUEST_TIMEOUT_MS) {
+function withMessagesRequestTimeout(promise, ms = MESSAGE_REQUEST_TIMEOUT_MS, onTimeout = () => {}) {
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => {
+      onTimeout();
       reject(Object.assign(new Error("Превышено время ожидания загрузки сообщений."), { code: "TIMEOUT" }));
     }, ms);
     Promise.resolve(promise).then(
@@ -147,6 +149,7 @@ function withMessagesRequestTimeout(promise, ms = MESSAGE_REQUEST_TIMEOUT_MS) {
 }
 
 function invalidateMessagesPoll() {
+  cancelReadScope("message-poll");
   pollNewMessagesRunId += 1;
   pollNewMessagesInFlight = false;
 }
@@ -1794,7 +1797,7 @@ async function fetchUnreadIncomingDmMeta() {
 }
 
 /** Сообщения одного peer (1:1), без выгрузки всей переписки пользователя. */
-async function fetchPeerMessages(peerId, { sinceIso = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT } = {}) {
+async function fetchPeerMessages(peerId, { sinceIso = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT, signal } = {}) {
   const uid = getCurrentUserId();
   if (!uid || !peerId) return { rows: [], error: null };
 
@@ -1807,7 +1810,7 @@ async function fetchPeerMessages(peerId, { sinceIso = null, limit = DIALOG_INITI
       .order("created_at", { ascending: false })
       .limit(limit);
     if (sinceIso) q = q.gte("created_at", sinceIso);
-    return q;
+    return signal ? q.abortSignal(signal) : q;
   });
   if (error) return { rows, error };
   return { rows: rows.slice().reverse(), error: null };
@@ -1850,7 +1853,7 @@ async function fetchMyGroupChats() {
   return { chats, error: null };
 }
 
-async function fetchGroupMessages(chatId, { sinceIso = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT } = {}) {
+async function fetchGroupMessages(chatId, { sinceIso = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT, signal } = {}) {
   if (!chatId || groupChatsSupported === false) return { rows: [], error: null };
 
   const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
@@ -1864,7 +1867,7 @@ async function fetchGroupMessages(chatId, { sinceIso = null, limit = DIALOG_INIT
       .order("created_at", { ascending: false })
       .limit(limit);
     if (sinceIso) q = q.gte("created_at", sinceIso);
-    return q;
+    return signal ? q.abortSignal(signal) : q;
   }
 
   let { data, error } = await run(select);
@@ -2983,6 +2986,7 @@ function prepareMessagesDialogForPeer(peerId, { forceReset = false } = {}) {
     return false;
   }
   loadMessagesGeneration += 1;
+  cancelReadScope("dialog");
   stopMessagesFeedBottomPin();
   lastFeedMessageAt = null;
   clearComposerContext();
@@ -2995,6 +2999,7 @@ function prepareMessagesDialogForPeer(peerId, { forceReset = false } = {}) {
 }
 
 export function showMessagesChatList() {
+  cancelReadScope("dialog");
   invalidateMessagesPoll();
   activePeerId = null;
   lastFeedMessageAt = null;
@@ -3066,6 +3071,7 @@ export async function loadMessages({ forceBottom = false } = {}) {
   if (messagesView !== "dialog" || !activePeerId) return;
 
   const gen = ++loadMessagesGeneration;
+  const scope = beginReadScope("dialog");
   const peerAtStart = activePeerId;
   if (!feed.dataset.peerId) feed.dataset.peerId = String(peerAtStart);
 
@@ -3076,9 +3082,9 @@ export async function loadMessages({ forceBottom = false } = {}) {
 
   async function fetchDialogRows({ since = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT } = {}) {
     if (isGroupChat(peerAtStart)) {
-      return fetchGroupMessages(parseGroupId(peerAtStart), { sinceIso: since, limit });
+      return fetchGroupMessages(parseGroupId(peerAtStart), { sinceIso: since, limit, signal: scope.signal });
     }
-    return fetchPeerMessages(peerAtStart, { sinceIso: since, limit });
+    return fetchPeerMessages(peerAtStart, { sinceIso: since, limit, signal: scope.signal });
   }
 
   async function renderDialogRows(rows, { markRead = true } = {}) {
@@ -3136,13 +3142,11 @@ export async function loadMessages({ forceBottom = false } = {}) {
   // ложное «нет сообщений» до фоновой догрузки, а LIMIT сохраняет быстрый ответ.
   let fast;
   try {
-    fast = await withMessagesRequestTimeout(
-      fetchDialogRows({ since: null, limit: DIALOG_INITIAL_MESSAGE_LIMIT }),
-    );
+    fast = await fetchDialogRows({ since: null, limit: DIALOG_INITIAL_MESSAGE_LIMIT });
   } catch (error) {
     fast = { rows: [], error };
   }
-  if (!isCurrentDialogLoad(gen, peerAtStart)) return;
+  if (!scope.current() || !isCurrentDialogLoad(gen, peerAtStart)) return;
 
   if (fast.error) {
     console.error("Ошибка загрузки сообщений:", fast.error);
@@ -3166,13 +3170,12 @@ export async function loadMessages({ forceBottom = false } = {}) {
     if (!isCurrentDialogLoad(gen, peerAtStart)) return;
     let fuller;
     try {
-      fuller = await withMessagesRequestTimeout(
-        fetchDialogRows({ since: null, limit: DIALOG_HISTORY_MESSAGE_LIMIT }),
-      );
+      if (!scope.current()) return;
+      fuller = await fetchDialogRows({ since: null, limit: DIALOG_HISTORY_MESSAGE_LIMIT });
     } catch {
       return;
     }
-    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
+    if (!scope.current() || !isCurrentDialogLoad(gen, peerAtStart)) return;
     if (fuller.error) return;
     rememberFeedMessages(fuller.rows);
 
@@ -3456,9 +3459,10 @@ async function pollNewMessages() {
   const uid = getCurrentUserId();
   if (!feed || !uid || messagesView !== "dialog" || !activePeerId) return;
   const runId = ++pollNewMessagesRunId;
+  const scope = beginReadScope("message-poll");
   pollNewMessagesInFlight = true;
   try {
-    await withMessagesRequestTimeout(pollNewMessagesUnlocked(runId));
+    await withMessagesRequestTimeout(pollNewMessagesUnlocked(runId, scope), MESSAGE_REQUEST_TIMEOUT_MS, scope.cancel);
   } catch (error) {
     if (error?.code === "TIMEOUT") {
       console.warn("Таймаут проверки новых сообщений.");
@@ -3470,12 +3474,12 @@ async function pollNewMessages() {
   }
 }
 
-async function pollNewMessagesUnlocked(runId) {
+async function pollNewMessagesUnlocked(runId, scope) {
   const uid = getCurrentUserId();
   if (!uid || messagesView !== "dialog" || !activePeerId) return;
   const peerAtStart = activePeerId;
   const isCurrentPoll = () =>
-    runId === pollNewMessagesRunId &&
+    scope.current() && runId === pollNewMessagesRunId &&
     activePeerId === peerAtStart &&
     messagesView === "dialog" &&
     isMessagesFeedForPeer(peerAtStart);
@@ -3500,7 +3504,7 @@ async function pollNewMessagesUnlocked(runId) {
     if (lastFeedMessageAt) {
       query = query.gte("created_at", lastFeedMessageAt);
     }
-    let { data, error } = await query;
+    let { data, error } = await query.abortSignal(scope.signal);
     if (error && noteMessageActionsSupport(error)) {
       query = supabaseClient
         .from("group_messages")
@@ -3508,7 +3512,7 @@ async function pollNewMessagesUnlocked(runId) {
         .eq("chat_id", groupId)
         .order("created_at", { ascending: true });
       if (lastFeedMessageAt) query = query.gte("created_at", lastFeedMessageAt);
-      ({ data, error } = await query);
+      ({ data, error } = await query.abortSignal(scope.signal));
     }
     if (error && noteAttachmentDimensionSupport(error)) {
       query = supabaseClient
@@ -3517,7 +3521,7 @@ async function pollNewMessagesUnlocked(runId) {
         .eq("chat_id", groupId)
         .order("created_at", { ascending: true });
       if (lastFeedMessageAt) query = query.gte("created_at", lastFeedMessageAt);
-      ({ data, error } = await query);
+      ({ data, error } = await query.abortSignal(scope.signal));
     }
     if (error && noteAttachmentSupport(error)) {
       query = supabaseClient
@@ -3526,8 +3530,9 @@ async function pollNewMessagesUnlocked(runId) {
         .eq("chat_id", groupId)
         .order("created_at", { ascending: true });
       if (lastFeedMessageAt) query = query.gte("created_at", lastFeedMessageAt);
-      ({ data, error } = await query);
+      ({ data, error } = await query.abortSignal(scope.signal));
     }
+    if (!isCurrentPoll()) return;
     if (error) {
       if (!noteGroupChatsSupport(error)) {
         console.warn("Ошибка проверки новых сообщений группы:", error);
@@ -3560,7 +3565,7 @@ async function pollNewMessagesUnlocked(runId) {
     query = query.gte("created_at", lastFeedMessageAt);
   }
 
-  let { data, error } = await query;
+  let { data, error } = await query.abortSignal(scope.signal);
   if (error && noteAttachmentDimensionSupport(error)) {
     let retry = supabaseClient
       .from("user_messages")
@@ -3568,7 +3573,7 @@ async function pollNewMessagesUnlocked(runId) {
       .or(peerFilter)
       .order("created_at", { ascending: true });
     if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
-    ({ data, error } = await retry);
+    ({ data, error } = await retry.abortSignal(scope.signal));
   }
   if (error && noteAttachmentSupport(error)) {
     let retry = supabaseClient
@@ -3577,7 +3582,7 @@ async function pollNewMessagesUnlocked(runId) {
       .or(peerFilter)
       .order("created_at", { ascending: true });
     if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
-    ({ data, error } = await retry);
+    ({ data, error } = await retry.abortSignal(scope.signal));
   }
   if (error && noteDeliveredAtSupport(error) && deliveredAtSupported === false) {
     let retry = supabaseClient
@@ -3586,11 +3591,12 @@ async function pollNewMessagesUnlocked(runId) {
       .or(peerFilter)
       .order("created_at", { ascending: true });
     if (lastFeedMessageAt) retry = retry.gte("created_at", lastFeedMessageAt);
-    ({ data, error } = await retry);
+    ({ data, error } = await retry.abortSignal(scope.signal));
   } else if (!error) {
     deliveredAtSupported = deliveredAtSupported !== false;
   }
 
+  if (!isCurrentPoll()) return;
   if (error) {
     console.warn("Ошибка проверки новых сообщений:", error);
     await syncOutgoingReadStatus();
@@ -3657,6 +3663,8 @@ function stopChatListPolling() {
 }
 
 export function stopMessagesPolling() {
+  invalidateMessagesPoll();
+  cancelReadScope("dialog");
   stopMessagesFeedPolling();
   stopChatListPolling();
 }

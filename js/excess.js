@@ -8,6 +8,7 @@ import {
   tryParseRublesInteger,
 } from "./format.js";
 import { raceWithTimeout } from "./offline-cache.js";
+import { beginReadScope } from "./read-requests.js";
 import { shortLoginByEmail } from "./user-names.js";
 import { canSelectKassaBeznal, KASSA_BEZNAL_PLACES } from "./roles.js";
 import {
@@ -1059,15 +1060,18 @@ async function deleteExcess(id) {
 }
 
 export async function loadExcesses() {
+  const scope = beginReadScope("excess");
   try {
-    const result = await raceWithTimeout(
+    const result = await (
       supabaseClient
         .from("excesses")
         .select("id, created_at, client, amount, paid_to, created_by")
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
-        .limit(500),
+        .limit(500)
+        .abortSignal(scope.signal)
     );
+    if (!scope.current()) return;
     if (result?.error) {
       console.error("excesses load:", result.error);
       excessesRowsCache = [];
@@ -1081,6 +1085,7 @@ export async function loadExcesses() {
     renderExcessesTable(excessesRowsCache);
   } catch (err) {
     console.error("excesses load:", err);
+    if (!scope.current()) return;
     excessesRowsCache = [];
     renderExcessesTable([]);
     setTableMessage("Ошибка загрузки излишков.");

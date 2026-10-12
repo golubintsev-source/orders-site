@@ -1,6 +1,7 @@
 import { createSectionLifecycle } from "./section-lifecycle.js";
 import { state } from "./state.js";
 import { isAdmin } from "./roles.js";
+import { cancelSectionReads } from "./read-requests.js";
 
 async function ordersDependency(current) {
   const runtime = await import("./orders-runtime.js");
@@ -122,4 +123,7 @@ const lifecycle = createSectionLifecycle({
 });
 
 export const enterSection = lifecycle.enter;
-export const leaveSection = lifecycle.leave;
+export function leaveSection(id) {
+  cancelSectionReads(id);
+  lifecycle.leave(id);
+}

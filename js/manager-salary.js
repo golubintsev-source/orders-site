@@ -573,7 +573,9 @@ function applyUncheckedIds(ids) {
   }
 }
 
+import { beginReadScope } from "./read-requests.js";
 async function loadUncheckedForSelection(managerId, fromYmd, toYmd) {
+  const scope = beginReadScope("manager-salary");
   const token = ++loadToken;
   const key = settingsKeyForSelection(managerId, fromYmd, toYmd);
   const expectedSelection = selectionKey(managerId, fromYmd, toYmd);
@@ -582,9 +584,10 @@ async function loadUncheckedForSelection(managerId, fromYmd, toYmd) {
     .from("app_settings")
     .select("value")
     .eq("key", key)
-    .maybeSingle();
+    .maybeSingle()
+    .abortSignal(scope.signal);
 
-  if (token !== loadToken || currentSelectionKey() !== expectedSelection) return;
+  if (!scope.current() || token !== loadToken || currentSelectionKey() !== expectedSelection) return;
 
   if (error) {
     applyUncheckedIds([]);
