@@ -2795,10 +2795,9 @@ async function loadChatListOnce() {
     },
   );
 
-  // Второй проход добирает переписки старше MESSAGES_FAST_LOAD_DAYS. Он не влияет на
-  // первый экран, поэтому ждём простоя: иначе 800 строк конкурируют с отрисовкой.
+  // Старые переписки должны появиться без искусственной задержки idle.
+  // На iOS requestIdleCallback может сработать существенно позже первого кадра.
   await (async () => {
-    await whenIdle();
     if (gen !== loadChatListGeneration || messagesView !== "list") return;
     const [fuller, unreadFresh] = await Promise.all([
       fetchRecentUserMessagesForChatList({
@@ -3975,6 +3974,9 @@ function startMessagesRealtime() {
     );
 
   channel.subscribe((status) => {
+    // A removed channel can still invoke its asynchronous status callback.
+    // Never let it override the state of a newer connection.
+    if (messagesRealtimeChannel !== channel) return;
     messagesRealtimeActive = status === "SUBSCRIBED";
     if (status === "SUBSCRIBED") {
       messagesRealtimeConnecting = false;
