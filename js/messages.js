@@ -2026,7 +2026,7 @@ function buildChatListEntries(
   lastGroupMessages,
   groupUnreadByChat,
   dmUnreadByPeer,
-  { groupMessagesPending = false } = {},
+  { groupMessagesPending = false, lastGroupOutgoingMessages = null } = {},
 ) {
   const uid = getCurrentUserId();
   const byPeer = new Map();
@@ -2037,10 +2037,11 @@ function buildChatListEntries(
     if (!peerId) continue;
     let bucket = byPeer.get(peerId);
     if (!bucket) {
-      bucket = { messages: [], last: null };
+      bucket = { messages: [], last: null, lastOutgoing: null };
       byPeer.set(peerId, bucket);
     }
     bucket.messages.push(row);
+    if (String(row.sender_id) === String(uid) && (!bucket.lastOutgoing || row.created_at >= bucket.lastOutgoing.created_at)) bucket.lastOutgoing = row;
     if (!bucket.last || row.created_at >= bucket.last.created_at) {
       bucket.last = row;
     }
@@ -2069,6 +2070,7 @@ function buildChatListEntries(
       email,
       unreadCount,
       last,
+      lastOutgoing: bucket?.lastOutgoing || null,
       sortAt: last?.created_at || "",
     });
   }
@@ -2085,6 +2087,7 @@ function buildChatListEntries(
       memberIds: chat.memberIds || [],
       unreadCount,
       lastPending: groupMessagesPending && !last,
+      lastOutgoing: lastGroupOutgoingMessages?.get(String(chat.id)) || null,
       last: last
         ? {
             ...last,
@@ -2109,9 +2112,9 @@ function buildChatListEntries(
 }
 
 function renderChatListTicks(last, uid, entry = null, receiptsByUser = null) {
-  if (!last) return "";
-  const isOut = String(last.sender_id) === String(uid);
-  if (!isOut) return "";
+  const outgoing = entry?.lastOutgoing || (String(last?.sender_id) === String(uid) ? last : null);
+  if (!outgoing) return "";
+  last = outgoing;
 
   if (entry?.kind === "group" || (last.recipient_id == null && last.chat_id)) {
     const memberIds = entry?.memberIds || groupChatsById.get(String(last.chat_id))?.memberIds || [];
@@ -2302,7 +2305,7 @@ function buildChatListSignature(entries) {
   return entries
     .map((entry) => {
       const preview = chatListPreviewText(entry);
-      return `${entry.peerId}|${entry.sortAt}|${entry.unreadCount}|${entry.name}|${preview}`;
+      return `${entry.peerId}|${entry.sortAt}|${entry.unreadCount}|${entry.name}|${preview}|${entry.lastOutgoing?.id || ""}|${entry.lastOutgoing?.read_at || ""}|${entry.lastOutgoing?.delivered_at || ""}`;
     })
     .join("\n");
 }
@@ -2597,7 +2600,7 @@ function paintChatListEntries(
   lastGroupMessages,
   groupUnreadByChat,
   groupReceiptsByChat,
-  { partial = false, announce = false, groupMessagesPending = false } = {},
+  { partial = false, announce = false, groupMessagesPending = false, lastGroupOutgoingMessages = null } = {},
 ) {
   const uid = getCurrentUserId();
   const dmUnreadByPeer = buildDmUnreadByPeer(unreadRows);
@@ -2609,7 +2612,7 @@ function paintChatListEntries(
     lastGroupMessages,
     groupUnreadByChat,
     dmUnreadByPeer,
-    { groupMessagesPending },
+    { groupMessagesPending, lastGroupOutgoingMessages },
   );
   const signature = buildChatListSignature(entries);
   if (!partial) {
