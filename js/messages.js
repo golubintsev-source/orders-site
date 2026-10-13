@@ -1945,6 +1945,40 @@ async function fetchLastGroupMessagesByChat(chatIds) {
   return { lastByChat };
 }
 
+/** Последнее исходящее сообщение пользователя в каждой группе для галочек списка. */
+async function fetchLastOutgoingGroupMessagesByChat(chatIds, uid) {
+  const lastByChat = new Map();
+  if (!chatIds?.length || !uid || groupChatsSupported === false) return lastByChat;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < chatIds.length) {
+      const chatId = chatIds[cursor++];
+      for (const select of [
+        "id, chat_id, sender_id, created_at, deleted_at",
+        "id, chat_id, sender_id, created_at",
+      ]) {
+        let query = supabaseClient.from("group_messages")
+          .select(select)
+          .eq("chat_id", chatId)
+          .eq("sender_id", uid)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (select.includes("deleted_at")) query = query.is("deleted_at", null);
+        const { data, error } = await query;
+        if (error) {
+          if (noteMessageActionsSupport(error)) continue;
+          console.warn("Ошибка загрузки исходящего сообщения группы:", chatId, error);
+          break;
+        }
+        if (data?.[0]) lastByChat.set(String(chatId), data[0]);
+        break;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(4, chatIds.length) }, () => worker()));
+  return lastByChat;
+}
+
 /** Точный unread групп — один batch-запрос вместо N count-запросов. */
 async function fetchGroupUnreadCounts(chatIds, uid, lastReadByChat) {
   const unreadByChat = new Map();
@@ -2026,7 +2060,7 @@ function buildChatListEntries(
   lastGroupMessages,
   groupUnreadByChat,
   dmUnreadByPeer,
-  { groupMessagesPending = false } = {},
+  { groupMessagesPending = false, lastGroupOutgoingMessages = null } = {},
 ) {
   const uid = getCurrentUserId();
   const byPeer = new Map();
@@ -2037,10 +2071,11 @@ function buildChatListEntries(
     if (!peerId) continue;
     let bucket = byPeer.get(peerId);
     if (!bucket) {
-      bucket = { messages: [], last: null };
+      bucket = { messages: [], last: null, lastOutgoing: null };
       byPeer.set(peerId, bucket);
     }
     bucket.messages.push(row);
+    if (String(row.sender_id) === String(uid) && (!bucket.lastOutgoing || row.created_at >= bucket.lastOutgoing.created_at)) bucket.lastOutgoing = row;
     if (!bucket.last || row.created_at >= bucket.last.created_at) {
       bucket.last = row;
     }
@@ -2069,6 +2104,7 @@ function buildChatListEntries(
       email,
       unreadCount,
       last,
+      lastOutgoing: bucket?.lastOutgoing || null,
       sortAt: last?.created_at || "",
     });
   }
@@ -2085,6 +2121,7 @@ function buildChatListEntries(
       memberIds: chat.memberIds || [],
       unreadCount,
       lastPending: groupMessagesPending && !last,
+      lastOutgoing: lastGroupOutgoingMessages?.get(String(chat.id)) || null,
       last: last
         ? {
             ...last,
@@ -2109,9 +2146,9 @@ function buildChatListEntries(
 }
 
 function renderChatListTicks(last, uid, entry = null, receiptsByUser = null) {
-  if (!last) return "";
-  const isOut = String(last.sender_id) === String(uid);
-  if (!isOut) return "";
+  const outgoing = entry?.lastOutgoing || (String(last?.sender_id) === String(uid) ? last : null);
+  if (!outgoing) return "";
+  last = outgoing;
 
   if (entry?.kind === "group" || (last.recipient_id == null && last.chat_id)) {
     const memberIds = entry?.memberIds || groupChatsById.get(String(last.chat_id))?.memberIds || [];
@@ -2302,7 +2339,7 @@ function buildChatListSignature(entries) {
   return entries
     .map((entry) => {
       const preview = chatListPreviewText(entry);
-      return `${entry.peerId}|${entry.sortAt}|${entry.unreadCount}|${entry.name}|${preview}`;
+      return `${entry.peerId}|${entry.sortAt}|${entry.unreadCount}|${entry.name}|${preview}|${entry.lastOutgoing?.id || ""}|${entry.lastOutgoing?.read_at || ""}|${entry.lastOutgoing?.delivered_at || ""}`;
     })
     .join("\n");
 }
@@ -2597,7 +2634,7 @@ function paintChatListEntries(
   lastGroupMessages,
   groupUnreadByChat,
   groupReceiptsByChat,
-  { partial = false, announce = false, groupMessagesPending = false } = {},
+  { partial = false, announce = false, groupMessagesPending = false, lastGroupOutgoingMessages = null } = {},
 ) {
   const uid = getCurrentUserId();
   const dmUnreadByPeer = buildDmUnreadByPeer(unreadRows);
@@ -2609,9 +2646,9 @@ function paintChatListEntries(
     lastGroupMessages,
     groupUnreadByChat,
     dmUnreadByPeer,
-    { groupMessagesPending },
+    { groupMessagesPending, lastGroupOutgoingMessages },
   );
-  const signature = buildChatListSignature(entries);
+  const signature = buildChatListSignature(entries) + "|" + [...(groupReceiptsByChat || new Map())].map(([chatId, receipts]) => `${chatId}:${[...(receipts || new Map())].map(([userId, receipt]) => `${userId}:${JSON.stringify(receipt)}`).join(",")}`).join(";");
   if (!partial) {
     list.dataset.chatListFull = "1";
     delete list.dataset.chatListFromSnapshot;
@@ -2657,9 +2694,10 @@ async function paintChatListFromData(
 
     if (!chatIds.length) return;
     await (async () => {
-      const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat] = await Promise.all([
+      const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat, lastGroupOutgoingMessages] = await Promise.all([
         fetchLastGroupMessagesByChat(chatIds),
         fetchGroupMemberReceiptsByChat(chatIds),
+        fetchLastOutgoingGroupMessagesByChat(chatIds, getCurrentUserId()),
       ]);
       if (typeof isCurrent === "function" && !isCurrent()) return;
       const uid = getCurrentUserId();
@@ -2674,15 +2712,16 @@ async function paintChatListFromData(
         lastGroupMessages,
         groupUnreadByChat,
         groupReceiptsByChat,
-        { partial },
+        { partial, lastGroupOutgoingMessages },
       );
     })().catch((error) => console.warn("Фоновое обновление групповых чатов:", error));
     return;
   }
 
-  const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat] = await Promise.all([
+  const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat, lastGroupOutgoingMessages] = await Promise.all([
     fetchLastGroupMessagesByChat(chatIds),
     fetchGroupMemberReceiptsByChat(chatIds),
+    fetchLastOutgoingGroupMessagesByChat(chatIds, getCurrentUserId()),
   ]);
   if (typeof isCurrent === "function" && !isCurrent()) return;
   const uid = getCurrentUserId();
@@ -2697,7 +2736,7 @@ async function paintChatListFromData(
     lastGroupMessages,
     groupUnreadByChat,
     groupReceiptsByChat,
-    { partial, announce: true },
+    { partial, announce: true, lastGroupOutgoingMessages },
   );
 }
 
