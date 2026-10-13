@@ -1945,6 +1945,40 @@ async function fetchLastGroupMessagesByChat(chatIds) {
   return { lastByChat };
 }
 
+/** Последнее исходящее сообщение пользователя в каждой группе для галочек списка. */
+async function fetchLastOutgoingGroupMessagesByChat(chatIds, uid) {
+  const lastByChat = new Map();
+  if (!chatIds?.length || !uid || groupChatsSupported === false) return lastByChat;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < chatIds.length) {
+      const chatId = chatIds[cursor++];
+      for (const select of [
+        "id, chat_id, sender_id, created_at, deleted_at",
+        "id, chat_id, sender_id, created_at",
+      ]) {
+        let query = supabaseClient.from("group_messages")
+          .select(select)
+          .eq("chat_id", chatId)
+          .eq("sender_id", uid)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (select.includes("deleted_at")) query = query.is("deleted_at", null);
+        const { data, error } = await query;
+        if (error) {
+          if (noteMessageActionsSupport(error)) continue;
+          console.warn("Ошибка загрузки исходящего сообщения группы:", chatId, error);
+          break;
+        }
+        if (data?.[0]) lastByChat.set(String(chatId), data[0]);
+        break;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(4, chatIds.length) }, () => worker()));
+  return lastByChat;
+}
+
 /** Точный unread групп — один batch-запрос вместо N count-запросов. */
 async function fetchGroupUnreadCounts(chatIds, uid, lastReadByChat) {
   const unreadByChat = new Map();
@@ -2614,7 +2648,7 @@ function paintChatListEntries(
     dmUnreadByPeer,
     { groupMessagesPending, lastGroupOutgoingMessages },
   );
-  const signature = buildChatListSignature(entries);
+  const signature = buildChatListSignature(entries) + "|" + [...(groupReceiptsByChat || new Map())].map(([chatId, receipts]) => `${chatId}:${[...(receipts || new Map())].map(([userId, receipt]) => `${userId}:${JSON.stringify(receipt)}`).join(",")}`).join(";");
   if (!partial) {
     list.dataset.chatListFull = "1";
     delete list.dataset.chatListFromSnapshot;
@@ -2660,9 +2694,10 @@ async function paintChatListFromData(
 
     if (!chatIds.length) return;
     await (async () => {
-      const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat] = await Promise.all([
+      const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat, lastGroupOutgoingMessages] = await Promise.all([
         fetchLastGroupMessagesByChat(chatIds),
         fetchGroupMemberReceiptsByChat(chatIds),
+        fetchLastOutgoingGroupMessagesByChat(chatIds, getCurrentUserId()),
       ]);
       if (typeof isCurrent === "function" && !isCurrent()) return;
       const uid = getCurrentUserId();
@@ -2677,15 +2712,16 @@ async function paintChatListFromData(
         lastGroupMessages,
         groupUnreadByChat,
         groupReceiptsByChat,
-        { partial },
+        { partial, lastGroupOutgoingMessages },
       );
     })().catch((error) => console.warn("Фоновое обновление групповых чатов:", error));
     return;
   }
 
-  const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat] = await Promise.all([
+  const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat, lastGroupOutgoingMessages] = await Promise.all([
     fetchLastGroupMessagesByChat(chatIds),
     fetchGroupMemberReceiptsByChat(chatIds),
+    fetchLastOutgoingGroupMessagesByChat(chatIds, getCurrentUserId()),
   ]);
   if (typeof isCurrent === "function" && !isCurrent()) return;
   const uid = getCurrentUserId();
@@ -2700,7 +2736,7 @@ async function paintChatListFromData(
     lastGroupMessages,
     groupUnreadByChat,
     groupReceiptsByChat,
-    { partial, announce: true },
+    { partial, announce: true, lastGroupOutgoingMessages },
   );
 }
 
