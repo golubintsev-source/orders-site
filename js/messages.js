@@ -2716,108 +2716,44 @@ async function loadChatListOnce() {
   const list = document.getElementById("messagesChatList");
   const msg = document.getElementById("messagesChatListMessage");
   if (!list) return true;
-
   const uid = getCurrentUserId();
   if (!uid) return true;
-
   const gen = ++loadChatListGeneration;
-  const sinceIso = getMessagesFastLoadSinceIso();
-  const alreadyFull = list.dataset.chatListFull === "1";
+  const isCurrent = () => gen === loadChatListGeneration && messagesView === "list";
 
   if (msg) {
     msg.textContent = "";
     msg.classList.remove("messages-page-message--error");
   }
 
-  // После полной отрисовки больше не красим урезанную 3-дневную выборку:
-  // иначе старые DM (как нижний чат) пропадают на время повторного прохода.
-  if (alreadyFull) {
-    const [fuller, unreadFresh, groupPack] = await Promise.all([
-      fetchRecentUserMessagesForChatList({
-        sinceIso: null,
-        limit: CHAT_LIST_DM_PREVIEW_LIMIT,
-      }),
-      fetchUnreadIncomingDmMeta(),
-      fetchMyGroupChats(),
-    ]);
-    if (gen !== loadChatListGeneration || messagesView !== "list") return true;
-    if (fuller.error) {
-      console.warn("Ошибка обновления списка чатов:", fuller.error);
-      return false;
-    }
-    if (groupPack.error) {
-      console.warn("Ошибка загрузки групповых чатов:", groupPack.error);
-    }
-    await paintChatListFromData(
-      list,
-      fuller.rows,
-      unreadFresh.rows,
-      groupPack.error ? [...groupChatsById.values()] : (groupPack.chats || []),
-      { isCurrent: () => gen === loadChatListGeneration && messagesView === "list" },
-    );
-    void refreshMessagesUnreadBadge();
-    return true;
-  }
-
+  // Не показываем неполный список из трёхдневной выборки.
+  // Существующий снимок остаётся на экране до получения согласованного результата.
+  // Boot-пакет DM ограничен тремя днями; для полного списка он не подходит.
   const boot = takeChatBootPack();
-  const [recentPack, unreadPack, groupPack] = await Promise.all([
-    boot
-      ? boot.dm.then((pack) => adoptBootDmRows(pack, sinceIso))
-      : fetchRecentUserMessagesForChatList({ sinceIso, limit: CHAT_LIST_FAST_PREVIEW_LIMIT }),
+  const [dmPack, unreadPack, groupPack] = await Promise.all([
+    fetchRecentUserMessagesForChatList({ sinceIso: null, limit: CHAT_LIST_DM_PREVIEW_LIMIT }),
     boot ? boot.unread.then(adoptBootUnreadRows) : fetchUnreadIncomingDmMeta(),
     boot ? boot.groups.then(adoptBootGroupChats) : fetchMyGroupChats(),
   ]);
-
-  if (gen !== loadChatListGeneration) return true;
-  if (messagesView !== "list") return true;
-
-  if (recentPack.error) {
-    showChatListLoadError(list, msg, recentPack.error);
+  if (!isCurrent()) return true;
+  if (dmPack.error) {
+    if (!list.querySelector(".messages-chat-item")) showChatListLoadError(list, msg, dmPack.error);
+    else console.warn("Не удалось обновить список чатов:", dmPack.error);
     return false;
   }
-
-  if (groupPack.error) {
-    console.warn("Ошибка загрузки групповых чатов:", groupPack.error);
+  if (groupPack.error || unreadPack.error) {
+    console.warn("Не удалось полностью обновить список чатов:", groupPack.error || unreadPack.error);
+    // Не заменяем предыдущий корректный список неполными данными.
+    if (list.querySelector(".messages-chat-item")) return false;
   }
-
   await paintChatListFromData(
     list,
-    recentPack.rows,
-    unreadPack.rows,
-    groupPack.chats || [],
-    {
-      partial: true,
-      progressive: true,
-      isCurrent: () =>
-        gen === loadChatListGeneration &&
-        messagesView === "list" &&
-        list.dataset.chatListFull !== "1",
-    },
+    dmPack.rows,
+    unreadPack.rows || [],
+    groupPack.error ? [...groupChatsById.values()] : (groupPack.chats || []),
+    { isCurrent },
   );
-
-  // Старые переписки должны появиться без искусственной задержки idle.
-  // На iOS requestIdleCallback может сработать существенно позже первого кадра.
-  await (async () => {
-    if (gen !== loadChatListGeneration || messagesView !== "list") return;
-    const [fuller, unreadFresh] = await Promise.all([
-      fetchRecentUserMessagesForChatList({
-        sinceIso: null,
-        limit: CHAT_LIST_DM_PREVIEW_LIMIT,
-      }),
-      fetchUnreadIncomingDmMeta(),
-    ]);
-    if (gen !== loadChatListGeneration || messagesView !== "list") return;
-    if (fuller.error) return;
-    await paintChatListFromData(
-      list,
-      fuller.rows,
-      unreadFresh.error ? unreadPack.rows : unreadFresh.rows,
-      groupPack.chats || [],
-      { isCurrent: () => gen === loadChatListGeneration && messagesView === "list" },
-    );
-  })();
-
-  void refreshMessagesUnreadBadge();
+  if (isCurrent()) void refreshMessagesUnreadBadge();
   return true;
 }
 
