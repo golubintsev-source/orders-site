@@ -1898,59 +1898,50 @@ async function fetchGroupMessages(chatId, { sinceIso = null, limit = DIALOG_INIT
   return { rows: (data || []).slice().reverse(), error: null };
 }
 
-/** Последнее сообщение по каждому чату — один batch-запрос вместо N+1. */
+/** Последнее видимое сообщение каждой группы.
+ * Общий LIMIT по всем группам некорректен: активная группа может вытеснить
+ * из выборки все сообщения менее активной группы.
+ */
 async function fetchLastGroupMessagesByChat(chatIds) {
-  if (!chatIds?.length || groupChatsSupported === false) {
-    return { lastByChat: new Map() };
-  }
+  const lastByChat = new Map();
+  if (!chatIds?.length || groupChatsSupported === false) return { lastByChat };
 
   const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
-  let select =
-    messageActionsSupported !== false
-      ? `${selectBase}, deleted_at, attachment_storage_path`
-      : `${selectBase}, attachment_storage_path`;
-  const limit = Math.min(Math.max(chatIds.length * 4, 40), 400);
-
-  async function run(sel) {
-    return supabaseClient
-      .from("group_messages")
-      .select(sel)
-      .in("chat_id", chatIds)
-      .order("created_at", { ascending: false })
-      .limit(limit);
+  const selectVariants = [
+    `${selectBase}, deleted_at, attachment_storage_path`,
+    `${selectBase}, attachment_storage_path`,
+    selectBase,
+  ];
+  // Ограничиваем параллелизм, чтобы не перегружать мобильное соединение.
+  const concurrency = Math.min(4, chatIds.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < chatIds.length) {
+      const chatId = chatIds[cursor++];
+      let loaded = false;
+      for (const select of selectVariants) {
+        let query = supabaseClient
+          .from("group_messages")
+          .select(select)
+          .eq("chat_id", chatId)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (select.includes("deleted_at")) query = query.is("deleted_at", null);
+        const { data, error } = await query;
+        if (error) {
+          if (noteGroupChatsSupport(error)) return;
+          if (noteMessageActionsSupport(error) || noteAttachmentSupport(error)) continue;
+          console.warn("Ошибка загрузки последнего сообщения группы:", chatId, error);
+          break;
+        }
+        loaded = true;
+        if (data?.[0]) lastByChat.set(String(chatId), data[0]);
+        break;
+      }
+      if (!loaded && groupChatsSupported === false) return;
+    }
   }
-
-  let { data, error } = await run(select);
-
-  if (error && noteMessageActionsSupport(error)) {
-    select = `${selectBase}, attachment_storage_path`;
-    ({ data, error } = await run(select));
-  }
-
-  if (error && noteAttachmentSupport(error)) {
-    select = selectBase;
-    if (messageActionsSupported !== false) select += ", deleted_at";
-    ({ data, error } = await run(select));
-  }
-
-  if (error) {
-    if (noteGroupChatsSupport(error)) return { lastByChat: new Map() };
-    console.warn("Ошибка загрузки последних сообщений групп:", error);
-    return { lastByChat: new Map() };
-  }
-
-  groupChatsSupported = true;
-  if (attachmentColumnsSupported !== false) attachmentColumnsSupported = true;
-  if (messageActionsSupported !== false) messageActionsSupported = true;
-
-  const lastByChat = new Map();
-  for (const row of data || []) {
-    const chatId = String(row.chat_id);
-    if (lastByChat.has(chatId)) continue;
-    if (isMessageDeleted(row)) continue;
-    lastByChat.set(chatId, row);
-  }
-
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
   return { lastByChat };
 }
 
