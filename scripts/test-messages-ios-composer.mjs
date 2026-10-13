@@ -21,8 +21,9 @@ assert.match(messagesSource, /composerSendTouchHandledAt < 800/);
 assert.match(messagesSource, /function requestSendMessage/);
 assert.match(messagesSource, /if \(composerSendPromise\) return composerSendPromise/);
 assert.match(styleSource, /\.messages-feed[\s\S]*?overflow-anchor: none/);
+assert.match(styleSource, /\.messages-feed[\s\S]*?padding: 16px 16px 6px/);
 assert.match(styleSource, /\.messages-composer-input[\s\S]*?caret-color: #059669/);
 assert.match(styleSource, /html\.keyboard-open:has\(#section-messages\.content-section\.active\)[\s\S]*?overflow: hidden/);
-assert.match(swSource, /orders-site-static-v83/);
+assert.match(swSource, /orders-site-static-v84/);
 
 console.log("messages iOS composer tests: ok");

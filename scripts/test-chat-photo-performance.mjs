@@ -19,6 +19,6 @@ assert.match(messagesSource, /loading="lazy"/);
 assert.match(messagesSource, /new IntersectionObserver\(/);
 assert.match(messagesSource, /const previewUrl = \(thumbPath && signedUrls\.get\(thumbPath\)\) \|\| fullUrl;/);
 assert.match(messagesSource, /getSignedFileUrls\(paths\)/);
-assert.match(swSource, /orders-site-static-v83/);
+assert.match(swSource, /orders-site-static-v84/);
 
 console.log("chat photo performance tests: ok");

@@ -33,6 +33,6 @@ const runtimeSource = await readFile(new URL("../js/orders-runtime.js", import.m
 assert.match(runtimeSource, /initOrdersAddressColumnWidth\(state\.currentUser\)/);
 assert.match(stickySource, /\.address-column-width-btn/);
 assert.match(styleSource, /--orders-address-column-width/);
-assert.match(swSource, /orders-site-static-v83/);
+assert.match(swSource, /orders-site-static-v84/);
 
 console.log("orders address width tests: ok");

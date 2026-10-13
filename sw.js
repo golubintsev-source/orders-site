@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v83: независимые таймауты чтения и отмена устаревших запросов.
-const STATIC_CACHE = "orders-site-static-v83";
+// v84: отступ между последним сообщением и панелью ввода.
+const STATIC_CACHE = "orders-site-static-v84";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
