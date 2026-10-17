@@ -3948,9 +3948,11 @@ function startMessagesRealtime() {
       (payload) => handleRealtimeGroupReceipt(payload),
     );
 
+  // Устанавливаем текущий канал ДО subscribe: callback может сработать сразу.
+  // Во время переподключения сохраняем один канал и не создаём повторные
+  // подписки на те же postgres_changes при каждом возврате в PWA.
+  messagesRealtimeChannel = channel;
   channel.subscribe((status) => {
-    // A removed channel can still invoke its asynchronous status callback.
-    // Never let it override the state of a newer connection.
     if (messagesRealtimeChannel !== channel) return;
     messagesRealtimeActive = status === "SUBSCRIBED";
     if (status === "SUBSCRIBED") {
@@ -3964,8 +3966,6 @@ function startMessagesRealtime() {
       restartUnreadPollingSchedule();
     }
   });
-
-  messagesRealtimeChannel = channel;
 }
 
 async function syncMessagesAfterResume() {
