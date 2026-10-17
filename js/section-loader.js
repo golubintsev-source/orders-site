@@ -91,6 +91,10 @@ const lifecycle = createSectionLifecycle({
     const m = await import("./debts.js");
     return { prepare: ordersDependency, init: m.initDebtsSection, load: m.loadDebts };
   },
+  "contractor-checks": async () => {
+    const m = await import("./contractor-checks.js");
+    return { init: m.initContractorChecksSection };
+  },
   statistics: async () => {
     const m = await import("./statistics.js");
     return { init: m.initStatisticsSection, load: () => m.loadStatistics({ refreshDefaultRange: true }) };

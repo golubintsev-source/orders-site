@@ -20,6 +20,7 @@ const BOOT_LABELS = {
   statistics: "Статистика",
   "statistics-balance": "Статистика баланса",
   debts: "Долги",
+  "contractor-checks": "Проверка контрагентов",
   "order-tasks": "Задачи",
   messages: "Чаты",
   voice: "Голосовое управление",

@@ -83,6 +83,7 @@ const SECTION_LABELS = {
   statistics: "Статистика",
   "statistics-balance": "Статистика баланса",
   debts: "Долги",
+  "contractor-checks": "Проверка контрагентов",
   messages: "Чаты",
   voice: "Голосовое управление",
 };
@@ -111,6 +112,7 @@ const SECTIONS_WITH_BACK_TO_ORDERS = new Set([
   "statistics",
   "statistics-balance",
   "debts",
+  "contractor-checks",
 ]);
 
 function updateBackToOrdersBtnVisibility(sectionId) {

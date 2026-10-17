@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Проверка контрагентов — smoke</title>
+  <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+  <main class="container">
+    <section id="section-contractor-checks" class="content-section active">
+      <div class="card contractor-checks-card">
+        <div class="contractor-checks-table-wrap">
+          <table class="contractor-checks-table">
+            <thead><tr><th>Дата проверки</th><th>Название компании</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><time datetime="2026-10-17">17.10.2026</time></td>
+                <td><a href="#union-polymer-report" id="openUnionPolymerReport" class="contractor-checks-report-link" aria-haspopup="dialog">ООО «Юнион Полимер Технолоджи»</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <dialog id="contractorReportDialog" class="contractor-report-dialog" aria-labelledby="contractorReportDialogTitle">
+        <div class="contractor-report-shell">
+          <header class="contractor-report-header">
+            <h2 id="contractorReportDialogTitle">Отчет о проверке контрагента</h2>
+            <button type="button" id="contractorReportCloseBtn" class="contractor-report-close" aria-label="Закрыть отчет">×</button>
+          </header>
+          <div id="contractorReportBody" class="contractor-report-body"></div>
+        </div>
+      </dialog>
+    </section>
+  </main>
+  <script type="module">
+    import { initContractorChecksSection } from "../js/contractor-checks.js";
+    initContractorChecksSection();
+  </script>
+</body>
+</html>

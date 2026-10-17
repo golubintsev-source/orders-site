@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v84: отступ между последним сообщением и панелью ввода.
-const STATIC_CACHE = "orders-site-static-v84";
+// v85: раздел проверки контрагентов и полноэкранный отчет.
+const STATIC_CACHE = "orders-site-static-v85";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -155,6 +155,7 @@ const APP_SHELL_PATHS = new Set([
   "/statistics",
   "/statistics-balance",
   "/debts",
+  "/contractor-checks",
   "/order-tasks",
   "/messages",
   "/voice",

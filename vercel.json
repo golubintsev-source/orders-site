@@ -72,6 +72,7 @@
     { "source": "/statistics", "destination": "/index.html" },
     { "source": "/statistics-balance", "destination": "/index.html" },
     { "source": "/debts", "destination": "/index.html" },
+    { "source": "/contractor-checks", "destination": "/index.html" },
     { "source": "/order-tasks", "destination": "/index.html" },
     { "source": "/messages", "destination": "/index.html" },
     { "source": "/voice", "destination": "/index.html" },
