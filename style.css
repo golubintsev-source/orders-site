@@ -512,7 +512,8 @@ h2 {
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="calculations"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="all-salaries"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="orders-excel"],
-#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="debts"] {
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="debts"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="contractor-checks"] {
   display: none !important;
 }
 
@@ -522,7 +523,8 @@ h2 {
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="statistics"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="calculations"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="all-salaries"],
-#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="debts"] {
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="debts"],
+#sectionNavDropdownPanel.section-nav-dropdown-panel--user-shop .section-nav-dropdown-item[data-section="contractor-checks"] {
   display: none !important;
 }
 

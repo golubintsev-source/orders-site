@@ -84,9 +84,15 @@ export function canAccessDebts() {
   return isAdmin() || state.currentRole === "user";
 }
 
+/** Проверка контрагентов — только полная роль user и администратор. */
+export function canAccessContractorChecks() {
+  return isAdmin() || state.currentRole === "user";
+}
+
 /** Разделы меню, закрытые для отдельных ролей. Настройки доступны всем (блок уведомлений). */
 export function canAccessSection(sectionId) {
   if (sectionId === "debts") return canAccessDebts();
+  if (sectionId === "contractor-checks") return canAccessContractorChecks();
   if (isUserShop()) {
     return (
       sectionId !== "balance" &&
@@ -115,6 +121,7 @@ export function isSectionHiddenFromNav(sectionId) {
   if (sectionId === "messages") return true;
   if (sectionId === "voice") return true;
   if (sectionId === "debts") return !canAccessDebts();
+  if (sectionId === "contractor-checks") return !canAccessContractorChecks();
   if (isUserShop()) {
     return (
       sectionId === "balance" ||

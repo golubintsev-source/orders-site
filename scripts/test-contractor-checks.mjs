@@ -88,3 +88,20 @@ test("contractor checks is wired into routing, navigation and the app shell", as
   assert.match(html, /<th>Название компании<\/th>/);
   assert.match(html, /ООО «Юнион Полимер Технолоджи»/);
 });
+
+test("full user role can see contractor checks while limited roles cannot", async () => {
+  const { state } = await import("../js/state.js");
+  const { canAccessSection, isSectionHiddenFromNav } = await import("../js/roles.js");
+
+  for (const role of ["admin", "user"]) {
+    state.currentRole = role;
+    assert.equal(canAccessSection("contractor-checks"), true, `${role} must have access`);
+    assert.equal(isSectionHiddenFromNav("contractor-checks"), false, `${role} must see menu item`);
+  }
+
+  for (const role of ["user_lite", "user_shop"]) {
+    state.currentRole = role;
+    assert.equal(canAccessSection("contractor-checks"), false, `${role} must not have access`);
+    assert.equal(isSectionHiddenFromNav("contractor-checks"), true, `${role} must not see menu item`);
+  }
+});
