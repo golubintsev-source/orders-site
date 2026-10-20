@@ -1897,7 +1897,25 @@
           </div>
           <button type="button" id="statisticsLoadBtn" class="statistics-load-btn">Показать</button>
         </div>
-        <div class="statistics-search-toolbar">
+        <div class="statistics-view-toggle" role="group" aria-label="Вид статистики">
+          <button
+            type="button"
+            class="statistics-view-toggle-btn is-active"
+            data-statistics-view="all"
+            aria-pressed="true"
+          >
+            Все
+          </button>
+          <button
+            type="button"
+            class="statistics-view-toggle-btn"
+            data-statistics-view="grouped"
+            aria-pressed="false"
+          >
+            Группировка по пользователям и страницам
+          </button>
+        </div>
+        <div id="statisticsSearchToolbar" class="statistics-search-toolbar">
           <input
             type="search"
             id="statisticsSearchInput"
@@ -1908,7 +1926,7 @@
             aria-label="Поиск по таблице статистики"
           />
         </div>
-        <div class="table-wrap statistics-table-wrap">
+        <div id="statisticsAllView" class="table-wrap statistics-table-wrap">
           <table id="statisticsTable">
             <thead>
               <tr>
@@ -1922,6 +1940,22 @@
                 <th>VPN</th>
                 <th>Режим работы</th>
                 <th>Отклик, мс</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="statisticsGroupedView" class="table-wrap statistics-table-wrap" hidden>
+          <table id="statisticsMatrixTable">
+            <thead>
+              <tr>
+                <th>Страница</th>
+                <th>Дима</th>
+                <th>Лена</th>
+                <th>Кристина</th>
+                <th>Андрей</th>
+                <th>Вова</th>
+                <th>Алексей</th>
               </tr>
             </thead>
             <tbody></tbody>

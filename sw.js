@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v91: новый порядок пунктов выпадающего меню.
-const STATIC_CACHE = "orders-site-static-v91";
+// v92: матрица входов по пользователям и страницам.
+const STATIC_CACHE = "orders-site-static-v92";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -40,6 +40,7 @@ const PRECACHE_URLS = [
   "/js/roles.js",
   "/js/format.js",
   "/js/user-names.js",
+  "/js/statistics-matrix.js",
   "/js/user-place.js",
   "/js/secret-login.js",
   "/js/access-log.js",

@@ -3,6 +3,10 @@ import { formatTaskDateRu } from "./format.js";
 import { isAdmin } from "./roles.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { BALANCE_SNAPSHOT_PATH } from "./app-routes.js";
+import { buildStatisticsMatrix, STATISTICS_MATRIX_USERS } from "./statistics-matrix.js";
+
+let statisticsRows = [];
+let statisticsViewMode = "all";
 
 function pad2(n) {
   return String(n).padStart(2, "0");
@@ -148,12 +152,67 @@ function paintStatisticsTable(rows) {
   applyStatisticsFilter();
 }
 
+function paintStatisticsMatrix(rows) {
+  const tbody = document.querySelector("#statisticsMatrixTable tbody");
+  if (!tbody) return;
+
+  const matrixRows = buildStatisticsMatrix(rows);
+  tbody.innerHTML = "";
+  for (const matrixRow of matrixRows) {
+    const tr = document.createElement("tr");
+    const pageCell = document.createElement("td");
+    pageCell.className = "statistics-matrix-page-cell";
+    pageCell.textContent = matrixRow.page;
+    tr.appendChild(pageCell);
+
+    for (const user of STATISTICS_MATRIX_USERS) {
+      const td = document.createElement("td");
+      td.className = "statistics-matrix-count-cell";
+      td.textContent = String(matrixRow.counts[user] || 0);
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+
+  return matrixRows.length;
+}
+
+function renderStatisticsView() {
+  const allView = document.getElementById("statisticsAllView");
+  const groupedView = document.getElementById("statisticsGroupedView");
+  const searchToolbar = document.getElementById("statisticsSearchToolbar");
+  const msg = document.getElementById("statisticsMessage");
+  const grouped = statisticsViewMode === "grouped";
+
+  if (allView) allView.hidden = grouped;
+  if (groupedView) groupedView.hidden = !grouped;
+  if (searchToolbar) searchToolbar.hidden = grouped;
+
+  if (grouped) {
+    const pageCount = paintStatisticsMatrix(statisticsRows) || 0;
+    if (msg) msg.textContent = statisticsRows.length ? `Записей: ${statisticsRows.length} · страниц: ${pageCount}` : "";
+  } else {
+    paintStatisticsTable(statisticsRows);
+  }
+}
+
+function setStatisticsView(mode) {
+  statisticsViewMode = mode === "grouped" ? "grouped" : "all";
+  for (const button of document.querySelectorAll("[data-statistics-view]")) {
+    const active = button.dataset.statisticsView === statisticsViewMode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
+  renderStatisticsView();
+}
+
 import { beginReadScope } from "./read-requests.js";
 export async function loadStatistics(opts = {}) {
   const scope = beginReadScope("statistics");
   if (!isAdmin()) return;
 
   const tbody = document.querySelector("#statisticsTable tbody");
+  const matrixBody = document.querySelector("#statisticsMatrixTable tbody");
   const msg = document.getElementById("statisticsMessage");
   if (!tbody) return;
 
@@ -168,6 +227,7 @@ export async function loadStatistics(opts = {}) {
   }
 
   tbody.innerHTML = `<tr><td colspan="10" class="statistics-loading-cell">Загрузка…</td></tr>`;
+  if (matrixBody) matrixBody.innerHTML = `<tr><td colspan="7" class="statistics-loading-cell">Загрузка…</td></tr>`;
   if (msg) msg.textContent = "";
 
   const { data, error } = await fetchAllSupabaseRows(() =>
@@ -188,6 +248,7 @@ export async function loadStatistics(opts = {}) {
   if (error) {
     console.error("Ошибка загрузки статистики:", error);
     tbody.innerHTML = "";
+    if (matrixBody) matrixBody.innerHTML = "";
     const hint = error?.message ? ` ${error.message}` : "";
     if (msg) {
       msg.textContent = `Не удалось загрузить данные.${hint} Проверьте, что выполнен SQL из supabase_site_access_logs.sql (таблица, GRANT, RLS).`;
@@ -195,7 +256,8 @@ export async function loadStatistics(opts = {}) {
     return;
   }
 
-  paintStatisticsTable(data || []);
+  statisticsRows = data || [];
+  renderStatisticsView();
   if (!data?.length && msg) {
     msg.textContent =
       "За выбранный период записей нет. Каждое открытие вкладки, переход по разделам, просмотр заказа, вход и звонок пишутся в журнал — обновите период или откройте разделы и нажмите «Показать».";
@@ -212,6 +274,7 @@ export function initStatisticsSection() {
 
   const btn = document.getElementById("statisticsLoadBtn");
   const searchInput = document.getElementById("statisticsSearchInput");
+  const viewButtons = document.querySelectorAll("[data-statistics-view]");
   if (btn && !btn.dataset.bound) {
     btn.dataset.bound = "1";
     btn.addEventListener("click", () => {
@@ -227,4 +290,10 @@ export function initStatisticsSection() {
       }
     });
   }
+  for (const viewButton of viewButtons) {
+    if (viewButton.dataset.bound) continue;
+    viewButton.dataset.bound = "1";
+    viewButton.addEventListener("click", () => setStatisticsView(viewButton.dataset.statisticsView));
+  }
+  setStatisticsView(statisticsViewMode);
 }

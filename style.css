@@ -3450,6 +3450,33 @@ h2 {
   width: 100%;
   min-width: 0;
 }
+#section-statistics .statistics-view-toggle {
+  display: inline-flex;
+  max-width: 100%;
+  margin-bottom: 10px;
+  padding: 3px;
+  gap: 3px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #f3f4f6;
+}
+#section-statistics .statistics-view-toggle-btn {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #4b5563;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+#section-statistics .statistics-view-toggle-btn.is-active {
+  background: #fff;
+  color: #1f6feb;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+}
 #section-statistics .statistics-search-input,
 #section-statistics-balance .statistics-search-input {
   box-sizing: border-box;
@@ -3472,6 +3499,12 @@ h2 {
   border-collapse: collapse;
   font-size: 13px;
 }
+#statisticsMatrixTable {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
 #statisticsBalanceTable {
   width: 100%;
   min-width: 640px;
@@ -3479,6 +3512,7 @@ h2 {
   font-size: 13px;
 }
 #statisticsTable thead th,
+#statisticsMatrixTable thead th,
 #statisticsBalanceTable thead th {
   position: sticky;
   top: 0;
@@ -3490,12 +3524,14 @@ h2 {
   white-space: nowrap;
 }
 #statisticsTable tbody td,
+#statisticsMatrixTable tbody td,
 #statisticsBalanceTable tbody td {
   padding: 7px 10px;
   border-bottom: 1px solid #f3f4f6;
   vertical-align: top;
 }
 #statisticsTable tbody tr:hover,
+#statisticsMatrixTable tbody tr:hover,
 #statisticsBalanceTable tbody tr:hover {
   background: #f9fafb;
 }
@@ -3505,10 +3541,31 @@ h2 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+#statisticsMatrixTable thead th:not(:first-child),
+#statisticsMatrixTable .statistics-matrix-count-cell {
+  text-align: center;
+}
+#statisticsMatrixTable .statistics-matrix-page-cell {
+  min-width: 210px;
+  font-weight: 600;
+}
 #statisticsTable .statistics-loading-cell,
+#statisticsMatrixTable .statistics-loading-cell,
 #statisticsBalanceTable .statistics-loading-cell {
   padding: 16px 10px;
   color: #6b7280;
+}
+
+@media (max-width: 640px) {
+  #section-statistics .statistics-view-toggle {
+    display: flex;
+    width: 100%;
+  }
+  #section-statistics .statistics-view-toggle-btn {
+    flex: 1 1 0;
+    padding-inline: 8px;
+    line-height: 1.2;
+  }
 }
 
 #section-debts .debts-table-wrap {
