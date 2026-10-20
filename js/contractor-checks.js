@@ -430,7 +430,7 @@ async function runCheck(companyName, inn) {
   const accessToken = sessionData?.session?.access_token;
   if (!accessToken) throw new Error("Сессия истекла. Войдите в систему снова.");
 
-  const response = await fetch("/api/contractor-check", {
+  const response = await fetch("/api/voice-assistant?mode=contractor-check", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

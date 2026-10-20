@@ -1,5 +1,6 @@
 /**
  * Запускает проверку контрагента через OpenAI Web Search и сохраняет отчет в Supabase.
+ * Подключается из общей Vercel Function voice-assistant, чтобы не превышать лимит функций.
  *
  * Env (Vercel):
  *   OPENAI_API_KEY, OPENAI_RESEARCH_MODEL (optional)

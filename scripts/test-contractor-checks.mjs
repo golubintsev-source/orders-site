@@ -110,7 +110,7 @@ test("full user role can see contractor checks while limited roles cannot", asyn
 });
 
 test("contractor research prompt includes the submitted company and INN", () => {
-  const { buildPrompt, extractSources } = require("../api/contractor-check.js");
+  const { buildPrompt, extractSources } = require("../server/contractor-check.js");
   const prompt = buildPrompt("ООО Тест", "1234567890");
 
   assert.match(prompt, /ООО Тест, ИНН 1234567890/);

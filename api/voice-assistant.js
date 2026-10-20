@@ -8,6 +8,7 @@
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const contractorCheckHandler = require("../server/contractor-check.js");
 
 const ORDER_TYPES = ["Окна", "Подоконники", "Аллюминий", "Магазин", "Сетки/мелочь"];
 const PAYMENT_STATUSES = [
@@ -1227,6 +1228,10 @@ function extractJsonObject(text) {
 }
 
 module.exports = async (req, res) => {
+  if (req.query?.mode === "contractor-check") {
+    return contractorCheckHandler(req, res);
+  }
+
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ message: "Method not allowed" });
