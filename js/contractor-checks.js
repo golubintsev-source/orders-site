@@ -197,7 +197,7 @@ let pollingTimer = null;
 let clientPromise = null;
 
 const STATIC_CHECK = {
-  id: "union-polymer",
+  id: "00000000-0000-4000-8000-000000000001",
   created_at: "2026-10-17T00:00:00.000Z",
   company_name: "ООО «Юнион Полимер Технолоджи»",
   inn: "7701998380",
@@ -239,7 +239,7 @@ function renderChecks() {
   if (!tbody) return;
   tbody.replaceChildren();
 
-  const rows = [STATIC_CHECK, ...checks].sort(
+  const rows = [...checks].sort(
     (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
   );
   for (const check of rows) {
@@ -270,8 +270,36 @@ function renderChecks() {
     if (check.status === "error" && check.error_message) status.title = check.error_message;
     statusCell.append(status);
 
-    row.append(dateCell, companyCell, createCell(check.inn || "—"), statusCell);
+    const actionCell = document.createElement("td");
+    actionCell.className = "contractor-checks-action-cell";
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "contractor-check-delete-btn";
+    deleteButton.dataset.deleteCheckId = String(check.id);
+    deleteButton.setAttribute("aria-label", `Удалить проверку ${check.company_name}`);
+    deleteButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6m4-6v6"/></svg>';
+    actionCell.append(deleteButton);
+
+    row.append(dateCell, companyCell, createCell(check.inn || "—"), statusCell, actionCell);
     tbody.append(row);
+  }
+}
+
+async function deleteCheck(checkId) {
+  const previousChecks = checks;
+  checks = checks.filter((check) => String(check.id) !== String(checkId));
+  renderChecks();
+
+  try {
+    const supabaseClient = await getClient();
+    const { error } = await supabaseClient.from("contractor_checks").delete().eq("id", checkId);
+    if (error) throw error;
+    setMessage("");
+  } catch (error) {
+    checks = previousChecks;
+    renderChecks();
+    setMessage("Не удалось удалить проверку. Повторите попытку позже.");
+    throw error;
   }
 }
 
@@ -402,7 +430,9 @@ export async function loadContractorChecks() {
       .select("id,created_at,company_name,inn,status,report_markdown,sources,error_message")
       .order("created_at", { ascending: false });
     if (error) throw error;
-    checks = Array.isArray(data) ? data : [];
+    checks = (Array.isArray(data) ? data : []).map((check) => (
+      String(check.id) === STATIC_CHECK.id ? { ...check, static: true } : check
+    ));
     setMessage("");
     renderChecks();
   } catch (error) {
@@ -461,6 +491,19 @@ export function initContractorChecksSection() {
 
   const tbody = document.getElementById("contractorChecksTbody");
   tbody?.addEventListener("click", (event) => {
+    const deleteButton = event.target.closest?.("[data-delete-check-id]");
+    if (deleteButton) {
+      event.preventDefault();
+      event.stopPropagation?.();
+      const checkId = deleteButton.dataset.deleteCheckId;
+      if (checkId) {
+        deleteButton.disabled = true;
+        void deleteCheck(checkId).catch((error) => {
+          console.error("contractor-checks: delete failed", error);
+        });
+      }
+      return;
+    }
     const link = event.target.closest?.("[data-check-id], [data-static-report]");
     if (!link) return;
     event.preventDefault();

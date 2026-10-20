@@ -10017,7 +10017,7 @@ th {
 
 .contractor-checks-table {
   width: 100%;
-  min-width: 720px;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -10049,10 +10049,56 @@ th {
   white-space: nowrap;
 }
 
-.contractor-checks-table th:last-child,
-.contractor-checks-table td:last-child {
+.contractor-checks-table th:nth-child(4),
+.contractor-checks-table td:nth-child(4) {
   width: 130px;
   white-space: nowrap;
+}
+
+.contractor-checks-table th:last-child,
+.contractor-checks-table td:last-child {
+  width: 58px;
+  padding-right: 18px;
+  padding-left: 8px;
+  text-align: center;
+}
+
+.contractor-check-delete-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.contractor-check-delete-btn svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.contractor-check-delete-btn:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.contractor-check-delete-btn:focus-visible {
+  outline: 3px solid rgba(220, 38, 38, 0.25);
+  outline-offset: 2px;
+}
+
+.contractor-check-delete-btn:disabled {
+  opacity: 0.45;
+  cursor: wait;
 }
 
 .contractor-checks-empty,
@@ -10486,7 +10532,7 @@ body.contractor-report-open {
   }
 
   .contractor-checks-table {
-    min-width: 650px;
+    min-width: 700px;
   }
 
   .contractor-checks-table th,

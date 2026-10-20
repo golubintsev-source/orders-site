@@ -89,7 +89,17 @@ test("contractor checks is wired into routing, navigation and the app shell", as
   }
   assert.match(html, /<th>Дата проверки<\/th>/);
   assert.match(html, /<th>Название компании<\/th>/);
+  assert.match(html, /contractor-check-delete-btn/);
+  assert.match(html, /data-delete-check-id/);
   assert.match(html, /ООО «Юнион Полимер Технолоджи»/);
+});
+
+test("contractor check rows expose a delete action backed by Supabase", async () => {
+  const source = await readFile(new URL("../js/contractor-checks.js", import.meta.url), "utf8");
+
+  assert.match(source, /\.from\("contractor_checks"\)\.delete\(\)\.eq\("id", checkId\)/);
+  assert.match(source, /dataset\.deleteCheckId/);
+  assert.match(source, /checks = checks\.filter/);
 });
 
 test("full user role can see contractor checks while limited roles cannot", async () => {
