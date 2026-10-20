@@ -192,30 +192,281 @@ const REPORT_HTML = `
 
 let initialized = false;
 let previousFocus = null;
+let checks = [];
+let pollingTimer = null;
+let clientPromise = null;
+
+const STATIC_CHECK = {
+  id: "union-polymer",
+  created_at: "2026-10-17T00:00:00.000Z",
+  company_name: "ООО «Юнион Полимер Технолоджи»",
+  inn: "7701998380",
+  status: "ready",
+  static: true,
+};
+
+const STATUS_LABELS = {
+  working: "В работе",
+  ready: "Готово",
+  error: "Ошибка",
+};
+
+function getClient() {
+  if (!clientPromise) {
+    clientPromise = import("./config.js").then((module) => module.supabaseClient);
+  }
+  return clientPromise;
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function createCell(text) {
+  const cell = document.createElement("td");
+  cell.textContent = text;
+  return cell;
+}
+
+function renderChecks() {
+  const tbody = document.getElementById("contractorChecksTbody");
+  if (!tbody) return;
+  tbody.replaceChildren();
+
+  const rows = [STATIC_CHECK, ...checks].sort(
+    (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+  );
+  for (const check of rows) {
+    const row = document.createElement("tr");
+    const dateCell = document.createElement("td");
+    const time = document.createElement("time");
+    time.dateTime = String(check.created_at || "").slice(0, 10);
+    time.textContent = formatDate(check.created_at);
+    dateCell.append(time);
+
+    const companyCell = document.createElement("td");
+    if (check.status === "ready" && (check.static || check.report_markdown)) {
+      const link = document.createElement("a");
+      link.href = check.static ? "#union-polymer-report" : `#contractor-report-${check.id}`;
+      link.className = "contractor-checks-report-link";
+      link.dataset.checkId = String(check.id);
+      link.setAttribute("aria-haspopup", "dialog");
+      link.textContent = check.company_name;
+      companyCell.append(link);
+    } else {
+      companyCell.textContent = check.company_name;
+    }
+
+    const statusCell = document.createElement("td");
+    const status = document.createElement("span");
+    status.className = `contractor-check-status contractor-check-status--${check.status}`;
+    status.textContent = STATUS_LABELS[check.status] || check.status;
+    if (check.status === "error" && check.error_message) status.title = check.error_message;
+    statusCell.append(status);
+
+    row.append(dateCell, companyCell, createCell(check.inn || "—"), statusCell);
+    tbody.append(row);
+  }
+}
+
+function appendTextWithLinks(container, rawText) {
+  const text = String(rawText || "").replace(/\*\*/g, "");
+  const pattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g;
+  let cursor = 0;
+  for (const match of text.matchAll(pattern)) {
+    container.append(document.createTextNode(text.slice(cursor, match.index)));
+    const link = document.createElement("a");
+    link.href = match[2] || match[3];
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = match[1] || match[3];
+    container.append(link);
+    cursor = match.index + match[0].length;
+  }
+  container.append(document.createTextNode(text.slice(cursor)));
+}
+
+export function renderReportMarkdown(markdown, sources = []) {
+  const article = document.createElement("article");
+  article.className = "contractor-report-article";
+  let list = null;
+
+  for (const rawLine of String(markdown || "").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) {
+      list = null;
+      continue;
+    }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    const numbered = line.match(/^\d+[.)]\s+(.+)$/);
+    if (heading) {
+      list = null;
+      const level = Math.min(3, heading[1].length);
+      const element = document.createElement(`h${level}`);
+      appendTextWithLinks(element, heading[2]);
+      article.append(element);
+    } else if (bullet || numbered) {
+      const tag = numbered ? "ol" : "ul";
+      if (!list || list.tagName.toLowerCase() !== tag) {
+        list = document.createElement(tag);
+        article.append(list);
+      }
+      const item = document.createElement("li");
+      appendTextWithLinks(item, (bullet || numbered)[1]);
+      list.append(item);
+    } else {
+      list = null;
+      const paragraph = document.createElement("p");
+      appendTextWithLinks(paragraph, line);
+      article.append(paragraph);
+    }
+  }
+
+  const safeSources = Array.isArray(sources)
+    ? sources.filter((source) => /^https?:\/\//i.test(String(source?.url || "")))
+    : [];
+  if (safeSources.length) {
+    const section = document.createElement("section");
+    const heading = document.createElement("h2");
+    heading.textContent = "Источники";
+    const listElement = document.createElement("ul");
+    for (const source of safeSources) {
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = source.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = String(source.title || source.url);
+      item.append(link);
+      listElement.append(item);
+    }
+    section.append(heading, listElement);
+    article.append(section);
+  }
+  return article;
+}
 
 function closeReport(dialog) {
   if (!dialog?.open) return;
   dialog.close();
 }
 
+function openReport(check) {
+  const dialog = document.getElementById("contractorReportDialog");
+  const body = document.getElementById("contractorReportBody");
+  const closeBtn = document.getElementById("contractorReportCloseBtn");
+  const title = document.getElementById("contractorReportDialogTitle");
+  if (!dialog || !body || !closeBtn) return;
+
+  previousFocus = document.activeElement;
+  if (check.static) {
+    body.innerHTML = REPORT_HTML;
+  } else {
+    body.replaceChildren(renderReportMarkdown(check.report_markdown, check.sources));
+  }
+  if (title) title.textContent = `Отчет: ${check.company_name}`;
+  dialog.showModal();
+  document.body.classList.add("contractor-report-open");
+  body.scrollTop = 0;
+  closeBtn.focus();
+}
+
+function setMessage(text) {
+  const element = document.getElementById("contractorChecksMessage");
+  if (element) element.textContent = text || "";
+}
+
+function stopPolling() {
+  if (pollingTimer) clearTimeout(pollingTimer);
+  pollingTimer = null;
+}
+
+function schedulePolling() {
+  stopPolling();
+  if (!checks.some((check) => check.status === "working")) return;
+  pollingTimer = setTimeout(() => void loadContractorChecks(), 5000);
+}
+
+export async function loadContractorChecks() {
+  try {
+    const supabaseClient = await getClient();
+    const { data, error } = await supabaseClient
+      .from("contractor_checks")
+      .select("id,created_at,company_name,inn,status,report_markdown,sources,error_message")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    checks = Array.isArray(data) ? data : [];
+    setMessage("");
+    renderChecks();
+  } catch (error) {
+    console.error("contractor-checks: load failed", error);
+    setMessage("Не удалось обновить список проверок. Повторите попытку позже.");
+  } finally {
+    schedulePolling();
+  }
+}
+
+async function runCheck(companyName, inn) {
+  const supabaseClient = await getClient();
+  const { data: created, error } = await supabaseClient
+    .from("contractor_checks")
+    .insert({ company_name: companyName, inn })
+    .select("id,created_at,company_name,inn,status,report_markdown,sources,error_message")
+    .single();
+  if (error) throw error;
+
+  checks = [created, ...checks.filter((check) => check.id !== created.id)];
+  renderChecks();
+  schedulePolling();
+
+  const { data: sessionData } = await supabaseClient.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error("Сессия истекла. Войдите в систему снова.");
+
+  const response = await fetch("/api/contractor-check", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ checkId: created.id }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.message || "Не удалось выполнить проверку");
+  await loadContractorChecks();
+}
+
 export function initContractorChecksSection() {
   if (initialized) return;
 
-  const openBtn = document.getElementById("openUnionPolymerReport");
+  const initialStaticLink = document.getElementById("openUnionPolymerReport");
   const closeBtn = document.getElementById("contractorReportCloseBtn");
   const dialog = document.getElementById("contractorReportDialog");
   const body = document.getElementById("contractorReportBody");
-  if (!openBtn || !closeBtn || !dialog || !body) return;
+  if (!closeBtn || !dialog || !body) return;
 
   body.innerHTML = REPORT_HTML;
-
-  openBtn.addEventListener("click", (event) => {
+  initialStaticLink?.addEventListener("click", (event) => {
     event.preventDefault();
-    previousFocus = document.activeElement;
-    dialog.showModal();
-    document.body.classList.add("contractor-report-open");
-    body.scrollTop = 0;
-    closeBtn.focus();
+    event.stopPropagation?.();
+    openReport(STATIC_CHECK);
+  });
+
+  const tbody = document.getElementById("contractorChecksTbody");
+  tbody?.addEventListener("click", (event) => {
+    const link = event.target.closest?.("[data-check-id], [data-static-report]");
+    if (!link) return;
+    event.preventDefault();
+    const id = link.dataset.checkId || link.dataset.staticReport;
+    const check = id === STATIC_CHECK.id ? STATIC_CHECK : checks.find((item) => String(item.id) === String(id));
+    if (check?.status === "ready") openReport(check);
   });
 
   closeBtn.addEventListener("click", () => closeReport(dialog));
@@ -228,5 +479,51 @@ export function initContractorChecksSection() {
     previousFocus = null;
   });
 
+  const formDialog = document.getElementById("newContractorCheckDialog");
+  const form = document.getElementById("newContractorCheckForm");
+  const companyInput = document.getElementById("contractorCompanyName");
+  const innInput = document.getElementById("contractorInn");
+  const formError = document.getElementById("contractorCheckFormError");
+
+  const closeForm = () => {
+    if (formDialog?.open) formDialog.close();
+  };
+  document.getElementById("newContractorCheckBtn")?.addEventListener("click", () => {
+    form?.reset();
+    if (formError) formError.textContent = "";
+    formDialog?.showModal();
+    companyInput?.focus();
+  });
+  document.getElementById("newContractorCheckCloseBtn")?.addEventListener("click", closeForm);
+  document.getElementById("newContractorCheckCancelBtn")?.addEventListener("click", closeForm);
+  formDialog?.addEventListener("click", (event) => {
+    if (event.target === formDialog) closeForm();
+  });
+  innInput?.addEventListener("input", () => {
+    innInput.value = innInput.value.replace(/\D/g, "").slice(0, 12);
+  });
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const companyName = companyInput?.value.trim() || "";
+    const inn = innInput?.value.replace(/\D/g, "") || "";
+    if (!companyName || !/^(?:\d{10}|\d{12})$/.test(inn)) {
+      if (formError) formError.textContent = "Заполните название и укажите ИНН из 10 или 12 цифр.";
+      return;
+    }
+    if (formError) formError.textContent = "";
+    closeForm();
+    setMessage("Проверка запущена. Отчет появится в таблице автоматически.");
+    void runCheck(companyName, inn)
+      .catch((error) => {
+        console.error("contractor-checks: run failed", error);
+        setMessage(error?.message || "Не удалось запустить проверку.");
+        void loadContractorChecks();
+      });
+  });
+
   initialized = true;
+}
+
+export function leaveContractorChecksSection() {
+  stopPolling();
 }

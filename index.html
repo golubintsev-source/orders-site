@@ -2049,27 +2049,60 @@
 
     <section id="section-contractor-checks" class="content-section">
       <div class="card contractor-checks-card">
+        <div class="contractor-checks-toolbar">
+          <div>
+            <h2 class="contractor-checks-title">Проверка контрагентов</h2>
+            <p class="contractor-checks-subtitle">Проверка деловой репутации по открытым источникам</p>
+          </div>
+          <button type="button" id="newContractorCheckBtn" class="btn-primary contractor-checks-new-btn">Новая проверка</button>
+        </div>
+        <p id="contractorChecksMessage" class="contractor-checks-message" role="status" aria-live="polite"></p>
         <div class="contractor-checks-table-wrap">
           <table class="contractor-checks-table">
             <thead>
               <tr>
                 <th>Дата проверки</th>
                 <th>Название компании</th>
+                <th>ИНН</th>
+                <th>Статус</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="contractorChecksTbody">
               <tr>
                 <td><time datetime="2026-10-17">17.10.2026</time></td>
                 <td>
-                  <a href="#union-polymer-report" id="openUnionPolymerReport" class="contractor-checks-report-link" aria-haspopup="dialog">
+                  <a href="#union-polymer-report" id="openUnionPolymerReport" class="contractor-checks-report-link" data-static-report="union-polymer" aria-haspopup="dialog">
                     ООО «Юнион Полимер Технолоджи»
                   </a>
                 </td>
+                <td>7701998380</td>
+                <td><span class="contractor-check-status contractor-check-status--ready">Готово</span></td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
+
+      <dialog id="newContractorCheckDialog" class="contractor-check-form-dialog" aria-labelledby="newContractorCheckTitle">
+        <form id="newContractorCheckForm" class="contractor-check-form" method="dialog">
+          <header class="contractor-check-form-header">
+            <h2 id="newContractorCheckTitle">Новая проверка</h2>
+            <button type="button" id="newContractorCheckCloseBtn" class="contractor-check-form-close" aria-label="Закрыть">×</button>
+          </header>
+          <div class="contractor-check-form-body">
+            <label for="contractorCompanyName">Название компании</label>
+            <input type="text" id="contractorCompanyName" name="companyName" maxlength="200" autocomplete="organization" required />
+            <label for="contractorInn">ИНН</label>
+            <input type="text" id="contractorInn" name="inn" inputmode="numeric" pattern="[0-9]{10}|[0-9]{12}" maxlength="12" autocomplete="off" required aria-describedby="contractorInnHint" />
+            <p id="contractorInnHint" class="contractor-check-form-hint">10 цифр для организации или 12 цифр для ИП</p>
+            <p id="contractorCheckFormError" class="contractor-check-form-error" role="alert"></p>
+          </div>
+          <footer class="contractor-check-form-actions">
+            <button type="button" id="newContractorCheckCancelBtn" class="contractor-check-cancel-btn">Отмена</button>
+            <button type="submit" id="runContractorCheckBtn" class="btn-primary">Запустить проверку</button>
+          </footer>
+        </form>
+      </dialog>
 
       <dialog id="contractorReportDialog" class="contractor-report-dialog" aria-labelledby="contractorReportDialogTitle">
         <div class="contractor-report-shell">

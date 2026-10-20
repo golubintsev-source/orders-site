@@ -53,6 +53,9 @@
     "api/voice-tts.js": {
       "maxDuration": 30
     },
+    "api/contractor-check.js": {
+      "maxDuration": 60
+    },
     "api/address-suggest.js": {
       "maxDuration": 10
     }

@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
 
 class FakeClassList {
   values = new Set();
@@ -104,4 +107,24 @@ test("full user role can see contractor checks while limited roles cannot", asyn
     assert.equal(canAccessSection("contractor-checks"), false, `${role} must not have access`);
     assert.equal(isSectionHiddenFromNav("contractor-checks"), true, `${role} must not see menu item`);
   }
+});
+
+test("contractor research prompt includes the submitted company and INN", () => {
+  const { buildPrompt, extractSources } = require("../api/contractor-check.js");
+  const prompt = buildPrompt("ООО Тест", "1234567890");
+
+  assert.match(prompt, /ООО Тест, ИНН 1234567890/);
+  assert.match(prompt, /судебную практику и решения/);
+  assert.match(prompt, /юридические риски или жалобы/);
+
+  assert.deepEqual(
+    extractSources(
+      { annotations: [{ url_citation: { url: "https://example.com/case", title: "Судебное дело" } }] },
+      "Дополнительный источник: https://example.org/company.",
+    ),
+    [
+      { url: "https://example.com/case", title: "Судебное дело" },
+      { url: "https://example.org/company", title: "https://example.org/company" },
+    ],
+  );
 });

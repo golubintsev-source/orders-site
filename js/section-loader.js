@@ -93,7 +93,11 @@ const lifecycle = createSectionLifecycle({
   },
   "contractor-checks": async () => {
     const m = await import("./contractor-checks.js");
-    return { init: m.initContractorChecksSection };
+    return {
+      init: m.initContractorChecksSection,
+      load: m.loadContractorChecks,
+      leave: m.leaveContractorChecksSection,
+    };
   },
   statistics: async () => {
     const m = await import("./statistics.js");
