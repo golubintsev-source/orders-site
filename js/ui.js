@@ -53,7 +53,7 @@ import {
 } from "./orders.js";
 import { mergeNewAttachmentsOnChange, pasteImageFromClipboardIntoAttachments } from "./files.js";
 import { initClientAutocomplete, initAddressAutocomplete } from "./clientAutocomplete.js";
-import { canMutateOrders, isOrderEditLockedForUserLite, isUserLite, isUserShop } from "./roles.js";
+import { canExportOrdersToExcel, canMutateOrders, isOrderEditLockedForUserLite, isUserLite, isUserShop } from "./roles.js";
 import { formatPhoneValue, isValidOrderPhone, refreshRublesIntegerInputState } from "./format.js";
 import {
   showFloatingCellTooltip,
@@ -241,6 +241,26 @@ export function bindUIEvents() {
   uiBound = true;
 
   bindOrderFormDdMmYyyyInputs();
+
+  const ordersExportBtn = document.getElementById("ordersExportExcelBtn");
+  if (ordersExportBtn) {
+    ordersExportBtn.hidden = !canExportOrdersToExcel();
+    ordersExportBtn.addEventListener("click", async () => {
+      if (!canExportOrdersToExcel() || ordersExportBtn.disabled) return;
+      ordersExportBtn.disabled = true;
+      ordersExportBtn.textContent = "Готовим Excel…";
+      try {
+        const { exportOrdersToExcel } = await import("./ordersExcelExport.js");
+        await exportOrdersToExcel();
+      } catch (error) {
+        console.error("Экспорт заказов в Excel:", error);
+        setMessage("Не удалось сформировать Excel. Обновите страницу и попробуйте ещё раз.", "#d32f2f");
+      } finally {
+        ordersExportBtn.disabled = false;
+        ordersExportBtn.textContent = "Выгрузить в Excel";
+      }
+    });
+  }
 
   if (phoneInput) {
     phoneInput.addEventListener("input", onPhoneInput);

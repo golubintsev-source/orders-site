@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v89: дата выполнения в начале отчета по контрагенту.
-const STATIC_CACHE = "orders-site-static-v89";
+// v90: экспорт заказов перенесен из меню под таблицу.
+const STATIC_CACHE = "orders-site-static-v90";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

@@ -4,7 +4,7 @@ import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
 import { formatAmount, formatOrderIdTypeChip } from "./format.js";
 import { applyHourlyMotivationToElement, scheduleHourlyMotivationUpdates } from "./motivationQuotes.js";
 import { canAccessSection, isAdmin, isSectionHiddenFromNav, isUserLite, isUserShop } from "./roles.js";
-import { getRouteSectionFromUrl, hrefToOrdersExcelExport, syncBrowserUrlToSection } from "./app-routes.js";
+import { getRouteSectionFromUrl, syncBrowserUrlToSection } from "./app-routes.js";
 import { navigateWithUserPlace, scheduleSaveUserPlace } from "./user-place.js";
 import {
   consumeSectionSwitchMs,
@@ -525,18 +525,6 @@ export function initSectionNavDropdown(options = {}) {
       item.addEventListener("click", () => {
         const id = item.dataset.section;
         if (!id) return;
-        if (id === "orders-excel") {
-          if (!canAccessSection("orders-excel")) return;
-          const hasOrdersTable = Boolean(document.getElementById("ordersTable"));
-          if (!hasOrdersTable) {
-            navigateWithUserPlace(hrefToOrdersExcelExport());
-            closeSectionNavDropdown();
-            return;
-          }
-          void import("./ordersExcelExport.js").then((m) => m.exportOrdersToExcel());
-          closeSectionNavDropdown();
-          return;
-        }
         if (typeof onSectionItemSelect === "function") {
           onSectionItemSelect(id);
           closeSectionNavDropdown();

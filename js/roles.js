@@ -89,10 +89,16 @@ export function canAccessContractorChecks() {
   return isAdmin() || state.currentRole === "user";
 }
 
+/** Выгрузка заказов с финансовыми и контактными данными — только admin и user. */
+export function canExportOrdersToExcel() {
+  return isAdmin() || state.currentRole === "user";
+}
+
 /** Разделы меню, закрытые для отдельных ролей. Настройки доступны всем (блок уведомлений). */
 export function canAccessSection(sectionId) {
   if (sectionId === "debts") return canAccessDebts();
   if (sectionId === "contractor-checks") return canAccessContractorChecks();
+  if (sectionId === "orders-excel") return canExportOrdersToExcel();
   if (isUserShop()) {
     return (
       sectionId !== "balance" &&
@@ -106,7 +112,6 @@ export function canAccessSection(sectionId) {
   if ((sectionId === "statistics" || sectionId === "statistics-balance") && !isAdmin()) {
     return false;
   }
-  if (sectionId === "orders-excel" && isUserLite()) return false;
   if (!isUserLite()) return true;
   // user_lite: просмотр «Зарплата менеджера» разрешён; баланс и расчёты — нет
   return (
@@ -122,6 +127,7 @@ export function isSectionHiddenFromNav(sectionId) {
   if (sectionId === "voice") return true;
   if (sectionId === "debts") return !canAccessDebts();
   if (sectionId === "contractor-checks") return !canAccessContractorChecks();
+  if (sectionId === "orders-excel") return true;
   if (isUserShop()) {
     return (
       sectionId === "balance" ||
@@ -135,7 +141,6 @@ export function isSectionHiddenFromNav(sectionId) {
   if ((sectionId === "statistics" || sectionId === "statistics-balance") && !isAdmin()) {
     return true;
   }
-  if (sectionId === "orders-excel" && isUserLite()) return true;
   if (!isUserLite()) return false;
   return (
     sectionId === "balance" ||

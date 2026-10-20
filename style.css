@@ -507,11 +507,10 @@ h2 {
   background: #eff6ff;
 }
 
-/* user_lite: финансовые разделы и экспорт не показываются (дублирует логику hidden в JS) */
+/* user_lite: финансовые разделы не показываются (дублирует логику hidden в JS) */
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="balance"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="calculations"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="all-salaries"],
-#sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="orders-excel"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="debts"],
 #sectionNavDropdownPanel.section-nav-dropdown-panel--user-lite .section-nav-dropdown-item[data-section="contractor-checks"] {
   display: none !important;
@@ -1581,6 +1580,44 @@ h2 {
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.orders-export-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 14px;
+}
+
+.orders-export-excel-btn {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 9px;
+  background: #217346;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.orders-export-excel-btn:hover {
+  background: #1a5c38;
+}
+
+.orders-export-excel-btn:focus-visible {
+  outline: 3px solid rgba(33, 115, 70, 0.28);
+  outline-offset: 3px;
+}
+
+.orders-export-excel-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.orders-export-excel-btn[hidden] {
+  display: none !important;
 }
 
 #calculationsTable .calc-filter-heading-btn {
