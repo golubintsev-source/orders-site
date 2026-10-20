@@ -1,8 +1,8 @@
 const REPORT_HTML = `
   <article class="contractor-report-article">
+    <p class="contractor-report-date"><strong>Дата выполнения проверки:</strong> 17 октября 2026 года</p>
     <h1>Проверка деловой репутации ООО «Юнион Полимер Технолоджи»</h1>
     <div class="contractor-report-meta">
-      <p><strong>Дата исследования:</strong> 17 октября 2026 года</p>
       <p><strong>Цель:</strong> оценка надежности потенциального поставщика материалов для производства и монтажа пластиковых окон.</p>
       <p><strong>Предполагаемые условия сотрудничества:</strong> регулярные закупки, оплата по безналичному расчету.</p>
     </div>
@@ -228,6 +228,16 @@ function formatDate(value) {
   }).format(date);
 }
 
+function formatReportDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
 function createCell(text) {
   const cell = document.createElement("td");
   cell.textContent = text;
@@ -320,9 +330,15 @@ function appendTextWithLinks(container, rawText) {
   container.append(document.createTextNode(text.slice(cursor)));
 }
 
-export function renderReportMarkdown(markdown, sources = []) {
+export function renderReportMarkdown(markdown, sources = [], completedAt = null) {
   const article = document.createElement("article");
   article.className = "contractor-report-article";
+  const reportDate = document.createElement("p");
+  reportDate.className = "contractor-report-date";
+  const reportDateLabel = document.createElement("strong");
+  reportDateLabel.textContent = "Дата выполнения проверки: ";
+  reportDate.append(reportDateLabel, document.createTextNode(formatReportDate(completedAt)));
+  article.append(reportDate);
   let list = null;
 
   for (const rawLine of String(markdown || "").split(/\r?\n/)) {
@@ -397,7 +413,11 @@ function openReport(check) {
   if (check.static) {
     body.innerHTML = REPORT_HTML;
   } else {
-    body.replaceChildren(renderReportMarkdown(check.report_markdown, check.sources));
+    body.replaceChildren(renderReportMarkdown(
+      check.report_markdown,
+      check.sources,
+      check.completed_at || check.created_at,
+    ));
   }
   if (title) title.textContent = `Отчет: ${check.company_name}`;
   dialog.showModal();
@@ -427,7 +447,7 @@ export async function loadContractorChecks() {
     const supabaseClient = await getClient();
     const { data, error } = await supabaseClient
       .from("contractor_checks")
-      .select("id,created_at,company_name,inn,status,report_markdown,sources,error_message")
+      .select("id,created_at,completed_at,company_name,inn,status,report_markdown,sources,error_message")
       .order("created_at", { ascending: false });
     if (error) throw error;
     checks = (Array.isArray(data) ? data : []).map((check) => (
@@ -448,7 +468,7 @@ async function runCheck(companyName, inn) {
   const { data: created, error } = await supabaseClient
     .from("contractor_checks")
     .insert({ company_name: companyName, inn })
-    .select("id,created_at,company_name,inn,status,report_markdown,sources,error_message")
+    .select("id,created_at,completed_at,company_name,inn,status,report_markdown,sources,error_message")
     .single();
   if (error) throw error;
 

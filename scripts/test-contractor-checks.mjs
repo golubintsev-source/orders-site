@@ -56,6 +56,7 @@ test("contractor report renders without the original prompt and opens full-scree
   module.initContractorChecksSection();
 
   assert.match(body.innerHTML, /Проверка деловой репутации ООО «Юнион Полимер Технолоджи»/);
+  assert.match(body.innerHTML, /Дата выполнения проверки:<\/strong> 17 октября 2026 года/);
   assert.match(body.innerHTML, /17 октября 2026 года/);
   assert.doesNotMatch(body.innerHTML, /У меня компания малый бизнес/);
   assert.equal((body.innerHTML.match(/<section>/g) || []).length, 9);
@@ -100,6 +101,14 @@ test("contractor check rows expose a delete action backed by Supabase", async ()
   assert.match(source, /\.from\("contractor_checks"\)\.delete\(\)\.eq\("id", checkId\)/);
   assert.match(source, /dataset\.deleteCheckId/);
   assert.match(source, /checks = checks\.filter/);
+});
+
+test("generated contractor reports show their completion date first", async () => {
+  const source = await readFile(new URL("../js/contractor-checks.js", import.meta.url), "utf8");
+
+  assert.match(source, /completed_at \|\| check\.created_at/);
+  assert.match(source, /Дата выполнения проверки:/);
+  assert.match(source, /article\.append\(reportDate\)/);
 });
 
 test("full user role can see contractor checks while limited roles cannot", async () => {

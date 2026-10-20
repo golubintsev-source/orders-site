@@ -10373,6 +10373,16 @@ body.contractor-report-open {
   line-height: 1.18;
 }
 
+.contractor-report-date {
+  margin: 0 0 16px !important;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.contractor-report-date strong {
+  color: #334155;
+}
+
 .contractor-report-article h2 {
   margin: 0 0 18px;
   color: #0f172a;
