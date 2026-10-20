@@ -15,6 +15,7 @@
     "test:address-suggest": "node scripts/test-address-suggest.mjs",
     "test:orders-search": "node scripts/test-orders-search.mjs",
     "test:orders-excel": "node scripts/test-orders-excel.mjs",
+    "test:section-nav-order": "node scripts/test-section-nav-order.mjs",
     "test:order-photo-reminder": "node scripts/test-order-photo-reminder.mjs",
     "test:orders-address-width": "node scripts/test-orders-address-width.mjs",
     "test:route-sheet-manual-route": "node scripts/test-route-sheet-manual-route.mjs",

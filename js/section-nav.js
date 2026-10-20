@@ -80,7 +80,7 @@ const SECTION_LABELS = {
   "route-sheet": "Маршрутный лист",
   settings: "Настройки",
   "speed-test": "Тест скорости",
-  statistics: "Статистика",
+  statistics: "Статистика входов",
   "statistics-balance": "Статистика баланса",
   debts: "Долги",
   "contractor-checks": "Проверка контрагентов",
@@ -135,7 +135,7 @@ function labelForSection(sectionId) {
       const chip = formatOrderIdTypeChip(state.viewingOrderId, orderType);
       return `Просмотр ${chip}`;
     }
-    if (!state.editingOrderId) return "Новый";
+    if (!state.editingOrderId) return "Новый заказ";
     const orderType = document.getElementById("order_type")?.value ?? "";
     const chip = formatOrderIdTypeChip(state.editingOrderId, orderType);
     return `Редактирование ${chip}`;
