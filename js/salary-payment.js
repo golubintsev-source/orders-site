@@ -29,11 +29,10 @@ export function buildSalaryPayment({ amount, recipient, comment = "" }, settings
   if (!salaryRecipientGroups(settings).some(group => group.names.includes(name))) {
     throw new Error("Выберите получателя из настроек");
   }
-  if (name === "Касса") throw new Error("Получатель не может совпадать с кассой");
   const text = String(comment || "").trim();
   const description = `з/п ${name}${text ? `, ${text}` : ""}`;
   return {
-    from_place: "Касса", to_place: name, amount: parsed.value,
+    from_place: "Касса", to_place: "Зарплата", amount: parsed.value,
     comment: `${description}; ${shortLoginByEmail(settings.currentUser?.email || "")}`,
     created_at: new Date().toISOString(),
   };

@@ -876,7 +876,8 @@ h2 {
 }
 
 #section-calculations .calculations-comment-wrap,
-.calculations-page .calculations-comment-wrap {
+.calculations-page .calculations-comment-wrap,
+#section-all-salaries .calculations-comment-wrap {
   position: relative;
 }
 
@@ -1315,7 +1316,8 @@ h2 {
 }
 
 #section-calculations .calculations-form,
-.calculations-page .calculations-form {
+.calculations-page .calculations-form,
+#section-all-salaries .calculations-form {
   margin-bottom: 16px;
 }
 
@@ -1349,12 +1351,14 @@ h2 {
 }
 
 #section-calculations .calculations-form .field,
-.calculations-page .calculations-form .field {
+.calculations-page .calculations-form .field,
+#section-all-salaries .calculations-form .field {
   margin: 0;
 }
 
 #section-calculations .calculations-form label,
-.calculations-page .calculations-form label {
+.calculations-page .calculations-form label,
+#section-all-salaries .calculations-form label {
   font-size: 13px;
   margin-bottom: 4px;
   font-weight: 600;
@@ -1363,7 +1367,9 @@ h2 {
 #section-calculations .calculations-form input,
 #section-calculations .calculations-form select,
 .calculations-page .calculations-form input,
-.calculations-page .calculations-form select {
+#section-all-salaries .calculations-form input,
+.calculations-page .calculations-form select,
+#section-all-salaries .calculations-form select {
   font-size: 13px;
   padding: 6px 8px;
   border-radius: 8px;
@@ -1392,7 +1398,8 @@ h2 {
 }
 
 #section-calculations .calculations-form .calculations-comment-input,
-.calculations-page .calculations-form .calculations-comment-input {
+.calculations-page .calculations-form .calculations-comment-input,
+#section-all-salaries .calculations-form .calculations-comment-input {
   flex: 0 0 var(--calc-comment-width);
   width: var(--calc-comment-width);
   max-width: var(--calc-comment-width);
@@ -1409,7 +1416,8 @@ h2 {
 }
 
 #section-calculations .calculations-form-row--comment-submit .calculations-submit-btn,
-.calculations-page .calculations-form-row--comment-submit .calculations-submit-btn {
+.calculations-page .calculations-form-row--comment-submit .calculations-submit-btn,
+#section-all-salaries .calculations-form-row--comment-submit .calculations-submit-btn {
   flex: 0 0 var(--calc-submit-row-height);
   width: var(--calc-submit-row-height);
   min-width: var(--calc-submit-row-height);
@@ -1427,14 +1435,16 @@ h2 {
 }
 
 #section-calculations .calculations-form-row--comment-submit .calculations-submit-btn svg,
-.calculations-page .calculations-form-row--comment-submit .calculations-submit-btn svg {
+.calculations-page .calculations-form-row--comment-submit .calculations-submit-btn svg,
+#section-all-salaries .calculations-form-row--comment-submit .calculations-submit-btn svg {
   width: 24px;
   height: 24px;
   flex-shrink: 0;
 }
 
 #section-calculations .calculations-form-row--comment-submit .calculations-submit-btn svg[hidden],
-.calculations-page .calculations-form-row--comment-submit .calculations-submit-btn svg[hidden] {
+.calculations-page .calculations-form-row--comment-submit .calculations-submit-btn svg[hidden],
+#section-all-salaries .calculations-form-row--comment-submit .calculations-submit-btn svg[hidden] {
   display: none;
 }
 
@@ -1531,7 +1541,8 @@ h2 {
 
 /* Поле «Сумма» в форме записи — тоже 16px, иначе iOS зумит страницу */
 #section-calculations #calcAmount,
-.calculations-page #calcAmount {
+.calculations-page #calcAmount,
+#section-all-salaries #salaryPaymentAmount {
   font-size: 16px;
 }
 
@@ -1788,7 +1799,8 @@ h2 {
 }
 
 #section-calculations .calculations-submit-btn,
-.calculations-page .calculations-submit-btn {
+.calculations-page .calculations-submit-btn,
+#section-all-salaries .calculations-submit-btn {
   padding: 8px 12px;
   font-size: 13px;
   font-weight: 600;
@@ -1801,7 +1813,8 @@ h2 {
 }
 
 #section-calculations .calculations-submit-btn:hover,
-.calculations-page .calculations-submit-btn:hover {
+.calculations-page .calculations-submit-btn:hover,
+#section-all-salaries .calculations-submit-btn:hover {
   opacity: 0.95;
 }
 
@@ -4952,8 +4965,10 @@ select {
 
 #section-calculations #calcAmount,
 .calculations-page #calcAmount,
+#section-all-salaries #salaryPaymentAmount,
 #section-calculations .calculations-amount-input,
-.calculations-page .calculations-amount-input {
+.calculations-page .calculations-amount-input,
+#section-all-salaries .calculations-amount-input {
   font-size: 16px;
 }
 
@@ -11722,20 +11737,13 @@ html.keyboard-open .voice-composer {
 }
 
 
-/* Форма выплаты на странице «Все зарплаты». */
-.salary-payment-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-end;
-  margin-bottom: 16px;
-}
 .salary-payment-form[hidden] { display: none; }
-.salary-payment-form label { display: flex; flex-direction: column; gap: 6px; flex: 1 1 160px; min-width: 0; }
-.salary-payment-form .salary-payment-comment { flex: 2 1 240px; }
-.salary-payment-form input, .salary-payment-form select { width: 100%; min-width: 0; box-sizing: border-box; }
 #calculationsTable tr.calc-row-salary-payment td { background-color: #fff9c4; }
-@media (max-width: 600px) {
-  .salary-payment-form label, .salary-payment-form .salary-payment-comment { flex-basis: 100%; }
-  .salary-payment-form button { width: 100%; }
+
+/* На узких экранах комментарий уступает место кнопке добавления. */
+#section-all-salaries .calculations-form-row--comment-submit .calculations-comment-wrap {
+  flex: 0 1 var(--calc-comment-width);
+}
+#section-all-salaries .calculations-form .calculations-comment-input {
+  width: 100%;
 }
