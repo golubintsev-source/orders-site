@@ -5,7 +5,7 @@ export const AUTOMATIC_CALCULATION_COMMENT_PREFIXES = [
   "[AUTO_EXCESS_DELTA]",
 ];
 
-export const SALARY_COMMENT_TERMS = ["ЗП", "зарплата", "аванс", "премия", "бонус"];
+export const SALARY_COMMENT_TERMS = ["з/п", "ЗП", "зарплата", "аванс", "премия", "бонус"];
 
 const RUSSIAN_MONTH_BY_FORM = new Map(
   [
@@ -64,7 +64,7 @@ function stripManualCalculationAuthor(comment) {
 }
 
 function salaryCommentWords(comment) {
-  return [...stripManualCalculationAuthor(comment).matchAll(/[а-яё]+(?:-[а-яё]+)*/giu)].map(
+  return [...stripManualCalculationAuthor(comment).replace(/з\s*\/\s*п/giu, "зп").matchAll(/[а-яё]+(?:-[а-яё]+)*/giu)].map(
     (match) => ({
       value: match[0],
       normalized: match[0].toLocaleLowerCase("ru-RU"),
@@ -118,6 +118,8 @@ function employeeNameBeforeSalaryTerm(words, termIndex) {
 
 /** Имя получателя выплаты из ручного комментария расчёта. */
 export function getSalaryEmployeeName(comment) {
+  const structured = stripManualCalculationAuthor(comment).match(/^з\/п\s+([^,]+)(?:,|$)/iu);
+  if (structured) return structured[1].trim();
   const words = salaryCommentWords(comment);
   const termIndex = words.findIndex((word) => SALARY_TERM_FORMS.has(word.normalized));
   if (termIndex < 0) return "";
@@ -133,7 +135,7 @@ export function groupSalaryRowsByEmployee(rows) {
   for (const row of rows || []) {
     const amount = Number(row?.amount);
     if (!Number.isFinite(amount)) continue;
-    const employee = getSalaryEmployeeName(row?.comment) || "Не указан";
+    const employee = (isSalaryPaymentRow(row) ? row.to_place : getSalaryEmployeeName(row?.comment)) || "Не указан";
     const key = employee.toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
     let group = byEmployee.get(key);
     if (!group) {
@@ -147,6 +149,15 @@ export function groupSalaryRowsByEmployee(rows) {
   return [...byEmployee.values()].sort(
     (a, b) => b.total - a.total || a.employee.localeCompare(b.employee, "ru"),
   );
+}
+
+/** Выплата из кассы с форматом комментария формы «Все зарплаты». */
+export function isSalaryPaymentRow(row) {
+  const name = String(row?.to_place || "").trim();
+  const comment = stripManualCalculationAuthor(row?.comment);
+  const prefix = `з/п ${name}`;
+  return row?.from_place === "Касса" && !!name &&
+    (comment === prefix || comment.startsWith(`${prefix},`));
 }
 
 /** Зарплата — ручная строка с одним из зарплатных обозначений в комментарии. */
@@ -245,3 +256,4 @@ export function groupSalaryRowsByMonth(rows) {
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
     }));
 }
+

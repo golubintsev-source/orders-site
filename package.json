@@ -6,6 +6,7 @@
     "test:lazy-sections": "node --experimental-vm-modules scripts/test-lazy-sections.mjs",
     "test:calculations-loading": "node --experimental-vm-modules scripts/test-calculations-loading.mjs",
     "update-supabase": "node scripts/update-supabase.js",
+    "test:salary-payment": "node scripts/test-salary-payment.mjs",
     "test:all-salaries": "node scripts/test-all-salaries.mjs",
     "test:messages-sync": "node scripts/test-messages-sync.mjs",
     "test:messages-body": "node scripts/test-messages-body.mjs",
@@ -33,3 +34,4 @@
     "web-push": "^3.6.7"
   }
 }
+

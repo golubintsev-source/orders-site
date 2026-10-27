@@ -842,6 +842,13 @@
 
     <section id="section-all-salaries" class="content-section">
       <div class="card all-salaries-card">
+        <form id="salaryPaymentForm" class="salary-payment-form">
+          <label>Сумма<input id="salaryPaymentAmount" type="text" inputmode="numeric" autocomplete="off" placeholder="Сумма, ₽" required aria-label="Сумма выплаты" /></label>
+          <label>Кому<select id="salaryPaymentRecipient" required><option value="">Выберите получателя</option></select></label>
+          <label class="salary-payment-comment">Комментарий<input id="salaryPaymentComment" type="text" autocomplete="off" /></label>
+          <button id="salaryPaymentAddBtn" type="submit" class="btn-primary">Добавить</button>
+        </form>
+        <p id="salaryPaymentMessage" class="all-salaries-message" role="status"></p>
         <div class="table-wrap all-salaries-table-wrap">
           <table id="allSalariesTable" class="all-salaries-table" aria-label="Все выплаты зарплаты по месяцам">
             <thead>
@@ -2635,4 +2642,5 @@
   </div>
 </body>
 </html>
+
 

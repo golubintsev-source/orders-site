@@ -11720,3 +11720,22 @@ html.keyboard-open .voice-composer {
     max-width: 94%;
   }
 }
+
+
+/* Форма выплаты на странице «Все зарплаты». */
+.salary-payment-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+.salary-payment-form[hidden] { display: none; }
+.salary-payment-form label { display: flex; flex-direction: column; gap: 6px; flex: 1 1 160px; min-width: 0; }
+.salary-payment-form .salary-payment-comment { flex: 2 1 240px; }
+.salary-payment-form input, .salary-payment-form select { width: 100%; min-width: 0; box-sizing: border-box; }
+#calculationsTable tr.calc-row-salary-payment td { background-color: #fff9c4; }
+@media (max-width: 600px) {
+  .salary-payment-form label, .salary-payment-form .salary-payment-comment { flex-basis: 100%; }
+  .salary-payment-form button { width: 100%; }
+}
