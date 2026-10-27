@@ -7,6 +7,22 @@ import { readSnapshot, persistSettingsSnapshotFromRows } from "./offline-cache.j
 const KEY_INSTALLER_RATE = "installer_rate_per_m2";
 const KEY_DRIVER_NAME = "driver_name";
 const KEY_EDITORS = "editors";
+const KEY_OTHER_WORKERS = "other_workers";
+export const DEFAULT_OTHER_WORKERS = Object.freeze([
+  "Иван Сотников",
+  "Леша",
+  "Сергей",
+  "Андрей Аверьянов",
+  "Монтажникам",
+  "Лена Коробова",
+  "Игорь Анатольевич",
+  "Павел",
+  "Голубинцев",
+  "Паша",
+  "Денис",
+  "Андрей Иванов",
+  "Кристина Шелякина"
+]);
 const DEFAULT_RATE = 1400;
 const DEFAULT_MANAGER_SALARY_BASE = 22000;
 const DEFAULT_MANAGER_SALARY_PERCENT = 1.5;
@@ -226,8 +242,8 @@ function editorsListsEqual(a, b) {
 }
 
 /** Имена из полей формы: пустые строки сохраняются как слоты UI. */
-function collectEditorInputsFromDom({ onlyFilled = false } = {}) {
-  const list = document.getElementById("settingsEditorsList");
+function collectEditorInputsFromDom({ onlyFilled = false, listId = "settingsEditorsList" } = {}) {
+  const list = document.getElementById(listId);
   if (!list) return [];
   const values = [];
   list.querySelectorAll(".settings-editor-input").forEach((el) => {
@@ -238,7 +254,7 @@ function collectEditorInputsFromDom({ onlyFilled = false } = {}) {
   return values;
 }
 
-function createEditorRow(initialValue = "") {
+function createEditorRow(initialValue = "", otherWorker = false) {
   const row = document.createElement("div");
   row.className = "settings-editor-row";
 
@@ -247,14 +263,15 @@ function createEditorRow(initialValue = "") {
   input.className = "settings-editor-input";
   input.autocomplete = "off";
   input.placeholder = "Имя Отчество";
-  input.title = "Имя и отчество монтажника";
+  input.title = otherWorker ? "Имя работника" : "Имя и отчество монтажника";
+  if (otherWorker) input.placeholder = "Имя работника";
   input.value = initialValue;
 
   const removeBtn = document.createElement("button");
   removeBtn.type = "button";
   removeBtn.className = "settings-editor-remove-btn";
-  removeBtn.title = "Удалить монтажника";
-  removeBtn.setAttribute("aria-label", "Удалить монтажника");
+  removeBtn.title = otherWorker ? "Удалить работника" : "Удалить монтажника";
+  removeBtn.setAttribute("aria-label", removeBtn.title);
   removeBtn.innerHTML = EDITOR_REMOVE_BTN_HTML;
 
   row.appendChild(input);
@@ -286,6 +303,30 @@ export function addEditorField() {
   updateEditorsSaveButtonState();
 }
 
+/** Отрисовать список полей других работников. */
+export function renderOtherWorkersList(names) {
+  const list = document.getElementById("settingsOtherWorkersList");
+  if (!list) return;
+  const items = Array.isArray(names) ? names : [];
+  list.innerHTML = "";
+  for (const name of items) {
+    list.appendChild(createEditorRow(name, true));
+  }
+}
+
+/** Добавить пустое поле работника. */
+export function addOtherWorkerField() {
+  const list = document.getElementById("settingsOtherWorkersList");
+  if (!list) return;
+  const row = createEditorRow("", true);
+  list.appendChild(row);
+  const input = row.querySelector(".settings-editor-input");
+  if (input instanceof HTMLInputElement) {
+    queueMicrotask(() => input.focus());
+  }
+  updateOtherWorkersSaveButtonState();
+}
+
 /** Синхронизировать поле «Водитель» на маршрутном листе с сохранённым значением. */
 function syncRouteSheetDriverInput(driverName) {
   const el = document.getElementById("routeSheetDriver");
@@ -305,6 +346,9 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
 
   state.driverName = normalizeDriverName(byKey[KEY_DRIVER_NAME] ?? "");
   state.editors = parseEditorsSettingValue(byKey[KEY_EDITORS]);
+  state.otherWorkers = byKey[KEY_OTHER_WORKERS] == null
+    ? [...DEFAULT_OTHER_WORKERS]
+    : parseEditorsSettingValue(byKey[KEY_OTHER_WORKERS]);
 
   for (const { participant, settingKey } of BALANCE_ADJ_FIELDS) {
     const raw = byKey[settingKey];
@@ -332,6 +376,7 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
 
   syncRouteSheetDriverInput(state.driverName);
   renderEditorsList(state.editors);
+  renderOtherWorkersList(state.otherWorkers);
 
   for (const { participant, inputId } of BALANCE_ADJ_FIELDS) {
     const el = document.getElementById(inputId);
@@ -360,6 +405,7 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
   updateSettingsSaveButtonState();
   updateDriverSaveButtonState();
   updateEditorsSaveButtonState();
+  updateOtherWorkersSaveButtonState();
   updateAdjustmentsSaveButtonState();
   exposeManagerSalaryParamsHelpers();
   updateManagerSalaryParamsSaveButtonState();
@@ -378,6 +424,7 @@ export async function loadSettings() {
     KEY_INSTALLER_RATE,
     KEY_DRIVER_NAME,
     KEY_EDITORS,
+    KEY_OTHER_WORKERS,
     ...BALANCE_ADJ_FIELDS.map((f) => f.settingKey),
     ...MANAGER_SALARY_PARAM_FIELDS.flatMap((f) => [f.baseKey, f.percentKey]),
   ];
@@ -426,6 +473,17 @@ export function updateEditorsSaveButtonState() {
   if (!btn) return;
   const current = collectEditorInputsFromDom({ onlyFilled: true }).map(normalizeEditorName);
   const saved = (state.editors || []).map(normalizeEditorName);
+  const isDirty = !editorsListsEqual(current, saved);
+  btn.disabled = !isDirty;
+  btn.classList.toggle("settings-save-btn-inactive", !isDirty);
+}
+
+
+export function updateOtherWorkersSaveButtonState() {
+  const btn = document.getElementById("settingsSaveOtherWorkersBtn");
+  if (!btn) return;
+  const current = collectEditorInputsFromDom({ onlyFilled: true, listId: "settingsOtherWorkersList" }).map(normalizeEditorName);
+  const saved = (state.otherWorkers || []).map(normalizeEditorName);
   const isDirty = !editorsListsEqual(current, saved);
   btn.disabled = !isDirty;
   btn.classList.toggle("settings-save-btn-inactive", !isDirty);
@@ -554,6 +612,24 @@ export async function saveEditors() {
   state.editors = names;
   renderEditorsList(names);
   updateEditorsSaveButtonState();
+  return true;
+}
+
+
+export async function saveOtherWorkers() {
+  if (!isAdmin()) return false;
+
+  const names = collectEditorInputsFromDom({ onlyFilled: true, listId: "settingsOtherWorkersList" }).map(normalizeEditorName);
+  const valueStr = JSON.stringify(names);
+  const { error } = await supabaseClient
+    .from("app_settings")
+    .upsert({ key: KEY_OTHER_WORKERS, value: valueStr }, { onConflict: "key" });
+
+  if (error) return false;
+
+  state.otherWorkers = names;
+  renderOtherWorkersList(names);
+  updateOtherWorkersSaveButtonState();
   return true;
 }
 
@@ -711,3 +787,4 @@ export function applySettingsAdminBlocksVisibility() {
 }
 
 exposeManagerSalaryParamsHelpers();
+
