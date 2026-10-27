@@ -842,11 +842,27 @@
 
     <section id="section-all-salaries" class="content-section">
       <div class="card all-salaries-card">
-        <form id="salaryPaymentForm" class="salary-payment-form">
-          <label>Сумма<input id="salaryPaymentAmount" type="text" inputmode="numeric" autocomplete="off" placeholder="Сумма, ₽" required aria-label="Сумма выплаты" /></label>
-          <label>Кому<select id="salaryPaymentRecipient" required><option value="">Выберите получателя</option></select></label>
-          <label class="salary-payment-comment">Комментарий<input id="salaryPaymentComment" type="text" autocomplete="off" /></label>
-          <button id="salaryPaymentAddBtn" type="submit" class="btn-primary">Добавить</button>
+        <form id="salaryPaymentForm" class="salary-payment-form calculations-form" aria-label="Добавить выплату зарплаты">
+          <div class="calculations-form-column">
+            <div class="calculations-form-row calculations-form-row--first">
+              <div class="field">
+                <label for="salaryPaymentRecipient">Кому</label>
+                <select id="salaryPaymentRecipient" required><option value="">Выберите получателя</option></select>
+              </div>
+              <div class="field">
+                <label for="salaryPaymentAmount">Сумма</label>
+                <input id="salaryPaymentAmount" class="calculations-amount-input" type="text" inputmode="numeric" autocomplete="off" title="Положительная сумма в целых рублях, без копеек" required aria-label="Сумма выплаты" />
+              </div>
+            </div>
+            <div class="calculations-form-row calculations-form-row--comment-submit">
+              <div class="calculations-comment-wrap field">
+                <input id="salaryPaymentComment" class="calculations-comment-input" type="text" placeholder="Комментарий" aria-label="Комментарий" autocomplete="off" />
+              </div>
+              <button id="salaryPaymentAddBtn" type="submit" class="calculations-submit-btn" title="Добавить" aria-label="Добавить">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+          </div>
         </form>
         <p id="salaryPaymentMessage" class="all-salaries-message" role="status"></p>
         <div class="table-wrap all-salaries-table-wrap">
