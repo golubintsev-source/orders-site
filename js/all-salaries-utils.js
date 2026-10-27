@@ -135,7 +135,7 @@ export function groupSalaryRowsByEmployee(rows) {
   for (const row of rows || []) {
     const amount = Number(row?.amount);
     if (!Number.isFinite(amount)) continue;
-    const employee = (isSalaryPaymentRow(row) ? row.to_place : getSalaryEmployeeName(row?.comment)) || "Не указан";
+    const employee = (isSalaryPaymentRow(row) && row.to_place !== "Зарплата" ? row.to_place : getSalaryEmployeeName(row?.comment)) || "Не указан";
     const key = employee.toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
     let group = byEmployee.get(key);
     if (!group) {
@@ -156,8 +156,10 @@ export function isSalaryPaymentRow(row) {
   const name = String(row?.to_place || "").trim();
   const comment = stripManualCalculationAuthor(row?.comment);
   const prefix = `з/п ${name}`;
-  return row?.from_place === "Касса" && !!name &&
-    (comment === prefix || comment.startsWith(`${prefix},`));
+  if (row?.from_place !== "Касса" || !name) return false;
+  if (name === "Зарплата") return /^з\/п\s+\S/iu.test(comment);
+  // Совместимость с выплатами, в которых раньше в «Куда» сохраняли имя.
+  return comment === prefix || comment.startsWith(`${prefix},`);
 }
 
 /** Зарплата — ручная строка с одним из зарплатных обозначений в комментарии. */

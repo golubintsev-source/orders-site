@@ -115,3 +115,10 @@ assert.equal(groupSalaryRowsByEmployee([formPayment])[0].employee, "Иван С�
 assert.equal(groupSalaryRowsByMonth([formPayment])[0].total, 2500);
 assert.equal(groupSalaryRowsByMonth([formPayment])[0].monthKey, "2026-09");
 assert.equal(isSalaryCalculationRow({ ...formPayment, deleted_at: "2026-10-27" }), false);
+
+const salaryDestinationPayment = { ...formPayment, id: 91, to_place: "Зарплата" };
+assert.equal(isSalaryCalculationRow(salaryDestinationPayment), true);
+assert.equal(groupSalaryRowsByEmployee([salaryDestinationPayment])[0].employee, "Иван Сотников");
+assert.equal(groupSalaryRowsByEmployee([formPayment, salaryDestinationPayment])[0].total, 5000);
+assert.equal(groupSalaryRowsByEmployee([{ ...salaryDestinationPayment, comment: "з/п Павел; Алексей" }])[0].employee, "Павел");
+assert.equal(groupSalaryRowsByMonth([salaryDestinationPayment])[0].total, 2500);

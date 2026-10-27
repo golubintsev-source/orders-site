@@ -16,7 +16,11 @@ assert.throws(() => build({ amount: '500', recipient: 'Не из настрое�
 const payload = build({ amount: '2 500', recipient: 'Павел', comment: 'Доплата' });
 assert.equal(payload.amount, 2500);
 assert.equal(payload.from_place, 'Касса');
-assert.equal(payload.to_place, 'Павел');
+assert.equal(payload.to_place, 'Зарплата');
+assert.equal(groupSalaryRowsByEmployee([payload])[0].employee, 'Павел');
+for (const recipient of ['Водитель Тест', 'Иван', 'Павел']) {
+  assert.equal(build({amount: '500', recipient}).to_place, 'Зарплата');
+}
 assert.equal(payload.comment, 'з/п Павел, Доплата; Алексей');
 assert.ok(isSalaryPaymentRow(payload));
 assert.equal(groupSalaryRowsByEmployee([payload])[0].total, 2500);
@@ -25,6 +29,7 @@ const values = { amount: '500', recipient: 'Павел' };
 const first = context.saveSalaryPayment(values);
 assert.equal((await context.saveSalaryPayment(values)).ok, false);
 assert.equal(calls.length, 1);
+assert.equal(calls[0][0].to_place, 'Зарплата');
 resolveWrite({ error: null });
 assert.equal((await first).ok, true);
 const failed = context.saveSalaryPayment(values);
