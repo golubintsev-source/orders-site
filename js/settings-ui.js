@@ -2,6 +2,9 @@ import {
   saveInstallerRate,
   saveDriverName,
   saveEditors,
+  saveOtherWorkers,
+  addOtherWorkerField,
+  updateOtherWorkersSaveButtonState,
   saveBalanceAdjustments,
   saveManagerSalaryParams,
   updateSettingsSaveButtonState,
@@ -82,6 +85,41 @@ export function bindSettingsUI() {
     settingsSaveEditorsBtn.addEventListener("click", async () => {
       const ok = await saveEditors();
       setMessage(ok ? "Монтажники сохранены" : "Ошибка сохранения монтажников", ok ? "" : "#d32f2f");
+      if (ok) document.dispatchEvent(new CustomEvent("order-settings-updated"));
+    });
+  }
+
+  const settingsAddOtherWorkerBtn = document.getElementById("settingsAddOtherWorkerBtn");
+  const settingsOtherWorkersList = document.getElementById("settingsOtherWorkersList");
+  const settingsSaveOtherWorkersBtn = document.getElementById("settingsSaveOtherWorkersBtn");
+  if (settingsAddOtherWorkerBtn) {
+    settingsAddOtherWorkerBtn.addEventListener("click", () => {
+      addOtherWorkerField();
+    });
+  }
+  if (settingsOtherWorkersList) {
+    settingsOtherWorkersList.addEventListener("click", (e) => {
+      const removeBtn = e.target.closest(".settings-editor-remove-btn");
+      if (!removeBtn || !settingsOtherWorkersList.contains(removeBtn)) return;
+      const row = removeBtn.closest(".settings-editor-row");
+      row?.remove();
+      updateOtherWorkersSaveButtonState();
+    });
+    settingsOtherWorkersList.addEventListener("input", (e) => {
+      if (e.target instanceof HTMLInputElement && e.target.classList.contains("settings-editor-input")) {
+        updateOtherWorkersSaveButtonState();
+      }
+    });
+    settingsOtherWorkersList.addEventListener("change", (e) => {
+      if (e.target instanceof HTMLInputElement && e.target.classList.contains("settings-editor-input")) {
+        updateOtherWorkersSaveButtonState();
+      }
+    });
+  }
+  if (settingsSaveOtherWorkersBtn) {
+    settingsSaveOtherWorkersBtn.addEventListener("click", async () => {
+      const ok = await saveOtherWorkers();
+      setMessage(ok ? "Другие работники сохранены" : "Ошибка сохранения других работников", ok ? "" : "#d32f2f");
       if (ok) document.dispatchEvent(new CustomEvent("order-settings-updated"));
     });
   }
@@ -188,3 +226,4 @@ export function bindSettingsUI() {
   }
 
 }
+
