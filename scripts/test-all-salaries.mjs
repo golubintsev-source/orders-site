@@ -105,3 +105,13 @@ assert.deepEqual(
 );
 
 console.log("test-all-salaries: ok");
+
+
+// New form uses «з/п» and a comma to separate the exact recipient from free text.
+const formPayment = { id: 90, created_at: "2026-10-27T10:00:00Z", from_place: "Касса", to_place: "Иван Сотников", amount: 2500, comment: "з/п Иван Сотников, Доплата за сентябрь; Алексей" };
+assert.equal(isSalaryCalculationRow(formPayment), true);
+assert.equal(getSalaryEmployeeName(formPayment.comment), "Иван Сотников");
+assert.equal(groupSalaryRowsByEmployee([formPayment])[0].employee, "Иван Сотников");
+assert.equal(groupSalaryRowsByMonth([formPayment])[0].total, 2500);
+assert.equal(groupSalaryRowsByMonth([formPayment])[0].monthKey, "2026-09");
+assert.equal(isSalaryCalculationRow({ ...formPayment, deleted_at: "2026-10-27" }), false);

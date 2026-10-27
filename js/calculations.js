@@ -1,3 +1,4 @@
+import { isSalaryPaymentRow } from "./all-salaries-utils.js";
 import { getCalcDisplayAuthor, formatCalcDisplayComment, stripAuthorFromManualComment, parseOrderDeltaCommentOrderId } from "./calculations-format.js";
 export { getCalcDisplayAuthor } from "./calculations-format.js";
 import { supabaseClient } from "./config.js";
@@ -198,6 +199,12 @@ export function applyCalcPlaceSelectsForRole() {
       }
     }
     if (current) {
+      if (id === "calcTo" && current === editingInitialTo && !Array.from(sel.options).some(option => option.value === current)) {
+        const option = document.createElement("option");
+        option.value = current;
+        option.textContent = current;
+        sel.appendChild(option);
+      }
       sel.value = current;
       if (sel.value !== current) sel.value = "";
     }
@@ -225,7 +232,7 @@ export function getCalcIncomeExpenseDisplay(row) {
   const formatted =
     row?.amount != null && row.amount !== "" ? formatAmount(row.amount) : "";
   if (!formatted) return { income: "", expense: "" };
-  if (CALC_INCOME_TO_PLACES.has(row.to_place)) {
+  if (CALC_INCOME_TO_PLACES.has(row.to_place) && !isSalaryPaymentRow(row)) {
     return { income: formatted, expense: "" };
   }
   return { income: "", expense: formatted };
@@ -722,7 +729,7 @@ function filterVisibleCalculationRows(rows) {
     if (calcColumnFilters.to && String(row?.to_place || "") !== calcColumnFilters.to) return false;
 
     const amount = Number(row?.amount);
-    const isIncome = CALC_INCOME_TO_PLACES.has(row?.to_place);
+    const isIncome = CALC_INCOME_TO_PLACES.has(row?.to_place) && !isSalaryPaymentRow(row);
     if (calcColumnFilters.incomeFrom != null || calcColumnFilters.incomeTo != null) {
       if (!isIncome || !Number.isFinite(amount)) return false;
       if (calcColumnFilters.incomeFrom != null && amount < calcColumnFilters.incomeFrom) return false;
@@ -1221,6 +1228,7 @@ function renderCalculationsTableFromCache() {
     }
     const tr = document.createElement("tr");
     if (isSystemDeltaRow) tr.classList.add("calc-row-system");
+    if (isSalaryPaymentRow(row)) tr.classList.add("calc-row-salary-payment");
     if (isOfflineRow) tr.classList.add("tr-order-offline-pending");
     tr.innerHTML = `
       <td><span class="status-value">${escapeHtml(formatCalcTimeRu(row.created_at))}</span></td>
@@ -1364,7 +1372,16 @@ function setFormValues(row) {
   const amountEl = document.getElementById("calcAmount");
   const commentEl = document.getElementById("calcComment");
   if (fromEl) fromEl.value = row.from_place || "";
-  if (toEl) toEl.value = row.to_place || "";
+  if (toEl) {
+    // Получатель зарплаты из настроек может отсутствовать в стандартных местах.
+    if (row.to_place && !Array.from(toEl.options).some(option => option.value === row.to_place)) {
+      const option = document.createElement("option");
+      option.value = row.to_place;
+      option.textContent = row.to_place;
+      toEl.appendChild(option);
+    }
+    toEl.value = row.to_place || "";
+  }
   editingInitialFrom = row.from_place || "";
   editingInitialTo = row.to_place || "";
   applyCalcPlaceSelectsForRole();
@@ -1849,3 +1866,4 @@ export async function initCalculationsPage() {
   await initCalculationsSection();
   await applySavedScroll(readSavedPlaceForCurrentPage(user.id));
 }
+

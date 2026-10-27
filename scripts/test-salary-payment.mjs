@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import { tryParseRublesInteger } from '../js/format.js';
+import { shortLoginByEmail } from '../js/user-names.js';
+import { isSalaryPaymentRow, groupSalaryRowsByEmployee } from '../js/all-salaries-utils.js';
+const state = { driverName: 'Водитель Тест', editors: ['Иван', 'ИВАН'], otherWorkers: ['Павел'], currentUser: { email: 'golubintsev@gmail.com' } };
+let allowed = true, calls = [], resolveWrite;
+const context = vm.createContext({ state, tryParseRublesInteger, shortLoginByEmail, canAccessSection: () => allowed, canEditManualCalculations: () => allowed,
+  supabaseClient: { from(table) { assert.equal(table, 'calculations'); return { insert(rows) { calls.push(rows); return new Promise(resolve => { resolveWrite = resolve; }); } }; } },
+});
+vm.runInContext(fs.readFileSync(new URL('../js/salary-payment.js', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replace(/export /g, ''), context);
+const build = values => context.buildSalaryPayment(values);
+for (const amount of ['', '0', '-1', 'abc', '1.2', 'Infinity', '9007199254740992']) assert.throws(() => build({ amount, recipient: 'Павел' }));
+assert.throws(() => build({ amount: '500', recipient: 'Не из настроек' }));
+const payload = build({ amount: '2 500', recipient: 'Павел', comment: 'Доплата' });
+assert.equal(payload.amount, 2500);
+assert.equal(payload.from_place, 'Касса');
+assert.equal(payload.to_place, 'Павел');
+assert.equal(payload.comment, 'з/п Павел, Доплата; Алексей');
+assert.ok(isSalaryPaymentRow(payload));
+assert.equal(groupSalaryRowsByEmployee([payload])[0].total, 2500);
+assert.equal(context.salaryRecipientGroups()[1].names.length, 1);
+const values = { amount: '500', recipient: 'Павел' };
+const first = context.saveSalaryPayment(values);
+assert.equal((await context.saveSalaryPayment(values)).ok, false);
+assert.equal(calls.length, 1);
+resolveWrite({ error: null });
+assert.equal((await first).ok, true);
+const failed = context.saveSalaryPayment(values);
+resolveWrite({ error: { message: 'denied' } });
+assert.equal((await failed).ok, false);
+allowed = false;
+assert.equal((await context.saveSalaryPayment(values)).ok, false);
+assert.equal(calls.length, 2);
+// Income/expense rendering must treat salary as expense even for a named cash participant.
+const source = fs.readFileSync(new URL('../js/calculations.js', import.meta.url), 'utf8');
+const fn = source.match(/export function getCalcIncomeExpenseDisplay\(row\) \{[\s\S]*?\n\}/)[0].replace('export ', '');
+const displayContext = vm.createContext({ isSalaryPaymentRow, formatAmount: String, CALC_INCOME_TO_PLACES: new Set(['Дима', 'Касса']) });
+vm.runInContext(fn, displayContext);
+assert.equal(displayContext.getCalcIncomeExpenseDisplay({ ...payload, to_place: 'Дима', comment: 'з/п Дима, Доплата; Алексей' }).expense, '2500');
+assert.equal(displayContext.getCalcIncomeExpenseDisplay({ ...payload, to_place: 'Касса', comment: 'Перевод' }).income, '2500');
+console.log('salary-payment: validation, payload, grouping, concurrency, errors, roles, expense passed');

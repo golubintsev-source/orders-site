@@ -1,3 +1,6 @@
+import { loadSettings } from "./settings.js";
+import { canEditManualCalculations } from "./roles.js";
+import { salaryRecipientGroups, saveSalaryPayment } from "./salary-payment.js";
 import { supabaseClient } from "./config.js";
 import { formatAmount } from "./format.js";
 import { getCalcDisplayAuthor, formatCalcDisplayComment as getCalcDisplayComment } from "./calculations-format.js";
@@ -222,11 +225,74 @@ function toggleSalaryMonth(monthKey) {
   renderAllSalaries();
 }
 
+function renderSalaryRecipients() {
+  const select = document.getElementById("salaryPaymentRecipient");
+  if (!select) return;
+  const selected = select.value;
+  select.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Выберите получателя";
+  select.appendChild(placeholder);
+  for (const group of salaryRecipientGroups()) {
+    const optgroup = document.createElement("optgroup");
+    optgroup.label = group.label;
+    for (const name of group.names) {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      optgroup.appendChild(option);
+    }
+    select.appendChild(optgroup);
+  }
+  select.value = selected;
+}
+
+function bindSalaryPaymentForm() {
+  const form = document.getElementById("salaryPaymentForm");
+  if (!form) return;
+  form.hidden = !canEditManualCalculations();
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = document.getElementById("salaryPaymentAddBtn");
+    const message = document.getElementById("salaryPaymentMessage");
+    if (button.disabled) return;
+    button.disabled = true;
+    const amount = document.getElementById("salaryPaymentAmount");
+    const recipient = document.getElementById("salaryPaymentRecipient");
+    const comment = document.getElementById("salaryPaymentComment");
+    // Lock the fields while the submitted values are being written.
+    const values = { amount: amount.value, recipient: recipient.value, comment: comment.value };
+    const fields = [amount, recipient, comment];
+    fields.forEach(field => { field.disabled = true; });
+    message.textContent = "Сохранение…";
+    message.classList.remove("all-salaries-message--error");
+    try {
+      const result = await saveSalaryPayment(values);
+      if (!result.ok) {
+        message.textContent = result.message;
+        message.classList.add("all-salaries-message--error");
+        return;
+      }
+      amount.value = "";
+      comment.value = "";
+      message.textContent = "Выплата добавлена в расчёты";
+      // Wait for any older read before reloading so the new payment is included.
+      if (allSalariesLoadPromise) await allSalariesLoadPromise.catch(() => {});
+      await loadAllSalaries();
+    } finally {
+      fields.forEach(field => { field.disabled = false; });
+      button.disabled = false;
+    }
+  });
+}
+
 let sectionBound = false;
 
 export function initAllSalariesSection() {
   if (sectionBound) return;
   sectionBound = true;
+  bindSalaryPaymentForm();
   const table = document.getElementById("allSalariesTable");
   table?.addEventListener("click", (event) => {
     const viewButton = event.target.closest("[data-salary-view]");
@@ -253,6 +319,8 @@ async function loadAllSalariesOnce() {
   if (!tbody) return;
 
   const generation = ++loadGeneration;
+  const form = document.getElementById("salaryPaymentForm");
+  if (form) form.hidden = !canEditManualCalculations();
   tbody.innerHTML = '<tr><td colspan="2" class="all-salaries-empty">Загрузка…</td></tr>';
   if (message) {
     message.textContent = "";
@@ -262,6 +330,9 @@ async function loadAllSalariesOnce() {
   let data = null;
   let error = null;
   try {
+    await loadSettings();
+    if (!scope.current()) return;
+    renderSalaryRecipients();
     ({ data, error } = await fetchAllSupabaseRows(() =>
       supabaseClient
         .from("calculations")
@@ -308,3 +379,4 @@ export function loadAllSalaries() {
     if (allSalariesLoadPromise === current) allSalariesLoadPromise = null;
   });
 }
+
