@@ -510,7 +510,6 @@ export function initSectionNavDropdown(options = {}) {
   // Ранняя привязка: не зависит от import("./tasks.js") / idle.
   bindTopbarSectionNavButton("myTasksNavBtn", "tasks-all", onSectionItemSelect);
   bindTopbarSectionNavButton("messagesNavBtn", "messages", onSectionItemSelect);
-  bindTopbarSectionNavButton("voiceNavBtn", "voice", onSectionItemSelect);
 
   if (currentBtn) {
     currentBtn.addEventListener("click", (e) => {

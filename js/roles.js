@@ -124,7 +124,6 @@ export function canAccessSection(sectionId) {
 export function isSectionHiddenFromNav(sectionId) {
   if (sectionId === "order-tasks") return true;
   if (sectionId === "messages") return true;
-  if (sectionId === "voice") return true;
   if (sectionId === "debts") return !canAccessDebts();
   if (sectionId === "contractor-checks") return !canAccessContractorChecks();
   if (sectionId === "orders-excel") return true;

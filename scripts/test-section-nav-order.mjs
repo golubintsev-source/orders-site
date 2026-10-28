@@ -13,7 +13,7 @@ test("section dropdown follows the requested order and labels", async () => {
   const expected = [
     "all", "new", "calculations", "excess", "debts", "manager-salary",
     "all-salaries", "tasks-all", "route-sheet", "contractor-checks", "balance",
-    "statistics-balance", "changes-all", "statistics", "speed-test", "settings",
+    "statistics-balance", "changes-all", "statistics", "speed-test", "voice", "settings",
   ];
 
   assert.deepEqual(actual, expected);
