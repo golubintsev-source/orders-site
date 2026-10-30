@@ -122,28 +122,6 @@ export function canAccessSection(sectionId) {
 }
 
 export function isSectionHiddenFromNav(sectionId) {
-  if (sectionId === "order-tasks") return true;
-  if (sectionId === "messages") return true;
-  if (sectionId === "debts") return !canAccessDebts();
-  if (sectionId === "contractor-checks") return !canAccessContractorChecks();
-  if (sectionId === "orders-excel") return true;
-  if (isUserShop()) {
-    return (
-      sectionId === "balance" ||
-      sectionId === "manager-salary" ||
-      sectionId === "statistics" ||
-      sectionId === "statistics-balance" ||
-      sectionId === "calculations" ||
-      sectionId === "all-salaries"
-    );
-  }
-  if ((sectionId === "statistics" || sectionId === "statistics-balance") && !isAdmin()) {
-    return true;
-  }
-  if (!isUserLite()) return false;
-  return (
-    sectionId === "balance" ||
-    sectionId === "calculations" ||
-    sectionId === "all-salaries"
-  );
+  if (!canAccessSection(sectionId)) return true;
+  return sectionId === "order-tasks" || sectionId === "messages" || sectionId === "orders-excel";
 }
