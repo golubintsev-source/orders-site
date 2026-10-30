@@ -461,6 +461,10 @@ h2 {
   z-index: 1100;
 }
 
+.section-nav-dropdown-item[hidden] {
+  display: none;
+}
+
 .section-nav-dropdown-item {
   display: flex;
   align-items: center;
