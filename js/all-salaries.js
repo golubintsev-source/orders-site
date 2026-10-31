@@ -4,12 +4,14 @@ import { salaryRecipientGroups, saveSalaryPayment } from "./salary-payment.js";
 import { supabaseClient } from "./config.js";
 import { formatAmount } from "./format.js";
 import { getCalcDisplayAuthor, formatCalcDisplayComment as getCalcDisplayComment } from "./calculations-format.js";
-import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { fetchSupabaseByIdsInChunks, fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { beginReadScope } from "./read-requests.js";
 import {
   groupSalaryRowsByEmployee,
   groupSalaryRowsByMonth,
   SALARY_COMMENT_TERMS,
+  installationSalaryOrderId,
+  salaryCalculationAmount,
 } from "./all-salaries-utils.js";
 
 const MONTH_NAMES = [
@@ -70,7 +72,7 @@ function renderSalaryDetails(group) {
           <td>${escapeHtml(row.from_place || "—")}</td>
           <td>${escapeHtml(row.to_place || "—")}</td>
           <td>${escapeHtml(comment)}</td>
-          <td class="all-salaries-detail-amount">${escapeHtml(formatAmount(row.amount))}&nbsp;₽</td>
+          <td class="all-salaries-detail-amount">${escapeHtml(formatAmount(salaryCalculationAmount(row)))}&nbsp;₽</td>
         </tr>
       `;
     })
@@ -338,7 +340,7 @@ async function loadAllSalariesOnce() {
         .from("calculations")
         .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
         .is("deleted_at", null)
-        .or(SALARY_COMMENT_TERMS.map((term) => `comment.ilike.%${term}%`).join(","))
+        .or([...SALARY_COMMENT_TERMS.map((term) => `comment.ilike.%${term}%`), "comment.like.[AUTO_ORDER_DELTA] Монтаж;*"].join(","))
         .order("created_at", { ascending: false })
         .order("id", { ascending: false }),
       { signal: scope.signal },
@@ -359,6 +361,29 @@ async function loadAllSalariesOnce() {
     return;
   }
 
+  const orderIds = [...new Set((data || []).map(installationSalaryOrderId).filter(Boolean))];
+  if (orderIds.length) {
+    try {
+      const result = await fetchSupabaseByIdsInChunks(
+        ids => supabaseClient.from("orders").select("id, installer_name").in("id", ids),
+        orderIds, { signal: scope.signal },
+      );
+      if (result.error) throw result.error;
+      const installers = new Map((result.data || []).map(order => [Number(order.id), order.installer_name]));
+      data = (data || []).map(row => ({
+        ...row, installer_name: installers.get(installationSalaryOrderId(row)) || "",
+      }));
+    } catch (error) {
+      if (!scope.current() || generation !== loadGeneration) return;
+      if (message) {
+        message.textContent = "Не удалось загрузить монтажников для выплат зарплаты.";
+        message.classList.add("all-salaries-message--error");
+      }
+      tbody.innerHTML = "";
+      return;
+    }
+  }
+  if (!scope.current() || generation !== loadGeneration) return;
   salaryGroups = groupSalaryRowsByMonth(data || []);
   const availableKeys = new Set(salaryGroups.map((group) => group.monthKey));
   for (const key of expandedMonthKeys) {
