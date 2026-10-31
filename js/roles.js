@@ -14,6 +14,11 @@ export function isAdmin() {
   return state.currentRole === "admin";
 }
 
+/** Справочники водителя и работников на странице «Настройки». */
+export function canManageWorkerSettings() {
+  return isAdmin() || state.currentRole === "user";
+}
+
 export function isUserLite() {
   return state.currentRole === "user_lite";
 }

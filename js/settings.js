@@ -1,6 +1,6 @@
 import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
-import { isAdmin } from "./roles.js";
+import { isAdmin, canManageWorkerSettings } from "./roles.js";
 import { tryParseRublesInteger, formatAmount } from "./format.js";
 import { readSnapshot, persistSettingsSnapshotFromRows } from "./offline-cache.js";
 
@@ -574,7 +574,7 @@ export async function saveInstallerRate(value) {
 
 /** Сохранить ФИО водителя в БД и state. */
 export async function saveDriverName(value) {
-  if (!isAdmin()) return false;
+  if (!canManageWorkerSettings()) return false;
 
   const name = normalizeDriverName(value);
   const { error } = await supabaseClient
@@ -599,7 +599,7 @@ export async function saveDriverName(value) {
 
 /** Сохранить список редакторов в БД и state. */
 export async function saveEditors() {
-  if (!isAdmin()) return false;
+  if (!canManageWorkerSettings()) return false;
 
   const names = collectEditorInputsFromDom({ onlyFilled: true }).map(normalizeEditorName);
   const valueStr = JSON.stringify(names);
@@ -617,7 +617,7 @@ export async function saveEditors() {
 
 
 export async function saveOtherWorkers() {
-  if (!isAdmin()) return false;
+  if (!canManageWorkerSettings()) return false;
 
   const names = collectEditorInputsFromDom({ onlyFilled: true, listId: "settingsOtherWorkersList" }).map(normalizeEditorName);
   const valueStr = JSON.stringify(names);
@@ -774,14 +774,14 @@ export function getEditors() {
   return (state.editors || []).map(normalizeEditorName).filter(Boolean);
 }
 
-/** Блоки настроек кроме уведомлений — только для админов. */
+/** Справочники работников доступны admin/user, остальные блоки — только admin. */
 export function applySettingsAdminBlocksVisibility() {
   const showAdmin = isAdmin();
   document.querySelectorAll(".settings-admin-only").forEach((el) => {
     if (!(el instanceof HTMLElement)) return;
     // loginLinksCard управляется отдельно в login-links.js
     if (el.id === "loginLinksCard") return;
-    el.hidden = !showAdmin;
+    el.hidden = !(el.classList.contains("settings-worker-editable") ? canManageWorkerSettings() : showAdmin);
   });
   exposeManagerSalaryParamsHelpers();
 }
