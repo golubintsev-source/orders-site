@@ -5,6 +5,9 @@ import {
   groupSalaryRowsByMonth,
   isSalaryCalculationRow,
   salaryMonthKey,
+  isInstallationSalaryRow,
+  installationSalaryOrderId,
+  salaryCalculationAmount,
 } from "../js/all-salaries-utils.js";
 
 const manualSalary = {
@@ -122,3 +125,28 @@ assert.equal(groupSalaryRowsByEmployee([salaryDestinationPayment])[0].employee, 
 assert.equal(groupSalaryRowsByEmployee([formPayment, salaryDestinationPayment])[0].total, 5000);
 assert.equal(groupSalaryRowsByEmployee([{ ...salaryDestinationPayment, comment: "з/п Павел; Алексей" }])[0].employee, "Павел");
 assert.equal(groupSalaryRowsByMonth([salaryDestinationPayment])[0].total, 2500);
+
+const installation = {
+  id: 100, created_at: "2026-10-31T10:00:00Z", amount: 10000,
+  from_place: "Касса", to_place: "Монтаж", installer_name: "Иван Сотников",
+  comment: "[AUTO_ORDER_DELTA] Монтаж; 1599_О; Май Клиент; улица Март; оплатил [__] → Касса; сумма 10000; 12:00; Алексей",
+};
+assert.equal(isInstallationSalaryRow(installation), true);
+assert.equal(isSalaryCalculationRow(installation), true);
+assert.equal(installationSalaryOrderId(installation), 1599);
+assert.equal(groupSalaryRowsByMonth([installation])[0].monthKey, "2026-10");
+assert.equal(groupSalaryRowsByEmployee([installation])[0].employee, "Иван Сотников");
+const reduction = { ...installation, id: 101, amount: -2000 };
+assert.equal(groupSalaryRowsByMonth([installation, reduction])[0].total, 8000);
+const refund = { ...installation, id: 102, from_place: "Монтаж", to_place: "Касса" };
+assert.equal(salaryCalculationAmount(refund), -10000);
+assert.equal(groupSalaryRowsByMonth([installation, refund])[0].total, 0);
+const changedPayer = { ...installation, id: 103, from_place: "Вова", amount: 12000 };
+assert.equal(groupSalaryRowsByMonth([installation, refund, changedPayer])[0].total, 12000);
+assert.equal(groupSalaryRowsByEmployee([installation, refund, changedPayer])[0].total, 12000);
+assert.equal(groupSalaryRowsByEmployee([installation, { ...salaryDestinationPayment, amount: 500 }])[0].total, 10500);
+assert.equal(isSalaryCalculationRow({ ...installation, deleted_at: "2026-10-31" }), false);
+assert.equal(isSalaryCalculationRow({ ...installation, comment: "[AUTO_ORDER_DELTA] Предоплата; 1599; клиент ЗП" }), false);
+assert.equal(isSalaryCalculationRow({ ...installation, comment: "[AUTO_EXCESS_DELTA] Монтаж; 1599; ЗП" }), false);
+assert.equal(groupSalaryRowsByEmployee([{ ...installation, installer_name: "" }])[0].employee, "Монтажник не указан");
+console.log("installation salary deltas: payment, decrease, refund, payer change, employee and month passed");

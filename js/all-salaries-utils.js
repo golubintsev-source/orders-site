@@ -129,13 +129,32 @@ export function getSalaryEmployeeName(comment) {
   );
 }
 
+/** Только монтажные проводки заказа, без предоплат и остатков. */
+export function isInstallationSalaryRow(row) {
+  return /^\[AUTO_ORDER_DELTA\]\s+Монтаж\s*;/u.test(String(row?.comment || "")) &&
+    (row?.to_place === "Монтаж" || row?.from_place === "Монтаж");
+}
+
+export function installationSalaryOrderId(row) {
+  if (!isInstallationSalaryRow(row)) return null;
+  const chip = String(row.comment).split(";")[1]?.trim() || "";
+  const match = chip.match(/^#?(\d+)(?:_|$)/);
+  return match ? Number(match[1]) : null;
+}
+
+/** Возврат из «Монтаж» уменьшает выплаты; отрицательная дельта сохраняет знак. */
+export function salaryCalculationAmount(row) {
+  const amount = Number(row?.amount);
+  return isInstallationSalaryRow(row) && row.from_place === "Монтаж" ? -amount : amount;
+}
+
 /** Одна строка на сотрудника; выплаты без распознанного имени не теряются. */
 export function groupSalaryRowsByEmployee(rows) {
   const byEmployee = new Map();
   for (const row of rows || []) {
-    const amount = Number(row?.amount);
+    const amount = salaryCalculationAmount(row);
     if (!Number.isFinite(amount)) continue;
-    const employee = (isSalaryPaymentRow(row) && row.to_place !== "Зарплата" ? row.to_place : getSalaryEmployeeName(row?.comment)) || "Не указан";
+    const employee = isInstallationSalaryRow(row) ? (row.installer_name || "Монтажник не указан") : (isSalaryPaymentRow(row) && row.to_place !== "Зарплата" ? row.to_place : getSalaryEmployeeName(row?.comment)) || "Не указан";
     const key = employee.toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
     let group = byEmployee.get(key);
     if (!group) {
@@ -165,6 +184,7 @@ export function isSalaryPaymentRow(row) {
 /** Зарплата — ручная строка с одним из зарплатных обозначений в комментарии. */
 export function isSalaryCalculationRow(row) {
   if (!row || row.deleted_at != null) return false;
+  if (isInstallationSalaryRow(row)) return true;
   const comment = String(row.comment ?? "");
   if (AUTOMATIC_CALCULATION_COMMENT_PREFIXES.some((prefix) => comment.startsWith(prefix))) {
     return false;
@@ -237,8 +257,8 @@ export function groupSalaryRowsByMonth(rows) {
   const byMonth = new Map();
   for (const row of rows || []) {
     if (!isSalaryCalculationRow(row)) continue;
-    const monthKey = salaryMonthKey(row.created_at, row.comment);
-    const amount = Number(row.amount);
+    const monthKey = salaryMonthKey(row.created_at, isInstallationSalaryRow(row) ? "" : row.comment);
+    const amount = salaryCalculationAmount(row);
     if (!monthKey || !Number.isFinite(amount)) continue;
     let group = byMonth.get(monthKey);
     if (!group) {
