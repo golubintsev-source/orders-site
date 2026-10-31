@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Расчёты: проверка ширины таблицы</title>
+<style>body{font:14px Arial;margin:16px}iframe{display:block;border:1px solid #888;max-width:none}output{display:block;white-space:pre-wrap;margin:10px 0}h2{font-size:16px}</style>
+</head><body><h1>Расчёты: проверка переноса и ширины</h1>
+<p>Синтетические данные; запросов к базе нет. Используется настоящий style.css.</p>
+<script>
+const comment="Монтаж; 1459_О; Тестовый клиент; Очень длинный адрес и пояснение по оплате монтажа. "+ "ТекстБезПробелов".repeat(15);
+const headings=["Время","Доход","Расход","Комментарий","Откуда","Куда","Автор",""];
+const filters=["time","income","expense","comment","from","to","author",""];
+const table='<div class="card"><div class="table-wrap"><table id="calculationsTable"><thead><tr>'+headings.map((h,i)=>'<th><button class="calc-filter-heading-btn" data-calc-filter="'+filters[i]+'"><span>'+h+'</span><small class="calc-filter-heading-value"></small></button></th>').join("")+'</tr></thead><tbody><tr><td><span class="status-value">30 окт 08:59:29</span></td><td><span class="status-value">1 234 567</span></td><td><span class="status-value">106 350</span></td><td class="td-calc-comment"><span class="calc-table-cell-text">'+comment+'</span></td><td>Касса</td><td>Зарплата</td><td><span class="status-value">Алексей</span></td><td class="td-actions"><span class="calc-actions-grid"><button class="btn-icon btn-edit">✎</button><button class="btn-icon btn-delete-calc">×</button></span></td></tr></tbody></table></div></div>';
+for(const [w,h,standalone] of [[667,375,false],[844,390,false],[932,430,false],[1024,768,false],[844,390,true],[390,844,false]]){
+ const title=document.createElement("h2");title.textContent=w+" × "+h+(standalone?" calculations.html":" SPA/PWA");
+ const output=document.createElement("output");output.textContent="Проверка…";
+ const frame=document.createElement("iframe");frame.width=w;frame.height=h;frame.title=title.textContent;
+ frame.onload=()=>{
+  const d=frame.contentDocument,t=d.querySelector("table"),wrap=d.querySelector(".table-wrap"),text=d.querySelector(".calc-table-cell-text"),cs=frame.contentWindow.getComputedStyle(text);
+  const fits=wrap.scrollWidth<=wrap.clientWidth+1 && t.getBoundingClientRect().width<=wrap.clientWidth+1;
+  const complete=text.textContent===comment && text.scrollHeight<=text.clientHeight+1 && cs.whiteSpace!=="nowrap" && text.clientHeight>35;
+  const required=w>h;
+  output.textContent=JSON.stringify({size:w+"x"+h,standalone,fits,complete,width:wrap.clientWidth,scrollWidth:wrap.scrollWidth,tableWidth:t.getBoundingClientRect().width,commentHeight:text.clientHeight,result:complete&&(!required||fits)?"PASS":"FAIL"});
+ };
+ frame.srcdoc='<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="stylesheet" href="/style.css?v=calc-fit-20261031"></head><body class="'+(standalone?'calculations-page':'')+'"><div class="container">'+(standalone?table:'<section id="section-calculations" class="content-section active">'+table+'</section>')+'</div></body></html>';
+ document.body.append(title,output,frame);
+}
+</script></body></html>

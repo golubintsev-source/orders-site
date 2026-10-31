@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v92: матрица входов по пользователям и страницам.
-const STATIC_CACHE = "orders-site-static-v92";
+// v93: обновить стили таблицы «Расчёты» в PWA.
+const STATIC_CACHE = "orders-site-static-v93";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -20,6 +20,7 @@ const PRECACHE_URLS = [
   "/",
   "/index.html",
   "/style.css",
+  "/style.css?v=calc-fit-20261031",
   "/js/performance-monitor.js",
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",
