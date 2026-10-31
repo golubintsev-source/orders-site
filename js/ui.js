@@ -327,7 +327,7 @@ export function bindUIEvents() {
     if (!el) return;
     el.addEventListener("input", () => refreshRublesIntegerInputState(el, el.value));
   });
-  ["prepayment_to", "remaining_to", "delivery", "delivery_date"].forEach((id) => {
+  ["prepayment_to", "remaining_to", "delivery", "delivery_date", "installer_payment_by", "installer_name"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener("change", () => {
