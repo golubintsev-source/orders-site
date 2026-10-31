@@ -2613,6 +2613,14 @@ export function updatePaidField() {
   paidEl.value = remainingToFilled || remainingAmountZero ? "да" : "нет";
 }
 
+export function isInstallerRequiredMissing(payer, installer) {
+  const filled = value => {
+    const text = String(value ?? "").trim();
+    return text !== "" && text !== "—";
+  };
+  return filled(payer) && !filled(installer);
+}
+
 export function updateConditionalRequiredHighlight() {
   const prepaymentVal = (document.getElementById("prepayment")?.value || "").trim();
   const prepaymentToVal = (document.getElementById("prepayment_to")?.value || "").trim();
@@ -2623,6 +2631,15 @@ export function updateConditionalRequiredHighlight() {
   const deliveryDateEl = document.getElementById("delivery_date");
   if (prepaymentToEl) prepaymentToEl.classList.toggle("conditional-invalid", !!prepaymentVal && !prepaymentToVal);
   if (deliveryDateEl) deliveryDateEl.classList.toggle("conditional-invalid", !!deliveryVal && !deliveryDateComplete);
+  const payer = document.getElementById("installer_payment_by")?.value;
+  const installer = document.getElementById("installer_name");
+  if (installer) {
+    const missing = isInstallerRequiredMissing(payer, installer.value);
+    installer.classList.toggle("conditional-invalid", missing);
+    installer.setAttribute("aria-required", isInstallerRequiredMissing(payer, "") ? "true" : "false");
+    if (missing) installer.setAttribute("aria-invalid", "true");
+    else installer.removeAttribute("aria-invalid");
+  }
 }
 
 function getInstallerPaymentElements() {
@@ -3698,6 +3715,11 @@ export async function submitOrderForm(event) {
     return;
   }
   const conditionalMissing = [];
+  const installerMissing = isInstallerRequiredMissing(
+    document.getElementById("installer_payment_by")?.value,
+    document.getElementById("installer_name")?.value,
+  );
+  if (installerMissing) conditionalMissing.push("Монтажник");
   if (prepaymentVal && !prepaymentToVal) conditionalMissing.push("Кому предоплата");
   const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
   const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
@@ -3705,6 +3727,7 @@ export async function submitOrderForm(event) {
   if (conditionalMissing.length > 0) {
     setMessage("Заполните поля: " + conditionalMissing.join(", "), "#d32f2f");
     updateConditionalRequiredHighlight();
+    if (installerMissing) document.getElementById("installer_name")?.focus();
     return;
   }
 
