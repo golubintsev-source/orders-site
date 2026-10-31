@@ -84,6 +84,11 @@ export function canSaveManagerSalaryChecks() {
   return isAdmin() || state.currentRole === "user";
 }
 
+/** Страница «Излишки» — только admin и user. */
+export function canAccessExcesses() {
+  return isAdmin() || state.currentRole === "user";
+}
+
 /** Страница «Долги» — только admin и user. */
 export function canAccessDebts() {
   return isAdmin() || state.currentRole === "user";
@@ -101,6 +106,7 @@ export function canExportOrdersToExcel() {
 
 /** Разделы меню, закрытые для отдельных ролей. Настройки доступны всем (блок уведомлений). */
 export function canAccessSection(sectionId) {
+  if (sectionId === "excess") return canAccessExcesses();
   if (sectionId === "debts") return canAccessDebts();
   if (sectionId === "contractor-checks") return canAccessContractorChecks();
   if (sectionId === "orders-excel") return canExportOrdersToExcel();
