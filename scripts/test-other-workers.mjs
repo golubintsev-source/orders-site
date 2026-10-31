@@ -14,7 +14,7 @@ const elements = Object.fromEntries(['settingsOtherWorkersList', 'settingsEditor
 const state = { balanceAdjustments: {}, editors: [] };
 let admin = true, rows = [], error = null, writes = [];
 const context = vm.createContext({
-  state, isAdmin: () => admin, HTMLInputElement: Element, queueMicrotask,
+  state, isAdmin: () => admin, canManageWorkerSettings: () => admin, HTMLInputElement: Element, queueMicrotask,
   document: { getElementById: id => elements[id], createElement: () => new Element(), dispatchEvent() {} },
   CustomEvent: class {}, console,
   isOfflineWorkModeEnabled: () => false, persistSettingsSnapshotFromRows() {},
