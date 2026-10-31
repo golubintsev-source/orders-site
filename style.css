@@ -11751,3 +11751,63 @@ html.keyboard-open .voice-composer {
 #section-all-salaries .calculations-form .calculations-comment-input {
   width: 100%;
 }
+
+/* «Расчёты»: комментарий всегда виден целиком. */
+#calculationsTable td.td-calc-comment {
+  white-space: normal;
+}
+#calculationsTable td.td-calc-comment .calc-table-cell-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* Телефон в горизонтальной ориентации: все восемь столбцов в ширине экрана. */
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 1100px) {
+  #calculationsTable {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    table-layout: fixed;
+  }
+  #calculationsTable th, #calculationsTable td {
+    box-sizing: border-box;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+  }
+  #calculationsTable th:nth-child(1), #calculationsTable td:nth-child(1) { width: 12%; }
+  #calculationsTable th:nth-child(2), #calculationsTable td:nth-child(2),
+  #calculationsTable th:nth-child(3), #calculationsTable td:nth-child(3) { width: 10%; }
+  #calculationsTable th:nth-child(4), #calculationsTable td:nth-child(4) { width: 34%; max-width: none; }
+  #calculationsTable th:nth-child(5), #calculationsTable td:nth-child(5),
+  #calculationsTable th:nth-child(6), #calculationsTable td:nth-child(6) { width: 8%; }
+  #calculationsTable th:nth-child(7), #calculationsTable td:nth-child(7) { width: 10%; }
+  #calculationsTable th:nth-child(8), #calculationsTable td:nth-child(8) { width: 8%; }
+  #calculationsTable .status-value {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    padding: 3px 4px;
+  }
+  #calculationsTable .calc-filter-heading-btn {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 0;
+    padding-right: 0;
+    font-size: 12px;
+  }
+  #calculationsTable .calc-filter-heading-btn > span { white-space: normal; min-width: 0; gap: 3px; }
+  #calculationsTable .calc-filter-heading-btn > span::after { flex-shrink: 0; }
+  #calculationsTable .calc-actions-grid {
+    grid-template-columns: 26px;
+    width: 26px;
+    min-width: 26px;
+  }
+  #calculationsTable .calc-actions-grid .btn-edit,
+  #calculationsTable .calc-actions-grid .btn-delete-calc { grid-column: 1; }
+}
