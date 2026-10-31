@@ -11764,7 +11764,7 @@ html.keyboard-open .voice-composer {
 }
 
 /* Телефон в горизонтальной ориентации: все восемь столбцов в ширине экрана. */
-@media (orientation: landscape) and (max-height: 600px) and (max-width: 1100px) {
+@media (orientation: landscape) and (max-width: 1100px) {
   #calculationsTable {
     width: 100%;
     min-width: 0;
