@@ -1,3 +1,4 @@
+import { bindAutogrowTextarea, resizeTextarea } from "./autogrow-textarea.js";
 import { loadSettings } from "./settings.js";
 import { canEditManualCalculations } from "./roles.js";
 import { salaryRecipientGroups, saveSalaryPayment, SALARY_PAYMENT_FROM_PLACES, defaultSalaryPaymentFrom } from "./salary-payment.js";
@@ -265,32 +266,14 @@ function renderSalaryRecipients() {
 }
 
 function resizeSalaryComment() {
-  const comment = document.getElementById("salaryPaymentComment");
-  if (!comment || !comment.clientWidth) return;
-  comment.style.height = "auto";
-  const borderHeight = comment.offsetHeight - comment.clientHeight;
-  comment.style.height = `${comment.scrollHeight + borderHeight}px`;
+  resizeTextarea(document.getElementById("salaryPaymentComment"));
 }
 
 function bindSalaryPaymentForm() {
   const form = document.getElementById("salaryPaymentForm");
   if (!form) return;
   form.hidden = !canEditManualCalculations();
-  const commentField = document.getElementById("salaryPaymentComment");
-  commentField?.addEventListener("input", resizeSalaryComment);
-  // Recalculate after opening the section or changing the screen width.
-  if (commentField && typeof ResizeObserver !== "undefined") {
-    let previousWidth = 0;
-    const observer = new ResizeObserver(entries => {
-      const width = entries[0].contentRect.width;
-      if (width === previousWidth) return;
-      previousWidth = width;
-      resizeSalaryComment();
-    });
-    observer.observe(commentField);
-  }
-  window.addEventListener("resize", resizeSalaryComment);
-  resizeSalaryComment();
+  bindAutogrowTextarea(document.getElementById("salaryPaymentComment"));
   form.addEventListener("submit", async event => {
     event.preventDefault();
     const button = document.getElementById("salaryPaymentAddBtn");

@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v99: обновить кэш навигации PWA — раздел «Зарплаты» и его подпись в шапке.
-const STATIC_CACHE = "orders-site-static-v99";
+// v100: однострочные комментарии с автоматическим ростом в расчётах и зарплатах.
+const STATIC_CACHE = "orders-site-static-v100";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -44,6 +44,7 @@ const PRECACHE_URLS = [
   "/js/app-routes.js",
   "/js/roles.js",
   "/js/format.js",
+  "/js/autogrow-textarea.js",
   "/js/user-names.js",
   "/js/statistics-matrix.js",
   "/js/user-place.js",

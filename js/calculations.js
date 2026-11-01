@@ -1,3 +1,4 @@
+import { bindAutogrowTextarea, resizeTextarea } from "./autogrow-textarea.js";
 import { isSalaryPaymentRow } from "./all-salaries-utils.js";
 import { getCalcDisplayAuthor, formatCalcDisplayComment, stripAuthorFromManualComment, parseOrderDeltaCommentOrderId } from "./calculations-format.js";
 export { getCalcDisplayAuthor } from "./calculations-format.js";
@@ -1409,6 +1410,7 @@ function setFormValues(row) {
     commentEl.value = raw.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX)
       ? raw
       : stripAuthorFromManualComment(raw);
+    resizeTextarea(commentEl);
   }
 }
 
@@ -1448,7 +1450,10 @@ function resetForm() {
     amountEl.classList.remove("sum-input-invalid");
     amountEl.removeAttribute("title");
   }
-  if (commentEl) commentEl.value = "";
+  if (commentEl) {
+    commentEl.value = "";
+    resizeTextarea(commentEl);
+  }
   applyCalcPlaceSelectsForRole();
   setCalcSubmitMode("add");
 }
@@ -1775,10 +1780,11 @@ function setupCalculationsForm() {
   }
 
   const commentEl = document.getElementById("calcComment");
+  bindAutogrowTextarea(commentEl);
   const commentSuggestions = document.getElementById("calcCommentSuggestions");
   const commentWrap = commentEl?.closest(".calculations-comment-wrap");
   if (
-    commentEl instanceof HTMLInputElement &&
+    (commentEl instanceof HTMLInputElement || commentEl instanceof HTMLTextAreaElement) &&
     commentSuggestions &&
     commentWrap &&
     !commentEl.dataset.autocompleteBound
