@@ -1542,10 +1542,11 @@ async function submitForm(e) {
       resetForm();
       return;
     }
+    const calculationId = editingId;
     const { data: currentRow, error: currentRowError } = await supabaseClient
       .from("calculations")
-      .select("comment")
-      .eq("id", editingId)
+      .select("id, from_place, to_place, amount, comment")
+      .eq("id", calculationId)
       .is("deleted_at", null)
       .maybeSingle();
     if (currentRowError || !currentRow) {
@@ -1557,17 +1558,28 @@ async function submitForm(e) {
       resetForm();
       return;
     }
-    const { error } = await supabaseClient
+    const { data: updatedRow, error } = await supabaseClient
       .from("calculations")
       .update(payload)
-      .eq("id", editingId)
-      .is("deleted_at", null);
-    if (error) {
-      console.error("Ошибка обновления:", error);
+      .eq("id", calculationId)
+      .is("deleted_at", null)
+      .select("id, from_place, to_place, amount, comment")
+      .maybeSingle();
+    if (error || !updatedRow) {
+      console.error("Ошибка обновления:", error || "Запись не обновлена");
       setMessage("Ошибка при сохранении.", true);
       return;
     }
-    setMessage("Запись обновлена.");
+    const history = await insertCalculationHistoryComments(
+      calculationId,
+      buildCalculationHistoryComments(currentRow, updatedRow, "update"),
+      currentUserEmail || state.currentUser?.email,
+    );
+    if (history.ok) {
+      setMessage("Запись обновлена.");
+    } else {
+      setMessage("Запись обновлена, но не удалось записать историю для «Все изменения».", true);
+    }
     resetForm();
   } else {
     const insertPayload = { ...payload, created_at: new Date().toISOString() };
@@ -1628,10 +1640,25 @@ function formatCalcHistoryPlace(v) {
  * Комментарии для calculation_history (страница «Все изменения»).
  * @param {Record<string, unknown>|null} prev
  * @param {Record<string, unknown>|null} next
- * @param {"delete"} mode
+ * @param {"delete"|"update"} mode
  * @returns {string[]}
  */
 function buildCalculationHistoryComments(prev, next, mode) {
+  if (mode === "update") {
+    const changes = [];
+    const fields = [
+      ["from_place", "Откуда", formatCalcHistoryPlace],
+      ["to_place", "Куда", formatCalcHistoryPlace],
+      ["amount", "Сумма", formatCalcHistoryAmount],
+      ["comment", "Комментарий", value => stripAuthorFromManualComment(String(value ?? "")).trim() || "—"],
+    ];
+    for (const [field, label, format] of fields) {
+      const before = format(prev?.[field]);
+      const after = format(next?.[field]);
+      if (before !== after) changes.push(`${label}: ${before} → ${after}`);
+    }
+    return changes.length ? ["Расчёт изменён", ...changes] : [];
+  }
   if (mode !== "delete") return [];
   const row = prev || next || {};
   const from = formatCalcHistoryPlace(row.from_place);
@@ -1662,12 +1689,14 @@ async function insertCalculationHistoryComments(calculationId, comments, userEma
     user_email: email,
     comment,
   }));
-  const { error } = await supabaseClient.from("calculation_history").insert(rows);
-  if (error) {
+  try {
+    const { error } = await supabaseClient.from("calculation_history").insert(rows);
+    if (error) throw error;
+    return { ok: true };
+  } catch (error) {
     console.error("Ошибка записи истории расчётов:", error);
     return { ok: false, error };
   }
-  return { ok: true };
 }
 
 /** Запись не удаляется из БД — только выставляется deleted_at. */

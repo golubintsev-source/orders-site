@@ -24,6 +24,7 @@
     "test:orders-address-width": "node scripts/test-orders-address-width.mjs",
     "test:route-sheet-manual-route": "node scripts/test-route-sheet-manual-route.mjs",
     "test:order-atomic-save": "node scripts/test-order-atomic-save.mjs",
+    "test:calculation-edit-history": "node scripts/test-calculation-edit-history.mjs",
     "test:all-changes-author": "node scripts/test-all-changes-author.mjs",
     "test:contractor-checks": "node scripts/test-contractor-checks.mjs",
     "test:excess-idempotency": "node scripts/test-excess-idempotency.mjs",
