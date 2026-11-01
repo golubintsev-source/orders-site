@@ -1,3 +1,4 @@
+import { orderFieldLabel } from "./order-cell-highlights.js";
 import {
   initTaskAttachments, hasTaskDraftAttachments, prepareTaskAttachments,
   setTaskAttachmentsBusy, clearTaskDraftAttachments, renderTaskAttachmentsHtml,
@@ -131,7 +132,8 @@ function renderTaskOrderCellHtml(row) {
   const orderIds = taskLinkedOrderIds(row);
   if (!orderIds.length) return `<td class="my-tasks-order-cell">—</td>`;
   const links = orderIds.map((oid) => {
-    const label = formatTaskOrderLabel(oid);
+    const fieldLabel = Number(row.order_id) === Number(oid) ? orderFieldLabel(row.source_order_field) : "";
+    const label = [formatTaskOrderLabel(oid), fieldLabel].filter(Boolean).join(" ");
     return `<a
       class="my-tasks-order-link"
       href="${escapeHtml(buildOrderViewUrl(oid))}"

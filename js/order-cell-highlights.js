@@ -6,6 +6,18 @@ export const ORDER_TABLE_FIELD_KEYS = [
   "installer_payment_by", "reveals_date", "mosquito_nets", "construction_count", "phone",
 ];
 
+const ORDER_TABLE_FIELD_LABELS = {
+  id: "Номер", order_date: "Дата", client: "Клиент", paid: "Опл.", address: "Адрес",
+  description: "Описание", payment_status: "Статус", amount: "Стоимость", prepayment: "Предоплата",
+  prepayment_to: "Кому", remaining_amount: "Остаток", remaining_to: "Кому", delivery: "Отправка",
+  delivery_date: "Дата", installation_date: "Монтаж", area_m2: "м2", installer_payment_amount: "з/п",
+  installer_payment_by: "Оплатил", reveals_date: "Откосы", mosquito_nets: "Моск.", construction_count: "Конс.", phone: "Телефон",
+};
+
+export function orderFieldLabel(value) {
+  return validOrderField(value) ? ORDER_TABLE_FIELD_LABELS[value] : "";
+}
+
 export function validOrderField(value) {
   return ORDER_TABLE_FIELD_KEYS.includes(value) ? value : null;
 }
