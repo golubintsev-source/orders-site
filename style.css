@@ -2945,8 +2945,8 @@ h2 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 33.6px;
+  height: 33.6px;
   padding: 0;
   margin: 0;
   border: none;
@@ -2958,8 +2958,8 @@ h2 {
   vertical-align: middle;
 }
 #myAuthorTasksTable .btn-icon svg {
-  width: 32px;
-  height: 32px;
+  width: 22.4px;
+  height: 22.4px;
 }
 #myAuthorTasksTable .btn-icon:hover {
   background: #f3f4f6;
