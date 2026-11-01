@@ -4,7 +4,7 @@ import {
   isUserAuthorOfTask, ensureTaskExecutorsInList, normalizeExecutorEmails,
   getSelectedExecutorEmailsFrom, datetimeLocalToIso,
 } from "./task-form-shared.js";
-import { renderTaskAttachmentsHtml, hydrateTaskAttachments } from "./task-attachments.js";
+import { createTaskAttachmentComposer } from "./task-attachments.js";
 
 let opening = false;
 
@@ -21,6 +21,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
   if (isOfflineDataMode()) throw new Error("Для редактирования задачи подключитесь к интернету.");
   opening = true;
   let dialog;
+  let composer;
   try {
     const { data: task, error } = await supabaseClient.from("order_tasks")
       .select("id, author_login, body, executor_emails, due_at, attachments")
@@ -35,9 +36,12 @@ export async function openTaskEditDialog(taskId, onSaved) {
     dialog.setAttribute("aria-labelledby", "taskEditTitle");
     dialog.innerHTML = `<form class="task-create-dialog-panel">
       <div class="task-create-dialog-header"><h3 id="taskEditTitle" class="task-create-dialog-title">Редактировать задачу</h3></div>
-      <label class="task-create-dialog-field"><span class="task-create-dialog-label">Текст</span>
-        <textarea class="task-create-dialog-text" rows="4" data-field="body"></textarea></label>
-      <div data-field="attachments"></div>
+      <div class="task-create-dialog-field"><label for="taskEdit-orderTaskTextInput" class="task-create-dialog-label">Текст</label>
+        <div data-field="composer"></div>
+        <input id="taskEdit-taskPhotoGalleryInput" type="file" accept="image/*" multiple hidden />
+        <input id="taskEdit-taskPhotoCameraInput" type="file" accept="image/*" capture="environment" hidden />
+        <div id="taskEdit-taskPendingAttachments" class="task-pending-attachments" aria-label="Вложения задачи" hidden></div>
+      </div>
       <div class="task-create-dialog-field"><span class="task-create-dialog-label">Исполнители</span>
         <div id="taskEditExecutors" class="messages-create-group-users order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>
         <p class="order-tasks-executors-hint" data-field="hint"></p></div>
@@ -54,17 +58,54 @@ export async function openTaskEditDialog(taskId, onSaved) {
     const form = dialog.querySelector("form");
     form.addEventListener("submit", (event) => event.preventDefault());
     const submit = dialog.querySelector('[type="submit"]');
-    const cancel = dialog.querySelector('[type="button"]');
+    const cancel = dialog.querySelector('.task-create-dialog-cancel');
     let saving = false;
-    const close = () => { if (!saving) dialog.close(); };
-    dialog.addEventListener("close", () => dialog.remove());
+    let attachmentBusy = false;
+    let executorsReady = false;
+    const syncDisabled = () => {
+      form.querySelectorAll("input, textarea, button").forEach((el) => { el.disabled = saving || attachmentBusy; });
+      submit.disabled = saving || attachmentBusy || !executorsReady;
+    };
+    const close = () => { if (!saving && !attachmentBusy) dialog.close(); };
+    dialog.addEventListener("close", () => { composer?.dispose(); dialog.remove(); });
     dialog.addEventListener("cancel", (event) => { event.preventDefault(); close(); });
     cancel.addEventListener("click", close);
     dialog.addEventListener("click", (event) => { if (event.target === dialog) close(); });
+    // Clone the same controls and icons as the create form, with separate IDs and draft.
+    const sourceRow = document.getElementById("orderTaskTextInput")?.closest(".task-composer-row");
+    if (!sourceRow) throw new Error("Форма вложений недоступна. Обновите страницу.");
+    const row = sourceRow.cloneNode(true);
+    row.querySelectorAll("[id]").forEach((el) => {
+      el.id = `taskEdit-${el.id}`;
+      delete el.dataset.bound;
+      el.disabled = false;
+    });
+    const text = row.querySelector("textarea");
+    text.className = "task-create-dialog-text";
+    text.dataset.field = "body";
+    text.rows = 4;
+    text.removeAttribute("style");
+    const suggestions = row.querySelector("ul");
+    suggestions.innerHTML = "";
+    suggestions.hidden = true;
+    row.querySelector(".messages-attach-panel").hidden = true;
+    row.querySelectorAll('[aria-expanded]').forEach((el) => el.setAttribute("aria-expanded", "false"));
+    row.querySelectorAll('.messages-composer-tool-btn--active').forEach((el) => el.classList.remove('messages-composer-tool-btn--active'));
+    field("composer").append(row);
     field("body").value = task.body || "";
+    composer = createTaskAttachmentComposer({
+      getElement: (id) => dialog.querySelector(`#taskEdit-${id}`),
+      initialAttachments: task.attachments,
+      cropHost: dialog,
+      onError: (error) => {
+        field("error").textContent = error?.message || "Не удалось добавить вложение.";
+        field("error").hidden = false;
+      },
+      onBusyChange: (value) => { attachmentBusy = value; syncDisabled(); },
+    });
+    composer.init();
     field("due").value = localDateTime(task.due_at);
-    field("attachments").innerHTML = renderTaskAttachmentsHtml(task);
-    hydrateTaskAttachments(field("attachments"));
+
     submit.disabled = true;
     dialog.showModal();
     await ensureTaskExecutorsInList(executors, field("hint"));
@@ -85,7 +126,8 @@ export async function openTaskEditDialog(taskId, onSaved) {
     }
     if (!dialog.isConnected) return;
     // A failed directory load must not silently drop executors.
-    submit.disabled = executors.dataset.loaded !== "1";
+    executorsReady = executors.dataset.loaded === "1";
+    syncDisabled();
     field("body").focus();
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -93,13 +135,14 @@ export async function openTaskEditDialog(taskId, onSaved) {
       const errorEl = field("error");
       errorEl.hidden = true;
       const body = field("body").value.trim();
-      if (!body && !task.attachments?.length) {
+      if (!body && !composer.hasAttachments()) {
         errorEl.textContent = "Введите текст задачи.";
         errorEl.hidden = false;
         return;
       }
       saving = true;
-      form.querySelectorAll("input, textarea, button").forEach((el) => { el.disabled = true; });
+      composer.setBusy(true);
+      syncDisabled();
       let saved;
       try {
         if (isOfflineDataMode()) throw new Error("Для сохранения подключитесь к интернету.");
@@ -107,8 +150,9 @@ export async function openTaskEditDialog(taskId, onSaved) {
         const patch = {
           body, executor_emails: getSelectedExecutorEmailsFrom(executors),
           due_at: datetimeLocalToIso(field("due").value),
+          attachments: await composer.prepare(),
         };
-        // Update only editable fields: photos, order and status stay intact.
+        // Keep the linked source order and completion status intact.
         const { data, error: saveError } = await supabaseClient.from("order_tasks")
           .update(patch).eq("id", task.id).eq("author_login", task.author_login)
           .is("deleted_at", null).select("id").maybeSingle();
@@ -120,7 +164,8 @@ export async function openTaskEditDialog(taskId, onSaved) {
         errorEl.hidden = false;
       } finally {
         saving = false;
-        form.querySelectorAll("input, textarea, button").forEach((el) => { el.disabled = false; });
+        composer.setBusy(false);
+        syncDisabled();
       }
       if (saved) {
         dialog.close();
@@ -129,6 +174,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
       }
     });
   } catch (error) {
+    composer?.dispose();
     dialog?.remove();
     throw error;
   } finally {

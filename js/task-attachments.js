@@ -6,279 +6,349 @@ import { buildOrderViewUrl } from "./app-routes.js";
 import { getSignedFileUrl, getSignedFileUrls, isCroppableImageFile } from "./storage-urls.js";
 import { normalizeTaskAttachments, taskOrderIdsFromBody } from "./task-attachment-data.js";
 
-const photos = [];
-let busy = false;
-let pickerOpen = false;
-let pickerRequest = 0;
-let pickerTimer;
-let viewer;
-let pickerModule;
-let photoObserver;
-const observedByRoot = new WeakMap();
-let viewerRequest = 0;
-
-export function isTaskAttachmentsBusy() {
-  return busy;
-}
-
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[char]);
 }
 
-function showError(error) {
-  const message = document.getElementById("myTasksFormMessage");
-  if (message) {
-    message.textContent = error?.message || "Не удалось добавить вложение. Попробуйте ещё раз.";
-    message.classList.add("order-tasks-message--error");
+
+// Each form owns its draft and DOM references, so editing never changes a new task.
+export function createTaskAttachmentComposer({ getElement = (id) => document.getElementById(id), initialAttachments = [], onError, onBusyChange, cropHost } = {}) {
+  let cleanup = () => {};
+  const photos = normalizeTaskAttachments(initialAttachments).filter((item) => item.type === "photo")
+    .map((uploaded) => ({ file: null, previewUrl: "", uploaded }));
+  const legacyOrders = normalizeTaskAttachments(initialAttachments).filter((item) => item.type === "order" && !taskOrderIdsFromBody(getElement("orderTaskTextInput")?.value).includes(item.orderId));
+  let disposed = false;
+  const releasePreview = (photo) => { if (photo?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(photo.previewUrl); };
+  let busy = false;
+  let pickerOpen = false;
+  let pickerRequest = 0;
+  let pickerTimer;
+  let pickerModule;
+
+  function isTaskAttachmentsBusy() {
+    return busy;
   }
-}
 
-function setMenuOpen(open) {
-  const menu = document.getElementById("taskAttachMenu");
-  const button = document.getElementById("taskAttachBtn");
-  if (menu) menu.hidden = !open;
-  button?.setAttribute("aria-expanded", String(open));
-  button?.classList.toggle("messages-composer-tool-btn--active", open);
-  if (button) {
-    button.title = open ? "Закрыть вложения" : "Вложение";
-    button.setAttribute("aria-label", button.title);
-  }
-}
 
-function renderPending() {
-  const root = document.getElementById("taskPendingAttachments");
-  if (!root) return;
-  root.hidden = photos.length === 0;
-  root.innerHTML = photos.map((photo, index) => `
-    <div class="task-pending-photo">
-      <img src="${escapeHtml(photo.previewUrl)}" alt="${escapeHtml(photo.file.name || "Фото")}" />
-      <div class="task-pending-actions">
-        ${isCroppableImageFile(photo.file) ? `<button type="button" data-crop="${index}" ${busy ? "disabled" : ""}>Обрезать</button>` : ""}
-        <button type="button" data-remove-photo="${index}" aria-label="Убрать фото" ${busy ? "disabled" : ""}>×</button>
-      </div>
-    </div>`).join("");
-}
-
-export function hasTaskDraftAttachments() {
-  return photos.length > 0;
-}
-
-export function setTaskAttachmentsBusy(value) {
-  busy = value;
-  const button = document.getElementById("taskAttachBtn");
-  if (button) button.disabled = value;
-  if (value) {
-    setMenuOpen(false);
-    hideOrderSuggestions();
-  }
-  renderPending();
-}
-
-export function clearTaskDraftAttachments() {
-  for (const photo of photos) URL.revokeObjectURL(photo.previewUrl);
-  photos.length = 0;
-  hideOrderSuggestions();
-  renderPending();
-}
-
-export async function prepareTaskAttachments() {
-  const attachments = taskOrderIdsFromBody(document.getElementById("orderTaskTextInput")?.value)
-    .map((orderId) => ({ type: "order", orderId }));
-  if (photos.length) {
-    const { uploadChatPhoto } = await import("./files.js");
-    for (const photo of photos) {
-      // Keep successful uploads on failure, so retry does not upload them again.
-      if (!photo.uploaded) photo.uploaded = await uploadChatPhoto(photo.file);
-      attachments.push({ type: "photo", ...photo.uploaded });
+  function showError(error) {
+    if (disposed) return;
+    if (onError) { onError(error); return; }
+    const message = getElement("myTasksFormMessage");
+    if (message) {
+      message.textContent = error?.message || "Не удалось добавить вложение. Попробуйте ещё раз.";
+      message.classList.add("order-tasks-message--error");
     }
   }
-  return normalizeTaskAttachments(attachments);
-}
 
-function addPhotos(files) {
-  if (busy) return;
-  for (const file of files || []) {
-    if (!file.type?.startsWith("image/")) {
-      showError(new Error("Можно прикрепить только изображение."));
-      continue;
+  function setMenuOpen(open) {
+    const menu = getElement("taskAttachMenu");
+    const button = getElement("taskAttachBtn");
+    if (menu) menu.hidden = !open;
+    button?.setAttribute("aria-expanded", String(open));
+    button?.classList.toggle("messages-composer-tool-btn--active", open);
+    if (button) {
+      button.title = open ? "Закрыть вложения" : "Вложение";
+      button.setAttribute("aria-label", button.title);
     }
-    photos.push({ file, previewUrl: URL.createObjectURL(file), uploaded: null });
   }
-  renderPending();
-}
 
-function hideOrderSuggestions() {
-  clearTimeout(pickerTimer);
-  pickerOpen = false;
-  pickerRequest++;
-  const list = document.getElementById("taskComposerSuggestions");
-  if (list) { list.hidden = true; list.innerHTML = ""; }
-  const button = document.getElementById("taskPickOrderBtn");
-  button?.setAttribute("aria-expanded", "false");
-  button?.classList.remove("messages-composer-tool-btn--active");
-}
-
-function triggerContext(input) {
-  const caret = input.selectionStart ?? input.value.length;
-  const match = input.value.slice(0, caret).match(/&(\d*)$/);
-  return match ? { query: match[1], start: caret - match[0].length } : null;
-}
-
-function pickOrder(input, order, context) {
-  if (busy || input.disabled) return;
-  const start = context?.start ?? input.selectionStart ?? input.value.length;
-  const end = input.selectionEnd ?? start;
-  const before = input.value.slice(0, start);
-  const insert = `[[order:${order.id}]] `;
-  input.value = before + insert + input.value.slice(end);
-  hideOrderSuggestions();
-  input.focus();
-  input.setSelectionRange(before.length + insert.length, before.length + insert.length);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
-async function showOrderSuggestions(input, context = null) {
-  if (busy || input.disabled) return;
-  pickerOpen = true;
-  const request = ++pickerRequest;
-  const text = input.value;
-  const caret = input.selectionStart;
-  const button = document.getElementById("taskPickOrderBtn");
-  button?.setAttribute("aria-expanded", "true");
-  button?.classList.add("messages-composer-tool-btn--active");
-  try {
-    const runtime = await import("./orders-runtime.js");
-    pickerModule = await runtime.ensureOrdersData({ current: () => pickerOpen && request === pickerRequest });
-    if (!pickerOpen || request !== pickerRequest || busy || input.value !== text || input.selectionStart !== caret) return;
-    const query = (context?.query || "").toLowerCase();
-    const rows = (state.allOrders || []).filter((order) => {
-      if (isOrderHiddenForCurrentRole(order)) return false;
-      if (!context && order.payment_status === "Заказ закрыт") return false;
-      return [order.id, formatOrderIdTypeChip(order.id, order.order_type), order.client, order.address, order.description]
-        .some((value) => String(value || "").toLowerCase().includes(query));
-    });
-    const choices = context ? rows.slice(0, 15) : rows;
-    const list = document.getElementById("taskComposerSuggestions");
-    if (!choices.length) { hideOrderSuggestions(); return; }
-    list.innerHTML = choices.map((order, index) =>
-      `<li role="option" data-index="${index}" aria-selected="${index === 0}">${pickerModule.buildOrderPickerRowHtml(order)}</li>`).join("");
-    list.hidden = false;
-    list.querySelectorAll("[data-fulltext]").forEach((cell) => {
-      const full = cell.getAttribute("data-fulltext");
-      if (full) cell.setAttribute("title", full);
-    });
-    list.querySelectorAll("li").forEach((item, index) => {
-      item.addEventListener("mousedown", (event) => {
-        event.preventDefault();
-        pickOrder(input, choices[index], context);
-      });
-    });
-  } catch (error) {
-    if (request === pickerRequest) { hideOrderSuggestions(); showError(error); }
+  function renderPending() {
+    const root = getElement("taskPendingAttachments");
+    if (!root) return;
+    root.hidden = photos.length === 0 && legacyOrders.length === 0;
+    root.innerHTML = photos.map((photo, index) => `
+      <div class="task-pending-photo">
+        <img ${photo.previewUrl ? `src="${escapeHtml(photo.previewUrl)}"` : ""} alt="${escapeHtml(photo.file?.name || photo.uploaded?.fileName || "Фото")}" />
+        <div class="task-pending-actions">
+          ${isCroppableImageFile(photo.file || { name: photo.uploaded?.fileName, type: photo.uploaded?.mimeType }) ? `<button type="button" data-crop="${index}" ${busy ? "disabled" : ""}>Обрезать</button>` : ""}
+          <button type="button" data-remove-photo="${index}" aria-label="Убрать фото" ${busy ? "disabled" : ""}>×</button>
+        </div>
+      </div>`).join("") + legacyOrders.map((item, index) => `<span class="task-pending-order">Заказ ${escapeHtml(formatOrderIdTypeChip(item.orderId, getOrderSummary(item.orderId)?.order_type))}<button type="button" data-remove-order="${index}" aria-label="Убрать заказ" ${busy ? "disabled" : ""}>×</button></span>`).join("");
   }
-}
 
-function bindOrderComposer(input) {
-  input.addEventListener("input", () => {
-    clearTimeout(pickerTimer);
-    hideOrderSuggestions();
-    const context = triggerContext(input);
-    if (context && !busy) {
-      pickerTimer = setTimeout(() => { void showOrderSuggestions(input, context); }, 120);
-    }
-  });
-  input.addEventListener("keydown", (event) => {
-    const list = document.getElementById("taskComposerSuggestions");
-    if (!list || list.hidden || event.isComposing) return;
-    const items = [...list.querySelectorAll("li")];
-    let index = items.findIndex((item) => item.getAttribute("aria-selected") === "true");
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      index = event.key === "ArrowDown" ? Math.min(index + 1, items.length - 1) : Math.max(index - 1, 0);
-      items.forEach((item, i) => item.setAttribute("aria-selected", String(i === index)));
-      items[index]?.scrollIntoView({ block: "nearest" });
-    } else if (event.key === "Enter" && !event.ctrlKey && !event.metaKey) {
-      event.preventDefault();
-      items[index]?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-    } else if (event.key === "Escape") {
-      event.preventDefault();
+  function hasTaskDraftAttachments() {
+    return photos.length > 0 || legacyOrders.length > 0;
+  }
+
+  function setTaskAttachmentsBusy(value) {
+    busy = value;
+    onBusyChange?.(value);
+    const button = getElement("taskAttachBtn");
+    if (button) button.disabled = value;
+    if (value) {
+      setMenuOpen(false);
       hideOrderSuggestions();
     }
-  });
-  input.addEventListener("blur", () => setTimeout(hideOrderSuggestions, 150));
-}
-
-export function initTaskAttachments() {
-  const button = document.getElementById("taskAttachBtn");
-  if (!button || button.dataset.bound) return;
-  button.dataset.bound = "1";
-  button.addEventListener("mousedown", (event) => event.preventDefault());
-  button.addEventListener("click", () => {
-    hideOrderSuggestions();
-    setMenuOpen(document.getElementById("taskAttachMenu").hidden);
-  });
-  const input = document.getElementById("orderTaskTextInput");
-  bindOrderComposer(input);
-  document.getElementById("taskPickOrderBtn").addEventListener("mousedown", (event) => event.preventDefault());
-  document.getElementById("taskPickOrderBtn").addEventListener("click", () => {
-    setMenuOpen(false);
-    if (pickerOpen) hideOrderSuggestions();
-    else {
-      input.focus();
-      void showOrderSuggestions(input);
-    }
-  });
-  for (const kind of ["Camera", "Gallery"]) {
-    const input = document.getElementById(`taskPhoto${kind}Input`);
-    document.getElementById(`taskAttach${kind}Btn`).addEventListener("click", () => {
-      setMenuOpen(false);
-      input.value = "";
-      input.click();
-    });
-    input.addEventListener("change", () => { addPhotos(input.files); input.value = ""; });
+    renderPending();
   }
-  document.getElementById("orderTaskTextInput").addEventListener("paste", (event) => {
-    const images = [...(event.clipboardData?.files || [])].filter((file) => file.type.startsWith("image/"));
-    if (images.length) { event.preventDefault(); addPhotos(images); }
-  });
-  document.getElementById("taskPendingAttachments").addEventListener("click", async (event) => {
-    const target = event.target.closest("button");
-    if (!target || busy) return;
-    if (target.hasAttribute("data-remove-photo")) {
-      const [photo] = photos.splice(Number(target.dataset.removePhoto), 1);
-      if (photo) URL.revokeObjectURL(photo.previewUrl);
 
-    } else if (target.hasAttribute("data-crop")) {
-      const photo = photos[Number(target.dataset.crop)];
-      if (!photo) return;
-      // Lock draft controls while the crop dialog is open.
-      setTaskAttachmentsBusy(true);
-      const createButton = document.getElementById("orderTaskCreateBtn");
-      const wasDisabled = createButton.disabled;
-      createButton.disabled = true;
-      try {
-        const { cropImageAttachment } = await import("./files.js");
-        const cropped = await cropImageAttachment(photo.file);
-        if (cropped) {
-          URL.revokeObjectURL(photo.previewUrl);
-          photo.file = cropped;
-          photo.previewUrl = URL.createObjectURL(cropped);
-          photo.uploaded = null;
-        }
-      } catch (error) { showError(error); }
-      finally { setTaskAttachmentsBusy(false); createButton.disabled = wasDisabled; }
+  function clearTaskDraftAttachments() {
+    for (const photo of photos) releasePreview(photo);
+    photos.length = 0;
+    legacyOrders.length = 0;
+    hideOrderSuggestions();
+    renderPending();
+  }
+
+  async function prepareTaskAttachments() {
+    const attachments = taskOrderIdsFromBody(getElement("orderTaskTextInput")?.value)
+      .map((orderId) => ({ type: "order", orderId }));
+    attachments.push(...legacyOrders);
+    if (photos.length) {
+      const { uploadChatPhoto } = await import("./files.js");
+      for (const photo of photos) {
+        // Keep successful uploads on failure, so retry does not upload them again.
+        if (!photo.uploaded) photo.uploaded = await uploadChatPhoto(photo.file);
+        attachments.push({ type: "photo", ...photo.uploaded });
+      }
+    }
+    return normalizeTaskAttachments(attachments);
+  }
+
+  function addPhotos(files) {
+    if (busy) return;
+    for (const file of files || []) {
+      if (!file.type?.startsWith("image/")) {
+        showError(new Error("Можно прикрепить только изображение."));
+        continue;
+      }
+      photos.push({ file, previewUrl: URL.createObjectURL(file), uploaded: null });
     }
     renderPending();
-  });
-  document.addEventListener("click", (event) => {
-    if (!event.target.closest(".task-attach-wrap")) setMenuOpen(false);
-    if (!event.target.closest(".task-composer-row")) hideOrderSuggestions();
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") { setMenuOpen(false); hideOrderSuggestions(); }
-  });
+  }
+
+  function hideOrderSuggestions() {
+    clearTimeout(pickerTimer);
+    pickerOpen = false;
+    pickerRequest++;
+    const list = getElement("taskComposerSuggestions");
+    if (list) { list.hidden = true; list.innerHTML = ""; }
+    const button = getElement("taskPickOrderBtn");
+    button?.setAttribute("aria-expanded", "false");
+    button?.classList.remove("messages-composer-tool-btn--active");
+  }
+
+  function triggerContext(input) {
+    const caret = input.selectionStart ?? input.value.length;
+    const match = input.value.slice(0, caret).match(/&(\d*)$/);
+    return match ? { query: match[1], start: caret - match[0].length } : null;
+  }
+
+  function pickOrder(input, order, context) {
+    if (busy || input.disabled) return;
+    const start = context?.start ?? input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    const before = input.value.slice(0, start);
+    const insert = `[[order:${order.id}]] `;
+    input.value = before + insert + input.value.slice(end);
+    hideOrderSuggestions();
+    input.focus();
+    input.setSelectionRange(before.length + insert.length, before.length + insert.length);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  async function showOrderSuggestions(input, context = null) {
+    if (busy || input.disabled) return;
+    pickerOpen = true;
+    const request = ++pickerRequest;
+    const text = input.value;
+    const caret = input.selectionStart;
+    const button = getElement("taskPickOrderBtn");
+    button?.setAttribute("aria-expanded", "true");
+    button?.classList.add("messages-composer-tool-btn--active");
+    try {
+      const runtime = await import("./orders-runtime.js");
+      pickerModule = await runtime.ensureOrdersData({ current: () => pickerOpen && request === pickerRequest });
+      if (!pickerOpen || request !== pickerRequest || busy || input.value !== text || input.selectionStart !== caret) return;
+      const query = (context?.query || "").toLowerCase();
+      const rows = (state.allOrders || []).filter((order) => {
+        if (isOrderHiddenForCurrentRole(order)) return false;
+        if (!context && order.payment_status === "Заказ закрыт") return false;
+        return [order.id, formatOrderIdTypeChip(order.id, order.order_type), order.client, order.address, order.description]
+          .some((value) => String(value || "").toLowerCase().includes(query));
+      });
+      const choices = context ? rows.slice(0, 15) : rows;
+      const list = getElement("taskComposerSuggestions");
+      if (!choices.length) { hideOrderSuggestions(); return; }
+      list.innerHTML = choices.map((order, index) =>
+        `<li role="option" data-index="${index}" aria-selected="${index === 0}">${pickerModule.buildOrderPickerRowHtml(order)}</li>`).join("");
+      list.hidden = false;
+      list.querySelectorAll("[data-fulltext]").forEach((cell) => {
+        const full = cell.getAttribute("data-fulltext");
+        if (full) cell.setAttribute("title", full);
+      });
+      list.querySelectorAll("li").forEach((item, index) => {
+        item.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          pickOrder(input, choices[index], context);
+        });
+      });
+    } catch (error) {
+      if (request === pickerRequest) { hideOrderSuggestions(); showError(error); }
+    }
+  }
+
+  function bindOrderComposer(input) {
+    input.addEventListener("input", () => {
+      clearTimeout(pickerTimer);
+      hideOrderSuggestions();
+      const context = triggerContext(input);
+      if (context && !busy) {
+        pickerTimer = setTimeout(() => { void showOrderSuggestions(input, context); }, 120);
+      }
+    });
+    input.addEventListener("keydown", (event) => {
+      const list = getElement("taskComposerSuggestions");
+      if (!list || list.hidden || event.isComposing) return;
+      const items = [...list.querySelectorAll("li")];
+      let index = items.findIndex((item) => item.getAttribute("aria-selected") === "true");
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        index = event.key === "ArrowDown" ? Math.min(index + 1, items.length - 1) : Math.max(index - 1, 0);
+        items.forEach((item, i) => item.setAttribute("aria-selected", String(i === index)));
+        items[index]?.scrollIntoView({ block: "nearest" });
+      } else if (event.key === "Enter" && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        items[index]?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        hideOrderSuggestions();
+      }
+    });
+    input.addEventListener("blur", () => setTimeout(hideOrderSuggestions, 150));
+  }
+
+  function initTaskAttachments() {
+    const button = getElement("taskAttachBtn");
+    if (!button || button.dataset.bound) return;
+    button.dataset.bound = "1";
+    button.addEventListener("mousedown", (event) => event.preventDefault());
+    button.addEventListener("click", () => {
+      hideOrderSuggestions();
+      setMenuOpen(getElement("taskAttachMenu").hidden);
+    });
+    const input = getElement("orderTaskTextInput");
+    bindOrderComposer(input);
+    getElement("taskPickOrderBtn").addEventListener("mousedown", (event) => event.preventDefault());
+    getElement("taskPickOrderBtn").addEventListener("click", () => {
+      setMenuOpen(false);
+      if (pickerOpen) hideOrderSuggestions();
+      else {
+        input.focus();
+        void showOrderSuggestions(input);
+      }
+    });
+    for (const kind of ["Camera", "Gallery"]) {
+      const input = getElement(`taskPhoto${kind}Input`);
+      getElement(`taskAttach${kind}Btn`).addEventListener("click", () => {
+        setMenuOpen(false);
+        input.value = "";
+        input.click();
+      });
+      input.addEventListener("change", () => { addPhotos(input.files); input.value = ""; });
+    }
+    getElement("orderTaskTextInput").addEventListener("paste", (event) => {
+      const images = [...(event.clipboardData?.files || [])].filter((file) => file.type.startsWith("image/"));
+      if (images.length) { event.preventDefault(); addPhotos(images); }
+    });
+    getElement("taskPendingAttachments").addEventListener("click", async (event) => {
+      const target = event.target.closest("button");
+      if (!target || busy) return;
+      if (target.hasAttribute("data-remove-photo")) {
+        const [photo] = photos.splice(Number(target.dataset.removePhoto), 1);
+        if (photo) releasePreview(photo);
+
+      } else if (target.hasAttribute("data-remove-order")) {
+        legacyOrders.splice(Number(target.dataset.removeOrder), 1);
+      } else if (target.hasAttribute("data-crop")) {
+        const photo = photos[Number(target.dataset.crop)];
+        if (!photo) return;
+        // Lock draft controls while the crop dialog is open.
+        setTaskAttachmentsBusy(true);
+        const createButton = getElement("orderTaskCreateBtn");
+        const wasDisabled = createButton?.disabled;
+        if (createButton) createButton.disabled = true;
+        try {
+          const { cropImageAttachment } = await import("./files.js");
+          let source = photo.file;
+          if (!source) {
+            const url = await getSignedFileUrl(photo.uploaded.storagePath);
+            if (!url) throw new Error("Фото недоступно. Попробуйте ещё раз.");
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Не удалось загрузить фото для обрезки.");
+            const blob = await response.blob();
+            source = new File([blob], photo.uploaded.fileName || "Фото.jpg", { type: blob.type || photo.uploaded.mimeType });
+          }
+          // The shared crop overlay must be inside the native dialog's top layer.
+          const cropModal = cropHost ? document.getElementById("cropImageModal") : null;
+          const parent = cropModal?.parentNode;
+          const next = cropModal?.nextSibling;
+          let cropped;
+          try {
+            if (cropModal) cropHost.append(cropModal);
+            cropped = await cropImageAttachment(source);
+          } finally {
+            if (cropModal && parent) parent.insertBefore(cropModal, next);
+          }
+          if (cropped && cropped !== source && !disposed) {
+            releasePreview(photo);
+            photo.file = cropped;
+            photo.previewUrl = URL.createObjectURL(cropped);
+            photo.uploaded = null;
+          }
+        } catch (error) { showError(error); }
+        finally { setTaskAttachmentsBusy(false); if (createButton) createButton.disabled = wasDisabled; }
+      }
+      renderPending();
+    });
+    const onDocumentClick = (event) => {
+      if (!event.target.closest(".task-attach-wrap")) setMenuOpen(false);
+      if (!event.target.closest(".task-composer-row")) hideOrderSuggestions();
+    };
+    const onDocumentKeydown = (event) => {
+      if (event.key === "Escape") { setMenuOpen(false); hideOrderSuggestions(); }
+    };
+    document.addEventListener("click", onDocumentClick);
+    document.addEventListener("keydown", onDocumentKeydown);
+    cleanup = () => {
+      document.removeEventListener("click", onDocumentClick);
+      document.removeEventListener("keydown", onDocumentKeydown);
+    };
+    renderPending();
+    for (const photo of photos) {
+      if (!photo.uploaded) continue;
+      const uploaded = photo.uploaded;
+      void Promise.resolve(getSignedFileUrl(uploaded.thumbnailPath || uploaded.storagePath)).then((url) => {
+        if (!disposed && photos.includes(photo) && photo.uploaded === uploaded) { photo.previewUrl = url || ""; renderPending(); }
+      }).catch(showError);
+    }
+  }
+
+
+  return {
+    init: initTaskAttachments, isBusy: isTaskAttachmentsBusy, hasAttachments: hasTaskDraftAttachments,
+    setBusy: setTaskAttachmentsBusy, clear: clearTaskDraftAttachments, prepare: prepareTaskAttachments,
+    dispose() { disposed = true; hideOrderSuggestions(); cleanup(); for (const photo of photos) releasePreview(photo); },
+  };
+}
+
+const defaultComposer = createTaskAttachmentComposer();
+export const initTaskAttachments = () => defaultComposer.init();
+export const isTaskAttachmentsBusy = () => defaultComposer.isBusy();
+export const hasTaskDraftAttachments = () => defaultComposer.hasAttachments();
+export const setTaskAttachmentsBusy = (value) => defaultComposer.setBusy(value);
+export const clearTaskDraftAttachments = () => defaultComposer.clear();
+export const prepareTaskAttachments = () => defaultComposer.prepare();
+
+let viewer;
+let photoObserver;
+const observedByRoot = new WeakMap();
+let viewerRequest = 0;
+function showError(error) {
+  const message = document.getElementById("myTasksFormMessage");
+  if (message) { message.textContent = error?.message || "Не удалось открыть фото."; message.classList.add("order-tasks-message--error"); }
 }
 
 export function renderTaskBodyHtml(body) {
