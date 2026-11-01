@@ -148,7 +148,12 @@ function renderTaskOrderCellHtml(row) {
  * что и попап по дате заказа в таблице «Заказы».
  */
 function renderTaskTextCellHtml(row, { orderPopup = false } = {}) {
-  const text = `<div class="task-body-text">${renderTaskBodyHtml(row.body)}</div>${renderTaskAttachmentsHtml(row)}`;
+  const editButton = orderPopup && isUserAuthorOfTask(row)
+    ? `<button type="button" class="btn-edit-task" data-task-id="${escapeHtml(row.id)}"
+        ${row.__offlineLocalId ? 'disabled title="Редактирование доступно после отправки задачи в базу"' : 'title="Редактировать задачу"'}
+        aria-label="Редактировать задачу">✎</button>`
+    : "";
+  const text = `<div class="task-body-text">${renderTaskBodyHtml(row.body)}</div>${renderTaskAttachmentsHtml(row)}${editButton}`;
   if (!orderPopup || isStandaloneTask(row)) {
     return `<td class="order-tasks-text-cell">${text}</td>`;
   }
@@ -637,6 +642,33 @@ function bindAuthorTaskDeleteDelegation(root) {
   });
 }
 
+function bindAuthorTaskEditDelegation(root) {
+  if (!root || root.dataset.taskEditBound === "1") return;
+  root.dataset.taskEditBound = "1";
+  root.addEventListener("click", async (e) => {
+    const button = e.target.closest(".btn-edit-task");
+    if (!button || !root.contains(button) || button.disabled) return;
+    e.preventDefault();
+    button.disabled = true;
+    try {
+      const { openTaskEditDialog } = await import("./task-edit-dialog.js");
+      await openTaskEditDialog(button.dataset.taskId, async (row) => {
+        await insertTaskHistoryComments(row.id, ["Задача отредактирована", `Текст: ${row.body}`]);
+        await loadAllTasks();
+        void loadOrderTasks();
+        void refreshMyTasksNavBadge();
+        void import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
+        void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
+      });
+    } catch (error) {
+      console.error("Ошибка открытия редактирования задачи:", error);
+      window.alert(error?.message || "Не удалось открыть задачу.");
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
 async function showTaskOrderFullTooltip(cell) {
   const oid = Number(cell.getAttribute("data-order-id"));
   if (!Number.isFinite(oid) || oid <= 0) return;
@@ -957,6 +989,8 @@ export function initOrderTasksSection() {
   bindTaskCompletedCheckboxDelegation(document.getElementById("allTasksTable"));
   bindTaskCompletedCheckboxDelegation(document.getElementById("myAuthorTasksTable"));
   bindAuthorTaskDeleteDelegation(document.getElementById("myAuthorTasksTable"));
+  bindAuthorTaskEditDelegation(document.getElementById("allTasksTable"));
+  bindAuthorTaskEditDelegation(document.getElementById("myAuthorTasksTable"));
   bindAuthorTaskDeleteDelegation(document.getElementById("orderTasksAuthorTable"));
   bindTaskOrderLinkDelegation(document.getElementById("allTasksTable"));
   bindTaskOrderLinkDelegation(document.getElementById("myAuthorTasksTable"));
