@@ -1,6 +1,6 @@
 import { loadSettings } from "./settings.js";
 import { canEditManualCalculations } from "./roles.js";
-import { salaryRecipientGroups, saveSalaryPayment } from "./salary-payment.js";
+import { salaryRecipientGroups, saveSalaryPayment, SALARY_PAYMENT_FROM_PLACES, defaultSalaryPaymentFrom } from "./salary-payment.js";
 import { supabaseClient } from "./config.js";
 import { formatAmount } from "./format.js";
 import { getCalcDisplayAuthor, formatCalcDisplayComment as getCalcDisplayComment } from "./calculations-format.js";
@@ -227,6 +227,20 @@ function toggleSalaryMonth(monthKey) {
   renderAllSalaries();
 }
 
+function renderSalarySources() {
+  const select = document.getElementById("salaryPaymentFrom");
+  if (!select) return;
+  const selected = select.value || defaultSalaryPaymentFrom();
+  select.replaceChildren();
+  for (const name of SALARY_PAYMENT_FROM_PLACES) {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    select.appendChild(option);
+  }
+  select.value = selected;
+}
+
 function renderSalaryRecipients() {
   const select = document.getElementById("salaryPaymentRecipient");
   if (!select) return;
@@ -262,10 +276,11 @@ function bindSalaryPaymentForm() {
     button.disabled = true;
     const amount = document.getElementById("salaryPaymentAmount");
     const recipient = document.getElementById("salaryPaymentRecipient");
+    const from = document.getElementById("salaryPaymentFrom");
     const comment = document.getElementById("salaryPaymentComment");
     // Lock the fields while the submitted values are being written.
-    const values = { amount: amount.value, recipient: recipient.value, comment: comment.value };
-    const fields = [amount, recipient, comment];
+    const values = { from: from.value, amount: amount.value, recipient: recipient.value, comment: comment.value };
+    const fields = [from, amount, recipient, comment];
     fields.forEach(field => { field.disabled = true; });
     message.textContent = "Сохранение…";
     message.classList.remove("all-salaries-message--error");
@@ -334,6 +349,7 @@ async function loadAllSalariesOnce() {
   try {
     await loadSettings();
     if (!scope.current()) return;
+    renderSalarySources();
     renderSalaryRecipients();
     ({ data, error } = await fetchAllSupabaseRows(() =>
       supabaseClient

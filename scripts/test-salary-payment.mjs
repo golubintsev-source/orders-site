@@ -2,17 +2,30 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { tryParseRublesInteger } from '../js/format.js';
-import { shortLoginByEmail } from '../js/user-names.js';
+import { displayNameByEmail, shortLoginByEmail } from '../js/user-names.js';
 import { isSalaryPaymentRow, groupSalaryRowsByEmployee } from '../js/all-salaries-utils.js';
 const state = { driverName: 'Водитель Тест', editors: ['Иван', 'ИВАН'], otherWorkers: ['Павел'], currentUser: { email: 'golubintsev@gmail.com' } };
 let allowed = true, calls = [], resolveWrite;
-const context = vm.createContext({ state, tryParseRublesInteger, shortLoginByEmail, canAccessSection: () => allowed, canEditManualCalculations: () => allowed,
+const context = vm.createContext({ state, tryParseRublesInteger, displayNameByEmail, shortLoginByEmail, canAccessSection: () => allowed, canEditManualCalculations: () => allowed,
   supabaseClient: { from(table) { assert.equal(table, 'calculations'); return { insert(rows) { calls.push(rows); return new Promise(resolve => { resolveWrite = resolve; }); } }; } },
 });
 vm.runInContext(fs.readFileSync(new URL('../js/salary-payment.js', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replace(/export /g, ''), context);
-const build = values => context.buildSalaryPayment(values);
+const build = values => context.buildSalaryPayment({ from: "Касса", ...values });
 for (const amount of ['', '0', '-1', 'abc', '1.2', 'Infinity', '9007199254740992']) assert.throws(() => build({ amount, recipient: 'Павел' }));
 assert.throws(() => build({ amount: '500', recipient: 'Не из настроек' }));
+for (const from of ['Вова', 'Дима', 'Касса', 'Безнал', 'Другое']) {
+  assert.equal(build({ amount: '500', recipient: 'Павел', from }).from_place, from);
+}
+for (const from of ['', 'Алексей', 'Несуществующий источник', null]) {
+  assert.throws(() => build({ amount: '500', recipient: 'Павел', from }));
+}
+for (const [email, expected] of [['aver1978aver@gmail.com', 'Вова'], ['golubintsev26@gmail.com', 'Дима'], ['golubintsev@gmail.com', 'Другое'], ['', 'Другое']]) {
+  assert.equal(context.defaultSalaryPaymentFrom({ currentUser: { email } }), expected);
+}
+const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const calcSources = [...html.match(/<select id="calcFrom">([\s\S]*?)<\/select>/)[1].matchAll(/<option value="([^"]+)">/g)].map(match => match[1]);
+assert.deepEqual(Array.from(vm.runInContext('SALARY_PAYMENT_FROM_PLACES', context)), calcSources);
+assert.ok(html.indexOf('id="salaryPaymentFrom"') < html.indexOf('id="salaryPaymentRecipient"'));
 const payload = build({ amount: '2 500', recipient: 'Павел', comment: 'Доплата' });
 assert.equal(payload.amount, 2500);
 assert.equal(payload.from_place, 'Касса');
@@ -25,11 +38,12 @@ assert.equal(payload.comment, 'з/п Павел, Доплата; Алексей'
 assert.ok(isSalaryPaymentRow(payload));
 assert.equal(groupSalaryRowsByEmployee([payload])[0].total, 2500);
 assert.equal(context.salaryRecipientGroups()[1].names.length, 1);
-const values = { amount: '500', recipient: 'Павел' };
+const values = { from: 'Дима', amount: '500', recipient: 'Павел' };
 const first = context.saveSalaryPayment(values);
 assert.equal((await context.saveSalaryPayment(values)).ok, false);
 assert.equal(calls.length, 1);
 assert.equal(calls[0][0].to_place, 'Зарплата');
+assert.equal(calls[0][0].from_place, 'Дима');
 resolveWrite({ error: null });
 assert.equal((await first).ok, true);
 const failed = context.saveSalaryPayment(values);
