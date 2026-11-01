@@ -55,19 +55,15 @@
   let lastHttpAt = -Infinity;
   let phase = "loading";
   let phraseIndex = Math.floor(Math.random() * phrases.length);
-  let phraseInterval;
-  const phraseTimer = setTimeout(() => {
-    phrase.hidden = false;
+  phrase.hidden = false;
+  phrase.textContent = phrases[phraseIndex];
+  const phraseInterval = setInterval(() => {
+    phraseIndex = (phraseIndex + 1) % phrases.length;
     phrase.textContent = phrases[phraseIndex];
-    phraseInterval = setInterval(() => {
-      phraseIndex = (phraseIndex + 1) % phrases.length;
-      phrase.textContent = phrases[phraseIndex];
-    }, 5000);
-  }, 4000);
+  }, 5000);
   const deadline = setTimeout(() => void fail(), 30000);
 
   function stopTimers() {
-    clearTimeout(phraseTimer);
     clearInterval(phraseInterval);
     clearTimeout(deadline);
   }
@@ -102,6 +98,8 @@
     picture.src = `/img/startup/worker-${phase}.webp`;
     picture.alt = online ? "Грустный мастер у закрытого окна с табличкой «Перерыв»" : "Мастер ищет интернет с роутером в руке";
     title.textContent = online ? "Данные не загрузились" : "Нет подключения к интернету";
+    title.hidden = false;
+    description.hidden = false;
     description.textContent = online
       ? "Связь есть, но система пока не смогла получить данные. Попробуем ещё раз?"
       : "Проверьте Wi-Fi, мобильную сеть или VPN и попробуйте снова.";
@@ -115,6 +113,8 @@
     const id = ++diagnosis;
     stopTimers();
     phase = "checking";
+    title.hidden = false;
+    description.hidden = false;
     title.textContent = "Проверяем соединение…";
     description.textContent = "Выясняем, где задержались данные.";
     phrase.hidden = true;

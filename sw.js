@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v96: грустный мастер и табличка «Перерыв» на экране ошибки загрузки данных.
-const STATIC_CACHE = "orders-site-static-v96";
+// v97: сразу показывать смешную фразу, убрать заголовки загрузки, оживить три точки.
+const STATIC_CACHE = "orders-site-static-v97";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
