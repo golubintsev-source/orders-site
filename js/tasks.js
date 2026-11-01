@@ -1,7 +1,7 @@
 import {
   initTaskAttachments, hasTaskDraftAttachments, prepareTaskAttachments,
   setTaskAttachmentsBusy, clearTaskDraftAttachments, renderTaskAttachmentsHtml,
-  hydrateTaskAttachments, isTaskAttachmentsBusy,
+  hydrateTaskAttachments, isTaskAttachmentsBusy, renderTaskBodyHtml,
 } from "./task-attachments.js";
 import { taskAttachmentOrderIds } from "./task-attachment-data.js";
 import { refreshMyTasksNavBadge } from "./task-badge.js";
@@ -148,7 +148,7 @@ function renderTaskOrderCellHtml(row) {
  * что и попап по дате заказа в таблице «Заказы».
  */
 function renderTaskTextCellHtml(row, { orderPopup = false } = {}) {
-  const text = `<div class="task-body-text">${escapeHtml(row.body || "")}</div>${renderTaskAttachmentsHtml(row)}`;
+  const text = `<div class="task-body-text">${renderTaskBodyHtml(row.body)}</div>${renderTaskAttachmentsHtml(row)}`;
   if (!orderPopup || isStandaloneTask(row)) {
     return `<td class="order-tasks-text-cell">${text}</td>`;
   }

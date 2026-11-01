@@ -25,7 +25,12 @@ export function normalizeTaskAttachments(value) {
   });
 }
 
+export function taskOrderIdsFromBody(body) {
+  return [...new Set([...String(body || "").matchAll(/\[\[order:(\d+)\]\]/g)]
+    .map((match) => Number(match[1])).filter((id) => Number.isSafeInteger(id) && id > 0))];
+}
+
 export function taskAttachmentOrderIds(row) {
-  return normalizeTaskAttachments(row?.attachments)
-    .filter((item) => item.type === "order").map((item) => item.orderId);
+  return [...new Set([...taskOrderIdsFromBody(row?.body), ...normalizeTaskAttachments(row?.attachments)
+    .filter((item) => item.type === "order").map((item) => item.orderId)])];
 }

@@ -4,12 +4,13 @@ import { formatOrderIdTypeChip } from "./format.js";
 import { getOrderSummary } from "./order-summary-cache.js";
 import { buildOrderViewUrl } from "./app-routes.js";
 import { getSignedFileUrl, getSignedFileUrls, isCroppableImageFile } from "./storage-urls.js";
-import { normalizeTaskAttachments } from "./task-attachment-data.js";
+import { normalizeTaskAttachments, taskOrderIdsFromBody } from "./task-attachment-data.js";
 
 const photos = [];
-const orders = new Map();
 let busy = false;
-let picker;
+let pickerOpen = false;
+let pickerRequest = 0;
+let pickerTimer;
 let viewer;
 let pickerModule;
 let photoObserver;
@@ -45,7 +46,7 @@ function setMenuOpen(open) {
 function renderPending() {
   const root = document.getElementById("taskPendingAttachments");
   if (!root) return;
-  root.hidden = photos.length + orders.size === 0;
+  root.hidden = photos.length === 0;
   root.innerHTML = photos.map((photo, index) => `
     <div class="task-pending-photo">
       <img src="${escapeHtml(photo.previewUrl)}" alt="${escapeHtml(photo.file.name || "Фото")}" />
@@ -53,14 +54,11 @@ function renderPending() {
         ${isCroppableImageFile(photo.file) ? `<button type="button" data-crop="${index}" ${busy ? "disabled" : ""}>Обрезать</button>` : ""}
         <button type="button" data-remove-photo="${index}" aria-label="Убрать фото" ${busy ? "disabled" : ""}>×</button>
       </div>
-    </div>`).join("") + [...orders.values()].map((order) => `
-    <div class="task-pending-order">Заказ ${escapeHtml(formatOrderIdTypeChip(order.id, order.order_type))}
-      <button type="button" data-remove-order="${order.id}" aria-label="Убрать заказ" ${busy ? "disabled" : ""}>×</button>
     </div>`).join("");
 }
 
 export function hasTaskDraftAttachments() {
-  return photos.length + orders.size > 0;
+  return photos.length > 0;
 }
 
 export function setTaskAttachmentsBusy(value) {
@@ -69,7 +67,7 @@ export function setTaskAttachmentsBusy(value) {
   if (button) button.disabled = value;
   if (value) {
     setMenuOpen(false);
-    if (picker?.open) picker.close();
+    hideOrderSuggestions();
   }
   renderPending();
 }
@@ -77,12 +75,13 @@ export function setTaskAttachmentsBusy(value) {
 export function clearTaskDraftAttachments() {
   for (const photo of photos) URL.revokeObjectURL(photo.previewUrl);
   photos.length = 0;
-  orders.clear();
+  hideOrderSuggestions();
   renderPending();
 }
 
 export async function prepareTaskAttachments() {
-  const attachments = [...orders.keys()].map((orderId) => ({ type: "order", orderId }));
+  const attachments = taskOrderIdsFromBody(document.getElementById("orderTaskTextInput")?.value)
+    .map((orderId) => ({ type: "order", orderId }));
   if (photos.length) {
     const { uploadChatPhoto } = await import("./files.js");
     for (const photo of photos) {
@@ -106,68 +105,126 @@ function addPhotos(files) {
   renderPending();
 }
 
-function createPicker() {
-  picker = document.createElement("dialog");
-  picker.className = "task-order-picker";
-  picker.setAttribute("aria-label", "Прикрепить заказ");
-  picker.innerHTML = `<div class="task-dialog-header"><strong>Прикрепить заказ</strong><button type="button" data-close aria-label="Закрыть">×</button></div>
-    <input type="search" placeholder="Номер, клиент, адрес или описание" aria-label="Поиск заказа" />
-    <p role="status"></p><div class="task-order-picker-results"></div>`;
-  document.body.append(picker);
-  picker.querySelector("[data-close]").addEventListener("click", () => picker.close());
-  picker.querySelector("input").addEventListener("input", renderOrderChoices);
-  picker.querySelector(".task-order-picker-results").addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-order-id]");
-    if (!button || busy) return;
-    const order = (state.allOrders || []).find((row) => Number(row.id) === Number(button.dataset.orderId));
-    if (!order || isOrderHiddenForCurrentRole(order)) return;
-    orders.set(Number(order.id), order);
-    renderPending();
-    picker.close();
-  });
+function hideOrderSuggestions() {
+  clearTimeout(pickerTimer);
+  pickerOpen = false;
+  pickerRequest++;
+  const list = document.getElementById("taskComposerSuggestions");
+  if (list) { list.hidden = true; list.innerHTML = ""; }
+  const button = document.getElementById("taskPickOrderBtn");
+  button?.setAttribute("aria-expanded", "false");
+  button?.classList.remove("messages-composer-tool-btn--active");
 }
 
-function renderOrderChoices() {
-  if (!pickerModule) return;
-  const query = picker.querySelector("input").value.trim().toLowerCase();
-  const rows = (state.allOrders || []).filter((order) => {
-    if (order.payment_status === "Заказ закрыт" || isOrderHiddenForCurrentRole(order)) return false;
-    return [order.id, formatOrderIdTypeChip(order.id, order.order_type), order.client, order.address, order.description]
-      .some((value) => String(value || "").toLowerCase().includes(query));
-  });
-  picker.querySelector("[role=status]").textContent = rows.length ? "" : "Заказы не найдены.";
-  picker.querySelector(".task-order-picker-results").innerHTML = rows.map((order) =>
-    `<button type="button" data-order-id="${Number(order.id)}">${pickerModule.buildOrderPickerRowHtml(order)}</button>`).join("");
+function triggerContext(input) {
+  const caret = input.selectionStart ?? input.value.length;
+  const match = input.value.slice(0, caret).match(/&(\d*)$/);
+  return match ? { query: match[1], start: caret - match[0].length } : null;
 }
 
-async function openOrderPicker() {
-  if (!picker) createPicker();
-  picker.querySelector("input").value = "";
-  picker.querySelector("input").disabled = true;
-  picker.querySelector("[role=status]").textContent = "Загрузка заказов…";
-  picker.querySelector(".task-order-picker-results").innerHTML = "";
-  picker.showModal();
+function pickOrder(input, order, context) {
+  if (busy || input.disabled) return;
+  const start = context?.start ?? input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  const before = input.value.slice(0, start);
+  const insert = `[[order:${order.id}]] `;
+  input.value = before + insert + input.value.slice(end);
+  hideOrderSuggestions();
+  input.focus();
+  input.setSelectionRange(before.length + insert.length, before.length + insert.length);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+async function showOrderSuggestions(input, context = null) {
+  if (busy || input.disabled) return;
+  pickerOpen = true;
+  const request = ++pickerRequest;
+  const text = input.value;
+  const caret = input.selectionStart;
+  const button = document.getElementById("taskPickOrderBtn");
+  button?.setAttribute("aria-expanded", "true");
+  button?.classList.add("messages-composer-tool-btn--active");
   try {
     const runtime = await import("./orders-runtime.js");
-    pickerModule = await runtime.ensureOrdersData({ current: () => picker.open });
-    if (picker.open && pickerModule) {
-      picker.querySelector("input").disabled = false;
-      renderOrderChoices();
-      picker.querySelector("input").focus();
-    }
-  } catch {
-    if (picker.open) picker.querySelector("[role=status]").textContent = "Не удалось загрузить заказы. Закройте окно и попробуйте ещё раз.";
+    pickerModule = await runtime.ensureOrdersData({ current: () => pickerOpen && request === pickerRequest });
+    if (!pickerOpen || request !== pickerRequest || busy || input.value !== text || input.selectionStart !== caret) return;
+    const query = (context?.query || "").toLowerCase();
+    const rows = (state.allOrders || []).filter((order) => {
+      if (isOrderHiddenForCurrentRole(order)) return false;
+      if (!context && order.payment_status === "Заказ закрыт") return false;
+      return [order.id, formatOrderIdTypeChip(order.id, order.order_type), order.client, order.address, order.description]
+        .some((value) => String(value || "").toLowerCase().includes(query));
+    });
+    const choices = context ? rows.slice(0, 15) : rows;
+    const list = document.getElementById("taskComposerSuggestions");
+    if (!choices.length) { hideOrderSuggestions(); return; }
+    list.innerHTML = choices.map((order, index) =>
+      `<li role="option" data-index="${index}" aria-selected="${index === 0}">${pickerModule.buildOrderPickerRowHtml(order)}</li>`).join("");
+    list.hidden = false;
+    list.querySelectorAll("[data-fulltext]").forEach((cell) => {
+      const full = cell.getAttribute("data-fulltext");
+      if (full) cell.setAttribute("title", full);
+    });
+    list.querySelectorAll("li").forEach((item, index) => {
+      item.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        pickOrder(input, choices[index], context);
+      });
+    });
+  } catch (error) {
+    if (request === pickerRequest) { hideOrderSuggestions(); showError(error); }
   }
+}
+
+function bindOrderComposer(input) {
+  input.addEventListener("input", () => {
+    clearTimeout(pickerTimer);
+    hideOrderSuggestions();
+    const context = triggerContext(input);
+    if (context && !busy) {
+      pickerTimer = setTimeout(() => { void showOrderSuggestions(input, context); }, 120);
+    }
+  });
+  input.addEventListener("keydown", (event) => {
+    const list = document.getElementById("taskComposerSuggestions");
+    if (!list || list.hidden || event.isComposing) return;
+    const items = [...list.querySelectorAll("li")];
+    let index = items.findIndex((item) => item.getAttribute("aria-selected") === "true");
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      index = event.key === "ArrowDown" ? Math.min(index + 1, items.length - 1) : Math.max(index - 1, 0);
+      items.forEach((item, i) => item.setAttribute("aria-selected", String(i === index)));
+      items[index]?.scrollIntoView({ block: "nearest" });
+    } else if (event.key === "Enter" && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      items[index]?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      hideOrderSuggestions();
+    }
+  });
+  input.addEventListener("blur", () => setTimeout(hideOrderSuggestions, 150));
 }
 
 export function initTaskAttachments() {
   const button = document.getElementById("taskAttachBtn");
   if (!button || button.dataset.bound) return;
   button.dataset.bound = "1";
-  button.addEventListener("click", () => setMenuOpen(document.getElementById("taskAttachMenu").hidden));
+  button.addEventListener("mousedown", (event) => event.preventDefault());
+  button.addEventListener("click", () => {
+    hideOrderSuggestions();
+    setMenuOpen(document.getElementById("taskAttachMenu").hidden);
+  });
+  const input = document.getElementById("orderTaskTextInput");
+  bindOrderComposer(input);
+  document.getElementById("taskPickOrderBtn").addEventListener("mousedown", (event) => event.preventDefault());
   document.getElementById("taskPickOrderBtn").addEventListener("click", () => {
     setMenuOpen(false);
-    void openOrderPicker().catch(showError);
+    if (pickerOpen) hideOrderSuggestions();
+    else {
+      input.focus();
+      void showOrderSuggestions(input);
+    }
   });
   for (const kind of ["Camera", "Gallery"]) {
     const input = document.getElementById(`taskPhoto${kind}Input`);
@@ -188,8 +245,7 @@ export function initTaskAttachments() {
     if (target.hasAttribute("data-remove-photo")) {
       const [photo] = photos.splice(Number(target.dataset.removePhoto), 1);
       if (photo) URL.revokeObjectURL(photo.previewUrl);
-    } else if (target.hasAttribute("data-remove-order")) {
-      orders.delete(Number(target.dataset.removeOrder));
+
     } else if (target.hasAttribute("data-crop")) {
       const photo = photos[Number(target.dataset.crop)];
       if (!photo) return;
@@ -214,14 +270,27 @@ export function initTaskAttachments() {
   });
   document.addEventListener("click", (event) => {
     if (!event.target.closest(".task-attach-wrap")) setMenuOpen(false);
+    if (!event.target.closest(".task-composer-row")) hideOrderSuggestions();
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") setMenuOpen(false);
+    if (event.key === "Escape") { setMenuOpen(false); hideOrderSuggestions(); }
   });
 }
 
+export function renderTaskBodyHtml(body) {
+  return String(body || "").split(/(\[\[order:\d+\]\])/g).map((part) => {
+    const match = part.match(/^\[\[order:(\d+)\]\]$/);
+    const id = match ? Number(match[1]) : 0;
+    if (!Number.isSafeInteger(id) || id <= 0) return escapeHtml(part);
+    const order = getOrderSummary(id);
+    return `<a class="my-tasks-order-link message-order-link" href="${escapeHtml(buildOrderViewUrl(id))}" data-order-id="${id}">${escapeHtml(formatOrderIdTypeChip(id, order?.order_type))}</a>`;
+  }).join("");
+}
+
 export function renderTaskAttachmentsHtml(row) {
-  const items = normalizeTaskAttachments(row.attachments);
+  const bodyOrderIds = new Set(taskOrderIdsFromBody(row.body));
+  const items = normalizeTaskAttachments(row.attachments)
+    .filter((item) => item.type !== "order" || !bodyOrderIds.has(item.orderId));
   if (!items.length) return "";
   return `<div class="task-attachments">${items.map((item) => {
     if (item.type === "order") {
