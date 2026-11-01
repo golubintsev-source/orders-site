@@ -1,3 +1,4 @@
+import { normalizeTaskAttachments } from "./task-attachment-data.js";
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { displayNameByEmail } from "./user-names.js";
@@ -221,6 +222,7 @@ export async function insertTask({
   dueAt,
   sourceMessageId,
   sourceMessageKind,
+  attachments,
   orderId,
 }) {
   if (!state.currentUser) {
@@ -229,7 +231,8 @@ export async function insertTask({
 
   const author = getAuthorLogin();
   const text = String(body || "").trim();
-  if (!text) {
+  const normalizedAttachments = normalizeTaskAttachments(attachments);
+  if (!text && !normalizedAttachments.length) {
     return { error: new Error("empty body") };
   }
 
@@ -241,6 +244,7 @@ export async function insertTask({
   const payload = {
     author_login: author,
     body: text,
+    ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
     executor_emails: Array.isArray(executorEmails) ? executorEmails : [],
     due_at: dueAt || null,
     is_completed: false,
@@ -259,6 +263,7 @@ export async function insertTask({
       tempTaskId: nextOfflineTempTaskId(),
       author_login: author,
       body: text,
+      ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
       executor_emails: payload.executor_emails,
       due_at: payload.due_at,
       is_completed: false,
