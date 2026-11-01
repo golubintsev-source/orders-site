@@ -91,7 +91,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
     row.querySelector(".messages-attach-panel").hidden = true;
     row.querySelectorAll('[aria-expanded]').forEach((el) => el.setAttribute("aria-expanded", "false"));
     row.querySelectorAll('.messages-composer-tool-btn--active').forEach((el) => el.classList.remove('messages-composer-tool-btn--active'));
-    field("composer").append(row);
+    // Keep the order list in the dialog flow below the text row. On phones this\n    // gives it the full dialog width and lets the dialog scroll naturally.\n    field("composer").append(row, suggestions);
     field("body").value = task.body || "";
     composer = createTaskAttachmentComposer({
       getElement: (id) => dialog.querySelector(`#taskEdit-${id}`),
