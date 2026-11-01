@@ -12021,3 +12021,16 @@ html.keyboard-open .voice-composer {
 }
 
 .task-reply-readonly { min-width: 140px; max-width: 300px; font-weight: 400; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.task-edit-delete {
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.task-edit-delete:disabled { opacity: .5; cursor: default; }

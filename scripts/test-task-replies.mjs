@@ -75,6 +75,7 @@ console.log('task replies: grey/green dirty state, save, duplicate prevention, e
 // Exercise the real shared edit dialog used from both task lists and order cells.
 let modal = null, patchSent, updateFilters, canReply = true, conflict = false, savedRow;
 const editorSizedFields = [];
+let deleteResult = false, deletedId;
 const node = () => ({ value: '', checked: false, disabled: false, dataset: {}, hidden: true, listeners: {},
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }, focus() {}, append() {}, appendChild() {},
   querySelector() { return null; }, querySelectorAll() { return []; },
@@ -84,7 +85,7 @@ const document = {
   getElementById: id => id === 'taskEditDialog' ? modal : null,
   body: { append(dialog) { modal = dialog; dialog.isConnected = true; } },
   createElement() {
-    fields = Object.fromEntries(['reply','completed','highlight','hint','due','error'].map(key => [key, node()]));
+    fields = Object.fromEntries(['reply','completed','highlight','hint','due','error','delete'].map(key => [key, node()]));
     form = node(); editText = node(); executors = node(); submit = node(); const cancel = node();
     form.querySelectorAll = () => [...Object.values(fields), editText, submit, cancel];
     const dialog = node(); dialog.setAttribute = () => {};
@@ -101,6 +102,7 @@ const document = {
 };
 const taskRow = { id: 50, author_login: 'worker@example.com', body: 'Задача', executor_emails: ['worker@example.com'], executor_reply: 'Старый ответ', is_completed: false };
 const editorContext = vm.createContext({
+  deleteModule: { softDeleteAuthorTask: async id => { deletedId = id; return deleteResult; } },
   document, console, isOfflineDataMode: () => false, bindAutogrowTextarea: field => { editorSizedFields.push(field); return () => {}; },
   isUserAuthorOfTask: () => true, isUserExecutorOfTask: () => canReply,
   getCurrentUserEmail: () => 'worker@example.com', normalizeExecutorEmails: () => [],
@@ -118,7 +120,7 @@ const editorContext = vm.createContext({
   } },
 });
 const editSource = fs.readFileSync(new URL('../js/task-edit-dialog.js', import.meta.url), 'utf8');
-vm.runInContext(editSource.replace(/^import[^]*?from "[^"]+";\n/gm, '').replace(/export /g, ''), editorContext);
+vm.runInContext(editSource.replace(/^import[^]*?from "[^"]+";\n/gm, '').replace(/export /g, '').replace(/import\("\.\/tasks\.js"\)/g, 'Promise.resolve(deleteModule)'), editorContext);
 await editorContext.openTaskEditDialog(50, row => { savedRow = row; });
 assert.equal(fields.reply.value, 'Старый ответ'); assert.equal(fields.reply.readOnly, false);
 assert.equal(editText.rows, 1);
@@ -151,6 +153,13 @@ await editorContext.openTaskEditDialog(50);
 fields.reply.value = 'Conflict'; await form.emit('submit');
 assert.equal(modal.open, true); assert.match(fields.error.textContent, /Ответ уже изменён/);
 modal.close();
+conflict = false;
+await editorContext.openTaskEditDialog(50);
+await fields.delete.emit('click');
+assert.equal(deletedId, 50); assert.equal(modal.open, true, 'cancelled/failed deletion keeps editor open');
+deleteResult = true;
+await fields.delete.emit('click');
+assert.equal(modal, null, 'successful soft deletion closes editor');
 console.log('shared edit dialog: reply below executors, editable for executor, read-only for author, unchanged reply preserved and conflict handled');
 let queue = [{ localId: 'local', tempTaskId: -1, executor_reply: '' }], synced;
 const offlineContext = vm.createContext({
