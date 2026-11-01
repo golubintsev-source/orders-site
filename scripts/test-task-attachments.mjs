@@ -16,9 +16,22 @@ assert.deepEqual(normalizeTaskAttachments([{ type: "order", orderId: 2, signedUr
 
 function element() {
   return {
-    hidden: true, dataset: {}, value: "", innerHTML: "", textContent: "", listeners: {},
+    hidden: true, dataset: {}, value: "", textContent: "", listeners: {}, attributes: {},
+    _html: "", _items: [],
+    get innerHTML() { return this._html; },
+    set innerHTML(value) {
+      this._html = value;
+      this._items = [...value.matchAll(/<li[^>]*aria-selected="(true|false)"/g)].map((match) => {
+        const item = element(); item.attributes["aria-selected"] = match[1]; return item;
+      });
+    },
+    querySelectorAll(selector) { return selector === "li" ? this._items : []; },
+    focus() {}, scrollIntoView() {},
+    setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; },
+    dispatchEvent(event) { this.listeners[event.type]?.(event); },
     classList: { add() {}, remove() {}, toggle() {} },
-    setAttribute() {},
+    setAttribute(name, value) { this.attributes[name] = value; },
+    getAttribute(name) { return this.attributes[name]; },
     addEventListener(name, listener) { this.listeners[name] = listener; },
   };
 }
@@ -30,13 +43,16 @@ const document = {
   },
   addEventListener() {},
 };
-const state = { currentUser: { id: "user-id", email: "author@example.com" } };
+const state = { currentUser: { id: "user-id", email: "author@example.com" }, allOrders: [
+  { id: 42, client: "Иван" }, { id: 43, payment_status: "Заказ закрыт" },
+  { id: 44, client: "Анна" }, { id: 45, hidden: true },
+] };
 const calls = [];
 let failSecondUpload = true;
 const persisted = [];
 const stubs = {
   "./state.js": { state },
-  "./roles.js": { isOrderHiddenForCurrentRole: () => false },
+  "./roles.js": { isOrderHiddenForCurrentRole: (order) => order.hidden },
   "./format.js": { formatOrderIdTypeChip: (id) => `00${id}_О` },
   "./order-summary-cache.js": { getOrderSummary: () => ({ order_type: "Окна" }) },
   "./app-routes.js": { buildOrderViewUrl: (id) => `/?order=${id}` },
@@ -52,6 +68,9 @@ const stubs = {
   "./offline-cache.js": {
     addPendingOfflineTask() {}, nextOfflineTempTaskId: () => -1, isOfflineDataMode: () => false,
   },
+  "./orders-runtime.js": { ensureOrdersData: async () => ({
+    buildOrderPickerRowHtml: (order) => `<div class="messages-suggestion-order-row">${order.id}</div>`,
+  }) },
   "./files.js": { uploadChatPhoto: async (file) => {
     calls.push(file.name);
     if (file.name === "second.jpg" && failSecondUpload) throw new Error("upload failed");
@@ -59,7 +78,7 @@ const stubs = {
       previewUrl: "blob:must-not-persist", signedUrl: "must-not-persist" };
   } },
 };
-const context = vm.createContext({ document, console, URL: {
+const context = vm.createContext({ document, console, Event, MouseEvent: Event, setTimeout, clearTimeout, URL: {
   createObjectURL: () => "blob:preview", revokeObjectURL() {},
 } });
 async function loadModule(path) {
@@ -89,6 +108,38 @@ function stub(specifier) {
 
 const attachments = (await loadModule("task-attachments.js")).namespace;
 attachments.initTaskAttachments();
+const composer = document.getElementById("orderTaskTextInput");
+composer.value = "До  после";
+composer.setSelectionRange(3, 3);
+document.getElementById("taskPickOrderBtn").listeners.click();
+await new Promise((resolve) => setImmediate(resolve));
+const list = document.getElementById("taskComposerSuggestions");
+assert.equal(list.hidden, false, "the order menu opens inline suggestions");
+assert.equal(list.querySelectorAll("li").length, 2, "menu shows open, permitted orders");
+assert.match(list.innerHTML, /messages-suggestion-order-row/);
+composer.listeners.keydown({ key: "ArrowDown", preventDefault() {} });
+composer.listeners.keydown({ key: "Enter", preventDefault() {} });
+assert.equal(composer.value, "До [[order:44]]  после", "selected order is inserted at the caret like messages");
+assert.equal(list.hidden, true);
+assert.deepEqual(normalize(await attachments.prepareTaskAttachments()), [{ type: "order", orderId: 44 }]);
+assert.match(attachments.renderTaskBodyHtml(composer.value), /message-order-link/);
+assert.doesNotMatch(attachments.renderTaskBodyHtml('<img onerror="bad"> [[order:42]]'), /<img/);
+assert.deepEqual(taskAttachmentOrderIds({ body: "[[order:42]] [[order:44]]", attachments: [
+  { type: "order", orderId: 42 }, { type: "order", orderId: 43 },
+]}), [42, 44, 43], "inline references and previously saved attachments both remain readable");
+assert.doesNotMatch(attachments.renderTaskAttachmentsHtml({ body: composer.value, attachments: [{type: "order", orderId: 44}] }), /data-order-id/, "inline orders are not rendered twice");
+composer.value = "Нужно &4";
+composer.setSelectionRange(composer.value.length, composer.value.length);
+composer.listeners.input();
+await new Promise((resolve) => setTimeout(resolve, 150));
+assert.equal(list.hidden, false, "typing & opens order suggestions");
+assert.equal(list.querySelectorAll("li").length, 3, "typed search also finds closed orders, as in messages");
+list.querySelectorAll("li")[0].dispatchEvent(new Event("mousedown"));
+assert.equal(composer.value, "Нужно [[order:42]] ", "typed &query is replaced with the selected token");
+composer.value = "";
+composer.setSelectionRange(0, 0);
+composer.listeners.input();
+assert.deepEqual(normalize(await attachments.prepareTaskAttachments()), [], "removing a token removes its attachment");
 const gallery = document.getElementById("taskPhotoGalleryInput");
 gallery.files = [{ type: "image/jpeg", name: '<img onerror="bad">.jpg' }, { type: "image/jpeg", name: "second.jpg" }];
 gallery.listeners.change();
