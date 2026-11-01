@@ -34,3 +34,17 @@ export function taskAttachmentOrderIds(row) {
   return [...new Set([...taskOrderIdsFromBody(row?.body), ...normalizeTaskAttachments(row?.attachments)
     .filter((item) => item.type === "order").map((item) => item.orderId)])];
 }
+
+/** Every order the task belongs to: its source order plus orders inserted into the task. */
+export function taskLinkedOrderIds(row) {
+  const primaryOrderId = Number(row?.order_id);
+  const ids = Number.isSafeInteger(primaryOrderId) && primaryOrderId > 0
+    ? [primaryOrderId]
+    : [];
+  return [...new Set([...ids, ...taskAttachmentOrderIds(row)])];
+}
+
+export function taskReferencesOrder(row, orderId) {
+  const id = Number(orderId);
+  return Number.isSafeInteger(id) && id > 0 && taskLinkedOrderIds(row).includes(id);
+}
