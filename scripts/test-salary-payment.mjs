@@ -14,7 +14,9 @@ const build = values => context.buildSalaryPayment({ from: "Касса", ...valu
 for (const amount of ['', '0', '-1', 'abc', '1.2', 'Infinity', '9007199254740992']) assert.throws(() => build({ amount, recipient: 'Павел' }));
 assert.throws(() => build({ amount: '500', recipient: 'Не из настроек' }));
 for (const from of ['Вова', 'Дима', 'Касса', 'Безнал', 'Другое']) {
-  assert.equal(build({ amount: '500', recipient: 'Павел', from }).from_place, from);
+  const payment = build({ amount: '500', recipient: 'Павел', from });
+  assert.equal(payment.from_place, from);
+  assert.ok(isSalaryPaymentRow(payment), `Salary from ${from} must receive the yellow row class`);
 }
 for (const from of ['', 'Алексей', 'Несуществующий источник', null]) {
   assert.throws(() => build({ amount: '500', recipient: 'Павел', from }));
@@ -36,6 +38,10 @@ for (const recipient of ['Водитель Тест', 'Иван', 'Павел'])
 }
 assert.equal(payload.comment, 'з/п Павел, Доплата; Алексей');
 assert.ok(isSalaryPaymentRow(payload));
+assert.ok(isSalaryPaymentRow({ from_place: 'Дима', to_place: 'Зарплата', comment: 'з/п Сергей и Стас, Аванс; Алексей' }));
+assert.ok(isSalaryPaymentRow({ from_place: 'Вова', to_place: 'Павел', comment: 'з/п Павел, Доплата; Алексей' }));
+assert.equal(isSalaryPaymentRow({ from_place: 'Дима', to_place: 'Покупка', comment: 'з/п Сергей и Стас, Аванс; Алексей' }), false);
+assert.equal(isSalaryPaymentRow({ from_place: 'Дима', to_place: 'Зарплата', comment: '[AUTO_ORDER_DELTA] Монтаж; Алексей' }), false);
 assert.equal(groupSalaryRowsByEmployee([payload])[0].total, 2500);
 assert.equal(context.salaryRecipientGroups()[1].names.length, 1);
 const values = { from: 'Дима', amount: '500', recipient: 'Павел' };
