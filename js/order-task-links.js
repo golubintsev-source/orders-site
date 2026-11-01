@@ -1,6 +1,7 @@
 import { supabaseClient } from "./config.js";
 import { readPendingTasksQueueForMessageLinks } from "./offline-cache.js";
 import { isUserAuthorOfTask, isUserExecutorOfTask } from "./task-form-shared.js";
+import { taskLinkedOrderIds } from "./task-attachment-data.js";
 
 /** @type {Set<number>} */
 const activeTaskOrderIds = new Set();
@@ -30,9 +31,7 @@ function isMyActiveOrderTask(row) {
 
 function ingestTaskRow(row) {
   if (!isMyActiveOrderTask(row)) return;
-  const id = Number(row.order_id);
-  if (!Number.isFinite(id) || id <= 0) return;
-  activeTaskOrderIds.add(id);
+  for (const id of taskLinkedOrderIds(row)) activeTaskOrderIds.add(id);
 }
 
 export function applyOrderTaskHighlightsInDom(root = document) {
@@ -49,8 +48,7 @@ export async function refreshActiveTaskOrderRefs(root = document) {
 
   const { data, error } = await supabaseClient
     .from("order_tasks")
-    .select("order_id, is_completed, author_login, executor_emails")
-    .not("order_id", "is", null)
+    .select("order_id, body, attachments, is_completed, author_login, executor_emails")
     .eq("is_completed", false)
     .is("deleted_at", null);
 

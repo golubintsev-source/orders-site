@@ -3,7 +3,7 @@ import {
   setTaskAttachmentsBusy, clearTaskDraftAttachments, renderTaskAttachmentsHtml,
   hydrateTaskAttachments, isTaskAttachmentsBusy, renderTaskBodyHtml,
 } from "./task-attachments.js";
-import { taskAttachmentOrderIds } from "./task-attachment-data.js";
+import { taskAttachmentOrderIds, taskReferencesOrder } from "./task-attachment-data.js";
 import { refreshMyTasksNavBadge } from "./task-badge.js";
 import { supabaseClient } from "./config.js";
 import { ensureOrderSummaries, getOrderSummary } from "./order-summary-cache.js";
@@ -81,7 +81,7 @@ function isStandaloneTask(row) {
 function filterTasksForOrder(rows, orderId) {
   const oid = Number(orderId);
   if (!Number.isFinite(oid) || oid <= 0) return [];
-  return (rows || []).filter((row) => Number(row.order_id) === oid);
+  return (rows || []).filter((row) => taskReferencesOrder(row, oid));
 }
 
 function sortTasksByDueAt(rows) {
@@ -260,7 +260,6 @@ async function fetchTasksForOrderFromServer(orderId, signal) {
     supabaseClient
       .from("order_tasks")
       .select(TASK_SELECT_FIELDS)
-      .eq("order_id", oid)
       .is("deleted_at", null),
     { signal },
   );
