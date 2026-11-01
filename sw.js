@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v105: красные и зелёные рамки ячеек по флажку задачи.
-const STATIC_CACHE = "orders-site-static-v105";
+// v106: размер текста 16px в окне создания задачи.
+const STATIC_CACHE = "orders-site-static-v106";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
