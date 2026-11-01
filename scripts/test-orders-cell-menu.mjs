@@ -26,7 +26,7 @@ class Element {
   focus() {} select() {} setSelectionRange() {}
 }
 const table = new Element('table'); const row = new Element('tr'); const idCell = new Element('td');
-idCell.dataset.orderId = '42'; const cell = new Element('td');
+idCell.dataset.orderId = '42'; idCell.textContent = '0042_О'; const cell = new Element('td');
 cell.dataset.fulltext = 'Полный <текст> клиента\nвторая строка'; cell.innerText = 'Полный…';
 row.append(idCell, cell); table.append(row); row.querySelector = () => idCell;
 const body = new Element('body'); body.append(table);
@@ -72,8 +72,10 @@ await emit(copy, 'click', { target: copy }).done;
 assert.equal(clipboard, cell.dataset.fulltext); assert.equal(menu.hidden, true);
 start(); hold(); release();
 await emit(task, 'click', { target: task }).done;
+assert.equal(opened[0].body, cell.dataset.fulltext);
+assert.equal(opened[0].sourceOrderLabel, '0042_О');
 assert.equal(opened.length, 1); assert.equal(opened[0].sourceOrderId, 42); assert.equal(menu.hidden, true);
-idCell.dataset.orderId = '99';
+idCell.dataset.orderId = '99'; idCell.textContent = '0099_О';
 start(); hold(); release(); await emit(task, 'click', { target: task }).done;
 assert.equal(opened[1].sourceOrderId, 99, 'task uses the touched row order, not a previously selected order');
 start(); hold(); release(); emit(document, 'scroll', { target: table }); assert.equal(menu.hidden, true);
@@ -89,7 +91,7 @@ assert.match(dialogSource, /orderId: sourceOrderId/);
 console.log('orders cell menu: short tap, hold, scroll, cancel, pinch, full-text copy, selected cell, task order link, refresh, escape, clipboard errors and offline order passed');
 
 // Exercise the real standard dialog and its insertTask payload with isolated data services.
-const ids = ['taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
+const ids = ['taskCreateDialogTitle', 'taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
   'taskCreateDialogDueAt', 'taskCreateDialogError', 'taskCreateDialogSubmitBtn', 'taskCreateDialogCancelBtn', 'taskCreateDialogCloseBtn'];
 const fields = new Map(ids.map(id => [id, new Element()]));
 const dialogBody = new Element('body');
@@ -113,7 +115,9 @@ const dialogContext = vm.createContext({
 vm.runInContext(dialogSource.replace(/^import[^]*?from "[^\"]+";\n/, '')
   .replace(/export /g, '')
   .replace(/import\("\.\/(?:tasks|order-task-links|message-task-links)\.js"\)/g, 'Promise.resolve(taskModules)'), dialogContext);
-await dialogContext.openTaskCreateDialog({ sourceOrderId: 99 });
+await dialogContext.openTaskCreateDialog(opened[1]);
+assert.equal(fields.get('taskCreateDialogText').value, cell.dataset.fulltext);
+assert.equal(fields.get('taskCreateDialogTitle').textContent, 'Создание задачи к заказу № 0099_О');
 assert.equal(fields.get('taskCreateDialog').open, true);
 fields.get('taskCreateDialogText').value = 'Проверить заказ';
 await dialogContext.submitTaskCreateDialog();
@@ -122,7 +126,10 @@ assert.equal(taskPayload.orderId, 99);
 assert.equal(taskPayload.body, 'Проверить заказ');
 assert.equal(taskPayload.executorEmails[0], 'worker@example.com');
 assert.equal(taskPayload.dueAt, '2026-11-02T09:00');
-console.log('standard task dialog: text, executors, deadline and touched order are preserved in the saved task payload');
+await dialogContext.openTaskCreateDialog();
+assert.equal(fields.get('taskCreateDialogText').value, '');
+assert.equal(fields.get('taskCreateDialogTitle').textContent, 'Новая задача');
+console.log('standard task dialog: cell text and order title prefilled, editable text saved, order link preserved and ordinary dialog reset');
 
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const messagesSection = html.match(/<section id="section-messages"[^]*?<\/section>/)?.[0];
