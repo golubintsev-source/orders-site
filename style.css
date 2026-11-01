@@ -4118,16 +4118,6 @@ h2 {
 }
 .task-composer-row #orderTaskTextInput { flex: 1; min-width: 0; }
 .task-attach-wrap { position: relative; flex-shrink: 0; }
-.task-attach-wrap .task-attach-btn {
-  display: flex;
-  flex-direction: row;
-  gap: 5px;
-  width: auto;
-  min-width: 36px;
-  height: 36px;
-  padding: 0 8px;
-  font-size: 12px;
-}
 .task-attach-wrap .messages-attach-panel {
   left: auto;
   right: 0;

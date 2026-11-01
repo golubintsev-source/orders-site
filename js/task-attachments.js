@@ -41,6 +41,10 @@ function setMenuOpen(open) {
   if (menu) menu.hidden = !open;
   button?.setAttribute("aria-expanded", String(open));
   button?.classList.toggle("messages-composer-tool-btn--active", open);
+  if (button) {
+    button.title = open ? "Закрыть вложения" : "Вложение";
+    button.setAttribute("aria-label", button.title);
+  }
 }
 
 function renderPending() {
