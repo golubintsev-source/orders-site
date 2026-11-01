@@ -11913,3 +11913,11 @@ html.keyboard-open .voice-composer {
   #calculationsTable .calc-actions-grid .btn-edit,
   #calculationsTable .calc-actions-grid .btn-delete-calc { grid-column: 1; }
 }
+
+.recent-salary-payments { margin: 12px 0 20px; }
+.recent-salary-payments h2 { margin: 0 0 8px; font-size: 16px; }
+.recent-salary-payments .all-salaries-detail-table td:nth-child(4) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.recent-salary-payments .all-salaries-detail-table td:nth-child(5) { white-space: nowrap; }

@@ -899,6 +899,15 @@
           </div>
         </form>
         <p id="salaryPaymentMessage" class="all-salaries-message" role="status"></p>
+        <section class="recent-salary-payments" aria-labelledby="recentSalaryPaymentsTitle">
+          <h2 id="recentSalaryPaymentsTitle">Последние выплаты</h2>
+          <div class="all-salaries-details-scroll">
+            <table class="all-salaries-detail-table" aria-label="Три последние выплаты зарплаты">
+              <thead><tr><th>Дата</th><th>Откуда</th><th>Кому</th><th>Комментарий</th><th>Сумма</th></tr></thead>
+              <tbody id="recentSalaryPaymentsBody"><tr><td colspan="5">Загрузка…</td></tr></tbody>
+            </table>
+          </div>
+        </section>
         <div class="table-wrap all-salaries-table-wrap">
           <table id="allSalariesTable" class="all-salaries-table" aria-label="Все выплаты зарплаты по месяцам">
             <thead>
