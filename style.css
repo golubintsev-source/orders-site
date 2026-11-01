@@ -12004,3 +12004,18 @@ html.keyboard-open .voice-composer {
   overflow: hidden;
   resize: none;
 }
+
+.task-reply-input,
+#taskEditDialog textarea[data-field="reply"] {
+  height: 40px;
+  min-height: 40px;
+  max-height: none;
+  padding: 9px 8px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  resize: none;
+}
