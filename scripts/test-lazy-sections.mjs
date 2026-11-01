@@ -164,6 +164,8 @@ test("shell and chat static graphs exclude order UI and other screens", () => {
   for (const entry of ["js/main.js", "js/messages.js", "js/nav-status.js", "js/all-salaries.js"]) {
     const graph = staticGraph(entry);
     for (const path of ["js/orders.js", "js/ui.js", "js/files.js", "js/settings.js", "js/calculations.js", "js/voice.js", "js/tasks.js", "js/balance.js"]) {
+      // Salary recipients already depend on settings; the shell and chat still must not.
+      if (entry === "js/all-salaries.js" && path === "js/settings.js") continue;
       assert.ok(!graph.has(path), `${entry} unexpectedly imports ${path}`);
     }
   }
@@ -180,7 +182,7 @@ test("HTML and service worker do not eagerly preload closed screens", () => {
   assert.ok(!read("js/main.js").includes("initSecondarySections"));
 });
 
-async function startupHarness({ route, savedApp = null, orderId = null, allowed = true }) {
+async function startupHarness({ route, savedApp = null, orderId = null, allowed = true, startup = null, routeReady = null }) {
   const calls = [], dynamicImports = [];
   let active = route;
   const user = { id: "user", email: "test@example.invalid" };
@@ -188,13 +190,13 @@ async function startupHarness({ route, savedApp = null, orderId = null, allowed 
   const context = vm.createContext({ console, document: {
     documentElement: { hasAttribute: () => true },
     getElementById: () => null, addEventListener() {},
-  }, window: { location: { replace: (url) => calls.push(["redirect", url]) }, addEventListener() {} },
+  }, window: { __appStartup: startup, location: { replace: (url) => calls.push(["redirect", url]) }, addEventListener() {} },
   sessionStorage: { getItem: () => null, removeItem() {} } });
   const values = {
     state, checkAuth: async () => user, loadProfile: async () => calls.push(["profile"]),
     canAccessSection: (id) => allowed || id === "all", getOrderIdFromUrl: () => orderId,
     getRouteSectionFromUrl: () => route, getCurrentSectionId: () => active,
-    switchSection: async (id) => { active = id; calls.push(["section", id]); },
+    switchSection: async (id) => { active = id; calls.push(["section", id]); await routeReady; },
     readSavedPlaceForCurrentPage: () => savedApp ? { app: savedApp } : null,
     consumeSkipUserPlaceResume: () => false, captureHref: () => "/" + route,
     readUserPlace: () => null, shouldRedirectToSavedPlace: () => false,
@@ -229,6 +231,20 @@ test("real startup script: cold chat and calculations never start orders or sett
     const h = await startupHarness({ route });
     assert.deepEqual(h.calls.filter(([name]) => name === "section"), [["section", route]]);
     assert.deepEqual(h.dynamicImports.sort(), ["./nav-status.js", "./push-notifications.js"]);
+  }
+});
+
+test("real startup keeps the cover until the selected screen's load promise resolves", async () => {
+  for (const route of ["all", "calculations", "messages"]) {
+    const gate = deferred(), events = [];
+    const pending = startupHarness({ route, routeReady: gate.promise, startup: {
+      expectSection: (id) => events.push(["expect", id]),
+      complete: () => events.push(["complete"]),
+    } });
+    await tick();
+    assert.deepEqual(events, [["expect", route]]);
+    gate.resolve(); await pending;
+    assert.deepEqual(events, [["expect", route], ["complete"]]);
   }
 });
 

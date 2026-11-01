@@ -1,13 +1,43 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-startup="loading">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- Critical boot styles: the first frame does not wait for the application CSS. -->
+  <style>
+    html[data-startup] { background: #fff; overflow: hidden; }
+    html[data-startup] body { margin: 0; }
+    html[data-startup] body > :not(#startupScreen):not(script):not(style) { visibility: hidden !important; }
+    #startupScreen[hidden], #startupScreen [hidden] { display: none !important; }
+    #startupScreen { position: fixed; inset: 0; z-index: 2147483647; overflow: auto; overscroll-behavior: none; box-sizing: border-box; background: #fff; color: #183047; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-align: center; }
+    #startupScreen .startup-content { box-sizing: border-box; min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: max(22px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
+    #startupScreen .startup-brand { margin: 0 0 10px; color: #698096; font-size: 12px; font-weight: 700; letter-spacing: .2em; }
+    #startupPicture { display: block; width: min(84vw, 410px, 48vh); width: min(84vw, 410px, 48svh); height: auto; aspect-ratio: 1; object-fit: contain; flex-shrink: 0; border-radius: 24px; }
+    #startupTitle { margin: 16px 0 8px; max-width: 480px; font-size: clamp(22px, 5vw, 30px); line-height: 1.2; font-weight: 750; }
+    #startupDescription { margin: 0; max-width: 350px; font-size: 15px; line-height: 1.5; color: #6c7e8e; }
+    #startupProgress { display: flex; gap: 7px; margin: 22px 0 0; }
+    #startupProgress span { width: 8px; height: 8px; border-radius: 50%; background: #f58a30; animation: startup-pulse 1.2s infinite ease-in-out; }
+    #startupProgress span:nth-child(2) { animation-delay: .15s; }
+    #startupProgress span:nth-child(3) { animation-delay: .3s; }
+    #startupPhrase { margin: 20px 0 0; max-width: 340px; min-height: 44px; font-size: 15px; line-height: 1.45; color: #536b80; }
+    #startupRetry { appearance: none; border: 0; border-radius: 14px; padding: 14px 28px; margin: 24px 0 0; min-height: 48px; background: #2563eb; color: #fff; font: 600 16px/1.25 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor: pointer; }
+    #startupRetry:focus-visible { outline: 3px solid #f58a30; outline-offset: 4px; }
+    #startupRetry:disabled { opacity: .65; }
+    @keyframes startup-pulse { 0%, 80%, 100% { opacity: .3; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
+    @media (prefers-reduced-motion: reduce) { #startupProgress span { animation: none; } }
+    @media (max-height: 480px) and (orientation: landscape) {
+      #startupScreen .startup-content { display: grid; grid-template-columns: min(34vw, 240px) minmax(0, 350px); align-content: center; justify-content: center; column-gap: 26px; }
+      #startupPicture { grid-column: 1; grid-row: 1 / 7; width: 100%; }
+      #startupScreen .startup-brand, #startupTitle, #startupDescription, #startupProgress, #startupPhrase, #startupRetry { grid-column: 2; justify-self: center; }
+      #startupTitle { margin-top: 8px; }
+    }
+  </style>
+  <link rel="preload" href="/img/startup/factory-loading.webp" as="image" fetchpriority="high">
   <link rel="preconnect" href="https://yizwpogwabosuguakyzt.supabase.co" crossorigin>
   <!-- Ставим монитор до остальных скриптов, чтобы не потерять ранние запросы и ошибки. -->
-  <script src="./js/performance-monitor.js"></script>
+  <script defer src="./js/performance-monitor.js"></script>
   <!-- Раздел «Чаты»: запрос списка уходит уже во время разбора HTML, до supabase-js и main.js. -->
-  <script src="./js/chat-boot.js"></script>
+  <script defer src="./js/chat-boot.js"></script>
   <!-- В <head>, чтобы скачивание шло параллельно разбору body: config.js требует window.supabase. -->
   <script defer src="./js/vendor/supabase.js"></script>
   <script defer src="./js/register-sw.js"></script>
@@ -18,9 +48,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ФАБРИКА ОКОН">
   <link rel="apple-touch-icon" href="/img/apple-touch-icon.png?v=20260803">
-  <link rel="stylesheet" href="./style.css?v=calc-fit-20261031">
+  <link id="appStyles" rel="stylesheet" href="./style.css?v=calc-fit-20261031" media="print">
   <link rel="modulepreload" href="./js/boot-route.js">
-  <link rel="modulepreload" href="./js/main.js">
+  <link rel="modulepreload" href="./js/main.js?v=45">
   <link rel="modulepreload" href="./js/config.js">
   <link rel="modulepreload" href="./js/state.js">
   <link rel="modulepreload" href="./js/auth.js">
@@ -28,6 +58,18 @@
   <!-- cropper/leaflet CSS подгружаются лениво вместе со скриптами (см. js/lazy-cdn.js) -->
 </head>
 <body>
+  <div id="startupScreen" aria-labelledby="startupTitle">
+    <div class="startup-content">
+      <p class="startup-brand">ФАБРИКА ОКОН</p>
+      <img id="startupPicture" src="/img/startup/factory-loading.webp" width="640" height="640" fetchpriority="high" alt="Маленькие мастера в оранжевых касках собирают большое окно на фабрике">
+      <h1 id="startupTitle">Открываем фабрику…</h1>
+      <p id="startupDescription" role="status" aria-live="polite">Загружаем ваши данные</p>
+      <div id="startupProgress" aria-hidden="true"><span></span><span></span><span></span></div>
+      <p id="startupPhrase" hidden></p>
+      <button id="startupRetry" type="button" hidden>Еще попытка</button>
+    </div>
+  </div>
+  <script src="./js/startup-screen.js"></script>
   <div id="dbUnavailableBanner" class="db-unavailable-banner" hidden role="alert" aria-live="polite">
     <span class="db-unavailable-banner__icon" aria-hidden="true">
       <svg width="44" height="44" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -41,7 +83,7 @@
     </span>
     <span class="db-unavailable-banner__text" id="dbUnavailableBannerText">Нет связи с базой данных</span>
   </div>
-  <div class="container">
+  <div class="container" id="appContainer" inert aria-busy="true">
     <div class="topbar">
       <nav class="section-nav topbar-section-nav" role="navigation">
         <div class="section-nav-dropdown-wrap section-nav-search-wrap">
@@ -2615,7 +2657,7 @@
       }
     })();
   </script>
-  <script type="module" src="./js/main.js?v=44"></script>
+  <script type="module" src="./js/main.js?v=45"></script>
 
   <div
     id="messagesReactionPicker"

@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v93: обновить стили таблицы «Расчёты» в PWA.
-const STATIC_CACHE = "orders-site-static-v93";
+// v96: грустный мастер и табличка «Перерыв» на экране ошибки загрузки данных.
+const STATIC_CACHE = "orders-site-static-v96";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -19,13 +19,17 @@ const LEGACY_CACHE_PREFIXES = ["orders-site-static-"];
 const PRECACHE_URLS = [
   "/",
   "/index.html",
+  "/js/startup-screen.js",
+  "/img/startup/factory-loading.webp",
+  "/img/startup/worker-offline.webp",
+  "/img/startup/worker-data-error.webp",
   "/style.css",
   "/style.css?v=calc-fit-20261031",
   "/js/performance-monitor.js",
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",
   "/js/boot-route.js",
-  "/js/main.js?v=44",
+  "/js/main.js?v=45",
   "/js/config.js",
   "/js/read-requests.js",
   "/js/state.js",

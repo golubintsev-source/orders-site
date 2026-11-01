@@ -47,7 +47,10 @@ const lifecycle = createSectionLifecycle({
   },
   messages: async () => {
     const m = await import("./messages.js");
-    return { load: (opts) => m.onMessagesSectionEnter({ restoreFromUrl: Boolean(opts.restoreMessagesChat) }), leave: m.stopMessagesPolling };
+    return { load: async (opts) => {
+      const ok = await m.onMessagesSectionEnter({ restoreFromUrl: Boolean(opts.restoreMessagesChat) });
+      if (ok === false && window.__appStartup?.pending) throw new Error("Не удалось загрузить чаты");
+    }, leave: m.stopMessagesPolling };
   },
   voice: async () => {
     const m = await import("./voice.js");

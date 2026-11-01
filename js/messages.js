@@ -2793,7 +2793,7 @@ async function loadChatListOnce() {
     { isCurrent },
   );
   if (isCurrent()) void refreshMessagesUnreadBadge();
-  return true;
+  return !groupPack.error && !unreadPack.error;
 }
 
 /** Один сетевой проход списка за раз: при медленной БД polling не создаёт лавину запросов. */
@@ -2978,7 +2978,7 @@ export function showMessagesChatList() {
   stopMessagesFeedPolling();
   startChatListPolling();
   reportChatVisibilityToSw();
-  void loadChatList();
+  return loadChatList();
 }
 
 export async function openMessagesDialog(peerId) {
@@ -3023,6 +3023,7 @@ export async function openMessagesDialog(peerId) {
     }, 1000);
   }
   reportChatVisibilityToSw();
+  return initialLoadOk;
 }
 
 export async function loadMessages({ forceBottom = false } = {}) {
@@ -3158,10 +3159,9 @@ export function onMessagesSectionEnter(opts = {}) {
   initMessagesSection();
   const peerFromUrl = opts.restoreFromUrl ? getChatPeerFromUrl() : null;
   if (peerFromUrl) {
-    void openMessagesDialog(peerFromUrl);
-    return;
+    return openMessagesDialog(peerFromUrl);
   }
-  showMessagesChatList();
+  return showMessagesChatList();
 }
 
 function getFeedMessageIds() {
