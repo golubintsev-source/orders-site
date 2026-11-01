@@ -686,6 +686,8 @@ export function addPendingOfflineTask({
   order_id,
   source_message_id,
   source_message_kind,
+  source_order_field,
+  highlight_order_field,
 }) {
   const items = readPendingTasksQueue();
   items.push({
@@ -697,6 +699,8 @@ export function addPendingOfflineTask({
     due_at: due_at || null,
     is_completed: is_completed === true,
     order_id: order_id ?? null,
+    source_order_field: source_order_field || null,
+    highlight_order_field: highlight_order_field === true,
     source_message_id: source_message_id ?? null,
     source_message_kind: source_message_kind || null,
     created_at: created_at || new Date().toISOString(),
@@ -736,6 +740,8 @@ export function pendingTaskDisplayRows() {
     due_at: t.due_at || null,
     is_completed: t.is_completed === true,
     order_id: t.order_id ?? null,
+    source_order_field: t.source_order_field || null,
+    highlight_order_field: t.highlight_order_field === true,
     source_message_id: t.source_message_id ?? null,
     source_message_kind: t.source_message_kind || null,
     created_at: t.created_at,
@@ -929,6 +935,8 @@ async function syncPendingTasksToSupabase() {
       due_at: t.due_at || null,
       is_completed: t.is_completed === true,
       order_id: t.order_id ?? null,
+      source_order_field: t.source_order_field || null,
+      highlight_order_field: t.highlight_order_field === true,
       source_message_id: t.source_message_id ?? null,
       source_message_kind: t.source_message_kind || null,
     });

@@ -1,3 +1,4 @@
+import { validOrderField } from "./order-cell-highlights.js";
 import {
   defaultTaskDueAtLocal,
   datetimeLocalToIso,
@@ -12,10 +13,12 @@ let dialogInited = false;
 let pendingSourceMessage = null;
 /** @type {number | null} */
 let pendingSourceOrderId = null;
+let pendingSourceOrderField = null;
 
 function clearPendingSourceMessage() {
   pendingSourceMessage = null;
   pendingSourceOrderId = null;
+  pendingSourceOrderField = null;
 }
 
 function getDialogEls() {
@@ -23,6 +26,7 @@ function getDialogEls() {
     dialog: document.getElementById("taskCreateDialog"),
     textInput: document.getElementById("taskCreateDialogText"),
     titleEl: document.getElementById("taskCreateDialogTitle"),
+    highlightInput: document.getElementById("taskCreateDialogHighlight"),
     executorsList: document.getElementById("taskCreateDialogExecutors"),
     executorsHint: document.getElementById("taskCreateDialogExecutorsHint"),
     dueInput: document.getElementById("taskCreateDialogDueAt"),
@@ -49,6 +53,8 @@ function setDialogError(message) {
 function resetDialogForm() {
   const { textInput, dueInput, executorsList, titleEl } = getDialogEls();
   if (titleEl) titleEl.textContent = "Новая задача";
+  const highlight = document.getElementById("taskCreateDialogHighlight");
+  if (highlight) highlight.checked = false;
   if (textInput) textInput.value = "";
   if (dueInput) dueInput.value = defaultTaskDueAtLocal();
   resetTaskExecutorsList(executorsList);
@@ -86,6 +92,8 @@ async function submitTaskCreateDialog() {
     sourceMessageId: source?.id ?? null,
     sourceMessageKind: source?.kind ?? null,
     orderId: sourceOrderId,
+    sourceOrderField: pendingSourceOrderField,
+    highlightOrderField: getDialogEls().highlightInput?.checked === true,
   });
 
   if (submitBtn) submitBtn.disabled = false;
@@ -112,8 +120,7 @@ async function submitTaskCreateDialog() {
   }
   if (sourceOrderId != null) {
     void import("./order-task-links.js").then((m) => {
-      m.addActiveTaskOrderRef(sourceOrderId);
-      m.applyOrderTaskHighlightsInDom();
+      void m.refreshActiveTaskOrderRefs();
     });
   }
   clearPendingSourceMessage();
@@ -125,6 +132,7 @@ export async function openTaskCreateDialog({
   sourceMessageKind = null,
   sourceOrderId = null,
   sourceOrderLabel = "",
+  sourceOrderField = null,
 } = {}) {
   initTaskCreateDialog();
   const { dialog, textInput, dueInput, executorsList, executorsHint, titleEl } = getDialogEls();
@@ -139,6 +147,12 @@ export async function openTaskCreateDialog({
       ? Number(sourceOrderId)
       : null;
 
+  pendingSourceOrderField = pendingSourceOrderId != null ? validOrderField(sourceOrderField) : null;
+  const highlight = getDialogEls().highlightInput;
+  if (highlight) {
+    highlight.checked = pendingSourceOrderField != null;
+    highlight.disabled = pendingSourceOrderField == null;
+  }
   if (titleEl) {
     const orderLabel = String(sourceOrderLabel || pendingSourceOrderId || "").trim();
     titleEl.textContent = pendingSourceOrderId != null

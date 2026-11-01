@@ -11978,3 +11978,8 @@ html.keyboard-open .voice-composer {
 .orders-cell-menu-actions button:disabled { opacity: .5; }
 .orders-cell-menu-status { font-size: 13px; color: #b91c1c; }
 .orders-cell-menu-status:empty { display: none; }
+
+.task-highlight-toggle { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 16px; }
+.task-highlight-toggle input { width: 18px; height: 18px; margin: 0; flex: none; }
+#ordersTable tbody td.order-cell-task-pending { box-shadow: inset 0 0 0 2px #dc2626; }
+#ordersTable tbody td.order-cell-task-completed { box-shadow: inset 0 0 0 2px #16a34a; }

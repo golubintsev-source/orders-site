@@ -1,3 +1,5 @@
+import { fetchAllSupabaseRows } from "./supabase-fetch.js";
+import { buildOrderCellHighlights } from "./order-cell-highlights.js";
 import { supabaseClient } from "./config.js";
 import { readPendingTasksQueueForMessageLinks } from "./offline-cache.js";
 import { isUserAuthorOfTask, isUserExecutorOfTask } from "./task-form-shared.js";
@@ -5,6 +7,9 @@ import { taskLinkedOrderIds } from "./task-attachment-data.js";
 
 /** @type {Set<number>} */
 const activeTaskOrderIds = new Set();
+let cellHighlights = new Map();
+let lastTaskRows = [];
+let refreshGeneration = 0;
 
 export function orderHasActiveTask(orderId) {
   const id = Number(orderId);
@@ -38,27 +43,30 @@ export function applyOrderTaskHighlightsInDom(root = document) {
   for (const td of root.querySelectorAll(".td-order-id[data-order-id]")) {
     const id = td.getAttribute("data-order-id");
     const chip = td.querySelector(".order-id-chip");
-    if (!chip) continue;
-    chip.classList.toggle("order-id-chip--highlight-tasks", orderHasActiveTask(id));
+    if (chip) chip.classList.toggle("order-id-chip--highlight-tasks", orderHasActiveTask(id));
+    for (const cell of td.closest("tr").querySelectorAll("td[data-order-field]")) {
+      const status = cellHighlights.get(`${Number(id)}:${cell.dataset.orderField}`);
+      cell.classList.toggle("order-cell-task-pending", status === "pending");
+      cell.classList.toggle("order-cell-task-completed", status === "completed");
+    }
   }
 }
 
 export async function refreshActiveTaskOrderRefs(root = document) {
-  activeTaskOrderIds.clear();
-
-  const { data, error } = await supabaseClient
+  const generation = ++refreshGeneration;
+  const { data, error } = await fetchAllSupabaseRows(() => supabaseClient
     .from("order_tasks")
-    .select("order_id, body, attachments, is_completed, author_login, executor_emails")
-    .eq("is_completed", false)
-    .is("deleted_at", null);
+    .select("id, order_id, body, attachments, is_completed, author_login, executor_emails, source_order_field, highlight_order_field")
+    .is("deleted_at", null)
+    .or("is_completed.eq.false,highlight_order_field.eq.true")
+    .order("id", { ascending: true }));
+  if (generation !== refreshGeneration) return;
 
-  if (!error && data) {
-    for (const row of data) ingestTaskRow(row);
-  }
-
-  for (const row of readPendingTasksQueueForMessageLinks()) {
-    ingestTaskRow(row);
-  }
+  if (!error && data) lastTaskRows = data;
+  const rows = [...lastTaskRows, ...readPendingTasksQueueForMessageLinks()];
+  activeTaskOrderIds.clear();
+  for (const row of rows) ingestTaskRow(row);
+  cellHighlights = buildOrderCellHighlights(rows);
 
   applyOrderTaskHighlightsInDom(root);
 }
