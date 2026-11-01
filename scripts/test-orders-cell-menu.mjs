@@ -34,7 +34,7 @@ const body = new Element('body'); body.append(table);
 const document = new Element('document');
 document.body = body; document.createElement = tag => new Element(tag);
 document.getElementById = id => id === 'ordersTable' ? table : null;
-let clipboard = ''; let failCopy = false; let opened = [];
+let clipboard = ''; let failCopy = false; let opened = []; let existingTask = null; let edits = []; let lookupError = false;
 let now = 0; let nextTimer = 0; const timers = new Map();
 const window = new Element(); window.innerWidth = 390; window.innerHeight = 844;
 window.getSelection = () => ({ removeAllRanges() {} });
@@ -46,7 +46,11 @@ const context = vm.createContext({
 document.execCommand = () => false;
 const source = fs.readFileSync(new URL('../js/orders-cell-menu.js', import.meta.url), 'utf8');
 vm.runInContext(source.replace(/^import .*;\n/gm, '').replace(/export /g, ''), context);
-context.initOrdersCellMenu({ openTask: async options => { opened.push(options); } });
+context.initOrdersCellMenu({
+  openTask: async options => { opened.push(options); },
+  findTask: async () => { if (lookupError) throw new Error('lookup failed'); return existingTask; },
+  editTask: async id => { edits.push(id); },
+});
 context.initOrdersCellMenu();
 assert.equal(body.children.length, 2, 'initialization must be idempotent');
 const menu = body.children[1]; const [preview, actions, status] = menu.children; const [copy, task] = actions.children;
@@ -57,35 +61,49 @@ function emit(target, type, values = {}) {
   return { event, done: Promise.all(results) };
 }
 function start(values) { emit(document, 'pointerdown', values); emit(table, 'pointerdown', values); }
-function hold() { now += 500; for (const [id, fn] of [...timers]) { timers.delete(id); fn(); } }
+async function hold() { now += 500; for (const [id, fn] of [...timers]) { timers.delete(id); fn(); } await new Promise(resolve => setImmediate(resolve)); }
 function release() { emit(document, 'pointerup'); }
-start(); release(); hold(); assert.equal(menu.hidden, true, 'short tap keeps existing behavior');
-start(); emit(document, 'pointermove', { clientX: 70 }); hold(); release(); assert.equal(menu.hidden, true, 'scroll movement cancels hold');
-start(); emit(document, 'pointercancel'); hold(); assert.equal(menu.hidden, true);
-start(); emit(document, 'pointerdown', { pointerId: 2 }); hold(); assert.equal(menu.hidden, true, 'pinch cancels hold');
+start(); release(); await hold(); assert.equal(menu.hidden, true, 'short tap keeps existing behavior');
+start(); emit(document, 'pointermove', { clientX: 70 }); await hold(); release(); assert.equal(menu.hidden, true, 'scroll movement cancels hold');
+start(); emit(document, 'pointercancel'); await hold(); assert.equal(menu.hidden, true);
+start(); emit(document, 'pointerdown', { pointerId: 2 }); await hold(); assert.equal(menu.hidden, true, 'pinch cancels hold');
 emit(document, 'pointerup', { pointerId: 2 }); release();
-start(); hold(); release();
+start(); await hold(); release();
 assert.equal(menu.hidden, false); assert.equal(preview.textContent, cell.dataset.fulltext);
 assert.ok(cell.classList.contains('order-cell-selected'));
 const click = emit(table, 'click').event;
 assert.ok(click.prevented && click.stopped, 'synthetic tap after hold must not reach existing order actions');
 await emit(copy, 'click', { target: copy }).done;
 assert.equal(clipboard, cell.dataset.fulltext); assert.equal(menu.hidden, true);
-start(); hold(); release();
+start(); await hold(); release();
 await emit(task, 'click', { target: task }).done;
 assert.equal(opened[0].body, cell.dataset.fulltext);
 assert.equal(opened[0].sourceOrderLabel, '0042_О');
 assert.equal(opened.length, 1); assert.equal(opened[0].sourceOrderId, 42); assert.equal(menu.hidden, true);
 idCell.dataset.orderId = '99'; idCell.textContent = '0099_О';
-start(); hold(); release(); await emit(task, 'click', { target: task }).done;
+start(); await hold(); release(); await emit(task, 'click', { target: task }).done;
 assert.equal(opened[1].sourceOrderId, 99, 'task uses the touched row order, not a previously selected order');
-start(); hold(); release(); emit(document, 'scroll', { target: table }); assert.equal(menu.hidden, true);
-start(); hold(); release(); emit(document, 'orders-table-will-render'); assert.equal(menu.hidden, true);
-start(); hold(); release(); emit(document, 'keydown', { key: 'Escape' }); assert.equal(menu.hidden, true);
-start(); hold(); release(); failCopy = true; await emit(copy, 'click', { target: copy }).done;
+start(); await hold(); release(); emit(document, 'scroll', { target: table }); assert.equal(menu.hidden, true);
+start(); await hold(); release(); emit(document, 'orders-table-will-render'); assert.equal(menu.hidden, true);
+start(); await hold(); release(); emit(document, 'keydown', { key: 'Escape' }); assert.equal(menu.hidden, true);
+start(); await hold(); release(); failCopy = true; await emit(copy, 'click', { target: copy }).done;
 assert.equal(menu.hidden, false); assert.match(status.textContent, /Не удалось скопировать/);
 failCopy = false; await emit(copy, 'click', { target: copy }).done; assert.equal(menu.hidden, true);
-idCell.dataset.orderId = '-1'; start(); hold(); release(); assert.equal(task.disabled, true, 'unsynced order must not silently produce an unlinked task');
+existingTask = { id: 123, is_completed: false };
+start(); await hold(); release();
+assert.equal(task.textContent, 'Редактировать задачу');
+await emit(task, 'click', { target: task }).done;
+assert.equal(edits[0], 123);
+assert.equal(opened.length, 2, 'existing task must not create a duplicate');
+existingTask = { id: 124, is_completed: true, highlight_order_field: false };
+start(); await hold(); release(); assert.equal(task.textContent, 'Редактировать задачу');
+await emit(task, 'click', { target: task }).done; assert.equal(edits[1], 124);
+existingTask = null;
+start(); await hold(); release(); assert.equal(task.textContent, 'Создать задачу');
+lookupError = true;
+start(); await hold(); release(); assert.equal(task.disabled, true); assert.match(status.textContent, /lookup failed/);
+lookupError = false;
+idCell.dataset.orderId = '-1'; start(); await hold(); release(); assert.equal(task.disabled, true, 'unsynced order must not silently produce an unlinked task');
 const dialogSource = fs.readFileSync(new URL('../js/task-create-dialog.js', import.meta.url), 'utf8');
 assert.match(dialogSource, /sourceOrderId = pendingSourceOrderId/);
 assert.match(dialogSource, /orderId: sourceOrderId/);

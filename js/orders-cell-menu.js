@@ -42,6 +42,11 @@ export async function copyOrderCellText(text) {
 
 export function initOrdersCellMenu({
   openTask = options => import("./task-create-dialog.js").then(module => module.openTaskCreateDialog(options)),
+  findTask = context => import("./order-task-links.js").then(module => module.findOrderCellTask(context.orderId, context.orderField)),
+  editTask = id => import("./task-edit-dialog.js").then(module => module.openTaskEditDialog(id, async () => {
+    const links = await import("./order-task-links.js");
+    await links.refreshActiveTaskOrderRefs();
+  })),
 } = {}) {
   const table = document.getElementById("ordersTable");
   if (!table || table.dataset.cellMenuBound) return;
@@ -98,8 +103,24 @@ export function initOrdersCellMenu({
     context.cell.classList.add("order-cell-selected");
     preview.textContent = context.text || "Пустая ячейка";
     copy.disabled = !context.text;
-    task.disabled = context.orderId < 0;
+    task.disabled = true;
+    task.textContent = "Проверка задачи…";
     task.title = context.orderId < 0 ? "Сначала синхронизируйте заказ" : "";
+    if (context.orderId > 0) {
+      Promise.resolve().then(() => findTask(context)).then(existing => {
+        if (active !== context) return;
+        context.existingTask = existing;
+        task.textContent = existing ? "Редактировать задачу" : "Создать задачу";
+        task.disabled = Boolean(existing && (existing.__offlinePendingSync || Number(existing.id) <= 0));
+        task.title = task.disabled ? "Сначала синхронизируйте задачу" : "";
+      }).catch(error => {
+        if (active !== context) return;
+        task.textContent = "Действие недоступно";
+        status.textContent = error?.message || "Не удалось проверить задачу этой ячейки.";
+      });
+    } else {
+      task.textContent = "Создать задачу";
+    }
     status.textContent = "";
     menu.hidden = false;
     // Use viewport coordinates, including the visual viewport when iOS is zoomed.
@@ -132,13 +153,17 @@ export function initOrdersCellMenu({
     const context = active;
     task.disabled = true;
     try {
-      await openTask({ body: context.text, sourceOrderId: context.orderId, sourceOrderLabel: context.orderLabel, sourceOrderField: context.orderField });
+      if (context.existingTask) {
+        await editTask(context.existingTask.id);
+      } else {
+        await openTask({ body: context.text, sourceOrderId: context.orderId, sourceOrderLabel: context.orderLabel, sourceOrderField: context.orderField });
+      }
       close();
     } catch (error) {
-      console.error("Не удалось открыть создание задачи:", error);
-      if (active === context) status.textContent = "Не удалось открыть задачу. Попробуйте ещё раз.";
+      console.error("Не удалось открыть задачу:", error);
+      if (active === context) status.textContent = error?.message || "Не удалось открыть задачу. Попробуйте ещё раз.";
     } finally {
-      task.disabled = false;
+      if (active === context) task.disabled = false;
     }
   });
 
