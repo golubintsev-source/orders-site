@@ -175,8 +175,9 @@ assert.equal(taskPayload.highlightOrderField, false);
 assert.equal(taskPayload.sourceOrderField, 'client');
 console.log('standard task dialog: cell text and order title prefilled, editable text saved, order link preserved and ordinary dialog reset');
 
-const markup = renderTaskComposerHtml('taskCreate-', 'taskCreateDialogText', 'Прикрепить');
-assert.ok(markup.includes('Прикрепить'));
+const markup = renderTaskComposerHtml('taskCreate-', 'taskCreateDialogText');
+assert.ok(!markup.includes('<span>Прикрепить</span>'));
+assert.ok(markup.includes('messages-composer-tool-icon'));
 for (const id of ['taskCreateDialogText', 'taskCreate-taskAttachBtn', 'taskCreate-taskAttachCameraBtn', 'taskCreate-taskAttachGalleryBtn', 'taskCreate-taskPickOrderBtn', 'taskCreate-taskComposerSuggestions']) assert.ok(markup.includes(`id="${id}"`));
 await dialogContext.openTaskCreateDialog(opened[1]);
 fields.get('taskCreateDialogText').value = '';
