@@ -29,7 +29,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
   let disposeReplyResize = () => {};
   try {
     const { data: task, error } = await supabaseClient.from("order_tasks")
-      .select("id, author_login, body, executor_emails, due_at, attachments, order_id, source_order_field, highlight_order_field, executor_reply")
+      .select("id, author_login, body, executor_emails, due_at, attachments, order_id, source_order_field, highlight_order_field, executor_reply, is_completed")
       .eq("id", taskId).is("deleted_at", null).maybeSingle();
     if (error) throw error;
     if (!task) throw new Error("Задача удалена или недоступна.");
@@ -53,6 +53,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
         <p class="order-tasks-executors-hint" data-field="hint"></p></div>
       <label class="task-create-dialog-field"><span class="task-create-dialog-label">Ответ</span>
         <textarea class="task-create-dialog-text" data-field="reply" rows="1" aria-label="Ответ исполнителя"></textarea></label>
+      <label class="task-highlight-toggle"><input type="checkbox" data-field="completed" /> Выполнено</label>
       <label class="task-create-dialog-field"><span class="task-create-dialog-label">Срок выполнения</span>
         <input type="datetime-local" class="order-tasks-due-input task-create-dialog-due" data-field="due" /></label>
       <p class="task-create-dialog-error" role="alert" data-field="error" hidden></p>
@@ -87,6 +88,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
     text.rows = 1;
     text.value = task.body || "";
     field("highlight").checked = task.highlight_order_field === true;
+    field("completed").checked = [true, 1, "1"].includes(task.is_completed);
     field("reply").value = task.executor_reply || "";
     field("reply").readOnly = !isUserExecutorOfTask(task);
     composer = createTaskAttachmentComposer({
@@ -151,6 +153,8 @@ export async function openTaskEditDialog(taskId, onSaved) {
           attachments: await composer.prepare(),
           highlight_order_field: Boolean(task.source_order_field && field("highlight").checked),
         };
+        const completed = field("completed").checked;
+        if (completed !== [true, 1, "1"].includes(task.is_completed)) patch.is_completed = completed;
         const replyChanged = isUserExecutorOfTask(task) && field("reply").value !== String(task.executor_reply ?? "");
         if (replyChanged) patch.executor_reply = field("reply").value;
         // Unchanged replies must not overwrite an executor's newer answer.
