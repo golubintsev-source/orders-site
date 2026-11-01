@@ -11994,3 +11994,13 @@ html.keyboard-open .voice-composer {
 .task-reply-save { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 40px; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 9px; background: #16a34a; color: white; cursor: pointer; }
 .task-reply-save:disabled { background: #d1d5db; color: #6b7280; cursor: default; }
 .task-reply-message { margin: 4px 0 0; font-size: 13px; color: #b91c1c; white-space: normal; }
+
+#taskEditDialog .task-composer-row textarea {
+  height: 40px;
+  min-height: 40px;
+  max-height: none;
+  padding: 9px 10px;
+  line-height: 20px;
+  overflow: hidden;
+  resize: none;
+}

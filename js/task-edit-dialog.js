@@ -1,3 +1,4 @@
+import { bindAutogrowTextarea } from "./autogrow-textarea.js";
 import { renderTaskComposerHtml } from "./task-composer-markup.js";
 import { supabaseClient } from "./config.js";
 import { isOfflineDataMode } from "./offline-cache.js";
@@ -24,6 +25,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
   opening = true;
   let dialog;
   let composer;
+  let disposeTextResize = () => {};
   try {
     const { data: task, error } = await supabaseClient.from("order_tasks")
       .select("id, author_login, body, executor_emails, due_at, attachments, order_id, source_order_field, highlight_order_field, executor_reply")
@@ -73,7 +75,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
       submit.disabled = saving || attachmentBusy || !executorsReady;
     };
     const close = () => { if (!saving && !attachmentBusy) dialog.close(); };
-    dialog.addEventListener("close", () => { composer?.dispose(); dialog.remove(); });
+    dialog.addEventListener("close", () => { disposeTextResize(); composer?.dispose(); dialog.remove(); });
     dialog.addEventListener("cancel", (event) => { event.preventDefault(); close(); });
     cancel.addEventListener("click", close);
     dialog.addEventListener("click", (event) => { if (event.target === dialog) close(); });
@@ -81,6 +83,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
     // controls is unreliable in iPhone standalone/PWA mode.
     const text = dialog.querySelector("#taskEdit-orderTaskTextInput");
     if (!text) throw new Error("Поле текста задачи недоступно. Обновите страницу.");
+    text.rows = 1;
     text.value = task.body || "";
     field("highlight").checked = task.highlight_order_field === true;
     field("reply").value = task.executor_reply || "";
@@ -100,6 +103,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
 
     submit.disabled = true;
     dialog.showModal();
+    disposeTextResize = bindAutogrowTextarea(text);
     await ensureTaskExecutorsInList(executors, field("hint"));
     // Preserve assigned people even if they are no longer in the user directory.
     for (const email of normalizeExecutorEmails(task.executor_emails)) {
@@ -171,6 +175,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
       }
     });
   } catch (error) {
+    disposeTextResize();
     composer?.dispose();
     dialog?.remove();
     throw error;

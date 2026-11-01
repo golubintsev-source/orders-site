@@ -89,7 +89,7 @@ const document = {
 };
 const taskRow = { id: 50, author_login: 'worker@example.com', body: 'Задача', executor_emails: ['worker@example.com'], executor_reply: 'Старый ответ' };
 const editorContext = vm.createContext({
-  document, console, isOfflineDataMode: () => false,
+  document, console, isOfflineDataMode: () => false, bindAutogrowTextarea: () => () => {},
   isUserAuthorOfTask: () => true, isUserExecutorOfTask: () => canReply,
   getCurrentUserEmail: () => 'worker@example.com', normalizeExecutorEmails: () => [],
   getSelectedExecutorEmailsFrom: () => ['worker@example.com'], datetimeLocalToIso: () => null,
@@ -109,6 +109,7 @@ const editSource = fs.readFileSync(new URL('../js/task-edit-dialog.js', import.m
 vm.runInContext(editSource.replace(/^import[^]*?from "[^"]+";\n/gm, '').replace(/export /g, ''), editorContext);
 await editorContext.openTaskEditDialog(50, row => { savedRow = row; });
 assert.equal(fields.reply.value, 'Старый ответ'); assert.equal(fields.reply.readOnly, false);
+assert.equal(editText.rows, 1);
 assert.ok(modal.innerHTML.indexOf('Ответ') > modal.innerHTML.indexOf('Исполнители'));
 fields.reply.value = 'Новый ответ'; await form.emit('submit');
 assert.equal(patchSent.executor_reply, 'Новый ответ'); assert.equal(savedRow.executor_reply, 'Новый ответ');

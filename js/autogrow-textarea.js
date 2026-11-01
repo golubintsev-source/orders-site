@@ -1,4 +1,4 @@
-const boundFields = new WeakSet();
+const boundFields = new WeakMap();
 
 export function resizeTextarea(field) {
   if (!field || !field.clientWidth) return;
@@ -8,14 +8,15 @@ export function resizeTextarea(field) {
 }
 
 export function bindAutogrowTextarea(field) {
-  if (!field || boundFields.has(field)) return;
-  boundFields.add(field);
+  if (!field) return () => {};
+  if (boundFields.has(field)) return boundFields.get(field);
   const resize = () => resizeTextarea(field);
   field.addEventListener("input", resize);
   window.addEventListener("resize", resize);
+  let observer;
   if (typeof ResizeObserver !== "undefined") {
     let previousWidth = 0;
-    const observer = new ResizeObserver(entries => {
+    observer = new ResizeObserver(entries => {
       const width = entries[0].contentRect.width;
       if (width === previousWidth) return;
       previousWidth = width;
@@ -24,4 +25,12 @@ export function bindAutogrowTextarea(field) {
     observer.observe(field);
   }
   resize();
+  const dispose = () => {
+    field.removeEventListener("input", resize);
+    window.removeEventListener("resize", resize);
+    observer?.disconnect();
+    boundFields.delete(field);
+  };
+  boundFields.set(field, dispose);
+  return dispose;
 }
