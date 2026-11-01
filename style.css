@@ -11850,6 +11850,13 @@ html.keyboard-open .voice-composer {
 }
 #section-all-salaries .calculations-form .calculations-comment-input {
   width: 100%;
+  max-height: none;
+  padding: 9px 8px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  resize: none;
 }
 
 /* «Расчёты»: комментарий всегда виден целиком. */
