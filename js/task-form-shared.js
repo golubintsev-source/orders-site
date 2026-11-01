@@ -1,3 +1,4 @@
+import { validOrderField } from "./order-cell-highlights.js";
 import { normalizeTaskAttachments } from "./task-attachment-data.js";
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
@@ -224,6 +225,8 @@ export async function insertTask({
   sourceMessageKind,
   attachments,
   orderId,
+  sourceOrderField = null,
+  highlightOrderField = false,
 }) {
   if (!state.currentUser) {
     return { error: new Error("not authenticated") };
@@ -249,6 +252,8 @@ export async function insertTask({
     due_at: dueAt || null,
     is_completed: false,
     order_id: linkedOrderId,
+    source_order_field: linkedOrderId != null ? validOrderField(sourceOrderField) : null,
+    highlight_order_field: linkedOrderId != null && validOrderField(sourceOrderField) != null && highlightOrderField === true,
     source_message_id: sourceMessageId ?? null,
     source_message_kind: sourceMessageKind || null,
   };
@@ -268,6 +273,8 @@ export async function insertTask({
       due_at: payload.due_at,
       is_completed: false,
       order_id: payload.order_id,
+      source_order_field: payload.source_order_field,
+      highlight_order_field: payload.highlight_order_field,
       source_message_id: payload.source_message_id,
       source_message_kind: payload.source_message_kind,
       created_at: new Date().toISOString(),

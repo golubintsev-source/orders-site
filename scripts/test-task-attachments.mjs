@@ -106,6 +106,7 @@ async function loadModule(path) {
   });
   await mod.link(async (specifier) => {
     if (specifier === "./task-attachment-data.js") return loadModule("task-attachment-data.js");
+    if (specifier === "./order-cell-highlights.js") return loadModule("order-cell-highlights.js");
     return stub(specifier);
   });
   await mod.evaluate();
@@ -190,6 +191,11 @@ assert.deepEqual(normalize(persisted[1].attachments), [{ type: "order", orderId:
 await shared.insertTask({ body: "Text only" });
 assert.equal("attachments" in persisted[2], false, "existing text-only callers remain compatible");
 assert.ok((await shared.insertTask({ body: " " })).error);
+await shared.insertTask({ body: "Cell", orderId: 42, sourceOrderField: "client", highlightOrderField: true });
+assert.equal(persisted.at(-1).source_order_field, "client");
+assert.equal(persisted.at(-1).highlight_order_field, true);
+await shared.insertTask({ body: "No mark", orderId: 42, sourceOrderField: "client", highlightOrderField: false });
+assert.equal(persisted.at(-1).highlight_order_field, false);
 state.currentUser = null;
 assert.ok((await shared.insertTask({ body: "test", attachments: savedAttachments })).error);
 attachments.clearTaskDraftAttachments();

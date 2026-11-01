@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { validOrderField } from '../js/order-cell-highlights.js';
 class Element {
   constructor(tag = 'div') {
     this.tag = tag; this.children = []; this.dataset = {}; this.listeners = {}; this.hidden = false;
@@ -27,7 +28,7 @@ class Element {
 }
 const table = new Element('table'); const row = new Element('tr'); const idCell = new Element('td');
 idCell.dataset.orderId = '42'; idCell.textContent = '0042_О'; const cell = new Element('td');
-cell.dataset.fulltext = 'Полный <текст> клиента\nвторая строка'; cell.innerText = 'Полный…';
+cell.dataset.orderField = 'client'; cell.dataset.fulltext = 'Полный <текст> клиента\nвторая строка'; cell.innerText = 'Полный…';
 row.append(idCell, cell); table.append(row); row.querySelector = () => idCell;
 const body = new Element('body'); body.append(table);
 const document = new Element('document');
@@ -38,7 +39,7 @@ let now = 0; let nextTimer = 0; const timers = new Map();
 const window = new Element(); window.innerWidth = 390; window.innerHeight = 844;
 window.getSelection = () => ({ removeAllRanges() {} });
 const context = vm.createContext({
-  document, window, console, Date: { now: () => now }, hideFloatingCellTooltip() {},
+  document, window, console, validOrderField, Date: { now: () => now }, hideFloatingCellTooltip() {},
   navigator: { clipboard: { async writeText(text) { if (failCopy) throw new Error('denied'); clipboard = text; } } },
   setTimeout: fn => { timers.set(++nextTimer, fn); return nextTimer; }, clearTimeout: id => timers.delete(id),
 });
@@ -91,7 +92,7 @@ assert.match(dialogSource, /orderId: sourceOrderId/);
 console.log('orders cell menu: short tap, hold, scroll, cancel, pinch, full-text copy, selected cell, task order link, refresh, escape, clipboard errors and offline order passed');
 
 // Exercise the real standard dialog and its insertTask payload with isolated data services.
-const ids = ['taskCreateDialogTitle', 'taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
+const ids = ['taskCreateDialogHighlight', 'taskCreateDialogTitle', 'taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
   'taskCreateDialogDueAt', 'taskCreateDialogError', 'taskCreateDialogSubmitBtn', 'taskCreateDialogCancelBtn', 'taskCreateDialogCloseBtn'];
 const fields = new Map(ids.map(id => [id, new Element()]));
 const dialogBody = new Element('body');
@@ -106,29 +107,38 @@ fields.get('taskCreateDialog').showModal = function () {
 fields.get('taskCreateDialog').close = function () { this.open = false; };
 let taskPayload;
 const dialogContext = vm.createContext({
-  document: { body: dialogBody, getElementById: id => fields.get(id) }, console,
+  document: { body: dialogBody, getElementById: id => fields.get(id) }, console, validOrderField,
   defaultTaskDueAtLocal: () => '2026-11-02T09:00', datetimeLocalToIso: value => value,
   ensureTaskExecutorsInList: async () => {}, getSelectedExecutorEmailsFrom: () => ['worker@example.com'],
   resetTaskExecutorsList() {}, insertTask: async payload => { taskPayload = payload; return { error: null }; },
-  taskModules: { loadAllTasks() {}, loadOrderTasks() {}, refreshMyTasksNavBadge() {}, addActiveTaskOrderRef() {}, applyOrderTaskHighlightsInDom() {} },
+  taskModules: { loadAllTasks() {}, loadOrderTasks() {}, refreshMyTasksNavBadge() {}, refreshActiveTaskOrderRefs() {}, addActiveTaskOrderRef() {}, applyOrderTaskHighlightsInDom() {} },
 });
-vm.runInContext(dialogSource.replace(/^import[^]*?from "[^\"]+";\n/, '')
+vm.runInContext(dialogSource.replace(/^import[^]*?from "[^\"]+";\n/gm, '')
   .replace(/export /g, '')
   .replace(/import\("\.\/(?:tasks|order-task-links|message-task-links)\.js"\)/g, 'Promise.resolve(taskModules)'), dialogContext);
 await dialogContext.openTaskCreateDialog(opened[1]);
 assert.equal(fields.get('taskCreateDialogText').value, cell.dataset.fulltext);
 assert.equal(fields.get('taskCreateDialogTitle').textContent, 'Создание задачи к заказу № 0099_О');
 assert.equal(fields.get('taskCreateDialog').open, true);
+assert.equal(fields.get('taskCreateDialogHighlight').checked, true);
 fields.get('taskCreateDialogText').value = 'Проверить заказ';
 await dialogContext.submitTaskCreateDialog();
 assert.equal(fields.get('taskCreateDialog').open, false, 'closing the modal releases the background');
 assert.equal(taskPayload.orderId, 99);
+assert.equal(taskPayload.sourceOrderField, "client");
+assert.equal(taskPayload.highlightOrderField, true);
 assert.equal(taskPayload.body, 'Проверить заказ');
 assert.equal(taskPayload.executorEmails[0], 'worker@example.com');
 assert.equal(taskPayload.dueAt, '2026-11-02T09:00');
 await dialogContext.openTaskCreateDialog();
 assert.equal(fields.get('taskCreateDialogText').value, '');
+assert.equal(fields.get('taskCreateDialogHighlight').checked, false);
 assert.equal(fields.get('taskCreateDialogTitle').textContent, 'Новая задача');
+await dialogContext.openTaskCreateDialog(opened[1]);
+fields.get('taskCreateDialogHighlight').checked = false;
+await dialogContext.submitTaskCreateDialog();
+assert.equal(taskPayload.highlightOrderField, false);
+assert.equal(taskPayload.sourceOrderField, 'client');
 console.log('standard task dialog: cell text and order title prefilled, editable text saved, order link preserved and ordinary dialog reset');
 
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');

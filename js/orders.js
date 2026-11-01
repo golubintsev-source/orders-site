@@ -88,7 +88,8 @@ import {
 } from "./offline-cache.js";
 import { shortLoginByEmail } from "./user-names.js";
 import { getEditors } from "./settings.js";
-import { orderHasActiveTask } from "./order-task-links.js";
+import { ORDER_TABLE_FIELD_KEYS } from "./order-cell-highlights.js";
+import { orderHasActiveTask, applyOrderTaskHighlightsInDom } from "./order-task-links.js";
 import {
   overlayHistorySnapshotWithParticipants,
   recoverLostMoneyRecipientsInOrderData,
@@ -1809,6 +1810,12 @@ export function renderOrders(orders) {
   }
 
   table.innerHTML = parts.join("");
+  for (const row of table.rows) {
+    ORDER_TABLE_FIELD_KEYS.forEach((key, index) => {
+      if (row.cells[index]) row.cells[index].dataset.orderField = key;
+    });
+  }
+  applyOrderTaskHighlightsInDom(table);
 
   // Подсказки по обрезке текста и sync скролла — после первой отрисовки, чтобы не блокировать paint.
   requestAnimationFrame(() => {

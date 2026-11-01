@@ -73,7 +73,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
   let composer;
   try {
     const { data: task, error } = await supabaseClient.from("order_tasks")
-      .select("id, author_login, body, executor_emails, due_at, attachments")
+      .select("id, author_login, body, executor_emails, due_at, attachments, order_id, source_order_field, highlight_order_field")
       .eq("id", taskId).is("deleted_at", null).maybeSingle();
     if (error) throw error;
     if (!task) throw new Error("Задача удалена или недоступна.");
@@ -85,6 +85,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
     dialog.setAttribute("aria-labelledby", "taskEditTitle");
     dialog.innerHTML = `<form class="task-create-dialog-panel">
       <div class="task-create-dialog-header"><h3 id="taskEditTitle" class="task-create-dialog-title">Редактировать задачу</h3></div>
+      <label class="task-highlight-toggle"><input type="checkbox" data-field="highlight" /> Выделить</label>
       <div class="task-create-dialog-field"><label for="taskEdit-orderTaskTextInput" class="task-create-dialog-label">Текст</label>
         <div data-field="composer">${renderTaskEditComposerHtml()}</div>
         <input id="taskEdit-taskPhotoGalleryInput" type="file" accept="image/*" multiple hidden />
@@ -113,6 +114,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
     let executorsReady = false;
     const syncDisabled = () => {
       form.querySelectorAll("input, textarea, button").forEach((el) => { el.disabled = saving || attachmentBusy; });
+      field("highlight").disabled = saving || attachmentBusy || !task.source_order_field;
       submit.disabled = saving || attachmentBusy || !executorsReady;
     };
     const close = () => { if (!saving && !attachmentBusy) dialog.close(); };
@@ -125,6 +127,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
     const text = dialog.querySelector("#taskEdit-orderTaskTextInput");
     if (!text) throw new Error("Поле текста задачи недоступно. Обновите страницу.");
     text.value = task.body || "";
+    field("highlight").checked = task.highlight_order_field === true;
     composer = createTaskAttachmentComposer({
       getElement: (id) => dialog.querySelector(`#taskEdit-${id}`),
       initialAttachments: task.attachments,
@@ -183,6 +186,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
           body, executor_emails: getSelectedExecutorEmailsFrom(executors),
           due_at: datetimeLocalToIso(field("due").value),
           attachments: await composer.prepare(),
+          highlight_order_field: Boolean(task.source_order_field && field("highlight").checked),
         };
         // Keep the linked source order and completion status intact.
         const { data, error: saveError } = await supabaseClient.from("order_tasks")

@@ -1,3 +1,4 @@
+import { validOrderField } from "./order-cell-highlights.js";
 import { hideFloatingCellTooltip } from "./cell-tooltip.js";
 
 const HOLD_MS = 500;
@@ -12,7 +13,7 @@ export function getOrderCellContext(cell) {
   // data-fulltext contains the original value, even when the visible chip is truncated.
   const text = String(cell.dataset.fulltext ?? cell.innerText ?? cell.textContent ?? "").trim();
   const orderLabel = String(orderCell?.innerText || orderCell?.textContent || orderId).trim();
-  return { cell, orderId, orderLabel, text };
+  return { cell, orderId, orderLabel, text, orderField: validOrderField(cell.dataset.orderField) };
 }
 
 export async function copyOrderCellText(text) {
@@ -131,7 +132,7 @@ export function initOrdersCellMenu({
     const context = active;
     task.disabled = true;
     try {
-      await openTask({ body: context.text, sourceOrderId: context.orderId, sourceOrderLabel: context.orderLabel });
+      await openTask({ body: context.text, sourceOrderId: context.orderId, sourceOrderLabel: context.orderLabel, sourceOrderField: context.orderField });
       close();
     } catch (error) {
       console.error("Не удалось открыть создание задачи:", error);
