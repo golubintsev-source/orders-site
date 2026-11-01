@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v97: сразу показывать смешную фразу, убрать заголовки загрузки, оживить три точки.
-const STATIC_CACHE = "orders-site-static-v97";
+// v98: новая иконка с монтажником для домашнего экрана и PWA.
+const STATIC_CACHE = "orders-site-static-v98";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -54,7 +54,9 @@ const PRECACHE_URLS = [
   "/js/motivationQuotes.js",
   "/js/register-sw.js",
   "/manifest.webmanifest",
-  "/img/icon-192.png?v=20260803",
+  "/img/icon-192.png?v=installer-20261101",
+  "/img/icon-512.png?v=installer-20261101",
+  "/img/apple-touch-icon.png?v=installer-20261101",
 ];
 
 self.addEventListener("install", (event) => {
@@ -492,8 +494,8 @@ self.addEventListener("push", (event) => {
       const tag = data.tag || (incomingPeer ? `chat-${incomingPeer}` : "orders-site");
       const options = {
         body: data.body || "Новое уведомление",
-        icon: "/img/icon-192.png?v=20260803",
-        badge: "/img/icon-192.png?v=20260803",
+        icon: "/img/icon-192.png?v=installer-20261101",
+        badge: "/img/icon-192.png?v=installer-20261101",
         tag,
         renotify: true,
         data: {
