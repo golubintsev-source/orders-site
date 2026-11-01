@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v100: однострочные комментарии с автоматическим ростом в расчётах и зарплатах.
-const STATIC_CACHE = "orders-site-static-v100";
+// v101: таблица трёх последних выплат на странице зарплат.
+const STATIC_CACHE = "orders-site-static-v101";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

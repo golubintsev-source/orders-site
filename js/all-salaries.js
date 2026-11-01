@@ -100,6 +100,28 @@ function renderSalaryDetails(group) {
   `;
 }
 
+function renderRecentSalaryPayments(groups, status = "") {
+  const tbody = document.getElementById("recentSalaryPaymentsBody");
+  if (!tbody) return;
+  const rows = groups.flatMap(group => group.rows)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || Number(b.id) - Number(a.id))
+    .slice(0, 3);
+  if (status || !rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5">${escapeHtml(status || "Выплат зарплаты пока нет.")}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(row => {
+    const employee = groupSalaryRowsByEmployee([row])[0]?.employee || "Не указан";
+    return `<tr>
+      <td>${escapeHtml(formatSalaryDate(row.created_at))}</td>
+      <td>${escapeHtml(row.from_place || "—")}</td>
+      <td>${escapeHtml(employee)}</td>
+      <td>${escapeHtml(getCalcDisplayComment(row.comment) || "—")}</td>
+      <td class="all-salaries-detail-amount">${escapeHtml(formatAmount(salaryCalculationAmount(row)))}&nbsp;₽</td>
+    </tr>`;
+  }).join("");
+}
+
 function renderSalaryEmployees(group) {
   const rows = groupSalaryRowsByEmployee(group.rows)
     .map(
@@ -346,6 +368,7 @@ async function loadAllSalariesOnce() {
   const form = document.getElementById("salaryPaymentForm");
   if (form) form.hidden = !canEditManualCalculations();
   tbody.innerHTML = '<tr><td colspan="2" class="all-salaries-empty">Загрузка…</td></tr>';
+  renderRecentSalaryPayments([], "Загрузка…");
   if (message) {
     message.textContent = "";
     message.classList.remove("all-salaries-message--error");
@@ -377,6 +400,7 @@ async function loadAllSalariesOnce() {
   if (error) {
     console.error("Ошибка загрузки всех зарплат:", error);
     salaryGroups = [];
+    renderRecentSalaryPayments([], "Не удалось загрузить выплаты зарплаты.");
     tbody.innerHTML = "";
     if (message) {
       message.textContent = "Не удалось загрузить выплаты зарплаты.";
@@ -403,12 +427,14 @@ async function loadAllSalariesOnce() {
         message.textContent = "Не удалось загрузить монтажников для выплат зарплаты.";
         message.classList.add("all-salaries-message--error");
       }
+      renderRecentSalaryPayments([], "Не удалось загрузить выплаты зарплаты.");
       tbody.innerHTML = "";
       return;
     }
   }
   if (!scope.current() || generation !== loadGeneration) return;
   salaryGroups = groupSalaryRowsByMonth(data || []);
+  renderRecentSalaryPayments(salaryGroups);
   const availableKeys = new Set(salaryGroups.map((group) => group.monthKey));
   for (const key of expandedMonthKeys) {
     if (!availableKeys.has(key)) {
