@@ -22,6 +22,7 @@ function getDialogEls() {
   return {
     dialog: document.getElementById("taskCreateDialog"),
     textInput: document.getElementById("taskCreateDialogText"),
+    titleEl: document.getElementById("taskCreateDialogTitle"),
     executorsList: document.getElementById("taskCreateDialogExecutors"),
     executorsHint: document.getElementById("taskCreateDialogExecutorsHint"),
     dueInput: document.getElementById("taskCreateDialogDueAt"),
@@ -46,7 +47,8 @@ function setDialogError(message) {
 }
 
 function resetDialogForm() {
-  const { textInput, dueInput, executorsList } = getDialogEls();
+  const { textInput, dueInput, executorsList, titleEl } = getDialogEls();
+  if (titleEl) titleEl.textContent = "Новая задача";
   if (textInput) textInput.value = "";
   if (dueInput) dueInput.value = defaultTaskDueAtLocal();
   resetTaskExecutorsList(executorsList);
@@ -122,9 +124,10 @@ export async function openTaskCreateDialog({
   sourceMessageId = null,
   sourceMessageKind = null,
   sourceOrderId = null,
+  sourceOrderLabel = "",
 } = {}) {
   initTaskCreateDialog();
-  const { dialog, textInput, dueInput, executorsList, executorsHint } = getDialogEls();
+  const { dialog, textInput, dueInput, executorsList, executorsHint, titleEl } = getDialogEls();
   if (!dialog) return;
 
   pendingSourceMessage =
@@ -135,6 +138,13 @@ export async function openTaskCreateDialog({
     sourceOrderId != null && Number.isFinite(Number(sourceOrderId)) && Number(sourceOrderId) > 0
       ? Number(sourceOrderId)
       : null;
+
+  if (titleEl) {
+    const orderLabel = String(sourceOrderLabel || pendingSourceOrderId || "").trim();
+    titleEl.textContent = pendingSourceOrderId != null
+      ? `Создание задачи к заказу № ${orderLabel}`
+      : "Новая задача";
+  }
 
   await ensureTaskExecutorsInList(executorsList, executorsHint);
 

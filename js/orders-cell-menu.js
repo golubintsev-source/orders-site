@@ -6,11 +6,13 @@ const MOVE_TOLERANCE = 10;
 export function getOrderCellContext(cell) {
   const row = cell?.closest("tbody tr");
   if (!row || cell.matches(".td-actions")) return null;
-  const orderId = Number(row.querySelector("td.td-order-id[data-order-id]")?.dataset.orderId);
+  const orderCell = row.querySelector("td.td-order-id[data-order-id]");
+  const orderId = Number(orderCell?.dataset.orderId);
   if (!Number.isFinite(orderId) || orderId === 0) return null;
   // data-fulltext contains the original value, even when the visible chip is truncated.
   const text = String(cell.dataset.fulltext ?? cell.innerText ?? cell.textContent ?? "").trim();
-  return { cell, orderId, text };
+  const orderLabel = String(orderCell?.innerText || orderCell?.textContent || orderId).trim();
+  return { cell, orderId, orderLabel, text };
 }
 
 export async function copyOrderCellText(text) {
@@ -129,7 +131,7 @@ export function initOrdersCellMenu({
     const context = active;
     task.disabled = true;
     try {
-      await openTask({ sourceOrderId: context.orderId });
+      await openTask({ body: context.text, sourceOrderId: context.orderId, sourceOrderLabel: context.orderLabel });
       close();
     } catch (error) {
       console.error("Не удалось открыть создание задачи:", error);
