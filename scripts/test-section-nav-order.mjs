@@ -11,12 +11,14 @@ test("section dropdown follows the requested order and labels", async () => {
   const panel = html.match(/<div class="section-nav-dropdown-panel" id="sectionNavDropdownPanel"[\s\S]*?<div class="section-nav-dropdown-footer">/)?.[0] || "";
   const actual = [...panel.matchAll(/data-section="([^"]+)"/g)].map((match) => match[1]);
   const expected = [
-    "all", "new", "calculations", "excess", "debts", "manager-salary",
-    "all-salaries", "tasks-all", "route-sheet", "contractor-checks", "balance",
+    "all", "new", "calculations", "all-salaries", "excess", "debts", "manager-salary", "tasks-all", "route-sheet", "contractor-checks", "balance",
     "statistics-balance", "changes-all", "statistics", "speed-test", "voice", "settings",
   ];
 
   assert.deepEqual(actual, expected);
+  assert.match(panel, /data-section="all-salaries"[\s\S]*?>Зарплаты<\/span>/);
+  assert.match(nav, /"all-salaries": "Зарплаты"/);
+  assert.match(boot, /"all-salaries": "Зарплаты"/);
   assert.match(panel, /data-section="new"[\s\S]*?>Новый заказ<\/span>/);
   assert.match(panel, /data-section="statistics"[\s\S]*?>Статистика входов<\/span>/);
   assert.match(nav, /statistics: "Статистика входов"/);
