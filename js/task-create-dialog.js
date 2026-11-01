@@ -210,7 +210,7 @@ export function initTaskCreateDialog() {
 
   const host = document.getElementById("taskCreateComposerHost");
   if (host) {
-    host.innerHTML = renderTaskComposerHtml("taskCreate-", "taskCreateDialogText", "Прикрепить");
+    host.innerHTML = renderTaskComposerHtml("taskCreate-", "taskCreateDialogText");
     attachmentComposer = createTaskAttachmentComposer({
       getElement: id => id === "orderTaskTextInput"
         ? document.getElementById("taskCreateDialogText")
