@@ -149,11 +149,13 @@ export async function openTaskCreateDialog({
 }
 
 export function initTaskCreateDialog() {
-  if (dialogInited) return;
-  dialogInited = true;
-
   const { dialog, submitBtn, cancelBtn, closeBtn } = getDialogEls();
   if (!dialog) return;
+  // A modal inside a display:none section can make the page inert while remaining
+  // invisible in iOS. Also relocate dialogs from older cached HTML shells.
+  if (dialog.parentElement !== document.body) document.body.appendChild(dialog);
+  if (dialogInited) return;
+  dialogInited = true;
 
   submitBtn?.addEventListener("click", () => void submitTaskCreateDialog());
   cancelBtn?.addEventListener("click", () => {
