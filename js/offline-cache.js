@@ -1,5 +1,6 @@
 import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
 import { state } from "./state.js";
+import { taskReferencesOrder } from "./task-attachment-data.js";
 
 const SNAP_KEY = "orders_site_offline_snap_v1";
 const PENDING_ORDERS_KEY = "orders_site_offline_pending_v1";
@@ -761,7 +762,7 @@ export function mergeOrderTasksRowsForAllTasks(serverRows) {
 
 export function mergeOrderTasksRowsForOrder(serverRows, orderId) {
   const oid = Number(orderId);
-  const extras = pendingTaskDisplayRows().filter((r) => Number(r.order_id) === oid);
+  const extras = pendingTaskDisplayRows().filter((row) => taskReferencesOrder(row, oid));
   const merged = [...extras, ...(serverRows || [])];
   merged.sort((a, b) => {
     const ap = a.__offlinePendingSync ? 1 : 0;
