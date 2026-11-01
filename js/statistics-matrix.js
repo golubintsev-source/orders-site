@@ -10,7 +10,7 @@ const PAGE_LABELS = new Map([
   ["/excess", "Излишки"],
   ["/debts", "Долги"],
   ["/manager-salary", "Зарплата менеджера"],
-  ["/all-salaries", "Все зарплаты"],
+  ["/all-salaries", "Зарплаты"],
   ["/tasks-all", "Мои задачи"],
   ["/route-sheet", "Маршрутный лист"],
   ["/contractor-checks", "Проверка контрагентов"],

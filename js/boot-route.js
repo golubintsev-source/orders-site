@@ -8,7 +8,7 @@ const BOOT_LABELS = {
   all: "Заказы",
   new: "Новый заказ",
   calculations: "Расчеты",
-  "all-salaries": "Все зарплаты",
+  "all-salaries": "Зарплаты",
   excess: "Излишки",
   "tasks-all": "Мои задачи",
   "changes-all": "Все изменения",
