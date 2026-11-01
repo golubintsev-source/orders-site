@@ -3,7 +3,7 @@ import {
   setTaskAttachmentsBusy, clearTaskDraftAttachments, renderTaskAttachmentsHtml,
   hydrateTaskAttachments, isTaskAttachmentsBusy, renderTaskBodyHtml,
 } from "./task-attachments.js";
-import { taskAttachmentOrderIds, taskReferencesOrder } from "./task-attachment-data.js";
+import { taskAttachmentOrderIds, taskLinkedOrderIds, taskReferencesOrder } from "./task-attachment-data.js";
 import { refreshMyTasksNavBadge } from "./task-badge.js";
 import { supabaseClient } from "./config.js";
 import { ensureOrderSummaries, getOrderSummary } from "./order-summary-cache.js";
@@ -128,17 +128,20 @@ function formatTaskOrderLabel(orderId) {
 }
 
 function renderTaskOrderCellHtml(row) {
-  if (isStandaloneTask(row)) return `<td class="my-tasks-order-cell">—</td>`;
-  const oid = Number(row.order_id);
-  const label = formatTaskOrderLabel(oid);
+  const orderIds = taskLinkedOrderIds(row);
+  if (!orderIds.length) return `<td class="my-tasks-order-cell">—</td>`;
+  const links = orderIds.map((oid) => {
+    const label = formatTaskOrderLabel(oid);
+    return `<a
+      class="my-tasks-order-link"
+      href="${escapeHtml(buildOrderViewUrl(oid))}"
+      data-order-id="${escapeHtml(String(oid))}"
+      title="Открыть заказ ${escapeHtml(label)}"
+    >${escapeHtml(label)}</a>`;
+  }).join("");
   return `
     <td class="my-tasks-order-cell">
-      <a
-        class="my-tasks-order-link"
-        href="${escapeHtml(buildOrderViewUrl(oid))}"
-        data-order-id="${escapeHtml(String(oid))}"
-        title="Открыть заказ ${escapeHtml(label)}"
-      >${escapeHtml(label)}</a>
+      <span class="my-tasks-order-links">${links}</span>
     </td>
   `;
 }
