@@ -76,7 +76,6 @@ const CALC_TO_OPTIONS = new Set([
   "Вова",
   "Дима",
   "Касса",
-  "Зарплата",
   "Покупка",
   "Списание",
   "Безнал",
@@ -198,8 +197,19 @@ export function applyCalcPlaceSelectsForRole() {
         if (opt.value !== current) opt.remove();
       }
     }
+    if (id === "calcTo") {
+      for (const option of [...sel.options]) {
+        if (option.value === "Зарплата") option.remove();
+      }
+      if (editingId && editingInitialTo === "Зарплата") {
+        const option = document.createElement("option");
+        option.value = "Зарплата";
+        option.textContent = "Зарплата";
+        sel.appendChild(option);
+      }
+    }
     if (current) {
-      if (id === "calcTo" && current === editingInitialTo && !Array.from(sel.options).some(option => option.value === current)) {
+      if (id === "calcTo" && current === editingInitialTo && (current !== "Зарплата" || editingId) && !Array.from(sel.options).some(option => option.value === current)) {
         const option = document.createElement("option");
         option.value = current;
         option.textContent = current;
@@ -218,6 +228,10 @@ function bindCalcPlaceSelectRoleGuards() {
     sel.dataset.moneyRoleBound = "1";
     sel.addEventListener("change", () => applyCalcPlaceSelectsForRole());
   }
+}
+
+function isForbiddenCalcSalaryDestination(value) {
+  return value === "Зарплата" && !(editingId && editingInitialTo === "Зарплата");
 }
 
 function isForbiddenCalcKassaBeznal(newVal, previousVal) {
@@ -1506,6 +1520,11 @@ async function submitForm(e) {
     isForbiddenCalcKassaBeznal(payload.to_place, editingId ? editingInitialTo : "")
   ) {
     setFormError("«Касса» и «Безнал» доступны только ролям admin и user");
+    return;
+  }
+
+  if (isForbiddenCalcSalaryDestination(payload.to_place)) {
+    setFormError("«Зарплата» доступна только при редактировании записи, где она уже была указана.");
     return;
   }
 
