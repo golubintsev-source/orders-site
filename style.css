@@ -1404,19 +1404,21 @@ h2 {
 #section-calculations .calculations-form .calculations-comment-input,
 .calculations-page .calculations-form .calculations-comment-input,
 #section-all-salaries .calculations-form .calculations-comment-input {
-  flex: 0 0 var(--calc-comment-width);
+  flex: 0 0 auto;
   width: var(--calc-comment-width);
   max-width: var(--calc-comment-width);
   min-width: 0;
   font-size: 16px;
   height: var(--calc-submit-row-height, 40px);
   min-height: var(--calc-submit-row-height, 40px);
-  max-height: var(--calc-submit-row-height, 40px);
-  padding: 0 8px;
+  max-height: none;
+  padding: 9px 8px;
+  line-height: 20px;
   box-sizing: border-box;
-  white-space: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  resize: none;
 }
 
 #section-calculations .calculations-form-row--comment-submit .calculations-submit-btn,
@@ -11850,13 +11852,6 @@ html.keyboard-open .voice-composer {
 }
 #section-all-salaries .calculations-form .calculations-comment-input {
   width: 100%;
-  max-height: none;
-  padding: 9px 8px;
-  line-height: 20px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  overflow: hidden;
-  resize: none;
 }
 
 /* «Расчёты»: комментарий всегда виден целиком. */

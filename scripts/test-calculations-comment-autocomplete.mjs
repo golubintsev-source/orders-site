@@ -19,6 +19,6 @@ assert.match(autocomplete, /input\.value\.trim\(\)\.length >= minChars/);
 assert.match(html, /id="calcCommentSuggestions"/);
 assert.match(html, /aria-controls="calcCommentSuggestions"/);
 assert.match(style, /#section-calculations \.client-suggestions/);
-assert.match(sw, /orders-site-static-v84/);
+assert.ok(Number(sw.match(/const STATIC_CACHE = "orders-site-static-v(\d+)"/)?.[1]) >= 84);
 
 console.log("calculations comment autocomplete tests: ok");
