@@ -81,6 +81,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
       el.disabled = false;
     });
     const text = row.querySelector("textarea");
+    if (!text) throw new Error("Поле текста задачи недоступно. Обновите страницу.");
     text.className = "task-create-dialog-text";
     text.dataset.field = "body";
     text.rows = 4;
@@ -91,8 +92,9 @@ export async function openTaskEditDialog(taskId, onSaved) {
     row.querySelector(".messages-attach-panel").hidden = true;
     row.querySelectorAll('[aria-expanded]').forEach((el) => el.setAttribute("aria-expanded", "false"));
     row.querySelectorAll('.messages-composer-tool-btn--active').forEach((el) => el.classList.remove('messages-composer-tool-btn--active'));
-    // Keep the order list in the dialog flow below the text row. On phones this\n    // gives it the full dialog width and lets the dialog scroll naturally.\n    field("composer").append(row, suggestions);
-    field("body").value = task.body || "";
+    // Keep the order list in the dialog flow below the text row. On phones this
+    // gives it the full dialog width and lets the dialog scroll naturally.\n    field("composer").append(row, suggestions);
+    text.value = task.body || "";
     composer = createTaskAttachmentComposer({
       getElement: (id) => dialog.querySelector(`#taskEdit-${id}`),
       initialAttachments: task.attachments,
@@ -128,13 +130,13 @@ export async function openTaskEditDialog(taskId, onSaved) {
     // A failed directory load must not silently drop executors.
     executorsReady = executors.dataset.loaded === "1";
     syncDisabled();
-    field("body").focus();
+    text.focus();
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (saving || submit.disabled) return;
       const errorEl = field("error");
       errorEl.hidden = true;
-      const body = field("body").value.trim();
+      const body = text.value.trim();
       if (!body && !composer.hasAttachments()) {
         errorEl.textContent = "Введите текст задачи.";
         errorEl.hidden = false;
