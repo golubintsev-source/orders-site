@@ -40,7 +40,8 @@ export async function openTaskEditDialog(taskId, onSaved) {
     dialog.className = "task-create-dialog";
     dialog.setAttribute("aria-labelledby", "taskEditTitle");
     dialog.innerHTML = `<form class="task-create-dialog-panel">
-      <div class="task-create-dialog-header"><h3 id="taskEditTitle" class="task-create-dialog-title">Редактировать задачу</h3></div>
+      <div class="task-create-dialog-header"><h3 id="taskEditTitle" class="task-create-dialog-title">Редактировать задачу</h3>
+        <button type="button" class="task-edit-delete" data-field="delete">Удалить задачу</button></div>
       <label class="task-highlight-toggle"><input type="checkbox" data-field="highlight" /> Выделить</label>
       <div class="task-create-dialog-field"><label for="taskEdit-orderTaskTextInput" class="task-create-dialog-label">Текст</label>
         <div data-field="composer">${renderTaskComposerHtml()}</div>
@@ -76,6 +77,27 @@ export async function openTaskEditDialog(taskId, onSaved) {
       field("highlight").disabled = saving || attachmentBusy || !task.source_order_field;
       submit.disabled = saving || attachmentBusy || !executorsReady;
     };
+    field("delete").addEventListener("click", async () => {
+      if (saving || attachmentBusy) return;
+      const errorEl = field("error");
+      errorEl.hidden = true;
+      saving = true;
+      composer?.setBusy(true);
+      syncDisabled();
+      let deleted = false;
+      try {
+        const { softDeleteAuthorTask } = await import("./tasks.js");
+        deleted = await softDeleteAuthorTask(task.id, null);
+      } catch (error) {
+        errorEl.textContent = error?.message || "Не удалось удалить задачу. Попробуйте ещё раз.";
+        errorEl.hidden = false;
+      } finally {
+        saving = false;
+        composer?.setBusy(false);
+        syncDisabled();
+      }
+      if (deleted) dialog.close();
+    });
     const close = () => { if (!saving && !attachmentBusy) dialog.close(); };
     dialog.addEventListener("close", () => { disposeTextResize(); disposeReplyResize(); composer?.dispose(); dialog.remove(); });
     dialog.addEventListener("cancel", (event) => { event.preventDefault(); close(); });

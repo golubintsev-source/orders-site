@@ -519,7 +519,7 @@ async function insertTaskHistoryComments(taskId, comments, userEmail) {
 }
 
 /** Запись не удаляется из БД — только выставляется deleted_at. Только автор. */
-async function softDeleteAuthorTask(taskId, offlineLocalId) {
+export async function softDeleteAuthorTask(taskId, offlineLocalId) {
   if (!state.currentUser) return;
 
   if (offlineLocalId) {
@@ -530,7 +530,7 @@ async function softDeleteAuthorTask(taskId, offlineLocalId) {
     void refreshMyTasksNavBadge();
     void import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
     void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
-    return;
+    return true;
   }
 
   if (taskId == null || taskId === "") return;
@@ -571,13 +571,14 @@ async function softDeleteAuthorTask(taskId, offlineLocalId) {
     return;
   }
 
-  const { error } = await supabaseClient
+  const { data: deletedRow, error } = await supabaseClient
     .from("order_tasks")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", taskId)
-    .is("deleted_at", null);
+    .eq("author_login", existing.author_login)
+    .is("deleted_at", null).select("id").maybeSingle();
 
-  if (error) {
+  if (error || !deletedRow) {
     console.error("Ошибка пометки удаления задачи:", error);
     window.alert(
       "Не удалось пометить задачу удалённой. Проверьте колонку deleted_at в таблице order_tasks.",
@@ -602,6 +603,7 @@ async function softDeleteAuthorTask(taskId, offlineLocalId) {
   void import("./all-changes.js").then((m) => {
     if (typeof m.loadAllChanges === "function") void m.loadAllChanges();
   });
+  return true;
 }
 
 async function onTaskCompletedCheckboxChange(checkbox) {
