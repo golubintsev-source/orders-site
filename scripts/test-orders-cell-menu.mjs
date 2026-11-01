@@ -9,7 +9,8 @@ class Element {
     this.classList = { add: v => values.add(v), remove: v => values.delete(v), contains: v => values.has(v) };
   }
   append(...nodes) { for (const node of nodes) { node.parent = this; this.children.push(node); } }
-  appendChild(node) { this.append(node); }
+  get parentElement() { return this.parent || null; }
+  appendChild(node) { node.remove(); this.append(node); }
   setAttribute(key, value) { this[key] = value; }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
   contains(node) { return node === this || this.children.some(child => child.contains(node)); }
@@ -91,11 +92,19 @@ console.log('orders cell menu: short tap, hold, scroll, cancel, pinch, full-text
 const ids = ['taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
   'taskCreateDialogDueAt', 'taskCreateDialogError', 'taskCreateDialogSubmitBtn', 'taskCreateDialogCancelBtn', 'taskCreateDialogCloseBtn'];
 const fields = new Map(ids.map(id => [id, new Element()]));
-fields.get('taskCreateDialog').showModal = function () { this.open = true; };
+const dialogBody = new Element('body');
+const hiddenMessagesSection = new Element('section');
+hiddenMessagesSection.hidden = true;
+dialogBody.append(hiddenMessagesSection);
+hiddenMessagesSection.append(fields.get('taskCreateDialog'));
+fields.get('taskCreateDialog').showModal = function () {
+  assert.equal(this.parentElement, dialogBody, 'modal must escape the hidden chat section before opening');
+  this.open = true;
+};
 fields.get('taskCreateDialog').close = function () { this.open = false; };
 let taskPayload;
 const dialogContext = vm.createContext({
-  document: { getElementById: id => fields.get(id) }, console,
+  document: { body: dialogBody, getElementById: id => fields.get(id) }, console,
   defaultTaskDueAtLocal: () => '2026-11-02T09:00', datetimeLocalToIso: value => value,
   ensureTaskExecutorsInList: async () => {}, getSelectedExecutorEmailsFrom: () => ['worker@example.com'],
   resetTaskExecutorsList() {}, insertTask: async payload => { taskPayload = payload; return { error: null }; },
@@ -108,8 +117,15 @@ await dialogContext.openTaskCreateDialog({ sourceOrderId: 99 });
 assert.equal(fields.get('taskCreateDialog').open, true);
 fields.get('taskCreateDialogText').value = 'Проверить заказ';
 await dialogContext.submitTaskCreateDialog();
+assert.equal(fields.get('taskCreateDialog').open, false, 'closing the modal releases the background');
 assert.equal(taskPayload.orderId, 99);
 assert.equal(taskPayload.body, 'Проверить заказ');
 assert.equal(taskPayload.executorEmails[0], 'worker@example.com');
 assert.equal(taskPayload.dueAt, '2026-11-02T09:00');
 console.log('standard task dialog: text, executors, deadline and touched order are preserved in the saved task payload');
+
+const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const messagesSection = html.match(/<section id="section-messages"[^]*?<\/section>/)?.[0];
+assert.ok(messagesSection);
+assert.ok(!messagesSection.includes('id="taskCreateDialog"'), 'new HTML must not place the shared dialog inside Chats');
+console.log('task dialog regression: hidden-section relocation, cached shell compatibility and modal close passed');

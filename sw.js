@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v102: собственное меню ячеек заказов — копирование и создание задачи.
-const STATIC_CACHE = "orders-site-static-v102";
+// v103: общее окно создания задачи вне скрытого раздела чатов.
+const STATIC_CACHE = "orders-site-static-v103";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
