@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
-import { normalizeTaskAttachments, taskAttachmentOrderIds } from "../js/task-attachment-data.js";
+import {
+  normalizeTaskAttachments,
+  taskAttachmentOrderIds,
+  taskLinkedOrderIds,
+  taskReferencesOrder,
+} from "../js/task-attachment-data.js";
 
 const normalize = (value) => JSON.parse(JSON.stringify(value));
 assert.deepEqual(normalizeTaskAttachments(null), []);
@@ -10,6 +15,14 @@ assert.deepEqual(taskAttachmentOrderIds({ attachments: [
   { type: "order", orderId: -1 }, { type: "order", orderId: "bad" },
 ]}), [42]);
 assert.deepEqual(normalizeTaskAttachments([{ type: "photo" }, { type: "unknown" }]), []);
+assert.deepEqual(taskLinkedOrderIds({
+  order_id: 41,
+  body: "Сверить [[order:42]] и [[order:43]]",
+  attachments: [{ type: "order", orderId: 42 }, { type: "order", orderId: 44 }],
+}), [41, 42, 43, 44]);
+assert.equal(taskReferencesOrder({ body: "[[order:42]]" }, 42), true);
+assert.equal(taskReferencesOrder({ attachments: [{ type: "order", orderId: 44 }] }, 44), true);
+assert.equal(taskReferencesOrder({ order_id: 41 }, 42), false);
 assert.deepEqual(normalizeTaskAttachments([{ type: "order", orderId: 2, signedUrl: "secret" }]), [
   { type: "order", orderId: 2 },
 ]);
