@@ -433,8 +433,9 @@ async function loadAllSalariesOnce() {
     }
   }
   if (!scope.current() || generation !== loadGeneration) return;
-  salaryGroups = groupSalaryRowsByMonth(data || []);
-  renderRecentSalaryPayments(salaryGroups);
+  const allGroups = groupSalaryRowsByMonth(data || []);
+  renderRecentSalaryPayments(allGroups);
+  salaryGroups = allGroups.filter(group => group.monthKey >= "2026-08");
   const availableKeys = new Set(salaryGroups.map((group) => group.monthKey));
   for (const key of expandedMonthKeys) {
     if (!availableKeys.has(key)) {
