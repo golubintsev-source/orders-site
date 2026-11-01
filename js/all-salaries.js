@@ -264,10 +264,33 @@ function renderSalaryRecipients() {
   select.value = selected;
 }
 
+function resizeSalaryComment() {
+  const comment = document.getElementById("salaryPaymentComment");
+  if (!comment || !comment.clientWidth) return;
+  comment.style.height = "auto";
+  const borderHeight = comment.offsetHeight - comment.clientHeight;
+  comment.style.height = `${comment.scrollHeight + borderHeight}px`;
+}
+
 function bindSalaryPaymentForm() {
   const form = document.getElementById("salaryPaymentForm");
   if (!form) return;
   form.hidden = !canEditManualCalculations();
+  const commentField = document.getElementById("salaryPaymentComment");
+  commentField?.addEventListener("input", resizeSalaryComment);
+  // Recalculate after opening the section or changing the screen width.
+  if (commentField && typeof ResizeObserver !== "undefined") {
+    let previousWidth = 0;
+    const observer = new ResizeObserver(entries => {
+      const width = entries[0].contentRect.width;
+      if (width === previousWidth) return;
+      previousWidth = width;
+      resizeSalaryComment();
+    });
+    observer.observe(commentField);
+  }
+  window.addEventListener("resize", resizeSalaryComment);
+  resizeSalaryComment();
   form.addEventListener("submit", async event => {
     event.preventDefault();
     const button = document.getElementById("salaryPaymentAddBtn");
@@ -293,6 +316,7 @@ function bindSalaryPaymentForm() {
       }
       amount.value = "";
       comment.value = "";
+      resizeSalaryComment();
       message.textContent = "Выплата добавлена в расчёты";
       // Wait for any older read before reloading so the new payment is included.
       if (allSalariesLoadPromise) await allSalariesLoadPromise.catch(() => {});
@@ -349,6 +373,7 @@ async function loadAllSalariesOnce() {
   try {
     await loadSettings();
     if (!scope.current()) return;
+    resizeSalaryComment();
     renderSalarySources();
     renderSalaryRecipients();
     ({ data, error } = await fetchAllSupabaseRows(() =>
