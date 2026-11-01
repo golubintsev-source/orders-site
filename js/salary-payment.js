@@ -2,7 +2,15 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { canEditManualCalculations, canAccessSection } from "./roles.js";
 import { tryParseRublesInteger } from "./format.js";
-import { shortLoginByEmail } from "./user-names.js";
+import { displayNameByEmail, shortLoginByEmail } from "./user-names.js";
+
+/** Те же источники, что в форме «Расчёты». */
+export const SALARY_PAYMENT_FROM_PLACES = ["Вова", "Дима", "Касса", "Безнал", "Другое"];
+
+export function defaultSalaryPaymentFrom(settings = state) {
+  const name = displayNameByEmail(settings.currentUser?.email);
+  return SALARY_PAYMENT_FROM_PLACES.includes(name) ? name : "Другое";
+}
 
 /** Список получателей в порядке разделов настроек. */
 export function salaryRecipientGroups(settings = state) {
@@ -20,7 +28,7 @@ export function salaryRecipientGroups(settings = state) {
     }) })).filter(group => group.names.length);
 }
 
-export function buildSalaryPayment({ amount, recipient, comment = "" }, settings = state) {
+export function buildSalaryPayment({ amount, recipient, from, comment = "" }, settings = state) {
   const parsed = tryParseRublesInteger(amount);
   if (parsed.invalidFormat || !Number.isSafeInteger(parsed.value) || parsed.value <= 0) {
     throw new Error("Укажите положительную сумму в целых рублях");
@@ -29,10 +37,14 @@ export function buildSalaryPayment({ amount, recipient, comment = "" }, settings
   if (!salaryRecipientGroups(settings).some(group => group.names.includes(name))) {
     throw new Error("Выберите получателя из настроек");
   }
+  const source = String(from || "").trim();
+  if (!SALARY_PAYMENT_FROM_PLACES.includes(source)) {
+    throw new Error("Выберите, откуда выплачивается зарплата");
+  }
   const text = String(comment || "").trim();
   const description = `з/п ${name}${text ? `, ${text}` : ""}`;
   return {
-    from_place: "Касса", to_place: "Зарплата", amount: parsed.value,
+    from_place: source, to_place: "Зарплата", amount: parsed.value,
     comment: `${description}; ${shortLoginByEmail(settings.currentUser?.email || "")}`,
     created_at: new Date().toISOString(),
   };
