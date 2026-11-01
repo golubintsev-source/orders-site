@@ -170,12 +170,12 @@ export function groupSalaryRowsByEmployee(rows) {
   );
 }
 
-/** Выплата из кассы с форматом комментария формы «Все зарплаты». */
+/** Выплата с форматом комментария формы «Все зарплаты», независимо от источника. */
 export function isSalaryPaymentRow(row) {
   const name = String(row?.to_place || "").trim();
   const comment = stripManualCalculationAuthor(row?.comment);
   const prefix = `з/п ${name}`;
-  if (row?.from_place !== "Касса" || !name) return false;
+  if (!name) return false;
   if (name === "Зарплата") return /^з\/п\s+\S/iu.test(comment);
   // Совместимость с выплатами, в которых раньше в «Куда» сохраняли имя.
   return comment === prefix || comment.startsWith(`${prefix},`);
