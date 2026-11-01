@@ -231,3 +231,32 @@ assert.equal(saveCalls, 2);
 assert.equal(input.value, "");
 assert.equal(cleared, true);
 console.log("PASS: metadata validation, XSS escaping, upload retry, draft locking, photo/order persistence and reset");
+
+// Editing gets an independent draft, seeded with storage metadata. Existing photos
+// need no upload; inline orders track the edited text and legacy orders survive.
+const editElements = new Map();
+const getEditElement = (id) => {
+  if (!editElements.has(id)) editElements.set(id, element());
+  return editElements.get(id);
+};
+getEditElement("orderTaskTextInput").value = "Текст [[order:42]]";
+const originalAttachments = [{ type: "photo", storagePath: "saved/photo.jpg", fileName: "Снимок.jpg" },
+  { type: "order", orderId: 42 }, { type: "order", orderId: 44 }];
+const editor = attachments.createTaskAttachmentComposer({ getElement: getEditElement, initialAttachments: originalAttachments });
+const uploadsBeforeEdit = calls.length;
+assert.equal(editor.hasAttachments(), true);
+editor.setBusy(true);
+assert.match(getEditElement("taskPendingAttachments").innerHTML, /data-crop="0"/);
+assert.match(getEditElement("taskPendingAttachments").innerHTML, /data-remove-photo="0"/);
+const editedAttachments = normalize(await editor.prepare());
+assert.equal(calls.length, uploadsBeforeEdit, "existing photos are not uploaded again");
+assert.deepEqual(editedAttachments.filter((item) => item.type === "order"), [{ type: "order", orderId: 42 }, { type: "order", orderId: 44 }]);
+assert.equal(editedAttachments.find((item) => item.type === "photo").storagePath, "saved/photo.jpg");
+assert.equal(attachments.isTaskAttachmentsBusy(), false, "the create form remains independent");
+getEditElement("orderTaskTextInput").value = "Без ссылки";
+assert.deepEqual(normalize(await editor.prepare()).filter((item) => item.type === "order"), [{ type: "order", orderId: 44 }]);
+editor.clear();
+assert.equal(originalAttachments.length, 3, "discarding the editor draft does not mutate saved attachments");
+assert.deepEqual(normalize(await editor.prepare()), []);
+editor.dispose();
+console.log("PASS: independent edit draft, saved-photo controls, preserved metadata, no repeated uploads, inline and legacy orders");
