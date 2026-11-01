@@ -17,6 +17,7 @@
     "test:chat-photo-performance": "node scripts/test-chat-photo-performance.mjs",
     "test:address-suggest": "node scripts/test-address-suggest.mjs",
     "test:order-cell-highlights": "node scripts/test-order-cell-highlights.mjs",
+    "test:task-replies": "node scripts/test-task-replies.mjs",
     "test:orders-cell-menu": "node scripts/test-orders-cell-menu.mjs",
     "test:orders-search": "node scripts/test-orders-search.mjs",
     "test:orders-excel": "node scripts/test-orders-excel.mjs",

@@ -688,6 +688,7 @@ export function addPendingOfflineTask({
   source_message_kind,
   source_order_field,
   highlight_order_field,
+  executor_reply,
 }) {
   const items = readPendingTasksQueue();
   items.push({
@@ -701,6 +702,7 @@ export function addPendingOfflineTask({
     order_id: order_id ?? null,
     source_order_field: source_order_field || null,
     highlight_order_field: highlight_order_field === true,
+    executor_reply: String(executor_reply ?? ""),
     source_message_id: source_message_id ?? null,
     source_message_kind: source_message_kind || null,
     created_at: created_at || new Date().toISOString(),
@@ -726,6 +728,15 @@ export function updatePendingTaskCompleted(localId, isCompleted) {
   if (changed) writePendingTasksItems(items);
 }
 
+export function updatePendingTaskReply(localId, reply) {
+  const items = readPendingTasksQueue();
+  const item = items.find(task => task.localId === localId);
+  if (!item) return false;
+  item.executor_reply = String(reply ?? "");
+  writePendingTasksItems(items);
+  return true;
+}
+
 export function removePendingTaskByLocalId(localId) {
   writePendingTasksItems(readPendingTasksQueue().filter((x) => x.localId !== localId));
 }
@@ -742,6 +753,7 @@ export function pendingTaskDisplayRows() {
     order_id: t.order_id ?? null,
     source_order_field: t.source_order_field || null,
     highlight_order_field: t.highlight_order_field === true,
+    executor_reply: String(t.executor_reply ?? ""),
     source_message_id: t.source_message_id ?? null,
     source_message_kind: t.source_message_kind || null,
     created_at: t.created_at,
@@ -937,6 +949,7 @@ async function syncPendingTasksToSupabase() {
       order_id: t.order_id ?? null,
       source_order_field: t.source_order_field || null,
       highlight_order_field: t.highlight_order_field === true,
+      executor_reply: String(t.executor_reply ?? ""),
       source_message_id: t.source_message_id ?? null,
       source_message_kind: t.source_message_kind || null,
     });

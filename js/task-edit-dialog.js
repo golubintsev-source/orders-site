@@ -2,7 +2,7 @@ import { renderTaskComposerHtml } from "./task-composer-markup.js";
 import { supabaseClient } from "./config.js";
 import { isOfflineDataMode } from "./offline-cache.js";
 import {
-  isUserAuthorOfTask, ensureTaskExecutorsInList, normalizeExecutorEmails,
+  isUserAuthorOfTask, isUserExecutorOfTask, getCurrentUserEmail, ensureTaskExecutorsInList, normalizeExecutorEmails,
   getSelectedExecutorEmailsFrom, datetimeLocalToIso,
 } from "./task-form-shared.js";
 import { createTaskAttachmentComposer } from "./task-attachments.js";
@@ -26,7 +26,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
   let composer;
   try {
     const { data: task, error } = await supabaseClient.from("order_tasks")
-      .select("id, author_login, body, executor_emails, due_at, attachments, order_id, source_order_field, highlight_order_field")
+      .select("id, author_login, body, executor_emails, due_at, attachments, order_id, source_order_field, highlight_order_field, executor_reply")
       .eq("id", taskId).is("deleted_at", null).maybeSingle();
     if (error) throw error;
     if (!task) throw new Error("Задача удалена или недоступна.");
@@ -48,6 +48,8 @@ export async function openTaskEditDialog(taskId, onSaved) {
       <div class="task-create-dialog-field"><span class="task-create-dialog-label">Исполнители</span>
         <div id="taskEditExecutors" class="messages-create-group-users order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>
         <p class="order-tasks-executors-hint" data-field="hint"></p></div>
+      <label class="task-create-dialog-field"><span class="task-create-dialog-label">Ответ</span>
+        <textarea class="task-create-dialog-text" data-field="reply" rows="2" aria-label="Ответ исполнителя"></textarea></label>
       <label class="task-create-dialog-field"><span class="task-create-dialog-label">Срок выполнения</span>
         <input type="datetime-local" class="order-tasks-due-input task-create-dialog-due" data-field="due" /></label>
       <p class="task-create-dialog-error" role="alert" data-field="error" hidden></p>
@@ -81,6 +83,8 @@ export async function openTaskEditDialog(taskId, onSaved) {
     if (!text) throw new Error("Поле текста задачи недоступно. Обновите страницу.");
     text.value = task.body || "";
     field("highlight").checked = task.highlight_order_field === true;
+    field("reply").value = task.executor_reply || "";
+    field("reply").readOnly = !isUserExecutorOfTask(task);
     composer = createTaskAttachmentComposer({
       getElement: (id) => dialog.querySelector(`#taskEdit-${id}`),
       initialAttachments: task.attachments,
@@ -141,12 +145,16 @@ export async function openTaskEditDialog(taskId, onSaved) {
           attachments: await composer.prepare(),
           highlight_order_field: Boolean(task.source_order_field && field("highlight").checked),
         };
-        // Keep the linked source order and completion status intact.
-        const { data, error: saveError } = await supabaseClient.from("order_tasks")
-          .update(patch).eq("id", task.id).eq("author_login", task.author_login)
-          .is("deleted_at", null).select("id").maybeSingle();
+        const replyChanged = isUserExecutorOfTask(task) && field("reply").value !== String(task.executor_reply ?? "");
+        if (replyChanged) patch.executor_reply = field("reply").value;
+        // Unchanged replies must not overwrite an executor's newer answer.
+        let update = supabaseClient.from("order_tasks")
+          .update(patch).eq("id", task.id).eq("author_login", task.author_login).is("deleted_at", null);
+        if (replyChanged) update = update.eq("executor_reply", String(task.executor_reply ?? ""))
+          .contains("executor_emails", [getCurrentUserEmail()]);
+        const { data, error: saveError } = await update.select("id").maybeSingle();
         if (saveError) throw saveError;
-        if (!data) throw new Error("Задача удалена или больше недоступна.");
+        if (!data) throw new Error(replyChanged ? "Ответ уже изменён или изменился исполнитель. Обновите задачу перед сохранением." : "Задача удалена или больше недоступна.");
         saved = { ...task, ...patch };
       } catch (saveError) {
         errorEl.textContent = saveError?.message || "Не удалось сохранить задачу. Попробуйте ещё раз.";

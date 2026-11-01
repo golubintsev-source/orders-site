@@ -11987,3 +11987,10 @@ html.keyboard-open .voice-composer {
 #taskCreateDialog .task-composer-row textarea { flex: 1; min-width: 0; width: 0; font-size: 16px; }
 #taskCreateDialog #taskCreateComposerHost > .messages-suggestions { position: static; width: 100%; margin-top: 6px; max-height: min(280px, 40dvh); }
 #taskCreateDialog #taskCreate-taskAttachBtn:disabled { opacity: .5; }
+
+.task-reply-cell { min-width: 240px; }
+.task-reply-controls { display: flex; align-items: flex-start; gap: 6px; }
+.task-reply-input { width: 190px; min-width: 140px; min-height: 44px; font-size: 16px; line-height: 20px; padding: 6px 8px; box-sizing: border-box; resize: vertical; }
+.task-reply-save { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 40px; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 9px; background: #16a34a; color: white; cursor: pointer; }
+.task-reply-save:disabled { background: #d1d5db; color: #6b7280; cursor: default; }
+.task-reply-message { margin: 4px 0 0; font-size: 13px; color: #b91c1c; white-space: normal; }
