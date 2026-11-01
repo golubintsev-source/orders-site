@@ -2939,7 +2939,7 @@ h2 {
   padding-right: 4px;
   text-align: center;
   white-space: nowrap;
-  vertical-align: middle;
+  vertical-align: top;
 }
 #myAuthorTasksTable .btn-icon {
   display: inline-flex;
