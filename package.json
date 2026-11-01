@@ -2,6 +2,7 @@
   "name": "orders-site",
   "private": true,
   "scripts": {
+    "test:task-attachments": "node --experimental-vm-modules scripts/test-task-attachments.mjs",
     "test:startup-screen": "node scripts/test-startup-screen.mjs",
     "test:read-requests": "node scripts/test-read-requests.mjs",
     "test:lazy-sections": "node --experimental-vm-modules scripts/test-lazy-sections.mjs",

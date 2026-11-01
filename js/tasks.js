@@ -1,3 +1,9 @@
+import {
+  initTaskAttachments, hasTaskDraftAttachments, prepareTaskAttachments,
+  setTaskAttachmentsBusy, clearTaskDraftAttachments, renderTaskAttachmentsHtml,
+  hydrateTaskAttachments, isTaskAttachmentsBusy,
+} from "./task-attachments.js";
+import { taskAttachmentOrderIds } from "./task-attachment-data.js";
 import { refreshMyTasksNavBadge } from "./task-badge.js";
 import { supabaseClient } from "./config.js";
 import { ensureOrderSummaries, getOrderSummary } from "./order-summary-cache.js";
@@ -34,7 +40,7 @@ import { buildOrderViewUrl } from "./app-routes.js";
 import { showFloatingCellTooltip, hideFloatingCellTooltip } from "./cell-tooltip.js";
 
 const TASK_SELECT_FIELDS =
-  "id, created_at, author_login, body, due_at, executor_emails, is_completed, order_id, deleted_at";
+  "id, created_at, author_login, body, due_at, executor_emails, is_completed, order_id, deleted_at, attachments";
 
 const TASK_ICON_DELETE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 
@@ -142,7 +148,7 @@ function renderTaskOrderCellHtml(row) {
  * что и попап по дате заказа в таблице «Заказы».
  */
 function renderTaskTextCellHtml(row, { orderPopup = false } = {}) {
-  const text = escapeHtml(row.body || "");
+  const text = `<div class="task-body-text">${escapeHtml(row.body || "")}</div>${renderTaskAttachmentsHtml(row)}`;
   if (!orderPopup || isStandaloneTask(row)) {
     return `<td class="order-tasks-text-cell">${text}</td>`;
   }
@@ -408,6 +414,8 @@ function renderOrderTasksTables(merged, orderId, { executorMsg, authorMsg, execu
 
   executorTbody.innerHTML = executorRows.map((row) => renderMyTasksRow(row)).join("");
   authorTbody.innerHTML = authorRows.map((row) => renderMyAuthorTasksRow(row)).join("");
+  hydrateTaskAttachments(executorTbody);
+  hydrateTaskAttachments(authorTbody);
 
   if (executorMsg) {
     executorMsg.textContent =
@@ -733,7 +741,7 @@ export async function loadAllTasks() {
   const mergedAll = filterNotDeletedTasks(mergeOrderTasksRowsForAllTasks(baseRows));
   const executorRows = sortTasksByDueAt(filterMyExecutorTasks(mergedAll));
   const authorRows = sortTasksByDueAt(filterMyAuthorTasks(mergedAll));
-  await ensureOrderSummaries([...executorRows, ...authorRows].map((row) => row.order_id), scope.signal);
+  await ensureOrderSummaries([...executorRows, ...authorRows].flatMap((row) => [row.order_id, ...taskAttachmentOrderIds(row)]), scope.signal);
   if (!scope.current()) return;
 
   executorTbody.innerHTML = executorRows
@@ -742,6 +750,9 @@ export async function loadAllTasks() {
   authorTbody.innerHTML = authorRows
     .map((row) => renderMyAuthorTasksRow(row, { showOrder: true, orderPopup: true }))
     .join("");
+
+  hydrateTaskAttachments(executorTbody);
+  hydrateTaskAttachments(authorTbody);
 
   if (executorRows.length === 0 && executorMsg) {
     executorMsg.textContent = "Нет задач, где вы исполнитель.";
@@ -811,6 +822,8 @@ export async function loadOrderTasks() {
   }
 
   const merged = filterNotDeletedTasks(mergeOrderTasksRowsForOrder(data || [], oid));
+  await ensureOrderSummaries(merged.flatMap(taskAttachmentOrderIds), scope.signal);
+  if (!scope.current()) return;
   renderOrderTasksTables(merged, oid, {
     executorTbody,
     authorTbody,
@@ -821,16 +834,25 @@ export async function loadOrderTasks() {
   void refreshMyTasksNavBadge();
 }
 
+function resizeTaskTextInput(input) {
+  if (!input || !input.clientWidth) return;
+  input.style.height = "auto";
+  const borderHeight = input.offsetHeight - input.clientHeight;
+  input.style.height = `${input.scrollHeight + borderHeight}px`;
+}
+
+let taskCreateInFlight = false;
+
 export async function createOrderTask() {
   const input = document.getElementById("orderTaskTextInput");
   const dueInput = document.getElementById("orderTaskDueAtInput");
   const msg = document.getElementById("myTasksFormMessage");
-  if (!input || !state.currentUser) return;
+  if (!input || !state.currentUser || taskCreateInFlight || isTaskAttachmentsBusy()) return;
 
   const text = (input.value || "").trim();
-  if (!text) {
+  if (!text && !hasTaskDraftAttachments()) {
     if (msg) {
-      msg.textContent = "Введите текст задачи.";
+      msg.textContent = "Введите текст задачи или прикрепите фото / заказ.";
       msg.classList.add("order-tasks-message--error");
     }
     return;
@@ -838,23 +860,39 @@ export async function createOrderTask() {
 
   const executorEmails = getSelectedExecutorEmails();
   const dueAt = datetimeLocalToIso(dueInput?.value);
-  const { error } = await insertTask({ body: text, executorEmails, dueAt });
-
-  if (error) {
+  taskCreateInFlight = true;
+  setTaskFormDisabled(true);
+  setTaskAttachmentsBusy(true);
+  let saved = false;
+  try {
+    if (msg) {
+      msg.textContent = "Сохранение задачи…";
+      msg.classList.remove("order-tasks-message--error");
+    }
+    if (isOfflineDataMode() && hasTaskDraftAttachments()) {
+      throw new Error("Для сохранения задачи с вложениями подключитесь к интернету.");
+    }
+    const attachments = await prepareTaskAttachments();
+    const { error } = await insertTask({ body: text, executorEmails, dueAt, attachments });
+    if (error) throw error;
+    saved = true;
+    input.value = "";
+    resizeTaskTextInput(input);
+    clearTaskDraftAttachments();
+    if (msg) msg.textContent = "";
+  } catch (error) {
     console.error("Ошибка создания задачи:", error);
     if (msg) {
-      msg.textContent = "Не удалось сохранить задачу.";
+      msg.textContent = error?.message || "Не удалось сохранить задачу. Попробуйте ещё раз.";
       msg.classList.add("order-tasks-message--error");
     }
-    return;
+  } finally {
+    taskCreateInFlight = false;
+    setTaskFormDisabled(false);
+    setTaskAttachmentsBusy(false);
   }
-
-  input.value = "";
+  if (!saved) return;
   resetTaskFormDefaults();
-  if (msg) {
-    msg.textContent = "";
-    msg.classList.remove("order-tasks-message--error");
-  }
   await loadAllTasks();
   void loadOrderTasks();
   void refreshMyTasksNavBadge();
@@ -869,14 +907,28 @@ let orderTasksSectionInited = false;
 export function initOrderTasksSection() {
   if (orderTasksSectionInited) return;
   orderTasksSectionInited = true;
+  initTaskAttachments();
   const createBtn = document.getElementById("orderTaskCreateBtn");
   const input = document.getElementById("orderTaskTextInput");
   if (createBtn) {
     createBtn.addEventListener("click", () => void createOrderTask());
   }
   if (input) {
+    const resize = () => resizeTaskTextInput(input);
+    input.addEventListener("input", resize);
+    input.addEventListener("focus", resize);
+    if (typeof ResizeObserver !== "undefined") {
+      let previousWidth = 0;
+      new ResizeObserver(() => {
+        const width = input.clientWidth;
+        if (width === previousWidth) return;
+        previousWidth = width;
+        resize();
+      }).observe(input);
+    }
+    resize();
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) {
         e.preventDefault();
         void createOrderTask();
       }
@@ -908,6 +960,8 @@ export function initOrderTasksSection() {
   bindAuthorTaskDeleteDelegation(document.getElementById("orderTasksAuthorTable"));
   bindTaskOrderLinkDelegation(document.getElementById("allTasksTable"));
   bindTaskOrderLinkDelegation(document.getElementById("myAuthorTasksTable"));
+  bindTaskOrderLinkDelegation(document.getElementById("orderTasksExecutorTable"));
+  bindTaskOrderLinkDelegation(document.getElementById("orderTasksAuthorTable"));
   bindTaskOrderPopupDelegation(document.getElementById("allTasksTable"));
   bindTaskOrderPopupDelegation(document.getElementById("myAuthorTasksTable"));
 }

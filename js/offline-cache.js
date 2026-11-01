@@ -730,6 +730,7 @@ export function pendingTaskDisplayRows() {
     id: t.tempTaskId,
     author_login: t.author_login,
     body: t.body,
+    ...(Array.isArray(t.attachments) && t.attachments.length ? { attachments: t.attachments } : {}),
     executor_emails: Array.isArray(t.executor_emails) ? t.executor_emails : [],
     due_at: t.due_at || null,
     is_completed: t.is_completed === true,
@@ -922,6 +923,7 @@ async function syncPendingTasksToSupabase() {
     const { error } = await supabaseClient.from("order_tasks").insert({
       author_login: t.author_login,
       body: t.body,
+      ...(Array.isArray(t.attachments) && t.attachments.length ? { attachments: t.attachments } : {}),
       executor_emails: Array.isArray(t.executor_emails) ? t.executor_emails : [],
       due_at: t.due_at || null,
       is_completed: t.is_completed === true,
