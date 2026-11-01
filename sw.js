@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v114: ответ исполнителя текстом в таблице автора задачи.
-const STATIC_CACHE = "orders-site-static-v114";
+// v115: флажок выполнения в окне редактирования задачи.
+const STATIC_CACHE = "orders-site-static-v115";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

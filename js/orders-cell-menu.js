@@ -44,8 +44,8 @@ export function initOrdersCellMenu({
   openTask = options => import("./task-create-dialog.js").then(module => module.openTaskCreateDialog(options)),
   findTask = context => import("./order-task-links.js").then(module => module.findOrderCellTask(context.orderId, context.orderField)),
   editTask = id => import("./task-edit-dialog.js").then(module => module.openTaskEditDialog(id, async () => {
-    const links = await import("./order-task-links.js");
-    await links.refreshActiveTaskOrderRefs();
+    const [links, tasks] = await Promise.all([import("./order-task-links.js"), import("./tasks.js")]);
+    await Promise.all([links.refreshActiveTaskOrderRefs(), tasks.refreshMyTasksNavBadge()]);
   })),
 } = {}) {
   const table = document.getElementById("ordersTable");

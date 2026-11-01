@@ -84,7 +84,7 @@ const document = {
   getElementById: id => id === 'taskEditDialog' ? modal : null,
   body: { append(dialog) { modal = dialog; dialog.isConnected = true; } },
   createElement() {
-    fields = Object.fromEntries(['reply','highlight','hint','due','error'].map(key => [key, node()]));
+    fields = Object.fromEntries(['reply','completed','highlight','hint','due','error'].map(key => [key, node()]));
     form = node(); editText = node(); executors = node(); submit = node(); const cancel = node();
     form.querySelectorAll = () => [...Object.values(fields), editText, submit, cancel];
     const dialog = node(); dialog.setAttribute = () => {};
@@ -99,7 +99,7 @@ const document = {
     return dialog;
   },
 };
-const taskRow = { id: 50, author_login: 'worker@example.com', body: 'Задача', executor_emails: ['worker@example.com'], executor_reply: 'Старый ответ' };
+const taskRow = { id: 50, author_login: 'worker@example.com', body: 'Задача', executor_emails: ['worker@example.com'], executor_reply: 'Старый ответ', is_completed: false };
 const editorContext = vm.createContext({
   document, console, isOfflineDataMode: () => false, bindAutogrowTextarea: field => { editorSizedFields.push(field); return () => {}; },
   isUserAuthorOfTask: () => true, isUserExecutorOfTask: () => canReply,
@@ -125,7 +125,12 @@ assert.equal(editText.rows, 1);
 assert.match(modal.innerHTML, /data-field="reply" rows="1"/);
 assert.ok(editorSizedFields.includes(fields.reply));
 assert.ok(modal.innerHTML.indexOf('Ответ') > modal.innerHTML.indexOf('Исполнители'));
+assert.equal(fields.completed.checked, false);
+assert.ok(modal.innerHTML.indexOf('data-field="completed"') > modal.innerHTML.indexOf('data-field="reply"'));
+fields.completed.checked = true;
 fields.reply.value = 'Новый ответ'; await form.emit('submit');
+assert.equal(patchSent.is_completed, true);
+assert.equal(savedRow.is_completed, true);
 assert.equal(patchSent.executor_reply, 'Новый ответ'); assert.equal(savedRow.executor_reply, 'Новый ответ');
 assert.ok(updateFilters.some(([key, value]) => key === 'executor_reply' && value === 'Старый ответ'));
 canReply = false;
@@ -133,6 +138,14 @@ await editorContext.openTaskEditDialog(50);
 assert.equal(fields.reply.value, 'Старый ответ'); assert.equal(fields.reply.readOnly, true);
 fields.reply.value = 'Cannot change'; await form.emit('submit');
 assert.equal(Object.hasOwn(patchSent, 'executor_reply'), false, 'author-only edits must not overwrite executor reply');
+assert.equal(Object.hasOwn(patchSent, 'is_completed'), false, 'unchanged checkbox must preserve a newer status');
+taskRow.is_completed = true;
+await editorContext.openTaskEditDialog(50);
+assert.equal(fields.completed.checked, true);
+fields.completed.checked = false;
+await form.emit('submit');
+assert.equal(patchSent.is_completed, false);
+taskRow.is_completed = false;
 canReply = true; conflict = true;
 await editorContext.openTaskEditDialog(50);
 fields.reply.value = 'Conflict'; await form.emit('submit');
