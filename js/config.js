@@ -20,8 +20,12 @@ export const SUPABASE_KEY =
  * Прямые запросы в Supabase (без Vercel /api/supabase-proxy).
  * Раньше прокси добавлял лишний hop и замедлял мобильный/PWA старт.
  */
+const readFetch = createReadFetch((...args) => fetch(...args), { baseUrl: SUPABASE_URL });
 export const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
   // One bounded attempt; retrying POST/RPC could duplicate a successful write.
   db: { retry: false },
-  global: { fetch: createReadFetch((...args) => fetch(...args), { baseUrl: SUPABASE_URL }) },
+  global: { fetch: (input, init) => {
+    const run = () => readFetch(input, init);
+    return window.__appStartup?.trackRead(input, init, run) ?? run();
+  } },
 });

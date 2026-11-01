@@ -49,6 +49,7 @@ function bindShell() {
 
 function reportError(error) {
   console.error("Ошибка инициализации:", error);
+  void window.__appStartup?.fail();
   setMessage("Не удалось загрузить раздел. Проверьте соединение и откройте его снова.", "#d32f2f");
 }
 
@@ -77,6 +78,7 @@ async function openRoute({ savedApp = null, initial = false } = {}) {
   const savedForm = savedApp?.sectionId == null || savedApp?.sectionId === "new";
   const viewId = orderId ?? (savedForm ? savedApp?.viewingOrderId : null);
   const editId = viewId == null && savedForm ? savedApp?.editingOrderId : null;
+  window.__appStartup?.expectSection(viewId != null || editId != null ? "new" : sectionId);
   restoreSearch(savedApp);
   if (savedApp?.sectionId === "order-tasks") state.tasksOrderId = savedApp.tasksOrderId;
   if (viewId != null || editId != null) {
@@ -96,8 +98,16 @@ async function openRoute({ savedApp = null, initial = false } = {}) {
 
 async function init() {
   ensureBootOrFallback();
+  if (typeof navigator !== "undefined" && navigator.onLine === false && window.__appStartup) {
+    void window.__appStartup.fail();
+    return;
+  }
   initAccessLogging();
-  if (getLoginKeyFromUrl() && await trySecretLoginFromUrl()) return;
+  if (getLoginKeyFromUrl() && await trySecretLoginFromUrl()) {
+    // Successful link login navigates away; failed link login must expose retry.
+    void window.__appStartup?.fail();
+    return;
+  }
   const user = await checkAuth();
   if (!user) return;
   updateTopbarUserName(user.email);
@@ -130,11 +140,12 @@ async function init() {
   refreshSectionNavAfterProfile();
   bindShell();
   window.addEventListener("popstate", () => { void openRoute().catch(reportError); });
-  void import("./nav-status.js").then((m) => m.initNavStatus()).catch(console.error);
-  void import("./push-notifications.js").then((m) => m.initPushNotifications()).catch(console.error);
   if (routeReady) await routeReady;
   else await openRoute({ savedApp: skipResume ? null : saved?.app, initial: true });
   await applySavedScroll(saved);
+  await window.__appStartup?.complete();
+  void import("./nav-status.js").then((m) => m.initNavStatus()).catch(console.error);
+  void import("./push-notifications.js").then((m) => m.initPushNotifications()).catch(console.error);
 }
 
 void init().catch(reportError);
