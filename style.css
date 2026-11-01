@@ -4117,6 +4117,7 @@ h2 {
   width: 100%;
 }
 .task-composer-row #orderTaskTextInput { flex: 1; min-width: 0; }
+#taskEditDialog .task-composer-row textarea { flex: 1; min-width: 0; width: 0; }
 .task-attach-wrap { position: relative; flex-shrink: 0; }
 .task-attach-wrap .messages-attach-panel {
   left: auto;
