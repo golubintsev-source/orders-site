@@ -8,7 +8,7 @@ const tick = async () => { for (let i = 0; i < 12; i++) await Promise.resolve();
 function harness({ online = true, ping = async () => ({ type: "opaque", ok: false }), css = true } = {}) {
   let now = 0, next = 0, reloads = 0;
   const timers = new Map(), listeners = new Map(), probes = [];
-  const element = (id) => ({ hidden: id === "startupPhrase" || id === "startupRetry", textContent: "",
+  const element = (id) => ({ hidden: ["startupTitle", "startupDescription", "startupRetry"].includes(id), textContent: "",
     inert: id === "appContainer", sheet: id === "appStyles" && css ? {} : null,
     attrs: new Map(), events: new Map(),
     addEventListener(name, fn) { this.events.set(name, fn); },
@@ -49,12 +49,14 @@ function harness({ online = true, ping = async () => ({ type: "opaque", ok: fals
 const read = (h, path, response = { ok: true }, init) => h.api.trackRead(`https://db.example/rest/v1/${path}`, init,
   async () => { if (response instanceof Error) throw response; return response; });
 
-test("quotes start after four seconds and rotate without repetition; readiness clears all timers", async () => {
+test("a quote appears immediately and rotates every five seconds; readiness clears all timers", async () => {
   const h = harness();
-  await h.advance(3999); assert.equal(h.elements.startupPhrase.hidden, true);
-  await h.advance(1); const first = h.elements.startupPhrase.textContent;
+  const first = h.elements.startupPhrase.textContent;
   assert.ok(first); assert.equal(h.elements.startupPhrase.hidden, false);
-  await h.advance(5000); assert.notEqual(h.elements.startupPhrase.textContent, first);
+  assert.equal(h.elements.startupTitle.hidden, true);
+  assert.equal(h.elements.startupDescription.hidden, true);
+  await h.advance(4999); assert.equal(h.elements.startupPhrase.textContent, first);
+  await h.advance(1); assert.notEqual(h.elements.startupPhrase.textContent, first);
   assert.equal(await h.api.complete(), true);
   assert.equal(h.elements.startupScreen.hidden, true);
   assert.equal(h.elements.appContainer.inert, false);
@@ -69,6 +71,8 @@ test("a swallowed required read error never reveals the empty app; ya.ru opaque 
   assert.equal(h.root.attrs.get("data-startup"), "data-error");
   assert.equal(h.elements.startupScreen.hidden, false);
   assert.equal(h.elements.startupRetry.hidden, false);
+  assert.equal(h.elements.startupTitle.hidden, false);
+  assert.equal(h.elements.startupDescription.hidden, false);
   assert.equal(h.probes[0][1].mode, "no-cors");
   assert.equal(h.probes[0][1].cache, "no-store");
   assert.equal(h.probes[0][1].credentials, "omit");
