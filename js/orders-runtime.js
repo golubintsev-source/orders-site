@@ -20,8 +20,10 @@ export function ensureOrdersUI() {
       import("./orders.js"), import("./ui.js"), import("./files.js"),
       import("./ordersTableStickyHeader.js"), import("./ordersTableMobileFit.js"),
       import("./ordersTablePinchZoom.js"), import("./orders-address-column-width.js"),
-    ]).then(([orders, ui, files, sticky, fit, zoom, width]) => {
+      import("./orders-cell-menu.js"),
+    ]).then(([orders, ui, files, sticky, fit, zoom, width, cellMenu]) => {
       ui.bindUIEvents();
+      cellMenu.initOrdersCellMenu();
       window.__ordersUiReady = true;
       sticky.initOrdersTableStickyHeader();
       fit.initOrdersTableMobileFit();

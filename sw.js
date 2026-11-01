@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v101: таблица трёх последних выплат на странице зарплат.
-const STATIC_CACHE = "orders-site-static-v101";
+// v102: собственное меню ячеек заказов — копирование и создание задачи.
+const STATIC_CACHE = "orders-site-static-v102";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -45,6 +45,7 @@ const PRECACHE_URLS = [
   "/js/roles.js",
   "/js/format.js",
   "/js/autogrow-textarea.js",
+  "/js/orders-cell-menu.js",
   "/js/user-names.js",
   "/js/statistics-matrix.js",
   "/js/user-place.js",

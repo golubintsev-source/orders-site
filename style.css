@@ -11921,3 +11921,60 @@ html.keyboard-open .voice-composer {
   overflow-wrap: anywhere;
 }
 .recent-salary-payments .all-salaries-detail-table td:nth-child(5) { white-space: nowrap; }
+
+/* Table cells use the app menu instead of iOS text-selection callouts. */
+#ordersTable tbody td, #ordersTable tbody td * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#ordersTable tbody td.order-cell-selected {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  background-color: #dbeafe;
+}
+#ordersTable tbody td.order-cell-selected .status-value {
+  background-color: #bfdbfe;
+  color: #172554;
+}
+.orders-cell-menu {
+  position: fixed;
+  z-index: 11000;
+  width: 340px;
+  box-sizing: border-box;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #d7dce5;
+  border-radius: 14px;
+  box-shadow: 0 8px 30px #0003;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.orders-cell-menu[hidden] { display: none; }
+.orders-cell-menu-text {
+  max-height: min(30vh, 180px);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  background: #bfdbfe;
+  color: #172554;
+  border-radius: 6px;
+  font-size: 16px;
+}
+.orders-cell-menu-actions { display: flex; gap: 6px; }
+.orders-cell-menu-actions button {
+  flex: 1;
+  min-height: 44px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 15px;
+}
+.orders-cell-menu-actions button:disabled { opacity: .5; }
+.orders-cell-menu-status { font-size: 13px; color: #b91c1c; }
+.orders-cell-menu-status:empty { display: none; }
