@@ -148,12 +148,7 @@ function renderTaskOrderCellHtml(row) {
  * что и попап по дате заказа в таблице «Заказы».
  */
 function renderTaskTextCellHtml(row, { orderPopup = false } = {}) {
-  const editButton = orderPopup && isUserAuthorOfTask(row)
-    ? `<button type="button" class="btn-edit-task" data-task-id="${escapeHtml(row.id)}"
-        ${row.__offlineLocalId ? 'disabled title="Редактирование доступно после отправки задачи в базу"' : 'title="Редактировать задачу"'}
-        aria-label="Редактировать задачу">✎</button>`
-    : "";
-  const text = `<div class="task-body-text">${renderTaskBodyHtml(row.body)}</div>${renderTaskAttachmentsHtml(row)}${editButton}`;
+  const text = `<div class="task-body-text">${renderTaskBodyHtml(row.body)}</div>${renderTaskAttachmentsHtml(row)}`;
   if (!orderPopup || isStandaloneTask(row)) {
     return `<td class="order-tasks-text-cell">${text}</td>`;
   }
@@ -170,7 +165,7 @@ function renderTaskTextCellHtml(row, { orderPopup = false } = {}) {
   `;
 }
 
-function renderAuthorTaskDeleteCell(row) {
+function renderAuthorTaskDeleteCell(row, { editable = false } = {}) {
   if (!isUserAuthorOfTask(row)) return `<td class="my-tasks-actions-cell"></td>`;
   const taskId = row.id != null ? String(row.id) : "";
   const offlineLocalId = row.__offlineLocalId ? String(row.__offlineLocalId) : "";
@@ -179,6 +174,10 @@ function renderAuthorTaskDeleteCell(row) {
     : "Скрыть задачу (в базе останется пометка удаления)";
   return `
     <td class="my-tasks-actions-cell">
+      ${editable ? `<button type="button" class="btn-icon btn-edit btn-edit-task"
+        data-task-id="${escapeHtml(taskId)}"
+        ${offlineLocalId ? 'disabled title="Редактирование доступно после отправки задачи в базу"' : 'title="Редактировать задачу"'}
+        aria-label="Редактировать задачу"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L9 17l-4 1 1-4Z"/></svg></button>` : ""}
       <button
         type="button"
         class="btn-icon btn-delete btn-delete-task"
@@ -191,7 +190,7 @@ function renderAuthorTaskDeleteCell(row) {
   `;
 }
 
-function renderMyAuthorTasksRow(row, { showOrder = false, orderPopup = false } = {}) {
+function renderMyAuthorTasksRow(row, { showOrder = false, orderPopup = false, editable = false } = {}) {
   const completed = !isActiveTask(row);
   const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
   const rowClass = completed
@@ -207,7 +206,7 @@ function renderMyAuthorTasksRow(row, { showOrder = false, orderPopup = false } =
       <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
       <td>${escapeHtml(due)}</td>
       ${renderMyTaskStatusCell(row)}
-      ${renderAuthorTaskDeleteCell(row)}
+      ${renderAuthorTaskDeleteCell(row, { editable })}
     </tr>
   `;
 }
@@ -780,7 +779,7 @@ export async function loadAllTasks() {
     .map((row) => renderMyTasksRow(row, { showOrder: true, showExecutors: false, orderPopup: true }))
     .join("");
   authorTbody.innerHTML = authorRows
-    .map((row) => renderMyAuthorTasksRow(row, { showOrder: true, orderPopup: true }))
+    .map((row) => renderMyAuthorTasksRow(row, { showOrder: true, orderPopup: true, editable: true }))
     .join("");
 
   hydrateTaskAttachments(executorTbody);
@@ -989,7 +988,6 @@ export function initOrderTasksSection() {
   bindTaskCompletedCheckboxDelegation(document.getElementById("allTasksTable"));
   bindTaskCompletedCheckboxDelegation(document.getElementById("myAuthorTasksTable"));
   bindAuthorTaskDeleteDelegation(document.getElementById("myAuthorTasksTable"));
-  bindAuthorTaskEditDelegation(document.getElementById("allTasksTable"));
   bindAuthorTaskEditDelegation(document.getElementById("myAuthorTasksTable"));
   bindAuthorTaskDeleteDelegation(document.getElementById("orderTasksAuthorTable"));
   bindTaskOrderLinkDelegation(document.getElementById("allTasksTable"));
