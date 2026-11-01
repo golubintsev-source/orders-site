@@ -4118,6 +4118,13 @@ h2 {
 }
 .task-composer-row #orderTaskTextInput { flex: 1; min-width: 0; }
 #taskEditDialog .task-composer-row textarea { flex: 1; min-width: 0; width: 0; font-size: 16px; }
+#taskEditDialog [data-field="composer"] > .messages-suggestions {
+  position: static;
+  width: 100%;
+  max-height: min(280px, 40dvh);
+  margin: 6px 0 0;
+  box-sizing: border-box;
+}
 .task-attach-wrap { position: relative; flex-shrink: 0; }
 .task-attach-wrap .messages-attach-panel {
   left: auto;
