@@ -821,6 +821,13 @@ export async function loadOrderTasks() {
   void refreshMyTasksNavBadge();
 }
 
+function resizeTaskTextInput(input) {
+  if (!input || !input.clientWidth) return;
+  input.style.height = "auto";
+  const borderHeight = input.offsetHeight - input.clientHeight;
+  input.style.height = `${input.scrollHeight + borderHeight}px`;
+}
+
 export async function createOrderTask() {
   const input = document.getElementById("orderTaskTextInput");
   const dueInput = document.getElementById("orderTaskDueAtInput");
@@ -850,6 +857,7 @@ export async function createOrderTask() {
   }
 
   input.value = "";
+  resizeTaskTextInput(input);
   resetTaskFormDefaults();
   if (msg) {
     msg.textContent = "";
@@ -875,8 +883,21 @@ export function initOrderTasksSection() {
     createBtn.addEventListener("click", () => void createOrderTask());
   }
   if (input) {
+    const resize = () => resizeTaskTextInput(input);
+    input.addEventListener("input", resize);
+    input.addEventListener("focus", resize);
+    if (typeof ResizeObserver !== "undefined") {
+      let previousWidth = 0;
+      new ResizeObserver(() => {
+        const width = input.clientWidth;
+        if (width === previousWidth) return;
+        previousWidth = width;
+        resize();
+      }).observe(input);
+    }
+    resize();
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) {
         e.preventDefault();
         void createOrderTask();
       }

@@ -4101,6 +4101,14 @@ h2 {
   padding: 0 10px;
   font-size: 16px;
 }
+#orderTaskTextInput {
+  min-height: 36px;
+  max-height: none;
+  padding: 7px 10px;
+  line-height: 20px;
+  resize: none;
+  overflow: hidden;
+}
 .order-tasks-create-btn {
   height: 36px;
   padding: 0 14px;
