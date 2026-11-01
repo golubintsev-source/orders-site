@@ -196,7 +196,7 @@ function renderAuthorTaskDeleteCell(row, { editable = false } = {}) {
   `;
 }
 
-function renderMyAuthorTasksRow(row, { showOrder = false, orderPopup = false, editable = false } = {}) {
+function renderMyAuthorTasksRow(row, { showOrder = false, orderPopup = false, editable = false, showReply = false } = {}) {
   const completed = !isActiveTask(row);
   const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
   const rowClass = completed
@@ -212,6 +212,7 @@ function renderMyAuthorTasksRow(row, { showOrder = false, orderPopup = false, ed
       <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
       <td>${escapeHtml(due)}</td>
       ${renderMyTaskStatusCell(row)}
+      ${showReply ? `<td class="task-reply-readonly">${escapeHtml(row.executor_reply || "")}</td>` : ""}
       ${renderAuthorTaskDeleteCell(row, { editable })}
     </tr>
   `;
@@ -786,7 +787,7 @@ export async function loadAllTasks() {
     .map((row) => renderMyTasksRow(row, { showOrder: true, showExecutors: false, orderPopup: true, showReply: true }))
     .join("");
   authorTbody.innerHTML = authorRows
-    .map((row) => renderMyAuthorTasksRow(row, { showOrder: true, orderPopup: true, editable: true }))
+    .map((row) => renderMyAuthorTasksRow(row, { showOrder: true, orderPopup: true, editable: true, showReply: true }))
     .join("");
 
   resizeTaskReplyFields(executorTbody);
