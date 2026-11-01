@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 let allowed = true, offline = false, pendingFound = true, pendingReply, calls = [], resolveWrite;
+let sizedFields = [], disposedFields = [];
 const context = vm.createContext({
+  bindAutogrowTextarea: field => { sizedFields.push(field); return () => disposedFields.push(field); },
   getCurrentUserEmail: () => 'worker@example.com', isUserExecutorOfTask: () => allowed,
   isOfflineDataMode: () => offline, updatePendingTaskReply: (id, reply) => { pendingReply = reply; return pendingFound; },
   supabaseClient: { from: table => {
@@ -19,7 +21,7 @@ vm.runInContext(fs.readFileSync(new URL('../js/task-replies.js', import.meta.url
 assert.equal(context.replyIsDirty('', ''), false);
 assert.equal(context.replyIsDirty('New', ''), true);
 const row = { id: 42, executor_reply: '', executor_emails: ['worker@example.com'] };
-const root = { dataset: {}, listeners: {}, contains: () => true, querySelectorAll: () => [root.editor],
+const root = { dataset: {}, listeners: {}, contains: () => true, querySelectorAll: selector => selector === ".task-reply-input" ? [root.editor.querySelector(selector)] : [root.editor],
   addEventListener(type, fn) { this.listeners[type] = fn; } };
 function editorFromHtml(html, value = '') {
   const key = html.match(/data-reply-key="([^"]+)"/)[1];
@@ -31,6 +33,11 @@ function editorFromHtml(html, value = '') {
 }
 let controls = editorFromHtml(context.renderTaskReplyCell(row)); root.editor = controls.editor;
 context.bindTaskReplyControls(root);
+controls.input.isConnected = true;
+context.resizeTaskReplyFields(root);
+context.resizeTaskReplyFields(root);
+assert.equal(sizedFields.length, 1, 'one sizing listener per reply field');
+assert.match(context.renderTaskReplyCell(row), /rows="1"/);
 assert.equal(controls.button.disabled, true);
 const input = text => { controls.input.value = text; root.listeners.input({ target: controls.input }); };
 const click = () => root.listeners.click({ target: controls.button, preventDefault() {} });
@@ -60,9 +67,14 @@ assert.equal((await context.saveExecutorReply({ ...row, __offlineLocalId: 'local
 assert.equal(pendingReply, 'Local'); pendingFound = false;
 assert.equal((await context.saveExecutorReply({ ...row, __offlineLocalId: 'local' }, 'Local', '')).ok, false);
 assert.ok(!context.renderTaskReplyCell({ ...row, id: 43, executor_reply: '</textarea><script>x</script>' }).includes('<script>'));
+controls.input.isConnected = false;
+root.editor = { querySelector: () => ({ isConnected: true }) };
+context.resizeTaskReplyFields(root);
+assert.equal(disposedFields.length, 1, 're-render removes sizing handlers for old fields');
 console.log('task replies: grey/green dirty state, save, duplicate prevention, edit/clear, errors/conflict, draft preservation, executor guard, offline task and escaping passed');
 // Exercise the real shared edit dialog used from both task lists and order cells.
 let modal = null, patchSent, updateFilters, canReply = true, conflict = false, savedRow;
+const editorSizedFields = [];
 const node = () => ({ value: '', checked: false, disabled: false, dataset: {}, hidden: true, listeners: {},
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }, focus() {}, append() {}, appendChild() {},
   querySelector() { return null; }, querySelectorAll() { return []; },
@@ -89,7 +101,7 @@ const document = {
 };
 const taskRow = { id: 50, author_login: 'worker@example.com', body: 'Задача', executor_emails: ['worker@example.com'], executor_reply: 'Старый ответ' };
 const editorContext = vm.createContext({
-  document, console, isOfflineDataMode: () => false, bindAutogrowTextarea: () => () => {},
+  document, console, isOfflineDataMode: () => false, bindAutogrowTextarea: field => { editorSizedFields.push(field); return () => {}; },
   isUserAuthorOfTask: () => true, isUserExecutorOfTask: () => canReply,
   getCurrentUserEmail: () => 'worker@example.com', normalizeExecutorEmails: () => [],
   getSelectedExecutorEmailsFrom: () => ['worker@example.com'], datetimeLocalToIso: () => null,
@@ -110,6 +122,8 @@ vm.runInContext(editSource.replace(/^import[^]*?from "[^"]+";\n/gm, '').replace(
 await editorContext.openTaskEditDialog(50, row => { savedRow = row; });
 assert.equal(fields.reply.value, 'Старый ответ'); assert.equal(fields.reply.readOnly, false);
 assert.equal(editText.rows, 1);
+assert.match(modal.innerHTML, /data-field="reply" rows="1"/);
+assert.ok(editorSizedFields.includes(fields.reply));
 assert.ok(modal.innerHTML.indexOf('Ответ') > modal.innerHTML.indexOf('Исполнители'));
 fields.reply.value = 'Новый ответ'; await form.emit('submit');
 assert.equal(patchSent.executor_reply, 'Новый ответ'); assert.equal(savedRow.executor_reply, 'Новый ответ');

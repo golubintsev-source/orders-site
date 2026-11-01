@@ -1,8 +1,10 @@
+import { bindAutogrowTextarea } from "./autogrow-textarea.js";
 import { supabaseClient } from "./config.js";
 import { getCurrentUserEmail, isUserExecutorOfTask } from "./task-form-shared.js";
 import { isOfflineDataMode, updatePendingTaskReply } from "./offline-cache.js";
 
 const drafts = new Map();
+const replySizing = new Map();
 const escape = value => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 export function replyIsDirty(value, saved) {
@@ -45,12 +47,21 @@ export function renderTaskReplyCell(row) {
   const disabled = draft.saving || !replyIsDirty(draft.value, draft.saved);
   return `<td class="task-reply-cell"><div class="task-reply-editor" data-reply-key="${escape(key)}">
     <div class="task-reply-controls">
-      <textarea class="task-reply-input" rows="2" aria-label="Ответ по задаче" ${draft.saving ? "disabled" : ""}>${escape(draft.value)}</textarea>
+      <textarea class="task-reply-input" rows="1" aria-label="Ответ по задаче" ${draft.saving ? "disabled" : ""}>${escape(draft.value)}</textarea>
       <button type="button" class="task-reply-save" title="Сохранить ответ" aria-label="Сохранить ответ" ${disabled ? "disabled" : ""}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg>
       </button>
     </div><p class="task-reply-message" role="status" ${draft.error ? "" : "hidden"}>${escape(draft.error)}</p>
   </div></td>`;
+}
+
+export function resizeTaskReplyFields(root) {
+  for (const [field, dispose] of replySizing) {
+    if (!field.isConnected) { dispose(); replySizing.delete(field); }
+  }
+  for (const field of root?.querySelectorAll(".task-reply-input") || []) {
+    if (!replySizing.has(field)) replySizing.set(field, bindAutogrowTextarea(field));
+  }
 }
 
 export function bindTaskReplyControls(root) {

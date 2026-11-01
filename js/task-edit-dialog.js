@@ -26,6 +26,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
   let dialog;
   let composer;
   let disposeTextResize = () => {};
+  let disposeReplyResize = () => {};
   try {
     const { data: task, error } = await supabaseClient.from("order_tasks")
       .select("id, author_login, body, executor_emails, due_at, attachments, order_id, source_order_field, highlight_order_field, executor_reply")
@@ -51,7 +52,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
         <div id="taskEditExecutors" class="messages-create-group-users order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>
         <p class="order-tasks-executors-hint" data-field="hint"></p></div>
       <label class="task-create-dialog-field"><span class="task-create-dialog-label">Ответ</span>
-        <textarea class="task-create-dialog-text" data-field="reply" rows="2" aria-label="Ответ исполнителя"></textarea></label>
+        <textarea class="task-create-dialog-text" data-field="reply" rows="1" aria-label="Ответ исполнителя"></textarea></label>
       <label class="task-create-dialog-field"><span class="task-create-dialog-label">Срок выполнения</span>
         <input type="datetime-local" class="order-tasks-due-input task-create-dialog-due" data-field="due" /></label>
       <p class="task-create-dialog-error" role="alert" data-field="error" hidden></p>
@@ -75,7 +76,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
       submit.disabled = saving || attachmentBusy || !executorsReady;
     };
     const close = () => { if (!saving && !attachmentBusy) dialog.close(); };
-    dialog.addEventListener("close", () => { disposeTextResize(); composer?.dispose(); dialog.remove(); });
+    dialog.addEventListener("close", () => { disposeTextResize(); disposeReplyResize(); composer?.dispose(); dialog.remove(); });
     dialog.addEventListener("cancel", (event) => { event.preventDefault(); close(); });
     cancel.addEventListener("click", close);
     dialog.addEventListener("click", (event) => { if (event.target === dialog) close(); });
@@ -104,6 +105,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
     submit.disabled = true;
     dialog.showModal();
     disposeTextResize = bindAutogrowTextarea(text);
+    disposeReplyResize = bindAutogrowTextarea(field("reply"));
     await ensureTaskExecutorsInList(executors, field("hint"));
     // Preserve assigned people even if they are no longer in the user directory.
     for (const email of normalizeExecutorEmails(task.executor_emails)) {
@@ -176,6 +178,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
     });
   } catch (error) {
     disposeTextResize();
+    disposeReplyResize();
     composer?.dispose();
     dialog?.remove();
     throw error;

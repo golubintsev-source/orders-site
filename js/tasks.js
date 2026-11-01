@@ -1,4 +1,4 @@
-import { renderTaskReplyCell, bindTaskReplyControls } from "./task-replies.js";
+import { renderTaskReplyCell, bindTaskReplyControls, resizeTaskReplyFields } from "./task-replies.js";
 import { orderFieldLabel } from "./order-cell-highlights.js";
 import {
   initTaskAttachments, hasTaskDraftAttachments, prepareTaskAttachments,
@@ -424,6 +424,7 @@ function renderOrderTasksTables(merged, orderId, { executorMsg, authorMsg, execu
 
   executorTbody.innerHTML = executorRows.map((row) => renderMyTasksRow(row)).join("");
   authorTbody.innerHTML = authorRows.map((row) => renderMyAuthorTasksRow(row)).join("");
+  resizeTaskReplyFields(executorTbody);
   hydrateTaskAttachments(executorTbody);
   hydrateTaskAttachments(authorTbody);
 
@@ -788,6 +789,7 @@ export async function loadAllTasks() {
     .map((row) => renderMyAuthorTasksRow(row, { showOrder: true, orderPopup: true, editable: true }))
     .join("");
 
+  resizeTaskReplyFields(executorTbody);
   hydrateTaskAttachments(executorTbody);
   hydrateTaskAttachments(authorTbody);
 
