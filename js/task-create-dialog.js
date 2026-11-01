@@ -1,3 +1,5 @@
+import { createTaskAttachmentComposer } from "./task-attachments.js";
+import { renderTaskComposerHtml } from "./task-composer-markup.js";
 import { validOrderField } from "./order-cell-highlights.js";
 import {
   defaultTaskDueAtLocal,
@@ -9,6 +11,8 @@ import {
 } from "./task-form-shared.js";
 
 let dialogInited = false;
+let attachmentComposer = null;
+let saving = false;
 /** @type {{ id: string | number, kind: string } | null} */
 let pendingSourceMessage = null;
 /** @type {number | null} */
@@ -50,7 +54,19 @@ function setDialogError(message) {
   errorEl.hidden = false;
 }
 
+function syncCreateDisabled() {
+  const { dialog, submitBtn, cancelBtn, closeBtn, textInput, dueInput, highlightInput } = getDialogEls();
+  const busy = saving || attachmentComposer?.isBusy();
+  for (const el of [submitBtn, cancelBtn, closeBtn, textInput, dueInput]) {
+    if (el) el.disabled = Boolean(busy);
+  }
+  if (highlightInput) highlightInput.disabled = Boolean(busy) || !pendingSourceOrderField;
+  dialog?.querySelectorAll('#taskCreateDialogExecutors input').forEach(el => { el.disabled = Boolean(busy); });
+}
+
 function resetDialogForm() {
+  if (saving || attachmentComposer?.isBusy()) return;
+  attachmentComposer?.clear();
   const { textInput, dueInput, executorsList, titleEl } = getDialogEls();
   if (titleEl) titleEl.textContent = "Новая задача";
   const highlight = document.getElementById("taskCreateDialogHighlight");
@@ -63,6 +79,7 @@ function resetDialogForm() {
 }
 
 function closeTaskCreateDialog() {
+  if (saving || attachmentComposer?.isBusy()) return;
   const { dialog } = getDialogEls();
   if (!dialog) return;
   if (typeof dialog.close === "function" && dialog.open) {
@@ -72,8 +89,9 @@ function closeTaskCreateDialog() {
 
 async function submitTaskCreateDialog() {
   const { textInput, executorsList, dueInput, submitBtn } = getDialogEls();
+  if (saving || attachmentComposer?.isBusy()) return;
   const text = (textInput?.value || "").trim();
-  if (!text) {
+  if (!text && !attachmentComposer?.hasAttachments()) {
     setDialogError("Введите текст задачи.");
     return;
   }
@@ -85,22 +103,31 @@ async function submitTaskCreateDialog() {
   const dueAt = datetimeLocalToIso(dueInput?.value);
   const source = pendingSourceMessage;
   const sourceOrderId = pendingSourceOrderId;
-  const { error } = await insertTask({
-    body: text,
-    executorEmails,
-    dueAt,
-    sourceMessageId: source?.id ?? null,
-    sourceMessageKind: source?.kind ?? null,
-    orderId: sourceOrderId,
-    sourceOrderField: pendingSourceOrderField,
-    highlightOrderField: getDialogEls().highlightInput?.checked === true,
-  });
-
-  if (submitBtn) submitBtn.disabled = false;
-
+  let error = null;
+  saving = true;
+  attachmentComposer?.setBusy(true);
+  syncCreateDisabled();
+  try {
+    const attachments = attachmentComposer ? await attachmentComposer.prepare() : [];
+    const result = await insertTask({
+      body: text, executorEmails, dueAt, attachments,
+      sourceMessageId: source?.id ?? null,
+      sourceMessageKind: source?.kind ?? null,
+      orderId: sourceOrderId,
+      sourceOrderField: pendingSourceOrderField,
+      highlightOrderField: getDialogEls().highlightInput?.checked === true,
+    });
+    error = result.error;
+  } catch (saveError) {
+    error = saveError;
+  } finally {
+    saving = false;
+    attachmentComposer?.setBusy(false);
+    syncCreateDisabled();
+  }
   if (error) {
     console.error("Ошибка создания задачи:", error);
-    setDialogError("Не удалось сохранить задачу.");
+    setDialogError(error.message || "Не удалось сохранить задачу.");
     return;
   }
 
@@ -180,6 +207,20 @@ export function initTaskCreateDialog() {
   if (dialog.parentElement !== document.body) document.body.appendChild(dialog);
   if (dialogInited) return;
   dialogInited = true;
+
+  const host = document.getElementById("taskCreateComposerHost");
+  if (host) {
+    host.innerHTML = renderTaskComposerHtml("taskCreate-", "taskCreateDialogText", "Прикрепить");
+    attachmentComposer = createTaskAttachmentComposer({
+      getElement: id => id === "orderTaskTextInput"
+        ? document.getElementById("taskCreateDialogText")
+        : document.getElementById(`taskCreate-${id}`),
+      cropHost: dialog,
+      onError: error => setDialogError(error?.message || "Не удалось добавить вложение."),
+      onBusyChange: syncCreateDisabled,
+    });
+    attachmentComposer.init();
+  }
 
   submitBtn?.addEventListener("click", () => void submitTaskCreateDialog());
   cancelBtn?.addEventListener("click", () => {

@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v107: редактирование существующей задачи из меню ячейки.
-const STATIC_CACHE = "orders-site-static-v107";
+// v108: вложения в общем окне создания задачи.
+const STATIC_CACHE = "orders-site-static-v108";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -47,6 +47,7 @@ const PRECACHE_URLS = [
   "/js/autogrow-textarea.js",
   "/js/orders-cell-menu.js",
   "/js/order-cell-highlights.js",
+  "/js/task-composer-markup.js",
   "/js/user-names.js",
   "/js/statistics-matrix.js",
   "/js/user-place.js",

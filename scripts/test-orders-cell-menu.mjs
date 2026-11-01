@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { validOrderField } from '../js/order-cell-highlights.js';
+import { renderTaskComposerHtml } from '../js/task-composer-markup.js';
 class Element {
   constructor(tag = 'div') {
     this.tag = tag; this.children = []; this.dataset = {}; this.listeners = {}; this.hidden = false;
@@ -10,6 +11,7 @@ class Element {
     this.classList = { add: v => values.add(v), remove: v => values.delete(v), contains: v => values.has(v) };
   }
   append(...nodes) { for (const node of nodes) { node.parent = this; this.children.push(node); } }
+  querySelectorAll() { return []; }
   get parentElement() { return this.parent || null; }
   appendChild(node) { node.remove(); this.append(node); }
   setAttribute(key, value) { this[key] = value; }
@@ -110,7 +112,7 @@ assert.match(dialogSource, /orderId: sourceOrderId/);
 console.log('orders cell menu: short tap, hold, scroll, cancel, pinch, full-text copy, selected cell, task order link, refresh, escape, clipboard errors and offline order passed');
 
 // Exercise the real standard dialog and its insertTask payload with isolated data services.
-const ids = ['taskCreateDialogHighlight', 'taskCreateDialogTitle', 'taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
+const ids = ['taskCreateComposerHost', 'taskCreateDialogHighlight', 'taskCreateDialogTitle', 'taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
   'taskCreateDialogDueAt', 'taskCreateDialogError', 'taskCreateDialogSubmitBtn', 'taskCreateDialogCancelBtn', 'taskCreateDialogCloseBtn'];
 const fields = new Map(ids.map(id => [id, new Element()]));
 const dialogBody = new Element('body');
@@ -124,11 +126,25 @@ fields.get('taskCreateDialog').showModal = function () {
 };
 fields.get('taskCreateDialog').close = function () { this.open = false; };
 let taskPayload;
+let draftAttachments = [];
+let failPrepare = false;
+let failInsert = false;
+const photoAttachment = { type: 'photo', storagePath: 'test/photo.jpg' };
 const dialogContext = vm.createContext({
-  document: { body: dialogBody, getElementById: id => fields.get(id) }, console, validOrderField,
+  document: { body: dialogBody, getElementById: id => fields.get(id) }, console: { error() {} }, validOrderField, renderTaskComposerHtml,
+  createTaskAttachmentComposer: options => {
+    let busy = false;
+    assert.equal(options.getElement('orderTaskTextInput'), fields.get('taskCreateDialogText'));
+    return {
+      init() {}, isBusy: () => busy, hasAttachments: () => draftAttachments.length > 0,
+      setBusy(value) { busy = value; options.onBusyChange(value); },
+      clear() { draftAttachments = []; },
+      async prepare() { if (failPrepare) throw new Error('upload failed'); return draftAttachments; },
+    };
+  },
   defaultTaskDueAtLocal: () => '2026-11-02T09:00', datetimeLocalToIso: value => value,
   ensureTaskExecutorsInList: async () => {}, getSelectedExecutorEmailsFrom: () => ['worker@example.com'],
-  resetTaskExecutorsList() {}, insertTask: async payload => { taskPayload = payload; return { error: null }; },
+  resetTaskExecutorsList() {}, insertTask: async payload => { taskPayload = payload; return { error: failInsert ? new Error("save failed") : null }; },
   taskModules: { loadAllTasks() {}, loadOrderTasks() {}, refreshMyTasksNavBadge() {}, refreshActiveTaskOrderRefs() {}, addActiveTaskOrderRef() {}, applyOrderTaskHighlightsInDom() {} },
 });
 vm.runInContext(dialogSource.replace(/^import[^]*?from "[^\"]+";\n/gm, '')
@@ -158,6 +174,28 @@ await dialogContext.submitTaskCreateDialog();
 assert.equal(taskPayload.highlightOrderField, false);
 assert.equal(taskPayload.sourceOrderField, 'client');
 console.log('standard task dialog: cell text and order title prefilled, editable text saved, order link preserved and ordinary dialog reset');
+
+const markup = renderTaskComposerHtml('taskCreate-', 'taskCreateDialogText', 'Прикрепить');
+assert.ok(markup.includes('Прикрепить'));
+for (const id of ['taskCreateDialogText', 'taskCreate-taskAttachBtn', 'taskCreate-taskAttachCameraBtn', 'taskCreate-taskAttachGalleryBtn', 'taskCreate-taskPickOrderBtn', 'taskCreate-taskComposerSuggestions']) assert.ok(markup.includes(`id="${id}"`));
+await dialogContext.openTaskCreateDialog(opened[1]);
+fields.get('taskCreateDialogText').value = '';
+draftAttachments = [photoAttachment]; failPrepare = true;
+await dialogContext.submitTaskCreateDialog();
+assert.equal(draftAttachments.length, 1, 'failed upload preserves attachment draft');
+assert.equal(fields.get('taskCreateDialog').open, true);
+assert.equal(fields.get('taskCreateDialogSubmitBtn').disabled, false);
+failPrepare = false; failInsert = true;
+await dialogContext.submitTaskCreateDialog();
+assert.equal(draftAttachments.length, 1, 'failed database save preserves attachment draft');
+assert.equal(fields.get('taskCreateDialog').open, true);
+failInsert = false;
+await dialogContext.submitTaskCreateDialog();
+assert.equal(taskPayload.attachments[0], photoAttachment);
+assert.equal(taskPayload.orderId, 99);
+assert.equal(draftAttachments.length, 0, 'successful save resets attachment draft');
+assert.equal(fields.get('taskCreateDialog').open, false);
+console.log('create dialog attachments: dedicated controls, photo-only save, upload error preserves draft and retry resets after success');
 
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const messagesSection = html.match(/<section id="section-messages"[^]*?<\/section>/)?.[0];

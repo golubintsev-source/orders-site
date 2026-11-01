@@ -2765,15 +2765,15 @@
         </button>
       </div>
       <label class="task-highlight-toggle"><input id="taskCreateDialogHighlight" type="checkbox" /> Выделить</label>
-      <label class="task-create-dialog-field">
-        <span class="task-create-dialog-label">Текст</span>
-        <textarea
-          id="taskCreateDialogText"
-          class="task-create-dialog-text"
-          rows="3"
-          autocomplete="off"
-        ></textarea>
-      </label>
+      <div class="task-create-dialog-field">
+      <span class="task-create-dialog-label">Текст</span>
+      <div id="taskCreateComposerHost">
+        <textarea id="taskCreateDialogText" class="task-create-dialog-text" rows="3" autocomplete="off" aria-label="Текст задачи"></textarea>
+      </div>
+      <input id="taskCreate-taskPhotoGalleryInput" type="file" accept="image/*" multiple hidden />
+      <input id="taskCreate-taskPhotoCameraInput" type="file" accept="image/*" capture="environment" hidden />
+      <div id="taskCreate-taskPendingAttachments" class="task-pending-attachments" aria-label="Вложения задачи" hidden></div>
+    </div>
       <div class="task-create-dialog-field">
         <span class="task-create-dialog-label">Исполнители</span>
         <div id="taskCreateDialogExecutors" class="messages-create-group-users order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>
