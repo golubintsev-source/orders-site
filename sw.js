@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v98: новая иконка с монтажником для домашнего экрана и PWA.
-const STATIC_CACHE = "orders-site-static-v98";
+// v99: обновить кэш навигации PWA — раздел «Зарплаты» и его подпись в шапке.
+const STATIC_CACHE = "orders-site-static-v99";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
