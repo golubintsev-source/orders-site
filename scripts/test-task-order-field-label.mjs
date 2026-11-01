@@ -34,3 +34,10 @@ for (const render of [context.renderMyTasksRow, context.renderMyAuthorTasksRow])
   assert.doesNotMatch(render({ ...row, source_order_field: '<script>' }, { showOrder: true }), /<script>/);
 }
 console.log('task order labels: both task tables, field label, original order only, ordinary tasks and unknown fields passed');
+
+const replyHtml = context.renderMyAuthorTasksRow({ order_id: 42, executor_reply: 'Ответ <текст>\nВторая строка' }, { showOrder: true, showReply: true });
+assert.match(replyHtml, /class="task-reply-readonly">Ответ &lt;текст&gt;\nВторая строка<\/td>/);
+assert.doesNotMatch(replyHtml, /textarea|task-reply-save/);
+const ordinaryAuthorRow = context.renderMyAuthorTasksRow({ executor_reply: 'Ответ' });
+assert.doesNotMatch(ordinaryAuthorRow, /task-reply-readonly/);
+console.log('author reply column: plain read-only text, escaped content and optional table column passed');

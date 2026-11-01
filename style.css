@@ -12019,3 +12019,5 @@ html.keyboard-open .voice-composer {
   overflow: hidden;
   resize: none;
 }
+
+.task-reply-readonly { min-width: 140px; max-width: 300px; font-weight: 400; white-space: pre-wrap; overflow-wrap: anywhere; }
