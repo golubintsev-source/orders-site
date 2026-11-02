@@ -11,14 +11,11 @@ import { supabaseClient } from "./config.js";
 import { ensureOrderSummaries, getOrderSummary } from "./order-summary-cache.js";
 import { state } from "./state.js";
 import {
-  formatTaskDateRu,
   formatTaskExecutors,
   formatOrderIdTypeChip,
 } from "./format.js";
 import { displayNameByEmail } from "./user-names.js";
 import {
-  defaultTaskDueAtLocal,
-  datetimeLocalToIso,
   ensureTaskExecutorsInList,
   getSelectedExecutorEmailsFrom,
   insertTask,
@@ -203,14 +200,12 @@ function renderMyAuthorTasksRow(row, { showOrder = false, orderPopup = false, ed
     ? `my-tasks-row my-tasks-row--completed${offlineCls}`
     : `my-tasks-row my-tasks-row--pending${offlineCls}`;
   const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
-  const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
   const orderCell = showOrder ? renderTaskOrderCellHtml(row) : "";
   return `
     <tr class="${rowClass}">
       ${renderTaskTextCellHtml(row, { orderPopup })}
       ${orderCell}
       <td class="order-tasks-executors-cell">${escapeHtml(executors)}</td>
-      <td>${escapeHtml(due)}</td>
       ${renderMyTaskStatusCell(row)}
       ${showReply ? `<td class="task-reply-readonly">${escapeHtml(row.executor_reply || "")}</td>` : ""}
       ${renderAuthorTaskDeleteCell(row, { editable })}
@@ -230,7 +225,6 @@ function renderMyTasksRow(row, { showOrder = false, showExecutors = true, orderP
   const rowClass = completed
     ? `my-tasks-row my-tasks-row--completed${offlineCls}`
     : `my-tasks-row my-tasks-row--pending${offlineCls}`;
-  const due = row.due_at ? formatTaskDateRu(row.due_at) : "—";
   const orderCell = showOrder ? renderTaskOrderCellHtml(row) : "";
   const executorsCell = showExecutors
     ? `<td class="order-tasks-executors-cell">${escapeHtml(
@@ -243,7 +237,6 @@ function renderMyTasksRow(row, { showOrder = false, showExecutors = true, orderP
       ${orderCell}
       <td>${escapeHtml(formatTaskAuthorName(row.author_login))}</td>
       ${executorsCell}
-      <td>${escapeHtml(due)}</td>
       ${renderMyTaskStatusCell(row)}
       ${showReply ? renderTaskReplyCell(row) : ""}
     </tr>
@@ -290,7 +283,6 @@ function setOrderTasksPageTitle(orderId) {
 function getOrderPageTaskFormEls() {
   return {
     textInput: document.getElementById("orderPageTaskTextInput"),
-    dueInput: document.getElementById("orderPageTaskDueAtInput"),
     executorsList: document.getElementById("orderPageTaskExecutorsList"),
     executorsHint: document.getElementById("orderPageTaskExecutorsHint"),
     createBtn: document.getElementById("orderPageTaskCreateBtn"),
@@ -320,9 +312,8 @@ function setOrderPageTaskFormMessage(text, { isError = false, autoClearMs = 0 } 
 }
 
 function setOrderPageTaskFormDisabled(disabled) {
-  const { textInput, dueInput, executorsList, createBtn } = getOrderPageTaskFormEls();
+  const { textInput, executorsList, createBtn } = getOrderPageTaskFormEls();
   if (textInput) textInput.disabled = disabled;
-  if (dueInput) dueInput.disabled = disabled;
   if (createBtn) createBtn.disabled = disabled;
   if (executorsList) {
     executorsList.querySelectorAll('input[type="checkbox"]').forEach((input) => {
@@ -350,15 +341,14 @@ export async function ensureOrderPageTaskExecutorsLoaded() {
 }
 
 function resetOrderPageTaskFormFields() {
-  const { textInput, dueInput, executorsList } = getOrderPageTaskFormEls();
+  const { textInput, executorsList } = getOrderPageTaskFormEls();
   if (textInput) textInput.value = "";
-  if (dueInput && !dueInput.disabled) dueInput.value = defaultTaskDueAtLocal();
   resetTaskExecutorsList(executorsList);
 }
 
 /** Задача с этой страницы всегда привязана к открытому заказу. */
 export async function createOrderPageTask() {
-  const { textInput, dueInput, executorsList, createBtn } = getOrderPageTaskFormEls();
+  const { textInput, executorsList, createBtn } = getOrderPageTaskFormEls();
   if (!textInput) return;
 
   if (!state.currentUser) {
@@ -382,8 +372,7 @@ export async function createOrderPageTask() {
   if (createBtn) createBtn.disabled = true;
 
   const executorEmails = getSelectedExecutorEmailsFrom(executorsList);
-  const dueAt = datetimeLocalToIso(dueInput?.value);
-  const { error } = await insertTask({ body: text, executorEmails, dueAt, orderId: oid });
+  const { error } = await insertTask({ body: text, executorEmails, orderId: oid });
 
   if (createBtn) createBtn.disabled = false;
 
@@ -414,8 +403,6 @@ function syncOrderPageTaskForm(orderId) {
   void ensureOrderPageTaskExecutorsLoaded().then(() => setOrderPageTaskFormDisabled(!canCreate));
   if (!canCreate) return;
 
-  const { dueInput } = getOrderPageTaskFormEls();
-  if (dueInput && !dueInput.value) dueInput.value = defaultTaskDueAtLocal();
 }
 
 function renderOrderTasksTables(merged, orderId, { executorMsg, authorMsg, executorTbody, authorTbody }) {
@@ -441,11 +428,9 @@ function renderOrderTasksTables(merged, orderId, { executorMsg, authorMsg, execu
 function setTaskFormDisabled(disabled) {
   const createBtn = document.getElementById("orderTaskCreateBtn");
   const textInput = document.getElementById("orderTaskTextInput");
-  const dueInput = document.getElementById("orderTaskDueAtInput");
   const executorsList = document.getElementById("orderTaskExecutorsList");
   if (createBtn) createBtn.disabled = disabled;
   if (textInput) textInput.disabled = disabled;
-  if (dueInput) dueInput.disabled = disabled;
   if (executorsList) {
     executorsList.querySelectorAll('input[type="checkbox"]').forEach((input) => {
       input.disabled = disabled;
@@ -454,10 +439,6 @@ function setTaskFormDisabled(disabled) {
 }
 
 function resetTaskFormDefaults() {
-  const dueInput = document.getElementById("orderTaskDueAtInput");
-  if (dueInput && !dueInput.disabled) {
-    dueInput.value = defaultTaskDueAtLocal();
-  }
   resetTaskExecutorsList(document.getElementById("orderTaskExecutorsList"));
 }
 
@@ -753,9 +734,6 @@ export async function loadAllTasks() {
   }
 
   setTaskFormDisabled(false);
-  if (!document.getElementById("orderTaskDueAtInput")?.value) {
-    resetTaskFormDefaults();
-  }
 
   const { data, error } = await fetchAllTasksFromServer(scope.signal);
   if (!scope.current()) return;
@@ -887,7 +865,6 @@ let taskCreateInFlight = false;
 
 export async function createOrderTask() {
   const input = document.getElementById("orderTaskTextInput");
-  const dueInput = document.getElementById("orderTaskDueAtInput");
   const msg = document.getElementById("myTasksFormMessage");
   if (!input || !state.currentUser || taskCreateInFlight || isTaskAttachmentsBusy()) return;
 
@@ -901,7 +878,6 @@ export async function createOrderTask() {
   }
 
   const executorEmails = getSelectedExecutorEmails();
-  const dueAt = datetimeLocalToIso(dueInput?.value);
   taskCreateInFlight = true;
   setTaskFormDisabled(true);
   setTaskAttachmentsBusy(true);
@@ -915,7 +891,7 @@ export async function createOrderTask() {
       throw new Error("Для сохранения задачи с вложениями подключитесь к интернету.");
     }
     const attachments = await prepareTaskAttachments();
-    const { error } = await insertTask({ body: text, executorEmails, dueAt, attachments });
+    const { error } = await insertTask({ body: text, executorEmails, attachments });
     if (error) throw error;
     saved = true;
     input.value = "";
