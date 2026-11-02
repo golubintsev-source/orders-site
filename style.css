@@ -4005,7 +4005,7 @@ h2 {
 }
 .order-tasks-executors-list.messages-create-group-users {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   max-height: none;
   overflow: visible;
 }
