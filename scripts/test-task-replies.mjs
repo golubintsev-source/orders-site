@@ -106,6 +106,7 @@ const editorContext = vm.createContext({
   document, console, isOfflineDataMode: () => false, bindAutogrowTextarea: field => { editorSizedFields.push(field); return () => {}; },
   isUserAuthorOfTask: () => true, isUserExecutorOfTask: () => canReply,
   getCurrentUserEmail: () => 'worker@example.com', normalizeExecutorEmails: () => [],
+  isTaskExecutorVisible: () => true, visibleTaskExecutorEmails: () => [],
   getSelectedExecutorEmailsFrom: () => ['worker@example.com'], datetimeLocalToIso: () => null,
   ensureTaskExecutorsInList: async list => { list.dataset.loaded = '1'; }, renderTaskComposerHtml: () => '',
   createTaskAttachmentComposer: () => ({ init() {}, dispose() {}, setBusy() {}, hasAttachments: () => false, prepare: async () => [] }),
