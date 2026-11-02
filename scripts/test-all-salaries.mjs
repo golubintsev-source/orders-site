@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   getSalaryEmployeeName,
+  formatInstallationSalaryComment,
   groupSalaryRowsByEmployee,
   groupSalaryRowsByMonth,
   isSalaryCalculationRow,
@@ -136,6 +137,18 @@ assert.equal(isSalaryCalculationRow(installation), true);
 assert.equal(installationSalaryOrderId(installation), 1599);
 assert.equal(groupSalaryRowsByMonth([installation])[0].monthKey, "2026-10");
 assert.equal(groupSalaryRowsByEmployee([installation])[0].employee, "Иван Сотников");
+assert.equal(
+  formatInstallationSalaryComment(installation, "Монтаж; 1599_О; Май Клиент"),
+  "Иван Сотников; 1599_О; Май Клиент",
+);
+assert.equal(
+  formatInstallationSalaryComment({ ...installation, installer_name: "Иван Сотников, Пётр Орлов" }, "Монтаж; 1599_О"),
+  "Иван Сотников, Пётр Орлов; 1599_О",
+);
+assert.equal(
+  formatInstallationSalaryComment({ ...installation, installer_name: "" }, "Монтаж; 1599_О"),
+  "Монтаж; 1599_О",
+);
 const reduction = { ...installation, id: 101, amount: -2000 };
 assert.equal(groupSalaryRowsByMonth([installation, reduction])[0].total, 8000);
 const refund = { ...installation, id: 102, from_place: "Монтаж", to_place: "Касса" };
