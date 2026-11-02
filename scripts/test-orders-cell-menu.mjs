@@ -113,7 +113,7 @@ console.log('orders cell menu: short tap, hold, scroll, cancel, pinch, full-text
 
 // Exercise the real standard dialog and its insertTask payload with isolated data services.
 const ids = ['taskCreateComposerHost', 'taskCreateDialogHighlight', 'taskCreateDialogTitle', 'taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
-  'taskCreateDialogDueAt', 'taskCreateDialogError', 'taskCreateDialogSubmitBtn', 'taskCreateDialogCancelBtn', 'taskCreateDialogCloseBtn'];
+  'taskCreateDialogError', 'taskCreateDialogSubmitBtn', 'taskCreateDialogCancelBtn', 'taskCreateDialogCloseBtn'];
 const fields = new Map(ids.map(id => [id, new Element()]));
 const dialogBody = new Element('body');
 const hiddenMessagesSection = new Element('section');
@@ -142,7 +142,6 @@ const dialogContext = vm.createContext({
       async prepare() { if (failPrepare) throw new Error('upload failed'); return draftAttachments; },
     };
   },
-  defaultTaskDueAtLocal: () => '2026-11-02T09:00', datetimeLocalToIso: value => value,
   ensureTaskExecutorsInList: async () => {}, getSelectedExecutorEmailsFrom: () => ['worker@example.com'],
   resetTaskExecutorsList() {}, insertTask: async payload => { taskPayload = payload; return { error: failInsert ? new Error("save failed") : null }; },
   taskModules: { loadAllTasks() {}, loadOrderTasks() {}, refreshMyTasksNavBadge() {}, refreshActiveTaskOrderRefs() {}, addActiveTaskOrderRef() {}, applyOrderTaskHighlightsInDom() {} },
@@ -163,7 +162,7 @@ assert.equal(taskPayload.sourceOrderField, "client");
 assert.equal(taskPayload.highlightOrderField, true);
 assert.equal(taskPayload.body, 'Проверить заказ');
 assert.equal(taskPayload.executorEmails[0], 'worker@example.com');
-assert.equal(taskPayload.dueAt, '2026-11-02T09:00');
+assert.equal(Object.hasOwn(taskPayload, 'dueAt'), false);
 await dialogContext.openTaskCreateDialog();
 assert.equal(fields.get('taskCreateDialogText').value, '');
 assert.equal(fields.get('taskCreateDialogHighlight').checked, false);

@@ -182,6 +182,16 @@ test("HTML and service worker do not eagerly preload closed screens", () => {
   assert.ok(!read("js/main.js").includes("initSecondarySections"));
 });
 
+test("task due date is hidden and new tasks are saved without it", () => {
+  const sources = [read("index.html"), read("js/tasks.js"), read("js/task-create-dialog.js"), read("js/task-edit-dialog.js")];
+  for (const source of sources) {
+    assert.ok(!source.includes("Срок выполнения"));
+    assert.ok(!source.includes("taskCreateDialogDueAt"));
+    assert.ok(!source.includes('data-field="due"'));
+  }
+  assert.match(read("js/task-form-shared.js"), /due_at:\s*null/);
+});
+
 async function startupHarness({ route, savedApp = null, orderId = null, editOrderId = null, allowed = true, startup = null, routeReady = null }) {
   const calls = [], dynamicImports = [];
   let active = route;

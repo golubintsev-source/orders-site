@@ -3044,7 +3044,6 @@ h2 {
 @media (max-width: 480px) {
   .order-tasks-create-block .order-tasks-form-stack,
   .order-tasks-create-block .order-tasks-input,
-  .order-tasks-create-block .order-tasks-due-input,
   .order-tasks-create-block .order-tasks-executors-list {
     max-width: none;
     width: 100%;
@@ -3151,7 +3150,7 @@ h2 {
   line-height: 1.25;
   vertical-align: top;
 }
-/* nowrap только у «Автор» и «Срок»; «Задача» и «Исполнители» переносятся */
+/* nowrap только у «Автор» и «Статус»; «Задача» и «Исполнители» переносятся */
 #orderTasksExecutorTable th:nth-child(2),
 #orderTasksExecutorTable td:nth-child(2),
 #orderTasksExecutorTable th:nth-child(4),
@@ -3179,7 +3178,7 @@ h2 {
   word-break: normal;
   line-height: 1.25;
 }
-/* nowrap только у «Срок»; «Задача» и «Исполнители» переносятся */
+/* nowrap только у «Статус»; «Задача» и «Исполнители» переносятся */
 #orderTasksAuthorTable th:nth-child(3),
 #orderTasksAuthorTable td:nth-child(3) {
   white-space: nowrap;
@@ -4021,14 +4020,10 @@ h2 {
 .order-tasks-executor-user--self .messages-create-group-user-name {
   font-weight: 600;
 }
-.order-tasks-executors-hint,
-.order-tasks-due-hint {
+.order-tasks-executors-hint {
   margin: 4px 0 0;
   font-size: 12px;
   color: #6b7280;
-}
-.order-tasks-due-input {
-  max-width: 280px;
 }
 .order-tasks-executors-cell {
   white-space: normal;
@@ -4222,7 +4217,6 @@ h2 {
   }
 
   .my-tasks-page .order-tasks-input,
-  .my-tasks-page .order-tasks-due-input,
   .my-tasks-page .order-tasks-executors-list {
     max-width: none;
     width: 100%;
@@ -9061,10 +9055,6 @@ th {
   font-size: 16px;
   resize: vertical;
   box-sizing: border-box;
-}
-
-.task-create-dialog-due {
-  max-width: 100%;
 }
 
 .task-create-dialog-error {
