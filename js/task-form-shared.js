@@ -59,6 +59,17 @@ export function normalizeExecutorEmails(raw) {
   return [];
 }
 
+const HIDDEN_TASK_EXECUTOR_NAMES = new Set(["Вова", "Маша"]);
+
+/** Вова и Маша не участвуют в интерфейсе назначения задач. */
+export function isTaskExecutorVisible(email) {
+  return !HIDDEN_TASK_EXECUTOR_NAMES.has(displayNameByEmail(email));
+}
+
+export function visibleTaskExecutorEmails(emails) {
+  return normalizeExecutorEmails(emails).filter(isTaskExecutorVisible);
+}
+
 export function getCurrentUserEmail() {
   return normalizeTaskEmail(state.currentUser?.email);
 }
@@ -146,7 +157,9 @@ function executorDisplayLabel(user) {
 export function renderTaskExecutorsInto(listEl, hintEl, users) {
   if (!listEl) return;
 
-  if (!users.length) {
+  const visibleUsers = (users || []).filter((user) => isTaskExecutorVisible(user.email));
+
+  if (!visibleUsers.length) {
     listEl.innerHTML = "";
     if (hintEl) {
       hintEl.textContent = "Нет пользователей для выбора.";
@@ -157,7 +170,7 @@ export function renderTaskExecutorsInto(listEl, hintEl, users) {
 
   if (hintEl) hintEl.hidden = true;
 
-  listEl.innerHTML = users
+  listEl.innerHTML = visibleUsers
     .map(
       (user) => `
     <label class="messages-create-group-user order-tasks-executor-user${user.isSelf ? " order-tasks-executor-user--self" : ""}">
@@ -178,8 +191,9 @@ async function loadExecutorPickerUsersCached() {
   }
   if (!executorsUsersCachePromise) {
     executorsUsersCachePromise = loadTaskExecutorPickerUsers(state.currentUser).then((users) => {
-      executorsCacheByListId.set("__users__", users);
-      return users;
+      const visibleUsers = users.filter((user) => isTaskExecutorVisible(user.email));
+      executorsCacheByListId.set("__users__", visibleUsers);
+      return visibleUsers;
     });
   }
   return executorsUsersCachePromise;
@@ -247,7 +261,7 @@ export async function insertTask({
     author_login: author,
     body: text,
     ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
-    executor_emails: Array.isArray(executorEmails) ? executorEmails : [],
+    executor_emails: visibleTaskExecutorEmails(executorEmails),
     due_at: null,
     is_completed: false,
     order_id: linkedOrderId,
