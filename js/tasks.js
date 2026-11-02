@@ -38,7 +38,7 @@ import {
   isOfflineDataMode,
 } from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
-import { buildOrderViewUrl } from "./app-routes.js";
+import { buildOrderEditUrl } from "./app-routes.js";
 import { showFloatingCellTooltip, hideFloatingCellTooltip } from "./cell-tooltip.js";
 
 const TASK_SELECT_FIELDS =
@@ -137,9 +137,9 @@ function renderTaskOrderCellHtml(row) {
     const label = [formatTaskOrderLabel(oid), fieldLabel].filter(Boolean).join(" ");
     return `<a
       class="my-tasks-order-link"
-      href="${escapeHtml(buildOrderViewUrl(oid))}"
+      href="${escapeHtml(buildOrderEditUrl(oid))}"
       data-order-id="${escapeHtml(String(oid))}"
-      title="Открыть заказ ${escapeHtml(label)}"
+      title="Редактировать заказ ${escapeHtml(label)}"
     >${escapeHtml(label)}</a>`;
   }).join("");
   return `
@@ -712,7 +712,7 @@ function bindTaskOrderPopupDelegation(root) {
   });
 }
 
-/** Номер заказа в таблицах задач открывает просмотр заказа без перезагрузки страницы. */
+/** Номер заказа в таблицах задач открывает редактирование без перезагрузки страницы. */
 function bindTaskOrderLinkDelegation(root) {
   if (!root || root.dataset.taskOrderLinkBound === "1") return;
   root.dataset.taskOrderLinkBound = "1";
@@ -723,7 +723,7 @@ function bindTaskOrderLinkDelegation(root) {
     const oid = Number(link.getAttribute("data-order-id"));
     if (!Number.isFinite(oid) || oid <= 0) return;
     e.preventDefault();
-    void import("./orders.js").then((m) => m.viewOrder(oid));
+    void import("./orders.js").then((m) => m.editOrder(oid));
   });
 }
 

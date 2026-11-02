@@ -182,7 +182,7 @@ test("HTML and service worker do not eagerly preload closed screens", () => {
   assert.ok(!read("js/main.js").includes("initSecondarySections"));
 });
 
-async function startupHarness({ route, savedApp = null, orderId = null, allowed = true, startup = null, routeReady = null }) {
+async function startupHarness({ route, savedApp = null, orderId = null, editOrderId = null, allowed = true, startup = null, routeReady = null }) {
   const calls = [], dynamicImports = [];
   let active = route;
   const user = { id: "user", email: "test@example.invalid" };
@@ -195,6 +195,7 @@ async function startupHarness({ route, savedApp = null, orderId = null, allowed 
   const values = {
     state, checkAuth: async () => user, loadProfile: async () => calls.push(["profile"]),
     canAccessSection: (id) => allowed || id === "all", getOrderIdFromUrl: () => orderId,
+    getOrderEditIdFromUrl: () => editOrderId,
     getRouteSectionFromUrl: () => route, getCurrentSectionId: () => active,
     switchSection: async (id) => { active = id; calls.push(["section", id]); await routeReady; },
     readSavedPlaceForCurrentPage: () => savedApp ? { app: savedApp } : null,
@@ -254,6 +255,9 @@ test("real startup script resolves saved route before loading, and order URL tak
   const order = await startupHarness({ route: "new", orderId: 42, savedApp: { sectionId: "messages" } });
   assert.ok(order.calls.some(([name, id]) => name === "viewOrder" && id === 42));
   assert.ok(!order.calls.some(([name]) => name === "section"));
+  const editOrder = await startupHarness({ route: "new", editOrderId: 43, savedApp: { sectionId: "messages" } });
+  assert.ok(editOrder.calls.some(([name, id]) => name === "editOrder" && id === 43));
+  assert.ok(!editOrder.calls.some(([name]) => name === "viewOrder"));
   const denied = await startupHarness({ route: "debts", allowed: false });
   assert.deepEqual(denied.calls.filter(([name]) => name === "section"), [["section", "all"]]);
 });
