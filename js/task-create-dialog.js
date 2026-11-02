@@ -2,8 +2,6 @@ import { createTaskAttachmentComposer } from "./task-attachments.js";
 import { renderTaskComposerHtml } from "./task-composer-markup.js";
 import { validOrderField } from "./order-cell-highlights.js";
 import {
-  defaultTaskDueAtLocal,
-  datetimeLocalToIso,
   ensureTaskExecutorsInList,
   getSelectedExecutorEmailsFrom,
   insertTask,
@@ -33,7 +31,6 @@ function getDialogEls() {
     highlightInput: document.getElementById("taskCreateDialogHighlight"),
     executorsList: document.getElementById("taskCreateDialogExecutors"),
     executorsHint: document.getElementById("taskCreateDialogExecutorsHint"),
-    dueInput: document.getElementById("taskCreateDialogDueAt"),
     errorEl: document.getElementById("taskCreateDialogError"),
     submitBtn: document.getElementById("taskCreateDialogSubmitBtn"),
     cancelBtn: document.getElementById("taskCreateDialogCancelBtn"),
@@ -55,9 +52,9 @@ function setDialogError(message) {
 }
 
 function syncCreateDisabled() {
-  const { dialog, submitBtn, cancelBtn, closeBtn, textInput, dueInput, highlightInput } = getDialogEls();
+  const { dialog, submitBtn, cancelBtn, closeBtn, textInput, highlightInput } = getDialogEls();
   const busy = saving || attachmentComposer?.isBusy();
-  for (const el of [submitBtn, cancelBtn, closeBtn, textInput, dueInput]) {
+  for (const el of [submitBtn, cancelBtn, closeBtn, textInput]) {
     if (el) el.disabled = Boolean(busy);
   }
   if (highlightInput) highlightInput.disabled = Boolean(busy) || !pendingSourceOrderField;
@@ -67,12 +64,11 @@ function syncCreateDisabled() {
 function resetDialogForm() {
   if (saving || attachmentComposer?.isBusy()) return;
   attachmentComposer?.clear();
-  const { textInput, dueInput, executorsList, titleEl } = getDialogEls();
+  const { textInput, executorsList, titleEl } = getDialogEls();
   if (titleEl) titleEl.textContent = "Новая задача";
   const highlight = document.getElementById("taskCreateDialogHighlight");
   if (highlight) highlight.checked = false;
   if (textInput) textInput.value = "";
-  if (dueInput) dueInput.value = defaultTaskDueAtLocal();
   resetTaskExecutorsList(executorsList);
   setDialogError("");
   clearPendingSourceMessage();
@@ -88,7 +84,7 @@ function closeTaskCreateDialog() {
 }
 
 async function submitTaskCreateDialog() {
-  const { textInput, executorsList, dueInput, submitBtn } = getDialogEls();
+  const { textInput, executorsList, submitBtn } = getDialogEls();
   if (saving || attachmentComposer?.isBusy()) return;
   const text = (textInput?.value || "").trim();
   if (!text && !attachmentComposer?.hasAttachments()) {
@@ -100,7 +96,6 @@ async function submitTaskCreateDialog() {
   if (submitBtn) submitBtn.disabled = true;
 
   const executorEmails = getSelectedExecutorEmailsFrom(executorsList);
-  const dueAt = datetimeLocalToIso(dueInput?.value);
   const source = pendingSourceMessage;
   const sourceOrderId = pendingSourceOrderId;
   let error = null;
@@ -110,7 +105,7 @@ async function submitTaskCreateDialog() {
   try {
     const attachments = attachmentComposer ? await attachmentComposer.prepare() : [];
     const result = await insertTask({
-      body: text, executorEmails, dueAt, attachments,
+      body: text, executorEmails, attachments,
       sourceMessageId: source?.id ?? null,
       sourceMessageKind: source?.kind ?? null,
       orderId: sourceOrderId,
@@ -162,7 +157,7 @@ export async function openTaskCreateDialog({
   sourceOrderField = null,
 } = {}) {
   initTaskCreateDialog();
-  const { dialog, textInput, dueInput, executorsList, executorsHint, titleEl } = getDialogEls();
+  const { dialog, textInput, executorsList, executorsHint, titleEl } = getDialogEls();
   if (!dialog) return;
 
   pendingSourceMessage =
@@ -190,7 +185,6 @@ export async function openTaskCreateDialog({
   await ensureTaskExecutorsInList(executorsList, executorsHint);
 
   if (textInput) textInput.value = String(body || "").trim();
-  if (dueInput) dueInput.value = defaultTaskDueAtLocal();
   resetTaskExecutorsList(executorsList);
   setDialogError("");
 
