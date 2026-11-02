@@ -136,9 +136,29 @@ export function buildOrderViewUrl(orderId) {
   return `${window.location.origin}/new?order_id=${id}`;
 }
 
+/** Ссылка сразу на редактирование заказа (в том числе для открытия в новой вкладке). */
+export function buildOrderEditUrl(orderId) {
+  const id = encodeURIComponent(String(orderId));
+  if (usesHashOnlyRouting()) {
+    const u = new URL(window.location.href);
+    u.searchParams.set("edit_order_id", String(orderId));
+    u.hash = "new";
+    return u.href;
+  }
+  return `${window.location.origin}/new?edit_order_id=${id}`;
+}
+
 /** ID заказа из ?order_id= или null. */
 export function getOrderIdFromUrl() {
   const raw = new URLSearchParams(window.location.search).get("order_id");
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** ID заказа для редактирования из ?edit_order_id= или null. */
+export function getOrderEditIdFromUrl() {
+  const raw = new URLSearchParams(window.location.search).get("edit_order_id");
   if (raw == null || raw === "") return null;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -151,8 +171,9 @@ export function getOrderIdFromUrl() {
 export function syncOrderIdInUrl(orderId) {
   const u = new URL(window.location.href);
   if (orderId == null || orderId === "") {
-    if (!u.searchParams.has("order_id")) return;
+    if (!u.searchParams.has("order_id") && !u.searchParams.has("edit_order_id")) return;
     u.searchParams.delete("order_id");
+    u.searchParams.delete("edit_order_id");
   } else {
     const next = String(orderId);
     if (u.searchParams.get("order_id") === next) return;
