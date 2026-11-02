@@ -7,7 +7,7 @@ import {
 } from "./section-nav.js";
 import { canAccessSection } from "./roles.js";
 import {
-  getOrderIdFromUrl, getRouteSectionFromUrl, migrateLegacyHashToPathIfNeeded,
+  getOrderIdFromUrl, getOrderEditIdFromUrl, getRouteSectionFromUrl, migrateLegacyHashToPathIfNeeded,
   tryConsumeOrdersExcelExport,
 } from "./app-routes.js";
 import { flushPendingAccessLogs, initAccessLogging } from "./access-log.js";
@@ -71,13 +71,14 @@ function restoreSearch(app) {
 }
 
 async function openRoute({ savedApp = null, initial = false } = {}) {
-  const orderId = getOrderIdFromUrl();
+  const editOrderId = getOrderEditIdFromUrl();
+  const orderId = editOrderId == null ? getOrderIdFromUrl() : null;
   let sectionId = getRouteSectionFromUrl();
   if (savedApp?.sectionId && canAccessSection(savedApp.sectionId)) sectionId = savedApp.sectionId;
   if (!canAccessSection(sectionId)) sectionId = "all";
   const savedForm = savedApp?.sectionId == null || savedApp?.sectionId === "new";
   const viewId = orderId ?? (savedForm ? savedApp?.viewingOrderId : null);
-  const editId = viewId == null && savedForm ? savedApp?.editingOrderId : null;
+  const editId = editOrderId ?? (viewId == null && savedForm ? savedApp?.editingOrderId : null);
   window.__appStartup?.expectSection(viewId != null || editId != null ? "new" : sectionId);
   restoreSearch(savedApp);
   if (savedApp?.sectionId === "order-tasks") state.tasksOrderId = savedApp.tasksOrderId;
