@@ -192,6 +192,13 @@ test("task due date is hidden and new tasks are saved without it", () => {
   assert.match(read("js/task-form-shared.js"), /due_at:\s*null/);
 });
 
+test("task executor picker hides Vova and Masha and uses a three-column grid", () => {
+  const shared = read("js/task-form-shared.js"), css = read("style.css");
+  assert.match(shared, /HIDDEN_TASK_EXECUTOR_NAMES\s*=\s*new Set\(\["Вова", "Маша"\]\)/);
+  assert.match(shared, /executor_emails:\s*visibleTaskExecutorEmails\(executorEmails\)/);
+  assert.match(css, /\.order-tasks-executors-list\.messages-create-group-users\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
+});
+
 async function startupHarness({ route, savedApp = null, orderId = null, editOrderId = null, allowed = true, startup = null, routeReady = null }) {
   const calls = [], dynamicImports = [];
   let active = route;

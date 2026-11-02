@@ -23,6 +23,7 @@ import {
   canUserAccessTask,
   canUserCompleteTask,
   normalizeExecutorEmails,
+  visibleTaskExecutorEmails,
   isUserExecutorOfTask,
   isUserAuthorOfTask,
 } from "./task-form-shared.js";
@@ -199,7 +200,7 @@ function renderMyAuthorTasksRow(row, { showOrder = false, orderPopup = false, ed
   const rowClass = completed
     ? `my-tasks-row my-tasks-row--completed${offlineCls}`
     : `my-tasks-row my-tasks-row--pending${offlineCls}`;
-  const executors = formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail);
+  const executors = formatTaskExecutors(visibleTaskExecutorEmails(row.executor_emails), displayNameByEmail);
   const orderCell = showOrder ? renderTaskOrderCellHtml(row) : "";
   return `
     <tr class="${rowClass}">
@@ -228,7 +229,7 @@ function renderMyTasksRow(row, { showOrder = false, showExecutors = true, orderP
   const orderCell = showOrder ? renderTaskOrderCellHtml(row) : "";
   const executorsCell = showExecutors
     ? `<td class="order-tasks-executors-cell">${escapeHtml(
-        formatTaskExecutors(normalizeExecutorEmails(row.executor_emails), displayNameByEmail),
+        formatTaskExecutors(visibleTaskExecutorEmails(row.executor_emails), displayNameByEmail),
       )}</td>`
     : "";
   return `
