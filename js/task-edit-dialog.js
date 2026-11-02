@@ -4,7 +4,7 @@ import { supabaseClient } from "./config.js";
 import { isOfflineDataMode } from "./offline-cache.js";
 import {
   isUserAuthorOfTask, isUserExecutorOfTask, getCurrentUserEmail, ensureTaskExecutorsInList, normalizeExecutorEmails,
-  getSelectedExecutorEmailsFrom,
+  getSelectedExecutorEmailsFrom, isTaskExecutorVisible, visibleTaskExecutorEmails,
 } from "./task-form-shared.js";
 import { createTaskAttachmentComposer } from "./task-attachments.js";
 
@@ -119,8 +119,12 @@ export async function openTaskEditDialog(taskId, onSaved) {
     disposeTextResize = bindAutogrowTextarea(text);
     disposeReplyResize = bindAutogrowTextarea(field("reply"));
     await ensureTaskExecutorsInList(executors, field("hint"));
-    // Preserve assigned people even if they are no longer in the user directory.
-    for (const email of normalizeExecutorEmails(task.executor_emails)) {
+    // Вова и Маша скрыты в интерфейсе, но старые назначения сохраняем в базе.
+    const hiddenExecutorEmails = normalizeExecutorEmails(task.executor_emails).filter(
+      (email) => !isTaskExecutorVisible(email),
+    );
+    // Preserve visible assigned people even if they are no longer in the user directory.
+    for (const email of visibleTaskExecutorEmails(task.executor_emails)) {
       let input = [...executors.querySelectorAll("input[data-email]")]
         .find((el) => el.dataset.email.toLowerCase() === email.toLowerCase());
       if (!input) {
@@ -158,7 +162,8 @@ export async function openTaskEditDialog(taskId, onSaved) {
         if (isOfflineDataMode()) throw new Error("Для сохранения подключитесь к интернету.");
         if (!isUserAuthorOfTask(task)) throw new Error("Редактировать можно только свои задачи.");
         const patch = {
-          body, executor_emails: getSelectedExecutorEmailsFrom(executors),
+          body,
+          executor_emails: [...new Set([...getSelectedExecutorEmailsFrom(executors), ...hiddenExecutorEmails])],
           attachments: await composer.prepare(),
           highlight_order_field: Boolean(task.source_order_field && field("highlight").checked),
         };
