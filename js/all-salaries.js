@@ -10,6 +10,7 @@ import { beginReadScope } from "./read-requests.js";
 import {
   groupSalaryRowsByEmployee,
   groupSalaryRowsByMonth,
+  formatInstallationSalaryComment,
   SALARY_COMMENT_TERMS,
   installationSalaryOrderId,
   salaryCalculationAmount,
@@ -65,7 +66,10 @@ function renderSalaryDetails(group) {
   const rows = group.rows
     .map((row) => {
       const author = getCalcDisplayAuthor(row.comment) || "—";
-      const comment = getCalcDisplayComment(row.comment) || "—";
+      const comment = formatInstallationSalaryComment(
+        row,
+        getCalcDisplayComment(row.comment),
+      ) || "—";
       return `
         <tr>
           <td>${escapeHtml(formatSalaryDate(row.created_at))}</td>
@@ -116,7 +120,7 @@ function renderRecentSalaryPayments(groups, status = "") {
       <td>${escapeHtml(formatSalaryDate(row.created_at))}</td>
       <td>${escapeHtml(row.from_place || "—")}</td>
       <td>${escapeHtml(employee)}</td>
-      <td>${escapeHtml(getCalcDisplayComment(row.comment) || "—")}</td>
+      <td>${escapeHtml(formatInstallationSalaryComment(row, getCalcDisplayComment(row.comment)) || "—")}</td>
       <td class="all-salaries-detail-amount">${escapeHtml(formatAmount(salaryCalculationAmount(row)))}&nbsp;₽</td>
     </tr>`;
   }).join("");

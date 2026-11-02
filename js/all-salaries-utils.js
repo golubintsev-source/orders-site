@@ -142,6 +142,13 @@ export function installationSalaryOrderId(row) {
   return match ? Number(match[1]) : null;
 }
 
+/** В таблицах зарплат вместо служебного «Монтаж» показываем выбранных монтажников. */
+export function formatInstallationSalaryComment(row, displayComment) {
+  const installerName = String(row?.installer_name || "").trim();
+  if (!installerName || !isInstallationSalaryRow(row)) return displayComment;
+  return String(displayComment || "").replace(/^Монтаж(?=\s*;)/u, installerName);
+}
+
 /** Возврат из «Монтаж» уменьшает выплаты; отрицательная дельта сохраняет знак. */
 export function salaryCalculationAmount(row) {
   const amount = Number(row?.amount);
