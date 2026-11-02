@@ -72,21 +72,22 @@ root.editor = { querySelector: () => ({ isConnected: true }) };
 context.resizeTaskReplyFields(root);
 assert.equal(disposedFields.length, 1, 're-render removes sizing handlers for old fields');
 console.log('task replies: grey/green dirty state, save, duplicate prevention, edit/clear, errors/conflict, draft preservation, executor guard, offline task and escaping passed');
-// Exercise the real shared edit dialog used from both task lists and order cells.
-let modal = null, patchSent, updateFilters, canReply = true, conflict = false, savedRow;
+// Exercise the real shared edit dialog used from task lists and order cells.
+let modal = null, patchSent, updateFilters, role = 'author', conflict = false, savedRow;
 const editorSizedFields = [];
 let deleteResult = false, deletedId;
-const node = () => ({ value: '', checked: false, disabled: false, dataset: {}, hidden: true, listeners: {},
+const node = () => ({ value: '', checked: false, disabled: false, readOnly: false, dataset: {}, hidden: false, listeners: {},
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }, focus() {}, append() {}, appendChild() {},
   querySelector() { return null; }, querySelectorAll() { return []; },
   async emit(type) { for (const fn of this.listeners[type] || []) await fn({ preventDefault() {} }); } });
-let fields, form, editText, executors, submit;
+let fields, form, editText, executors, submit, cancel;
 const document = {
   getElementById: id => id === 'taskEditDialog' ? modal : null,
   body: { append(dialog) { modal = dialog; dialog.isConnected = true; } },
+  createTextNode: text => ({ textContent: text }),
   createElement() {
-    fields = Object.fromEntries(['reply','completed','highlight','hint','due','error','delete'].map(key => [key, node()]));
-    form = node(); editText = node(); executors = node(); submit = node(); const cancel = node();
+    fields = Object.fromEntries(['reply','completed','highlight','hint','error','delete'].map(key => [key, node()]));
+    form = node(); editText = node(); executors = node(); submit = node(); cancel = node();
     form.querySelectorAll = () => [...Object.values(fields), editText, submit, cancel];
     const dialog = node(); dialog.setAttribute = () => {};
     dialog.querySelector = selector => {
@@ -100,16 +101,20 @@ const document = {
     return dialog;
   },
 };
-const taskRow = { id: 50, author_login: 'worker@example.com', body: 'Задача', executor_emails: ['worker@example.com'], executor_reply: 'Старый ответ', is_completed: false };
+const taskRow = {
+  id: 50, author_login: 'author@example.com', body: 'Задача', executor_emails: ['worker@example.com'],
+  executor_reply: 'Старый ответ', is_completed: false, source_order_field: 'client', highlight_order_field: false, attachments: [],
+};
 const editorContext = vm.createContext({
   deleteModule: { softDeleteAuthorTask: async id => { deletedId = id; return deleteResult; } },
-  document, console, isOfflineDataMode: () => false, bindAutogrowTextarea: field => { editorSizedFields.push(field); return () => {}; },
-  isUserAuthorOfTask: () => true, isUserExecutorOfTask: () => canReply,
-  getCurrentUserEmail: () => 'worker@example.com', normalizeExecutorEmails: () => [],
-  isTaskExecutorVisible: () => true, visibleTaskExecutorEmails: () => [],
-  getSelectedExecutorEmailsFrom: () => ['worker@example.com'], datetimeLocalToIso: () => null,
+  document, console, isOfflineDataMode: () => false,
+  bindAutogrowTextarea: field => { editorSizedFields.push(field); return () => {}; },
+  isUserAuthorOfTask: () => role === 'author' || role === 'both',
+  isUserExecutorOfTask: () => role === 'executor' || role === 'both',
+  getCurrentUserEmail: () => role === 'author' || role === 'both' ? 'author@example.com' : 'worker@example.com',
+  normalizeExecutorEmails: () => [], isTaskExecutorVisible: () => true, visibleTaskExecutorEmails: () => [],
   ensureTaskExecutorsInList: async list => { list.dataset.loaded = '1'; }, renderTaskComposerHtml: () => '',
-  createTaskAttachmentComposer: () => ({ init() {}, dispose() {}, setBusy() {}, hasAttachments: () => false, prepare: async () => [] }),
+  createTaskAttachmentComposer: () => ({ init() {}, dispose() {}, hasAttachments: () => false }),
   supabaseClient: { from: () => {
     let updating = false; updateFilters = [];
     return {
@@ -122,46 +127,83 @@ const editorContext = vm.createContext({
 });
 const editSource = fs.readFileSync(new URL('../js/task-edit-dialog.js', import.meta.url), 'utf8');
 vm.runInContext(editSource.replace(/^import[^]*?from "[^"]+";\n/gm, '').replace(/export /g, '').replace(/import\("\.\/tasks\.js"\)/g, 'Promise.resolve(deleteModule)'), editorContext);
+
+role = 'author';
 await editorContext.openTaskEditDialog(50, row => { savedRow = row; });
-assert.equal(fields.reply.value, 'Старый ответ'); assert.equal(fields.reply.readOnly, false);
+assert.equal(editText.readOnly, false);
+assert.equal(fields.reply.readOnly, true, 'author cannot edit the executor reply');
+assert.equal(fields.completed.disabled, false);
+assert.equal(fields.highlight.disabled, false);
+assert.equal(fields.delete.hidden, false);
+assert.equal(submit.hidden, false);
+assert.match(modal.innerHTML, /Редактировать задачу/);
 assert.equal(editText.rows, 1);
-assert.match(modal.innerHTML, /data-field="reply" rows="1"/);
 assert.ok(editorSizedFields.includes(fields.reply));
-assert.ok(modal.innerHTML.indexOf('Ответ') > modal.innerHTML.indexOf('Исполнители'));
-assert.equal(fields.completed.checked, false);
-assert.ok(modal.innerHTML.indexOf('data-field="completed"') > modal.innerHTML.indexOf('data-field="reply"'));
+editText.value = 'Исправленная задача';
 fields.completed.checked = true;
-fields.reply.value = 'Новый ответ'; await form.emit('submit');
-assert.equal(patchSent.is_completed, true);
-assert.equal(savedRow.is_completed, true);
-assert.equal(patchSent.executor_reply, 'Новый ответ'); assert.equal(savedRow.executor_reply, 'Новый ответ');
-assert.ok(updateFilters.some(([key, value]) => key === 'executor_reply' && value === 'Старый ответ'));
-canReply = false;
-await editorContext.openTaskEditDialog(50);
-assert.equal(fields.reply.value, 'Старый ответ'); assert.equal(fields.reply.readOnly, true);
-fields.reply.value = 'Cannot change'; await form.emit('submit');
-assert.equal(Object.hasOwn(patchSent, 'executor_reply'), false, 'author-only edits must not overwrite executor reply');
-assert.equal(Object.hasOwn(patchSent, 'is_completed'), false, 'unchanged checkbox must preserve a newer status');
-taskRow.is_completed = true;
-await editorContext.openTaskEditDialog(50);
-assert.equal(fields.completed.checked, true);
-fields.completed.checked = false;
+fields.highlight.checked = true;
+fields.reply.value = 'Cannot change';
 await form.emit('submit');
-assert.equal(patchSent.is_completed, false);
-taskRow.is_completed = false;
-canReply = true; conflict = true;
+assert.equal(patchSent.body, 'Исправленная задача');
+assert.equal(patchSent.is_completed, true);
+assert.equal(patchSent.highlight_order_field, true);
+assert.equal(Object.hasOwn(patchSent, 'executor_reply'), false);
+assert.equal(Object.hasOwn(patchSent, 'executor_emails'), false);
+assert.equal(savedRow.is_completed, true);
+
+role = 'executor';
+await editorContext.openTaskEditDialog(50, row => { savedRow = row; });
+assert.equal(editText.readOnly, true);
+assert.equal(fields.reply.readOnly, false);
+assert.equal(fields.completed.disabled, true);
+assert.equal(fields.highlight.disabled, true);
+assert.equal(fields.delete.hidden, true);
+assert.equal(submit.hidden, false);
+assert.match(modal.innerHTML, /Ответ на задачу/);
+fields.reply.value = 'Новый ответ';
+await form.emit('submit');
+assert.equal(patchSent.executor_reply, 'Новый ответ');
+assert.deepEqual(Object.keys(patchSent), ['executor_reply']);
+assert.equal(savedRow.executor_reply, 'Новый ответ');
+assert.ok(updateFilters.some(([key, value]) => key === 'executor_reply' && value === 'Старый ответ'));
+assert.ok(updateFilters.some(([key, value]) => key === 'executor_emails' && value[0] === 'worker@example.com'));
+
+role = 'viewer';
 await editorContext.openTaskEditDialog(50);
-fields.reply.value = 'Conflict'; await form.emit('submit');
-assert.equal(modal.open, true); assert.match(fields.error.textContent, /Ответ уже изменён/);
+assert.equal(editText.readOnly, true);
+assert.equal(fields.reply.readOnly, true);
+assert.equal(fields.completed.disabled, true);
+assert.equal(fields.highlight.disabled, true);
+assert.equal(fields.delete.hidden, true);
+assert.equal(submit.hidden, true);
+assert.match(modal.innerHTML, /Просмотр задачи/);
+modal.close();
+
+role = 'both';
+await editorContext.openTaskEditDialog(50);
+assert.equal(editText.readOnly, false, 'author mode takes priority when author is also executor');
+assert.equal(fields.reply.readOnly, true);
+modal.close();
+
+role = 'executor'; conflict = true;
+await editorContext.openTaskEditDialog(50);
+fields.reply.value = 'Conflict';
+await form.emit('submit');
+assert.equal(modal.open, true);
+assert.match(fields.error.textContent, /Ответ уже изменён/);
 modal.close();
 conflict = false;
+
+role = 'author';
 await editorContext.openTaskEditDialog(50);
 await fields.delete.emit('click');
-assert.equal(deletedId, 50); assert.equal(modal.open, true, 'cancelled/failed deletion keeps editor open');
+assert.equal(deletedId, 50);
+assert.equal(modal.open, true, 'cancelled/failed deletion keeps editor open');
 deleteResult = true;
 await fields.delete.emit('click');
 assert.equal(modal, null, 'successful soft deletion closes editor');
-console.log('shared edit dialog: reply below executors, editable for executor, read-only for author, unchanged reply preserved and conflict handled');
+console.log('shared edit dialog: author, executor and viewer permissions, author precedence, conflict handling and soft deletion passed');
+
 let queue = [{ localId: 'local', tempTaskId: -1, executor_reply: '' }], synced;
 const offlineContext = vm.createContext({
   console, readPendingTasksQueue: () => queue, writePendingTasksItems: rows => { queue = rows; },
@@ -176,3 +218,4 @@ assert.equal(offlineContext.pendingTaskDisplayRows()[0].executor_reply, 'Офл�
 await offlineContext.syncPendingTasksToSupabase();
 assert.equal(synced.executor_reply, 'Офлайн ответ'); assert.equal(queue.length, 0);
 console.log('offline executor reply survives queue update, display and database synchronization');
+

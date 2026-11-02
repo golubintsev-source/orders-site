@@ -3,8 +3,8 @@ import { renderTaskComposerHtml } from "./task-composer-markup.js";
 import { supabaseClient } from "./config.js";
 import { isOfflineDataMode } from "./offline-cache.js";
 import {
-  isUserAuthorOfTask, isUserExecutorOfTask, getCurrentUserEmail, ensureTaskExecutorsInList, normalizeExecutorEmails,
-  getSelectedExecutorEmailsFrom, isTaskExecutorVisible, visibleTaskExecutorEmails,
+  isUserAuthorOfTask, isUserExecutorOfTask, getCurrentUserEmail, ensureTaskExecutorsInList,
+  visibleTaskExecutorEmails,
 } from "./task-form-shared.js";
 import { createTaskAttachmentComposer } from "./task-attachments.js";
 
@@ -12,7 +12,7 @@ let opening = false;
 
 export async function openTaskEditDialog(taskId, onSaved) {
   if (opening || document.getElementById("taskEditDialog")) return;
-  if (isOfflineDataMode()) throw new Error("Для редактирования задачи подключитесь к интернету.");
+  if (isOfflineDataMode()) throw new Error("Для открытия задачи подключитесь к интернету.");
   opening = true;
   let dialog;
   let composer;
@@ -24,14 +24,19 @@ export async function openTaskEditDialog(taskId, onSaved) {
       .eq("id", taskId).is("deleted_at", null).maybeSingle();
     if (error) throw error;
     if (!task) throw new Error("Задача удалена или недоступна.");
-    if (!isUserAuthorOfTask(task)) throw new Error("Редактировать можно только свои задачи.");
+
+    const isAuthor = isUserAuthorOfTask(task);
+    // If the author is also an executor, the author mode takes priority.
+    const isExecutor = !isAuthor && isUserExecutorOfTask(task);
+    const canEdit = isAuthor || isExecutor;
+    const title = isAuthor ? "Редактировать задачу" : isExecutor ? "Ответ на задачу" : "Просмотр задачи";
 
     dialog = document.createElement("dialog");
     dialog.id = "taskEditDialog";
     dialog.className = "task-create-dialog";
     dialog.setAttribute("aria-labelledby", "taskEditTitle");
     dialog.innerHTML = `<form class="task-create-dialog-panel">
-      <div class="task-create-dialog-header"><h3 id="taskEditTitle" class="task-create-dialog-title">Редактировать задачу</h3>
+      <div class="task-create-dialog-header"><h3 id="taskEditTitle" class="task-create-dialog-title">${title}</h3>
         <button type="button" class="task-edit-delete" data-field="delete">Удалить задачу</button></div>
       <label class="task-highlight-toggle"><input type="checkbox" data-field="highlight" /> Выделить</label>
       <div class="task-create-dialog-field"><label for="taskEdit-orderTaskTextInput" class="task-create-dialog-label">Текст</label>
@@ -49,7 +54,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
       <p class="task-create-dialog-error" role="alert" data-field="error" hidden></p>
       <div class="task-create-dialog-actions">
         <button type="submit" class="btn-primary task-create-dialog-submit">Сохранить</button>
-        <button type="button" class="task-create-dialog-cancel">Отменить</button>
+        <button type="button" class="task-create-dialog-cancel">${canEdit ? "Отменить" : "Закрыть"}</button>
       </div></form>`;
     document.body.append(dialog);
     const field = (name) => dialog.querySelector(`[data-field="${name}"]`);
@@ -57,22 +62,34 @@ export async function openTaskEditDialog(taskId, onSaved) {
     const form = dialog.querySelector("form");
     form.addEventListener("submit", (event) => event.preventDefault());
     const submit = dialog.querySelector('[type="submit"]');
-    const cancel = dialog.querySelector('.task-create-dialog-cancel');
+    const cancel = dialog.querySelector(".task-create-dialog-cancel");
+    const text = dialog.querySelector("#taskEdit-orderTaskTextInput");
+    if (!text) throw new Error("Поле текста задачи недоступно. Обновите страницу.");
     let saving = false;
     let attachmentBusy = false;
-    let executorsReady = false;
-    const syncDisabled = () => {
-      form.querySelectorAll("input, textarea, button").forEach((el) => { el.disabled = saving || attachmentBusy; });
-      field("highlight").disabled = saving || attachmentBusy || !task.source_order_field;
-      submit.disabled = saving || attachmentBusy || !executorsReady;
+
+    const lockReadOnlyControls = () => {
+      text.readOnly = !isAuthor;
+      field("reply").readOnly = !isExecutor;
+      field("highlight").disabled = saving || attachmentBusy || !isAuthor || !task.source_order_field;
+      field("completed").disabled = saving || attachmentBusy || !isAuthor;
+      field("delete").hidden = !isAuthor;
+      field("delete").disabled = saving || attachmentBusy || !isAuthor;
+      executors.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.disabled = true; });
+      dialog.querySelectorAll(
+        '[id^="taskEdit-taskAttach"], #taskEdit-taskPickOrderBtn, [data-remove-photo], [data-remove-order], [data-crop]',
+      ).forEach((control) => { control.disabled = true; });
+      submit.hidden = !canEdit;
+      submit.disabled = saving || attachmentBusy || !canEdit;
+      cancel.disabled = saving || attachmentBusy;
     };
+
     field("delete").addEventListener("click", async () => {
-      if (saving || attachmentBusy) return;
+      if (!isAuthor || saving || attachmentBusy) return;
       const errorEl = field("error");
       errorEl.hidden = true;
       saving = true;
-      composer?.setBusy(true);
-      syncDisabled();
+      lockReadOnlyControls();
       let deleted = false;
       try {
         const { softDeleteAuthorTask } = await import("./tasks.js");
@@ -82,8 +99,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
         errorEl.hidden = false;
       } finally {
         saving = false;
-        composer?.setBusy(false);
-        syncDisabled();
+        lockReadOnlyControls();
       }
       if (deleted) dialog.close();
     });
@@ -92,38 +108,28 @@ export async function openTaskEditDialog(taskId, onSaved) {
     dialog.addEventListener("cancel", (event) => { event.preventDefault(); close(); });
     cancel.addEventListener("click", close);
     dialog.addEventListener("click", (event) => { if (event.target === dialog) close(); });
-    // The editor owns its controls. Do not clone the create form: cloning form
-    // controls is unreliable in iPhone standalone/PWA mode.
-    const text = dialog.querySelector("#taskEdit-orderTaskTextInput");
-    if (!text) throw new Error("Поле текста задачи недоступно. Обновите страницу.");
+
     text.rows = 1;
     text.value = task.body || "";
     field("highlight").checked = task.highlight_order_field === true;
     field("completed").checked = [true, 1, "1"].includes(task.is_completed);
     field("reply").value = task.executor_reply || "";
-    field("reply").readOnly = !isUserExecutorOfTask(task);
     composer = createTaskAttachmentComposer({
       getElement: (id) => dialog.querySelector(`#taskEdit-${id}`),
       initialAttachments: task.attachments,
       cropHost: dialog,
       onError: (error) => {
-        field("error").textContent = error?.message || "Не удалось добавить вложение.";
+        field("error").textContent = error?.message || "Не удалось открыть вложение.";
         field("error").hidden = false;
       },
-      onBusyChange: (value) => { attachmentBusy = value; syncDisabled(); },
+      onBusyChange: (value) => { attachmentBusy = value; lockReadOnlyControls(); },
     });
     composer.init();
 
-    submit.disabled = true;
     dialog.showModal();
     disposeTextResize = bindAutogrowTextarea(text);
     disposeReplyResize = bindAutogrowTextarea(field("reply"));
     await ensureTaskExecutorsInList(executors, field("hint"));
-    // Вова и Маша скрыты в интерфейсе, но старые назначения сохраняем в базе.
-    const hiddenExecutorEmails = normalizeExecutorEmails(task.executor_emails).filter(
-      (email) => !isTaskExecutorVisible(email),
-    );
-    // Preserve visible assigned people even if they are no longer in the user directory.
     for (const email of visibleTaskExecutorEmails(task.executor_emails)) {
       let input = [...executors.querySelectorAll("input[data-email]")]
         .find((el) => el.dataset.email.toLowerCase() === email.toLowerCase());
@@ -139,54 +145,64 @@ export async function openTaskEditDialog(taskId, onSaved) {
       input.checked = true;
     }
     if (!dialog.isConnected) return;
-    // A failed directory load must not silently drop executors.
-    executorsReady = executors.dataset.loaded === "1";
-    syncDisabled();
-    text.focus();
+    lockReadOnlyControls();
+    if (isAuthor) text.focus();
+    else if (isExecutor) field("reply").focus();
+    else cancel.focus();
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (saving || submit.disabled) return;
+      if (saving || submit.disabled || !canEdit) return;
       const errorEl = field("error");
       errorEl.hidden = true;
-      const body = text.value.trim();
-      if (!body && !composer.hasAttachments()) {
-        errorEl.textContent = "Введите текст задачи.";
-        errorEl.hidden = false;
-        return;
+      const patch = {};
+      if (isAuthor) {
+        const body = text.value.trim();
+        if (!body && !composer.hasAttachments()) {
+          errorEl.textContent = "Введите текст задачи.";
+          errorEl.hidden = false;
+          return;
+        }
+        patch.body = body;
+        patch.highlight_order_field = Boolean(task.source_order_field && field("highlight").checked);
+        const completed = field("completed").checked;
+        if (completed !== [true, 1, "1"].includes(task.is_completed)) patch.is_completed = completed;
+      } else if (isExecutor) {
+        const reply = field("reply").value;
+        if (reply === String(task.executor_reply ?? "")) {
+          dialog.close();
+          return;
+        }
+        patch.executor_reply = reply;
       }
+
       saving = true;
-      composer.setBusy(true);
-      syncDisabled();
+      lockReadOnlyControls();
       let saved;
       try {
         if (isOfflineDataMode()) throw new Error("Для сохранения подключитесь к интернету.");
-        if (!isUserAuthorOfTask(task)) throw new Error("Редактировать можно только свои задачи.");
-        const patch = {
-          body,
-          executor_emails: [...new Set([...getSelectedExecutorEmailsFrom(executors), ...hiddenExecutorEmails])],
-          attachments: await composer.prepare(),
-          highlight_order_field: Boolean(task.source_order_field && field("highlight").checked),
-        };
-        const completed = field("completed").checked;
-        if (completed !== [true, 1, "1"].includes(task.is_completed)) patch.is_completed = completed;
-        const replyChanged = isUserExecutorOfTask(task) && field("reply").value !== String(task.executor_reply ?? "");
-        if (replyChanged) patch.executor_reply = field("reply").value;
-        // Unchanged replies must not overwrite an executor's newer answer.
-        let update = supabaseClient.from("order_tasks")
-          .update(patch).eq("id", task.id).eq("author_login", task.author_login).is("deleted_at", null);
-        if (replyChanged) update = update.eq("executor_reply", String(task.executor_reply ?? ""))
-          .contains("executor_emails", [getCurrentUserEmail()]);
+        let update = supabaseClient.from("order_tasks").update(patch)
+          .eq("id", task.id).is("deleted_at", null);
+        if (isAuthor) {
+          update = update.eq("author_login", task.author_login);
+        } else {
+          update = update.eq("executor_reply", String(task.executor_reply ?? ""))
+            .contains("executor_emails", [getCurrentUserEmail()]);
+        }
         const { data, error: saveError } = await update.select("id").maybeSingle();
         if (saveError) throw saveError;
-        if (!data) throw new Error(replyChanged ? "Ответ уже изменён или изменился исполнитель. Обновите задачу перед сохранением." : "Задача удалена или больше недоступна.");
+        if (!data) {
+          throw new Error(isExecutor
+            ? "Ответ уже изменён или изменился исполнитель. Обновите задачу перед сохранением."
+            : "Задача удалена или больше недоступна.");
+        }
         saved = { ...task, ...patch };
       } catch (saveError) {
         errorEl.textContent = saveError?.message || "Не удалось сохранить задачу. Попробуйте ещё раз.";
         errorEl.hidden = false;
       } finally {
         saving = false;
-        composer.setBusy(false);
-        syncDisabled();
+        lockReadOnlyControls();
       }
       if (saved) {
         dialog.close();
@@ -204,3 +220,4 @@ export async function openTaskEditDialog(taskId, onSaved) {
     opening = false;
   }
 }
+
