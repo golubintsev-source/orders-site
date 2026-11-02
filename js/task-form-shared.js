@@ -220,7 +220,6 @@ export async function ensureTaskExecutorsInList(listEl, hintEl) {
 export async function insertTask({
   body,
   executorEmails,
-  dueAt,
   sourceMessageId,
   sourceMessageKind,
   attachments,
@@ -249,7 +248,7 @@ export async function insertTask({
     body: text,
     ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
     executor_emails: Array.isArray(executorEmails) ? executorEmails : [],
-    due_at: dueAt || null,
+    due_at: null,
     is_completed: false,
     order_id: linkedOrderId,
     source_order_field: linkedOrderId != null ? validOrderField(sourceOrderField) : null,
