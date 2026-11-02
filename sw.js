@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v116: мягкое удаление задачи из окна редактирования.
-const STATIC_CACHE = "orders-site-static-v116";
+// v117: ссылки заказов в «Моих задачах» открывают редактирование.
+const STATIC_CACHE = "orders-site-static-v117";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
