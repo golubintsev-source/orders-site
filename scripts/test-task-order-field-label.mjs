@@ -15,7 +15,7 @@ const context = vm.createContext({
   escapeHtml: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
   buildOrderEditUrl: id => `/new?edit_order_id=${id}`,
   isActiveTask: row => !row.is_completed,
-  formatTaskExecutors: () => '', normalizeExecutorEmails: () => [], displayNameByEmail: String,
+  formatTaskExecutors: () => '', normalizeExecutorEmails: () => [], visibleTaskExecutorEmails: () => [], displayNameByEmail: String,
   formatTaskAuthorName: () => '', formatTaskDateRu: () => '', renderTaskTextCellHtml: () => '<td>Задача</td>',
   renderAuthorTaskDeleteCell: () => '', renderMyTaskStatusCell: () => '',
 });
