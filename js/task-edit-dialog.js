@@ -4,20 +4,11 @@ import { supabaseClient } from "./config.js";
 import { isOfflineDataMode } from "./offline-cache.js";
 import {
   isUserAuthorOfTask, isUserExecutorOfTask, getCurrentUserEmail, ensureTaskExecutorsInList, normalizeExecutorEmails,
-  getSelectedExecutorEmailsFrom, datetimeLocalToIso,
+  getSelectedExecutorEmailsFrom,
 } from "./task-form-shared.js";
 import { createTaskAttachmentComposer } from "./task-attachments.js";
 
 let opening = false;
-
-function localDateTime(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 
 export async function openTaskEditDialog(taskId, onSaved) {
   if (opening || document.getElementById("taskEditDialog")) return;
@@ -55,8 +46,6 @@ export async function openTaskEditDialog(taskId, onSaved) {
       <label class="task-create-dialog-field"><span class="task-create-dialog-label">Ответ</span>
         <textarea class="task-create-dialog-text" data-field="reply" rows="1" aria-label="Ответ исполнителя"></textarea></label>
       <label class="task-highlight-toggle"><input type="checkbox" data-field="completed" /> Выполнено</label>
-      <label class="task-create-dialog-field"><span class="task-create-dialog-label">Срок выполнения</span>
-        <input type="datetime-local" class="order-tasks-due-input task-create-dialog-due" data-field="due" /></label>
       <p class="task-create-dialog-error" role="alert" data-field="error" hidden></p>
       <div class="task-create-dialog-actions">
         <button type="submit" class="btn-primary task-create-dialog-submit">Сохранить</button>
@@ -124,7 +113,6 @@ export async function openTaskEditDialog(taskId, onSaved) {
       onBusyChange: (value) => { attachmentBusy = value; syncDisabled(); },
     });
     composer.init();
-    field("due").value = localDateTime(task.due_at);
 
     submit.disabled = true;
     dialog.showModal();
@@ -171,7 +159,6 @@ export async function openTaskEditDialog(taskId, onSaved) {
         if (!isUserAuthorOfTask(task)) throw new Error("Редактировать можно только свои задачи.");
         const patch = {
           body, executor_emails: getSelectedExecutorEmailsFrom(executors),
-          due_at: datetimeLocalToIso(field("due").value),
           attachments: await composer.prepare(),
           highlight_order_field: Boolean(task.source_order_field && field("highlight").checked),
         };
