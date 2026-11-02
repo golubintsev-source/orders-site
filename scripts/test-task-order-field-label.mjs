@@ -13,7 +13,7 @@ const context = vm.createContext({
   taskLinkedOrderIds: row => row.ids || (row.order_id ? [row.order_id] : []),
   formatTaskOrderLabel: id => `${String(id).padStart(4, '0')}_О`,
   escapeHtml: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
-  buildOrderViewUrl: id => `/?order=${id}`,
+  buildOrderEditUrl: id => `/new?edit_order_id=${id}`,
   isActiveTask: row => !row.is_completed,
   formatTaskExecutors: () => '', normalizeExecutorEmails: () => [], displayNameByEmail: String,
   formatTaskAuthorName: () => '', formatTaskDateRu: () => '', renderTaskTextCellHtml: () => '<td>Задача</td>',
@@ -27,6 +27,7 @@ const row = { order_id: 42, source_order_field: 'client', ids: [42, 44] };
 for (const render of [context.renderMyTasksRow, context.renderMyAuthorTasksRow]) {
   const html = render(row, { showOrder: true });
   assert.match(html, />0042_О Клиент<\/a>/);
+  assert.match(html, /href="\/new\?edit_order_id=42"/);
   assert.match(html, />0044_О<\/a>/);
   assert.doesNotMatch(html, /0044_О Клиент/);
   assert.match(render({ order_id: 42 }, { showOrder: true }), />0042_О<\/a>/);
