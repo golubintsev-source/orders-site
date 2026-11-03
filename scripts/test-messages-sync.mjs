@@ -7,6 +7,7 @@ import {
   shouldSuppressPushNotification,
   shouldResetDialogFeed,
   mergePartialChatListPeerIds,
+  planGroupDeliveryUpdates,
 } from "../js/messages-sync-utils.js";
 import { readFile } from "node:fs/promises";
 
@@ -28,6 +29,35 @@ assert(isTimestampSameOrBefore(micros, z), "opened chat covers last visible mess
 assert(isTimestampAfter(later, micros), "next message stays unread");
 assert(laterIsoTimestamp(z, micros) === z, "laterIso keeps first on equal ms");
 assert(laterIsoTimestamp(z, later) === later, "laterIso picks later");
+
+{
+  const receipts = [{ chat_id: "g1", last_delivered_at: z }];
+  const updates = planGroupDeliveryUpdates({
+    chatIds: ["g1", "g2"],
+    receipts,
+    userId: "me",
+    messages: [
+      { chat_id: "g1", sender_id: "other", created_at: z },
+      { chat_id: "g1", sender_id: "me", created_at: later },
+      { chat_id: "g1", sender_id: "other", created_at: later },
+      { chat_id: "g2", sender_id: "other", created_at: offset },
+      { chat_id: "outside", sender_id: "other", created_at: later },
+    ],
+  });
+  assert(updates.length === 2, "only groups with a real newer incoming message are updated");
+  assert(
+    updates.find((item) => item.chatId === "g1")?.lastDeliveredAt === later,
+    "existing receipt advances to the latest incoming message",
+  );
+  assert(
+    updates.find((item) => item.chatId === "g2")?.exists === false,
+    "missing receipt is created only when an incoming message exists",
+  );
+  assert(
+    planGroupDeliveryUpdates({ chatIds: ["g1"], receipts, userId: "me", messages: [] }).length === 0,
+    "PWA resume without new messages performs no delivery write",
+  );
+}
 
 assert(conversationPeerFromPushData({ peerId: "abc" }) === "abc", "peerId");
 assert(conversationPeerFromPushData({ chatId: "g1" }) === "group:g1", "chatId");
@@ -195,3 +225,4 @@ assert(
 }
 
 console.log("test-messages-sync: ok");
+

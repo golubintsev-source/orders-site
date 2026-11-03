@@ -45,6 +45,7 @@ import {
   timestampMs,
   shouldResetDialogFeed,
   mergePartialChatListPeerIds,
+  planGroupDeliveryUpdates,
 } from "./messages-sync-utils.js";
 import {
   formatMessagePlainTextHtml,
@@ -1094,43 +1095,92 @@ async function acknowledgeGroupMessagesDelivered() {
 
   groupChatReadsSupported = true;
   groupDeliveredAtSupported = true;
-  const existingIds = (data || []).map((row) => String(row.chat_id)).filter(Boolean);
+  const receipts = data || [];
+  const existingIds = receipts.map((row) => String(row.chat_id)).filter(Boolean);
   const existingSet = new Set(existingIds);
   const missingIds = chatIds.filter((chatId) => !existingSet.has(chatId));
-  const at = new Date().toISOString();
+  const incoming = [];
 
-  // UPDATE не трогает last_read_at и потому не может откатить параллельную отметку прочтения.
+  // Для существующих курсоров читаем только сообщения новее самого раннего
+  // last_delivered_at. Для новых групп один раз загружаем их входящие сообщения,
+  // чтобы установить курсор на реальное created_at, а не на время resume PWA.
   if (existingIds.length) {
-    const { error: updateError } = await supabaseClient
-      .from("group_chat_reads")
-      .update({ last_delivered_at: at })
-      .eq("user_id", uid)
-      .in("chat_id", existingIds);
-    if (updateError) {
-      if (noteGroupDeliveredAtSupport(updateError)) return;
-      if (!noteGroupChatReadsSupport(updateError)) {
-        console.warn("Не удалось пакетно обновить доставку групп:", updateError);
-      }
+    const cursorMs = receipts.reduce((min, row) => {
+      const value = timestampMs(row?.last_delivered_at);
+      return value > 0 ? Math.min(min, value) : 0;
+    }, Number.POSITIVE_INFINITY);
+    let query = supabaseClient
+      .from("group_messages")
+      .select("chat_id, sender_id, created_at")
+      .in("chat_id", existingIds)
+      .neq("sender_id", uid)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true });
+    if (Number.isFinite(cursorMs) && cursorMs > 0) {
+      query = query.gt("created_at", new Date(cursorMs).toISOString());
+    }
+    const result = await query;
+    if (result.error) {
+      console.warn("Не удалось проверить новые групповые сообщения:", result.error);
       return;
     }
+    incoming.push(...(result.data || []));
   }
 
   if (missingIds.length) {
-    const payload = missingIds.map((chatId) => ({
-      chat_id: chatId,
-      user_id: uid,
-      last_read_at: "1970-01-01T00:00:00.000Z",
-      last_delivered_at: at,
-    }));
-    const { error: insertError } = await supabaseClient.from("group_chat_reads").upsert(payload, {
-      onConflict: "chat_id,user_id",
-      ignoreDuplicates: true,
-    });
-    if (insertError) {
-      if (noteGroupDeliveredAtSupport(insertError)) return;
-      if (!noteGroupChatReadsSupport(insertError)) {
-        console.warn("Не удалось пакетно создать доставку групп:", insertError);
+    const result = await supabaseClient
+      .from("group_messages")
+      .select("chat_id, sender_id, created_at")
+      .in("chat_id", missingIds)
+      .neq("sender_id", uid)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true });
+    if (result.error) {
+      console.warn("Не удалось проверить сообщения новых групп:", result.error);
+      return;
+    }
+    incoming.push(...(result.data || []));
+  }
+
+  const updates = planGroupDeliveryUpdates({ chatIds, receipts, messages: incoming, userId: uid });
+  if (!updates.length) return;
+
+  const existingUpdates = updates.filter((item) => item.exists);
+  for (const item of existingUpdates) {
+    let update = supabaseClient
+      .from("group_chat_reads")
+      .update({ last_delivered_at: item.lastDeliveredAt })
+      .eq("user_id", uid)
+      .eq("chat_id", item.chatId);
+    // Оптимистическая проверка не позволяет более позднему Realtime-событию
+    // быть перезаписанным результатом начатого ранее resume-запроса.
+    update = item.previousDeliveredAt
+      ? update.eq("last_delivered_at", item.previousDeliveredAt)
+      : update.is("last_delivered_at", null);
+    const { error: updateError } = await update;
+    if (updateError) {
+      if (noteGroupDeliveredAtSupport(updateError)) return;
+      if (!noteGroupChatReadsSupport(updateError)) {
+        console.warn("Не удалось обновить доставку группового чата:", updateError);
       }
+    }
+  }
+
+  const newRows = updates.filter((item) => !item.exists).map((item) => ({
+    chat_id: item.chatId,
+    user_id: uid,
+    last_read_at: "1970-01-01T00:00:00.000Z",
+    last_delivered_at: item.lastDeliveredAt,
+  }));
+  if (!newRows.length) return;
+  const { error: insertError } = await supabaseClient.from("group_chat_reads").upsert(newRows, {
+    onConflict: "chat_id,user_id",
+    ignoreDuplicates: true,
+  });
+  if (insertError) {
+    if (noteGroupDeliveredAtSupport(insertError)) return;
+    if (!noteGroupChatReadsSupport(insertError)) {
+      console.warn("Не удалось создать статусы доставки групп:", insertError);
     }
   }
 }
@@ -6481,6 +6531,8 @@ export function initMessagesSection() {
   void loadUsersDirectory();
   startUnreadPolling();
   initMessagesLiveSync();
+  window.dispatchEvent(new CustomEvent("messages-status-ready"));
 }
 
 export { ORDER_TOKEN_RE, GROUP_PEER_PREFIX };
+

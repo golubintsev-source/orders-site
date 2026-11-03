@@ -94,3 +94,35 @@ export function mergePartialChatListPeerIds(nextPeerIds, existingPeerIds) {
   }
   return out;
 }
+
+/**
+ * Возвращает только реальные продвижения статуса доставки по группам.
+ * Время восстановления PWA сюда не попадает: курсор двигается строго до
+ * created_at последнего входящего сообщения, которое новее сохранённого.
+ */
+export function planGroupDeliveryUpdates({ chatIds, receipts, messages, userId } = {}) {
+  const allowed = new Set((chatIds || []).map((id) => String(id || "")).filter(Boolean));
+  const receiptByChat = new Map(
+    (receipts || []).map((row) => [String(row?.chat_id || ""), row]),
+  );
+  const latestByChat = new Map();
+  const me = String(userId || "");
+
+  for (const row of messages || []) {
+    const chatId = String(row?.chat_id || "");
+    const createdAt = row?.created_at ? String(row.created_at) : "";
+    if (!allowed.has(chatId) || !createdAt || String(row?.sender_id || "") === me) continue;
+    const receiptAt = receiptByChat.get(chatId)?.last_delivered_at || null;
+    if (receiptAt && !isTimestampAfter(createdAt, receiptAt)) continue;
+    const previous = latestByChat.get(chatId);
+    if (!previous || isTimestampAfter(createdAt, previous)) latestByChat.set(chatId, createdAt);
+  }
+
+  return [...latestByChat.entries()].map(([chatId, lastDeliveredAt]) => ({
+    chatId,
+    lastDeliveredAt,
+    previousDeliveredAt: receiptByChat.get(chatId)?.last_delivered_at || null,
+    exists: receiptByChat.has(chatId),
+  }));
+}
+

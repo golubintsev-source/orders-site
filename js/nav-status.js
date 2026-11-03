@@ -7,7 +7,17 @@ import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { conversationPeerFromPushData } from "./messages-sync-utils.js";
 
 let started = false;
-let pending = null;
+let taskPending = null;
+let messagePending = null;
+let taskRefreshTimer = null;
+let messageRefreshTimer = null;
+let taskStatusChannel = null;
+let taskStatusRealtimeUid = null;
+let messageStatusChannel = null;
+let messageStatusRealtimeUid = null;
+
+const NAV_STATUS_FALLBACK_MS = 10 * 60_000;
+const NAV_STATUS_EVENT_DEBOUNCE_MS = 300;
 
 export async function refreshHeaderMessages() {
   if (window.__messagesStatusReady) return;
@@ -44,31 +54,149 @@ export async function refreshHeaderMessages() {
   await setPushBadgeCount(count);
 }
 
-export function refreshNavStatus() {
-  if (pending) return pending;
+function refreshTaskStatus() {
+  if (taskPending) return taskPending;
   if (document.visibilityState === "hidden") return Promise.resolve();
-  pending = Promise.allSettled([refreshMyTasksNavBadge(), refreshHeaderMessages()])
-    .then((results) => {
-      for (const result of results) if (result.status === "rejected") console.warn("Статус уведомлений:", result.reason);
-    }).finally(() => { pending = null; });
-  return pending;
+  const current = Promise.resolve(refreshMyTasksNavBadge()).catch((error) => {
+    console.warn("Статус задач:", error);
+  });
+  taskPending = current;
+  return current.finally(() => { if (taskPending === current) taskPending = null; });
+}
+
+function refreshMessageStatus() {
+  if (messagePending) return messagePending;
+  if (document.visibilityState === "hidden") return Promise.resolve();
+  const current = Promise.resolve(refreshHeaderMessages()).catch((error) => {
+    console.warn("Статус сообщений:", error);
+  });
+  messagePending = current;
+  return current.finally(() => { if (messagePending === current) messagePending = null; });
+}
+
+export function refreshNavStatus() {
+  return Promise.allSettled([refreshTaskStatus(), refreshMessageStatus()]);
+}
+
+function scheduleTaskStatusRefresh() {
+  if (taskRefreshTimer) window.clearTimeout(taskRefreshTimer);
+  taskRefreshTimer = window.setTimeout(() => {
+    taskRefreshTimer = null;
+    void refreshTaskStatus();
+  }, NAV_STATUS_EVENT_DEBOUNCE_MS);
+}
+
+function scheduleMessageStatusRefresh() {
+  if (messageRefreshTimer) window.clearTimeout(messageRefreshTimer);
+  messageRefreshTimer = window.setTimeout(() => {
+    messageRefreshTimer = null;
+    void refreshMessageStatus();
+  }, NAV_STATUS_EVENT_DEBOUNCE_MS);
+}
+
+function stopTaskStatusRealtime() {
+  if (!taskStatusChannel) return;
+  const channel = taskStatusChannel;
+  taskStatusChannel = null;
+  taskStatusRealtimeUid = null;
+  void supabaseClient.removeChannel(channel);
+}
+
+function stopMessageStatusRealtime() {
+  if (!messageStatusChannel) return;
+  const channel = messageStatusChannel;
+  messageStatusChannel = null;
+  messageStatusRealtimeUid = null;
+  void supabaseClient.removeChannel(channel);
+}
+
+function startTaskStatusRealtime() {
+  const uid = state.currentUser?.id;
+  if (!uid) return;
+  if (taskStatusChannel && taskStatusRealtimeUid === String(uid)) return;
+  if (taskStatusChannel) stopTaskStatusRealtime();
+
+  taskStatusRealtimeUid = String(uid);
+  taskStatusChannel = supabaseClient
+    .channel(`nav-task-status:${uid}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "order_tasks" },
+      scheduleTaskStatusRefresh,
+    )
+    .subscribe();
+}
+
+function startMessageStatusRealtime() {
+  const uid = state.currentUser?.id;
+  if (!uid || window.__messagesStatusReady) {
+    stopMessageStatusRealtime();
+    return;
+  }
+  if (messageStatusChannel && messageStatusRealtimeUid === String(uid)) return;
+  if (messageStatusChannel) stopMessageStatusRealtime();
+
+  messageStatusRealtimeUid = String(uid);
+  messageStatusChannel = supabaseClient
+    .channel(`nav-message-status:${uid}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "user_messages", filter: `recipient_id=eq.${uid}` },
+      scheduleMessageStatusRefresh,
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "group_messages" },
+      scheduleMessageStatusRefresh,
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "group_chat_reads" },
+      scheduleMessageStatusRefresh,
+    )
+    .subscribe();
+}
+
+function startNavStatusRealtime() {
+  startTaskStatusRealtime();
+  startMessageStatusRealtime();
+}
+
+function stopNavStatusRealtime() {
+  stopTaskStatusRealtime();
+  stopMessageStatusRealtime();
 }
 
 export function initNavStatus() {
   if (started) return;
   started = true;
   void refreshNavStatus();
-  window.setInterval(() => void refreshNavStatus(), 60_000);
-  document.addEventListener("visibilitychange", () => void refreshNavStatus());
-  window.addEventListener("online", () => void refreshNavStatus());
+  startNavStatusRealtime();
+  // Realtime — основной путь. Редкий проход нужен только как страховка после
+  // потери сети, сна iOS/PWA или незаметного разрыва WebSocket.
+  window.setInterval(() => void refreshNavStatus(), NAV_STATUS_FALLBACK_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    startNavStatusRealtime();
+    void refreshNavStatus();
+  });
+  window.addEventListener("online", () => {
+    startNavStatusRealtime();
+    void refreshNavStatus();
+  });
+  window.addEventListener("pagehide", (event) => {
+    if (!event.persisted) stopNavStatusRealtime();
+  });
+  window.addEventListener("messages-status-ready", stopMessageStatusRealtime);
   const onPush = (data) => {
     if (window.__messagesStatusReady) return;
     if (data?.type === "open-chat") {
       // A notification click is an explicit request to open the chat screen.
       const peerId = conversationPeerFromPushData(data) || data.peerId || null;
       void import("./messages.js").then((m) => m.openChatFromNotification(peerId)).catch(console.error);
-    } else if (data?.type === "push-received") void refreshNavStatus();
+    } else if (data?.type === "push-received") scheduleMessageStatusRefresh();
   };
   window.addEventListener("orders-sw-message", (event) => onPush(event.detail));
   for (const event of window.__pendingSwMessages || []) if (event?.type === "open-chat") onPush(event);
 }
+
