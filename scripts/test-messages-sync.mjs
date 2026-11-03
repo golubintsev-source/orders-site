@@ -12,6 +12,7 @@ import {
 import { readFile } from "node:fs/promises";
 
 const messagesSource = await readFile(new URL("../js/messages.js", import.meta.url), "utf8");
+const chatBootSource = await readFile(new URL("../js/chat-boot.js", import.meta.url), "utf8");
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
@@ -29,6 +30,27 @@ assert(isTimestampSameOrBefore(micros, z), "opened chat covers last visible mess
 assert(isTimestampAfter(later, micros), "next message stays unread");
 assert(laterIsoTimestamp(z, micros) === z, "laterIso keeps first on equal ms");
 assert(laterIsoTimestamp(z, later) === later, "laterIso picks later");
+
+assert(
+  /const CHAT_LIST_DM_PREVIEW_LIMIT = 100/.test(messagesSource),
+  "chat list preview must fetch at most 100 recent direct messages",
+);
+assert(
+  /const FAST_PREVIEW_LIMIT = 100/.test(chatBootSource),
+  "early chat boot must use the same 100-message preview limit",
+);
+assert(
+  !/DIALOG_HISTORY_MESSAGE_LIMIT/.test(messagesSource),
+  "dialog must not silently fetch a 400-message history batch",
+);
+assert(
+  /beforeId != null\) q = q\.lt\("id", beforeId\)/.test(messagesSource),
+  "older dialog messages must use an indexed id cursor",
+);
+assert(
+  /feed\.scrollTop <= 160[\s\S]*loadOlderMessagesPage/.test(messagesSource),
+  "scrolling to the top must load the next history page",
+);
 
 {
   const receipts = [{ chat_id: "g1", last_delivered_at: z }];
@@ -225,4 +247,5 @@ assert(
 }
 
 console.log("test-messages-sync: ok");
+
 
