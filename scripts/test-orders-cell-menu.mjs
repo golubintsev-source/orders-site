@@ -125,7 +125,7 @@ console.log('orders cell hold: direct create/edit, movement cancellation, pinch 
 
 // Exercise the real standard dialog and its insertTask payload with isolated data services.
 const ids = ['taskCreateComposerHost', 'taskCreateDialogHighlight', 'taskCreateDialogTitle', 'taskCreateDialogTaskLabel', 'taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
-  'taskCreateDialogOrderFieldBlock', 'taskCreateDialogOrderFieldLabel', 'taskCreateDialogOrderFieldValue', 'taskCreateDialogOrderFieldHint',
+  'taskCreateDialogOrderFieldBlock', 'taskCreateDialogOrderFieldLabel', 'taskCreateDialogOrderFieldValue', 'taskCreateDialogOrderFieldTextValue', 'taskCreateDialogOrderFieldHint',
   'taskCreateDialogError', 'taskCreateDialogSubmitBtn', 'taskCreateDialogCancelBtn', 'taskCreateDialogCloseBtn'];
 const fields = new Map(ids.map(id => [id, new Element()]));
 const dialogBody = new Element('body');
@@ -212,7 +212,7 @@ assert.equal(draftAttachments.length, 1, 'failed upload preserves attachment dra
 assert.equal(fields.get('taskCreateDialog').open, true);
 assert.equal(fields.get('taskCreateDialogSubmitBtn').disabled, false);
 failPrepare = false; failInsert = true;
-fields.get('taskCreateDialogOrderFieldValue').value = 'Пётр';
+fields.get('taskCreateDialogOrderFieldTextValue').value = 'Пётр';
 await dialogContext.submitTaskCreateDialog();
 assert.equal(draftAttachments.length, 1, 'failed database save preserves attachment draft');
 assert.equal(fields.get('taskCreateDialog').open, true);

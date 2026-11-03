@@ -88,7 +88,7 @@ const document = {
   createTextNode: text => ({ textContent: text }),
   createElement(tag) {
     if (tag !== 'dialog') return node();
-    fields = Object.fromEntries(['reply','reply-label','completed','highlight','hint','error','delete','task-label','order-field-block','order-field-label','order-field-value','order-field-hint'].map(key => [key, node()]));
+    fields = Object.fromEntries(['reply','reply-label','completed','highlight','hint','error','delete','task-label','order-field-block','order-field-label','order-field-value','order-field-text-value','order-field-hint'].map(key => [key, node()]));
     form = node(); editText = node(); executors = node(); submit = node(); cancel = node(); titleEl = node();
     form.querySelectorAll = () => [...Object.values(fields), editText, submit, cancel];
     const dialog = node(); dialog.setAttribute = () => {};
@@ -144,7 +144,8 @@ assert.equal(fields.completed.disabled, false);
 assert.equal(fields.highlight.disabled, false);
 assert.equal(fields.delete.hidden, false);
 assert.equal(submit.hidden, false);
-assert.equal(fields['order-field-value'].disabled, false);
+assert.equal(fields['order-field-text-value'].disabled, false);
+assert.equal(fields['order-field-text-value'].hidden, false);
 assert.match(modal.innerHTML, /Редактировать задачу/);
 assert.match(modal.innerHTML, /Выделить в таблице/);
 assert.match(modal.innerHTML, /task-order-field-attention/);
@@ -158,7 +159,7 @@ editText.value = 'Исправленная задача';
 fields.completed.checked = true;
 fields.highlight.checked = true;
 fields.reply.value = 'Cannot change';
-fields['order-field-value'].value = 'Новый клиент';
+fields['order-field-text-value'].value = 'Новый клиент';
 await form.emit('submit');
 assert.equal(patchSent.body, 'Исправленная задача');
 assert.equal(patchSent.is_completed, true);
@@ -178,7 +179,7 @@ assert.equal(fields.completed.disabled, true);
 assert.equal(fields.highlight.disabled, true);
 assert.equal(fields.delete.hidden, true);
 assert.equal(submit.hidden, false);
-assert.equal(fields['order-field-value'].disabled, false, 'executor can edit the source order field');
+assert.equal(fields['order-field-text-value'].disabled, false, 'executor can edit the source order field');
 assert.match(modal.innerHTML, /Ответ на задачу/);
 fields.reply.value = 'Новый ответ';
 await form.emit('submit');
@@ -196,7 +197,7 @@ assert.equal(fields.completed.disabled, true);
 assert.equal(fields.highlight.disabled, true);
 assert.equal(fields.delete.hidden, true);
 assert.equal(submit.hidden, true);
-assert.equal(fields['order-field-value'].disabled, true, 'viewer cannot edit the source order field');
+assert.equal(fields['order-field-text-value'].disabled, true, 'viewer cannot edit the source order field');
 assert.match(modal.innerHTML, /Просмотр задачи/);
 modal.close();
 

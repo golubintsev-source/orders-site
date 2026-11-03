@@ -22,6 +22,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
   let composer;
   let disposeTextResize = () => {};
   let disposeReplyResize = () => {};
+  let disposeOrderFieldResize = () => {};
   try {
     const { data: task, error } = await supabaseClient.from("order_tasks")
       .select("id, author_login, body, executor_emails, due_at, attachments, order_id, source_order_field, highlight_order_field, executor_reply, is_completed")
@@ -51,6 +52,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
       <label class="task-create-dialog-field task-order-field-attention" data-field="order-field-block" hidden>
         <span class="task-create-dialog-label"><span data-field="order-field-label"></span> <em class="task-order-field-question">(по этому полю вопрос)</em></span>
         <input class="task-create-dialog-order-field" data-field="order-field-value" />
+        <textarea class="task-create-dialog-order-field task-create-dialog-order-field--text" data-field="order-field-text-value" rows="1" hidden></textarea>
         <span class="order-tasks-executors-hint" data-field="order-field-hint" hidden></span>
       </label>
       <div class="task-create-dialog-field"><span class="task-create-dialog-label">Исполнители</span>
@@ -117,6 +119,10 @@ export async function openTaskEditDialog(taskId, onSaved) {
       if (orderFieldInput) {
         orderFieldInput.disabled = saving || attachmentBusy || !canEdit || !orderFieldState?.editable;
       }
+      const orderFieldText = field("order-field-text-value");
+      if (orderFieldText) {
+        orderFieldText.disabled = saving || attachmentBusy || !canEdit || !orderFieldState?.editable;
+      }
       dialog.querySelectorAll(
         '[id^="taskEdit-taskAttach"], #taskEdit-taskPickOrderBtn, [data-remove-photo], [data-remove-order], [data-crop]',
       ).forEach((control) => { control.disabled = true; });
@@ -145,7 +151,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
       if (deleted) dialog.close();
     });
     const close = () => { if (!saving && !attachmentBusy) dialog.close(); };
-    dialog.addEventListener("close", () => { disposeTextResize(); disposeReplyResize(); composer?.dispose(); dialog.remove(); });
+    dialog.addEventListener("close", () => { disposeTextResize(); disposeReplyResize(); disposeOrderFieldResize(); composer?.dispose(); dialog.remove(); });
     dialog.addEventListener("cancel", (event) => { event.preventDefault(); close(); });
     cancel.addEventListener("click", close);
     dialog.addEventListener("click", (event) => { if (event.target === dialog) close(); });
@@ -192,9 +198,19 @@ export async function openTaskEditDialog(taskId, onSaved) {
           field("order-field-block").hidden = false;
           field("order-field-label").textContent = orderFieldState.label;
           const orderFieldInput = field("order-field-value");
-          orderFieldInput.type = orderFieldState.inputType;
-          if (orderFieldState.inputType === "number") orderFieldInput.step = "any";
-          orderFieldInput.value = orderFieldState.value;
+          const orderFieldText = field("order-field-text-value");
+          const useTextArea = orderFieldState.inputType === "text";
+          orderFieldInput.hidden = useTextArea;
+          orderFieldText.hidden = !useTextArea;
+          if (useTextArea) {
+            orderFieldText.rows = 1;
+            orderFieldText.value = orderFieldState.value;
+            disposeOrderFieldResize = bindAutogrowTextarea(orderFieldText);
+          } else {
+            orderFieldInput.type = orderFieldState.inputType;
+            if (orderFieldState.inputType === "number") orderFieldInput.step = "any";
+            orderFieldInput.value = orderFieldState.value;
+          }
           if (!orderFieldState.editable) {
             field("order-field-hint").textContent = "Расчётное поле нельзя изменить напрямую.";
             field("order-field-hint").hidden = false;
@@ -204,6 +220,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
         field("order-field-block").hidden = false;
         field("order-field-label").textContent = "Поле заказа";
         field("order-field-value").hidden = true;
+        field("order-field-text-value").hidden = true;
         field("order-field-hint").textContent = loadError?.message || "Не удалось загрузить поле заказа.";
         field("order-field-hint").hidden = false;
       }
@@ -268,7 +285,9 @@ export async function openTaskEditDialog(taskId, onSaved) {
           await saveTaskOrderField(
             task.order_id,
             task.source_order_field,
-            field("order-field-value").value,
+            (orderFieldState.inputType === "text"
+              ? field("order-field-text-value")
+              : field("order-field-value")).value,
             orderFieldState.value,
           );
         }
@@ -289,6 +308,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
   } catch (error) {
     disposeTextResize();
     disposeReplyResize();
+    disposeOrderFieldResize();
     composer?.dispose();
     dialog?.remove();
     throw error;

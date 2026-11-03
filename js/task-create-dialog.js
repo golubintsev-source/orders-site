@@ -46,6 +46,7 @@ function getDialogEls() {
     orderFieldBlock: document.getElementById("taskCreateDialogOrderFieldBlock"),
     orderFieldLabel: document.getElementById("taskCreateDialogOrderFieldLabel"),
     orderFieldValue: document.getElementById("taskCreateDialogOrderFieldValue"),
+    orderFieldTextValue: document.getElementById("taskCreateDialogOrderFieldTextValue"),
     orderFieldHint: document.getElementById("taskCreateDialogOrderFieldHint"),
   };
 }
@@ -64,26 +65,28 @@ function setDialogError(message) {
 }
 
 function syncCreateDisabled() {
-  const { dialog, submitBtn, cancelBtn, closeBtn, textInput, highlightInput, orderFieldValue } = getDialogEls();
+  const { dialog, submitBtn, cancelBtn, closeBtn, textInput, highlightInput, orderFieldValue, orderFieldTextValue } = getDialogEls();
   const busy = saving || attachmentComposer?.isBusy();
   for (const el of [submitBtn, cancelBtn, closeBtn, textInput]) {
     if (el) el.disabled = Boolean(busy);
   }
   if (highlightInput) highlightInput.disabled = Boolean(busy) || !pendingSourceOrderField;
   if (orderFieldValue) orderFieldValue.disabled = Boolean(busy) || !pendingOrderFieldState?.editable;
+  if (orderFieldTextValue) orderFieldTextValue.disabled = Boolean(busy) || !pendingOrderFieldState?.editable;
   dialog?.querySelectorAll('#taskCreateDialogExecutors input').forEach(el => { el.disabled = Boolean(busy); });
 }
 
 function resetDialogForm() {
   if (saving || attachmentComposer?.isBusy()) return;
   attachmentComposer?.clear();
-  const { textInput, executorsList, titleEl, orderFieldBlock, orderFieldValue, orderFieldHint } = getDialogEls();
+  const { textInput, executorsList, titleEl, orderFieldBlock, orderFieldValue, orderFieldTextValue, orderFieldHint } = getDialogEls();
   if (titleEl) titleEl.textContent = "Новая задача";
   const highlight = document.getElementById("taskCreateDialogHighlight");
   if (highlight) highlight.checked = false;
   if (textInput) textInput.value = "";
   if (orderFieldBlock) orderFieldBlock.hidden = true;
   if (orderFieldValue) { orderFieldValue.value = ""; orderFieldValue.hidden = false; }
+  if (orderFieldTextValue) { orderFieldTextValue.value = ""; orderFieldTextValue.hidden = true; }
   if (orderFieldHint) orderFieldHint.hidden = true;
   resetTaskExecutorsList(executorsList);
   setDialogError("");
@@ -121,7 +124,10 @@ async function submitTaskCreateDialog() {
   try {
     const attachments = attachmentComposer ? await attachmentComposer.prepare() : [];
     if (pendingOrderFieldState?.editable) {
-      const currentOrderFieldValue = getDialogEls().orderFieldValue?.value;
+      const controls = getDialogEls();
+      const currentOrderFieldValue = pendingOrderFieldState.inputType === "text"
+        ? controls.orderFieldTextValue?.value
+        : controls.orderFieldValue?.value;
       const orderFieldChanged = await saveTaskOrderField(
         sourceOrderId,
         pendingSourceOrderField,
@@ -187,7 +193,7 @@ export async function openTaskCreateDialog({
   initTaskCreateDialog();
   const {
     dialog, textInput, executorsList, executorsHint, titleEl, taskLabel,
-    orderFieldBlock, orderFieldLabel, orderFieldValue, orderFieldHint,
+    orderFieldBlock, orderFieldLabel, orderFieldValue, orderFieldTextValue, orderFieldHint,
   } = getDialogEls();
   if (!dialog) return;
   if (taskLabel) {
@@ -240,10 +246,17 @@ export async function openTaskCreateDialog({
       if (pendingOrderFieldState) {
         orderFieldBlock.hidden = false;
         orderFieldLabel.textContent = pendingOrderFieldState.label;
-        orderFieldValue.hidden = false;
-        orderFieldValue.type = pendingOrderFieldState.inputType;
-        if (pendingOrderFieldState.inputType === "number") orderFieldValue.step = "any";
-        orderFieldValue.value = pendingOrderFieldState.value;
+        const useTextArea = pendingOrderFieldState.inputType === "text" && orderFieldTextValue;
+        orderFieldValue.hidden = Boolean(useTextArea);
+        if (orderFieldTextValue) orderFieldTextValue.hidden = !useTextArea;
+        if (useTextArea) {
+          orderFieldTextValue.rows = 1;
+          orderFieldTextValue.value = pendingOrderFieldState.value;
+        } else {
+          orderFieldValue.type = pendingOrderFieldState.inputType;
+          if (pendingOrderFieldState.inputType === "number") orderFieldValue.step = "any";
+          orderFieldValue.value = pendingOrderFieldState.value;
+        }
         if (orderFieldHint) {
           orderFieldHint.textContent = pendingOrderFieldState.editable ? "" : "Расчётное поле нельзя изменить напрямую.";
           orderFieldHint.hidden = pendingOrderFieldState.editable;
@@ -253,6 +266,7 @@ export async function openTaskCreateDialog({
       if (orderFieldBlock) orderFieldBlock.hidden = false;
       if (orderFieldLabel) orderFieldLabel.textContent = "Поле заказа";
       if (orderFieldValue) orderFieldValue.hidden = true;
+      if (orderFieldTextValue) orderFieldTextValue.hidden = true;
       if (orderFieldHint) {
         orderFieldHint.textContent = loadError?.message || "Не удалось загрузить поле заказа.";
         orderFieldHint.hidden = false;
@@ -273,6 +287,10 @@ export async function openTaskCreateDialog({
     textInput.rows = 1;
     bindAutogrowTextarea(textInput);
     resizeTextarea(textInput);
+  }
+  if (orderFieldTextValue && !orderFieldTextValue.hidden) {
+    bindAutogrowTextarea(orderFieldTextValue);
+    resizeTextarea(orderFieldTextValue);
   }
   syncCreateDisabled();
 }
