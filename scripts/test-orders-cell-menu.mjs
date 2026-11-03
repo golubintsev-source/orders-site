@@ -227,6 +227,8 @@ assert.equal(fields.get('taskCreateDialog').open, false);
 console.log('create dialog attachments: dedicated controls, photo-only save, upload error preserves draft and retry resets after success');
 
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+assert.match(css, /\.task-create-dialog-order-field\[hidden\]\s*\{\s*display:\s*none;/);
 assert.match(html, /Выделить в таблице/);
 assert.match(html, /task-order-field-attention/);
 assert.match(html, /<em class="task-order-field-question">\(по этому полю вопрос\)<\/em>/);

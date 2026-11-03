@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v125: перенос и авторасширение длинного текста исходного поля заказа в задаче.
-const STATIC_CACHE = "orders-site-static-v125";
+// v126: скрывать неактивный вариант поля заказа в окне задачи.
+const STATIC_CACHE = "orders-site-static-v126";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

@@ -9087,6 +9087,10 @@ th {
   box-sizing: border-box;
 }
 
+.task-create-dialog-order-field[hidden] {
+  display: none;
+}
+
 .task-create-dialog-order-field:disabled {
   background: #f3f4f6;
   color: #6b7280;
