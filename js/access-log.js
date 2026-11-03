@@ -8,10 +8,17 @@ const GEO_CACHE_KEY = "orders_site_access_geo_v1";
 const PENDING_LOGS_KEY = "orders_site_pending_access_logs_v1";
 /** Максимум отложенных обращений в localStorage (раньше 50 — терялись при офлайне). */
 const PENDING_LOGS_MAX = 200;
+/** Один INSERT на пакет вместо отдельной транзакции на каждый переход. */
+const ACCESS_LOG_BATCH_SIZE = 50;
+const ACCESS_LOG_FLUSH_DELAY_MS = 20_000;
+/** Быстрый повтор того же SPA-маршрута не считается новым посещением. */
+const ACCESS_LOG_DEDUPE_MS = 10_000;
 
 let geoCachePromise = null;
 let sectionSwitchStartedAt = null;
 let flushPendingPromise = null;
+let accessLogFlushTimer = null;
+const recentAccessByKey = new Map();
 /** Уникальные id текущих записей (не блокируем повторный путь). */
 const inFlightLogIds = new Set();
 let nextLogFlightId = 1;
@@ -234,7 +241,9 @@ function getWorkMode() {
 function queuePendingLog(row) {
   const list = readJsonStorage(PENDING_LOGS_KEY, []);
   list.push({ ...row, queuedAt: new Date().toISOString() });
-  writeJsonStorage(PENDING_LOGS_KEY, list.slice(-PENDING_LOGS_MAX));
+  const next = list.slice(-PENDING_LOGS_MAX);
+  writeJsonStorage(PENDING_LOGS_KEY, next);
+  return next.length;
 }
 
 /** Только колонки таблицы site_access_logs (без служебных visited_at / queuedAt). */
@@ -260,9 +269,34 @@ function toDbInsertPayload(row, user) {
   return payload;
 }
 
-async function insertAccessLog(row) {
-  const { error } = await supabaseClient.from("site_access_logs").insert(row);
+async function insertAccessLogs(rows) {
+  if (!rows?.length) return;
+  const { error } = await supabaseClient.from("site_access_logs").insert(rows);
   if (error) throw error;
+}
+
+function scheduleAccessLogFlush(user = state.currentUser, { immediate = false } = {}) {
+  if (!user?.id) return;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  if (accessLogFlushTimer) window.clearTimeout(accessLogFlushTimer);
+  accessLogFlushTimer = window.setTimeout(() => {
+    accessLogFlushTimer = null;
+    void flushPendingAccessLogs(user);
+  }, immediate ? 0 : ACCESS_LOG_FLUSH_DELAY_MS);
+}
+
+function isDuplicateAccess(pagePath, user, force) {
+  if (force) return false;
+  const now = Date.now();
+  const key = `${user?.id || user?.email || "anonymous"}|${pagePath}`;
+  const previous = recentAccessByKey.get(key) || 0;
+  recentAccessByKey.set(key, now);
+  if (recentAccessByKey.size > 100) {
+    for (const [storedKey, at] of recentAccessByKey) {
+      if (now - at > ACCESS_LOG_DEDUPE_MS) recentAccessByKey.delete(storedKey);
+    }
+  }
+  return now - previous < ACCESS_LOG_DEDUPE_MS;
 }
 
 export async function flushPendingAccessLogs(user = state.currentUser) {
@@ -277,13 +311,15 @@ export async function flushPendingAccessLogs(user = state.currentUser) {
     // Сразу забираем очередь из storage — параллельные flush не продублируют записи.
     writeJsonStorage(PENDING_LOGS_KEY, []);
 
-    const remaining = [];
-    for (const item of list) {
+    let remaining = [];
+    for (let offset = 0; offset < list.length; offset += ACCESS_LOG_BATCH_SIZE) {
+      const batch = list.slice(offset, offset + ACCESS_LOG_BATCH_SIZE);
       try {
-        await insertAccessLog(toDbInsertPayload(item, user));
+        await insertAccessLogs(batch.map((item) => toDbInsertPayload(item, user)));
       } catch (e) {
-        console.warn("Не удалось отправить отложенный лог обращения:", e);
-        remaining.push(item);
+        console.warn("Не удалось отправить пакет логов обращений:", e);
+        remaining = list.slice(offset);
+        break;
       }
     }
 
@@ -300,7 +336,8 @@ export async function flushPendingAccessLogs(user = state.currentUser) {
 
 /**
  * Записать обращение к странице/разделу в site_access_logs.
- * Каждое обращение — отдельная строка (без дедупликации по пути за 10 с).
+ * Обращения складываются локально и отправляются пакетами. Повтор одного пути
+ * в течение 10 секунд дедуплицируется, если вызов не помечен force.
  * @param {{ pagePath?: string, pageTitle?: string, responseTimeMs?: number|null, user?: object|null, force?: boolean, workMode?: string }} opts
  */
 export async function logSiteAccess(opts = {}) {
@@ -314,6 +351,7 @@ export async function logSiteAccess(opts = {}) {
 
   try {
     const user = opts.user ?? state.currentUser ?? null;
+    if (isDuplicateAccess(pagePath, user, opts.force === true)) return;
     const { device, geo } = await collectAccessContext();
 
     const workMode =
@@ -336,8 +374,8 @@ export async function logSiteAccess(opts = {}) {
       visited_at: visitedAt,
     };
 
+    const queuedCount = queuePendingLog(row);
     if (!user?.id) {
-      queuePendingLog(row);
       return;
     }
 
@@ -346,16 +384,13 @@ export async function logSiteAccess(opts = {}) {
       workMode === "offline" ||
       (typeof navigator !== "undefined" && navigator.onLine === false)
     ) {
-      queuePendingLog(row);
       return;
     }
 
-    try {
-      await insertAccessLog(toDbInsertPayload(row, user));
-    } catch (e) {
-      console.error("Не удалось записать лог обращения:", e?.message || e, e);
-      row.work_mode = getWorkMode() === "offline" ? "offline" : row.work_mode;
-      queuePendingLog(row);
+    if (opts.force === true || queuedCount >= ACCESS_LOG_BATCH_SIZE) {
+      await flushPendingAccessLogs(user);
+    } else {
+      scheduleAccessLogFlush(user);
     }
   } finally {
     inFlightLogIds.delete(flightId);
@@ -423,6 +458,9 @@ export function initAccessLogging() {
   window.addEventListener("db-ping-ok", () => {
     void flushPendingAccessLogs();
   });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") scheduleAccessLogFlush(state.currentUser, { immediate: true });
+  });
   // Восстановление вкладки из bfcache — отдельное обращение.
   window.addEventListener("pageshow", (ev) => {
     if (!ev.persisted) return;
@@ -437,3 +475,4 @@ export function initAccessLogging() {
     });
   });
 }
+
