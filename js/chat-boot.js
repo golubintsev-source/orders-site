@@ -15,7 +15,7 @@
   /** Должно совпадать с MESSAGES_FAST_LOAD_DAYS в messages.js. */
   const FAST_LOAD_DAYS = 3;
   /** Должно совпадать с CHAT_LIST_FAST_PREVIEW_LIMIT в messages.js. */
-  const FAST_PREVIEW_LIMIT = 200;
+  const FAST_PREVIEW_LIMIT = 100;
   /** Больше — значит выборка обрезана и messages.js должен долистать сам. */
   const UNREAD_PROBE_LIMIT = 1001;
 
@@ -263,3 +263,4 @@
     paintSnapshot(session.uid);
   }
 })();
+
