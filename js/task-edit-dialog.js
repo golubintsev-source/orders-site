@@ -10,7 +10,7 @@ import {
 import { createTaskAttachmentComposer } from "./task-attachments.js";
 import { buildOrderEditUrl } from "./app-routes.js";
 import { buildOrderNumberText, loadTaskOrderField, saveTaskOrderField } from "./task-order-field-editor.js";
-import { displayNameByEmail } from "./user-names.js";
+import { displayNameByEmail, displayNameGenitiveByEmail } from "./user-names.js";
 
 let opening = false;
 
@@ -30,8 +30,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
     if (!task) throw new Error("Задача удалена или недоступна.");
 
     const isAuthor = isUserAuthorOfTask(task);
-    // If the author is also an executor, the author mode takes priority.
-    const isExecutor = !isAuthor && isUserExecutorOfTask(task);
+    const isExecutor = isUserExecutorOfTask(task);
     const canEdit = isAuthor || isExecutor;
     const title = isAuthor ? "Редактировать задачу" : isExecutor ? "Ответ на задачу" : "Просмотр задачи";
 
@@ -57,9 +56,9 @@ export async function openTaskEditDialog(taskId, onSaved) {
       <div class="task-create-dialog-field"><span class="task-create-dialog-label">Исполнители</span>
         <div id="taskEditExecutors" class="messages-create-group-users order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>
         <p class="order-tasks-executors-hint" data-field="hint"></p></div>
-      <label class="task-create-dialog-field"><span class="task-create-dialog-label">Ответ</span>
+      <label class="task-create-dialog-field"><span class="task-create-dialog-label" data-field="reply-label">Ответ</span>
         <textarea class="task-create-dialog-text" data-field="reply" rows="1" aria-label="Ответ исполнителя"></textarea></label>
-      <label class="task-highlight-toggle"><input type="checkbox" data-field="completed" /> Выполнено</label>
+      <label class="task-highlight-toggle"><input type="checkbox" data-field="completed" /> Задача выполнена</label>
       <p class="task-create-dialog-error" role="alert" data-field="error" hidden></p>
       <div class="task-create-dialog-actions">
         <button type="submit" class="btn-primary task-create-dialog-submit">Сохранить</button>
@@ -69,6 +68,12 @@ export async function openTaskEditDialog(taskId, onSaved) {
     const field = (name) => dialog.querySelector(`[data-field="${name}"]`);
     const authorName = displayNameByEmail(task.author_login);
     field("task-label").textContent = authorName ? `Задача от ${authorName}` : "Задача";
+    const executorNames = visibleTaskExecutorEmails(task.executor_emails)
+      .map(displayNameGenitiveByEmail)
+      .filter(Boolean);
+    field("reply-label").textContent = executorNames.length
+      ? `Ответ от ${executorNames.join(", ")}`
+      : "Ответ";
     const executors = dialog.querySelector("#taskEditExecutors");
     const form = dialog.querySelector("form");
     form.addEventListener("submit", (event) => event.preventDefault());
@@ -231,7 +236,8 @@ export async function openTaskEditDialog(taskId, onSaved) {
         patch.highlight_order_field = Boolean(task.source_order_field && field("highlight").checked);
         const completed = field("completed").checked;
         if (completed !== [true, 1, "1"].includes(task.is_completed)) patch.is_completed = completed;
-      } else if (isExecutor) {
+      }
+      if (isExecutor) {
         const reply = field("reply").value;
         if (reply !== String(task.executor_reply ?? "")) patch.executor_reply = reply;
       }

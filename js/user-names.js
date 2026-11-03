@@ -31,6 +31,16 @@ const NAME_AVATAR_LOGOS = {
   Дима: "img/avatars/avatar-dima.png",
 };
 
+const DISPLAY_NAMES_GENITIVE = {
+  Лена: "Лены",
+  Вова: "Вовы",
+  Андрей: "Андрея",
+  Кристина: "Кристины",
+  Алексей: "Алексея",
+  Дима: "Димы",
+  Маша: "Маши",
+};
+
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
@@ -48,6 +58,12 @@ export function displayNameByEmail(email) {
   const local = localPart(key);
   if (local && EMAIL_DISPLAY_NAMES[local]) return EMAIL_DISPLAY_NAMES[local];
   return local;
+}
+
+/** Имя исполнителя после предлога «от»: Дима → Димы, Андрей → Андрея. */
+export function displayNameGenitiveByEmail(email) {
+  const name = displayNameByEmail(email);
+  return DISPLAY_NAMES_GENITIVE[name] || name;
 }
 
 /** URL логотипа участника по email или отображаемому имени; иначе null. */

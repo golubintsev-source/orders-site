@@ -88,7 +88,7 @@ const document = {
   createTextNode: text => ({ textContent: text }),
   createElement(tag) {
     if (tag !== 'dialog') return node();
-    fields = Object.fromEntries(['reply','completed','highlight','hint','error','delete','task-label','order-field-block','order-field-label','order-field-value','order-field-hint'].map(key => [key, node()]));
+    fields = Object.fromEntries(['reply','reply-label','completed','highlight','hint','error','delete','task-label','order-field-block','order-field-label','order-field-value','order-field-hint'].map(key => [key, node()]));
     form = node(); editText = node(); executors = node(); submit = node(); cancel = node(); titleEl = node();
     form.querySelectorAll = () => [...Object.values(fields), editText, submit, cancel];
     const dialog = node(); dialog.setAttribute = () => {};
@@ -121,6 +121,7 @@ const editorContext = vm.createContext({
   createTaskAttachmentComposer: () => ({ init() {}, dispose() {}, hasAttachments: () => false }),
   buildOrderEditUrl: id => `/new?edit_order_id=${id}`, buildOrderNumberText: id => String(id).padStart(4, '0'),
   displayNameByEmail: email => email === 'author@example.com' ? 'Автор' : email,
+  displayNameGenitiveByEmail: email => email === 'worker@example.com' ? 'Исполнителя' : email,
   loadTaskOrderField: async () => ({ field: 'client', label: 'Клиент', value: 'Старый клиент', inputType: 'text', editable: true }),
   saveTaskOrderField: async (orderId, field, value, initial) => { savedOrderField = { orderId, field, value, initial }; return true; },
   supabaseClient: { from: () => {
@@ -149,7 +150,9 @@ assert.match(modal.innerHTML, /Редактировать задачу/);
 assert.match(modal.innerHTML, /Выделить в таблице/);
 assert.match(modal.innerHTML, /task-order-field-attention/);
 assert.match(modal.innerHTML, /\(по этому полю вопрос\)/);
+assert.match(modal.innerHTML, /Задача выполнена/);
 assert.equal(fields['task-label'].textContent, 'Задача от Автор');
+assert.equal(fields['reply-label'].textContent, 'Ответ от Исполнителя');
 assert.equal(editText.rows, 1);
 assert.ok(editorSizedFields.includes(fields.reply));
 editText.value = 'Исправленная задача';
@@ -199,10 +202,18 @@ assert.match(modal.innerHTML, /Просмотр задачи/);
 modal.close();
 
 role = 'both';
-await editorContext.openTaskEditDialog(50);
-assert.equal(editText.readOnly, false, 'author mode takes priority when author is also executor');
-assert.equal(fields.reply.readOnly, true);
-modal.close();
+await editorContext.openTaskEditDialog(50, row => { savedRow = row; });
+assert.equal(editText.readOnly, false, 'author-executor can edit the task text');
+assert.equal(fields.reply.readOnly, false, 'author-executor can edit the reply');
+assert.equal(fields.completed.disabled, false, 'author-executor keeps author completion rights');
+assert.equal(fields.delete.hidden, false, 'author-executor keeps author deletion rights');
+editText.value = 'Объединённая правка';
+fields.reply.value = 'Ответ автора-исполнителя';
+await form.emit('submit');
+assert.equal(patchSent.body, 'Объединённая правка');
+assert.equal(patchSent.executor_reply, 'Ответ автора-исполнителя');
+assert.equal(savedRow.body, 'Объединённая правка');
+assert.equal(savedRow.executor_reply, 'Ответ автора-исполнителя');
 
 role = 'executor'; conflict = true;
 await editorContext.openTaskEditDialog(50);
@@ -221,7 +232,7 @@ assert.equal(modal.open, true, 'cancelled/failed deletion keeps editor open');
 deleteResult = true;
 await fields.delete.emit('click');
 assert.equal(modal, null, 'successful soft deletion closes editor');
-console.log('shared edit dialog: author, executor and viewer permissions, author precedence, conflict handling and soft deletion passed');
+console.log('shared edit dialog: author, executor, combined and viewer permissions, conflict handling and soft deletion passed');
 
 let queue = [{ localId: 'local', tempTaskId: -1, executor_reply: '' }], synced;
 const offlineContext = vm.createContext({
