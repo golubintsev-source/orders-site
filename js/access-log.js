@@ -389,6 +389,11 @@ export async function logSiteAccess(opts = {}) {
 
     if (opts.force === true || queuedCount >= ACCESS_LOG_BATCH_SIZE) {
       await flushPendingAccessLogs(user);
+      // Запись могла попасть в очередь уже после того, как параллельный flush
+      // забрал свой snapshot. Не оставляем её без запланированной отправки.
+      if (readJsonStorage(PENDING_LOGS_KEY, []).length) {
+        scheduleAccessLogFlush(user, { immediate: true });
+      }
     } else {
       scheduleAccessLogFlush(user);
     }
