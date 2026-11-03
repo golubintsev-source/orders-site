@@ -230,6 +230,7 @@ const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 assert.match(css, /\.task-create-dialog-order-field\[hidden\]\s*\{\s*display:\s*none;/);
 assert.match(html, /Выделить в таблице/);
+assert.match(html, /id="taskCreateDialogCancelBtn" class="task-create-dialog-cancel">Закрыть<\/button>/);
 assert.match(html, /task-order-field-attention/);
 assert.match(html, /<em class="task-order-field-question">\(по этому полю вопрос\)<\/em>/);
 const messagesSection = html.match(/<section id="section-messages"[^]*?<\/section>/)?.[0];

@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v126: скрывать неактивный вариант поля заказа в окне задачи.
-const STATIC_CACHE = "orders-site-static-v126";
+// v127: единая кнопка «Закрыть» в окнах создания и редактирования задачи.
+const STATIC_CACHE = "orders-site-static-v127";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

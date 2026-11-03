@@ -64,7 +64,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
       <p class="task-create-dialog-error" role="alert" data-field="error" hidden></p>
       <div class="task-create-dialog-actions">
         <button type="submit" class="btn-primary task-create-dialog-submit">Сохранить</button>
-        <button type="button" class="task-create-dialog-cancel">${canEdit ? "Отменить" : "Закрыть"}</button>
+        <button type="button" class="task-create-dialog-cancel">Закрыть</button>
       </div></form>`;
     document.body.append(dialog);
     const field = (name) => dialog.querySelector(`[data-field="${name}"]`);

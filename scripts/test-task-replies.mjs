@@ -151,6 +151,7 @@ assert.match(modal.innerHTML, /Выделить в таблице/);
 assert.match(modal.innerHTML, /task-order-field-attention/);
 assert.match(modal.innerHTML, /\(по этому полю вопрос\)/);
 assert.match(modal.innerHTML, /Задача выполнена/);
+assert.match(modal.innerHTML, /class="task-create-dialog-cancel">Закрыть<\/button>/);
 assert.equal(fields['task-label'].textContent, 'Задача от Автора');
 assert.equal(fields['reply-label'].textContent, 'Ответ от Исполнителя');
 assert.equal(editText.rows, 1);
