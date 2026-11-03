@@ -46,6 +46,7 @@ import {
 import { applyOrdersTableMobileFit } from "./ordersTableMobileFit.js";
 import { orderSearchMatchesValues } from "./order-search-utils.js";
 import { shouldPauseNewOrderSaveForPhoto } from "./order-photo-reminder-utils.js";
+import { getOrderPhotoCooldownMinutes } from "./settings.js";
 import {
   canMutateOrders,
   canDeleteOrders,
@@ -3189,6 +3190,7 @@ export function resetFormMode() {
   clearOrderFormNewOrderIdempotencyKey();
   newOrderPhotoReminderAcknowledged = false;
   setOrderFormSaveButtonsBusy(false);
+  restorePhotoCooldown();
 
   if (formTitle) {
     formTitle.textContent = "Новая заявка";
@@ -3508,6 +3510,46 @@ function commitOrderFormToOfflineStorage(orderData, editingOffline) {
 /** Флаг и UI-блокировка кнопок «Сохранить», чтобы не создавать дубликаты при повторных нажатиях. */
 let orderFormSaveInFlight = false;
 let newOrderPhotoReminderAcknowledged = false;
+let photoCooldownUntil = 0;
+let photoCooldownTimer = null;
+const PHOTO_COOLDOWN_KEY = "orders-site-photo-cooldown-until";
+function readPhotoCooldown() {
+  try { return Number(localStorage.getItem(PHOTO_COOLDOWN_KEY)) || 0; } catch { return photoCooldownUntil; }
+}
+function writePhotoCooldown(until) {
+  photoCooldownUntil = until;
+  try { if (until) localStorage.setItem(PHOTO_COOLDOWN_KEY, String(until)); else localStorage.removeItem(PHOTO_COOLDOWN_KEY); } catch { /* storage unavailable */ }
+}
+function updatePhotoCooldownUI() {
+  const remaining = Math.max(0, Math.ceil((photoCooldownUntil - Date.now()) / 1000));
+  const hasPhoto = hasPendingPhotoAttachment();
+  const active = !state.editingOrderId && !hasPhoto && remaining > 0;
+  const clock = document.getElementById("orderPhotoCooldownClock");
+  const warning = document.getElementById("orderPhotoStrictWarning");
+  const reminder = document.getElementById("orderPhotoReminder");
+  if (clock) clock.textContent = `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
+  if (warning) warning.hidden = !active;
+  if (active && reminder) reminder.hidden = true;
+  for (const btn of [submitBtn, submitBtnTop]) if (btn) btn.disabled = orderFormSaveInFlight || active;
+  if (!active && photoCooldownTimer) { clearInterval(photoCooldownTimer); photoCooldownTimer = null; }
+  if (hasPhoto && photoCooldownUntil) writePhotoCooldown(0);
+}
+function startPhotoCooldown() {
+  writePhotoCooldown(Date.now() + getOrderPhotoCooldownMinutes() * 60000);
+  if (photoCooldownTimer) clearInterval(photoCooldownTimer);
+  photoCooldownTimer = setInterval(updatePhotoCooldownUI, 1000);
+  updatePhotoCooldownUI();
+  document.getElementById("orderPhotoStrictWarning")?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function restorePhotoCooldown() {
+  photoCooldownUntil = readPhotoCooldown();
+  if (photoCooldownUntil > Date.now()) {
+    newOrderPhotoReminderAcknowledged = true;
+    if (!photoCooldownTimer) photoCooldownTimer = setInterval(updatePhotoCooldownUI, 1000);
+  }
+  updatePhotoCooldownUI();
+}
+
 
 function showNewOrderPhotoReminder() {
   const reminder = document.getElementById("orderPhotoReminder");
@@ -3580,7 +3622,7 @@ function setOrderFormSaveButtonsBusy(busy) {
   orderFormSaveInFlight = Boolean(busy);
   for (const btn of [submitBtn, submitBtnTop]) {
     if (!btn) continue;
-    btn.disabled = orderFormSaveInFlight;
+    btn.disabled = orderFormSaveInFlight || (!state.editingOrderId && !hasPendingPhotoAttachment() && photoCooldownUntil > Date.now());
     if (orderFormSaveInFlight) {
       btn.setAttribute("aria-busy", "true");
     } else {
@@ -3760,6 +3802,16 @@ export async function submitOrderForm(event) {
   }
 
   const hasPendingPhoto = hasPendingPhotoAttachment();
+  if (!state.editingOrderId && !hasPendingPhoto && photoCooldownUntil > Date.now()) {
+    updatePhotoCooldownUI();
+    setMessage("Сохранение временно заблокировано. Дождитесь окончания таймера или прикрепите фото.", "#b91c1c");
+    return;
+  }
+  if (!state.editingOrderId && !hasPendingPhoto && newOrderPhotoReminderAcknowledged && !photoCooldownUntil) {
+    startPhotoCooldown();
+    setMessage("Повторная попытка сохранения станет доступна после завершения таймера.", "#b91c1c");
+    return;
+  }
   if (
     shouldPauseNewOrderSaveForPhoto({
       editingOrderId: state.editingOrderId,
@@ -3770,7 +3822,7 @@ export async function submitOrderForm(event) {
     newOrderPhotoReminderAcknowledged = true;
     showNewOrderPhotoReminder();
     setMessage(
-      "Заказ пока не сохранён: прикрепите фото или нажмите «Сохранить заказ» ещё раз.",
+      "Заказ пока не сохранён: прикрепите фото. Повторная попытка без фото приведёт к временной блокировке.",
       "#9a5a00",
     );
     return;
