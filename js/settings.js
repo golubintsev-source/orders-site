@@ -5,6 +5,18 @@ import { tryParseRublesInteger, formatAmount } from "./format.js";
 import { readSnapshot, persistSettingsSnapshotFromRows } from "./offline-cache.js";
 
 const KEY_INSTALLER_RATE = "installer_rate_per_m2";
+const KEY_PHOTO_DELAY = "order_photo_cooldown_minutes";
+export function getOrderPhotoCooldownMinutes() { return Number.isInteger(state.orderPhotoCooldownMinutes) ? state.orderPhotoCooldownMinutes : 3; }
+export async function saveOrderPhotoCooldownMinutes(value) {
+ if (!isAdmin()) return false;
+ const minutes = Number(value);
+ if (!Number.isInteger(minutes) || minutes < 1 || minutes > 120) return false;
+ const { error } = await supabaseClient.from("app_settings").upsert({key:KEY_PHOTO_DELAY,value:String(minutes)},{onConflict:"key"});
+ if (error) return false;
+ state.orderPhotoCooldownMinutes = minutes;
+ return true;
+}
+
 const KEY_DRIVER_NAME = "driver_name";
 const KEY_EDITORS = "editors";
 const KEY_OTHER_WORKERS = "other_workers";
@@ -339,6 +351,10 @@ function syncRouteSheetDriverInput(driverName) {
 /** Применить строки app_settings к state и полям формы. */
 function applySettingsRowsToStateAndDom(effectiveRows) {
   const byKey = Object.fromEntries((effectiveRows || []).map((r) => [r.key, r.value]));
+ const delay = Number(byKey[KEY_PHOTO_DELAY]);
+ state.orderPhotoCooldownMinutes = Number.isInteger(delay) && delay >= 1 && delay <= 120 ? delay : 3;
+ const input = document.getElementById("settingsPhotoCooldownMinutes");
+ if (input) input.value = String(state.orderPhotoCooldownMinutes);
 
   const rateVal = byKey[KEY_INSTALLER_RATE];
   const rateNum = rateVal != null && rateVal !== "" ? parseFloat(rateVal) : null;
@@ -414,6 +430,19 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
 
 /** Загрузить настройки из БД и обновить state и поля на странице. */
 export async function loadSettings() {
+ const btn = document.getElementById("settingsPhotoCooldownSave");
+ if (btn && !btn.dataset.bound) {
+  btn.dataset.bound = "1";
+  btn.addEventListener("click", async () => {
+   btn.disabled = true;
+   const ok = await saveOrderPhotoCooldownMinutes(document.getElementById("settingsPhotoCooldownMinutes")?.value);
+   btn.disabled = false;
+   const status = document.getElementById("settingsPhotoCooldownStatus");
+   if (status) status.textContent = ok ? "Сохранено" : "Ошибка сохранения (1–120 минут)";
+  });
+ }
+ const card = document.getElementById("settingsPhotoCooldownCard");
+ if (card) card.hidden = !isAdmin();
   if (isOfflineWorkModeEnabled() && typeof navigator !== "undefined" && navigator.onLine === false) {
     const snap = readSnapshot();
     applySettingsRowsToStateAndDom(snap?.settingsRows || []);
@@ -422,6 +451,7 @@ export async function loadSettings() {
 
   const keys = [
     KEY_INSTALLER_RATE,
+    KEY_PHOTO_DELAY,
     KEY_DRIVER_NAME,
     KEY_EDITORS,
     KEY_OTHER_WORKERS,
