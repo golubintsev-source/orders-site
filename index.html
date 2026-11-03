@@ -602,6 +602,7 @@
               </div>
             </div>
 
+            <div id="orderPhotoStrictWarning" class="order-photo-strict-warning" hidden role="alert"><strong>⚠️ ГРУБОЕ НАРУШЕНИЕ ТРЕБОВАНИЙ РУКОВОДСТВА!</strong><p>Прикрепление фотографий к заказам — обязательное требование руководства. Повторная попытка сохранить заказ без фото нарушает установленные правила и является грубым нарушением трудовой дисциплины.</p><p>Сохранение временно заблокировано. Прикрепите фотографию для немедленной разблокировки или дождитесь окончания таймера.</p><div id="orderPhotoCooldownClock" class="order-photo-cooldown-clock">03:00</div><p>Повторная попытка сохранения станет доступна после окончания обратного отсчёта.</p></div>
             <div id="orderPhotoReminder" class="order-photo-reminder" hidden role="status" aria-live="polite">
               <div class="order-photo-reminder-illustration" aria-hidden="true">
                 <span class="order-photo-reminder-camera">📸</span>
@@ -610,7 +611,7 @@
               <div class="order-photo-reminder-copy">
                 <strong>Подарите заказу фотографию — пусть он не идёт по жизни без документов! 😊</strong>
                 <span>Фото помогает общему учёту не играть в «угадайку», уменьшает количество ошибок и помогает нам лучше обслуживать клиентов. Пожалуйста, прикрепите хотя бы одно фото — будущие мы скажут вам огромное спасибо.</span>
-                <span class="order-photo-reminder-fallback">Если фото сейчас совершенно негде добыть, нажмите «Сохранить заказ» ещё раз — мы великодушно пропустим заказ без него.</span>
+                <span class="order-photo-reminder-fallback">Если фотографии нет, повторная попытка сохранения запустит временную блокировку.</span>
               </div>
             </div>
           </div>
@@ -2255,6 +2256,7 @@
     </section>
 
     <section id="section-settings" class="content-section">
+<div id="settingsPhotoCooldownCard" class="card" hidden><h3>Сохранение заказа без фотографии</h3><label for="settingsPhotoCooldownMinutes">Задержка повторного сохранения (минуты)</label><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><input id="settingsPhotoCooldownMinutes" type="number" min="1" max="120" step="1" value="3" style="width:100px"><button type="button" class="btn-primary" id="settingsPhotoCooldownSave">Сохранить</button></div><p id="settingsPhotoCooldownStatus" role="status"></p></div>
       <div id="pushNotificationsCard" class="card push-notifications-card" hidden>
         <h3 class="push-notifications-title">Уведомления</h3>
         <p id="pushNotificationsHint" class="push-notifications-hint"></p>
