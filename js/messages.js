@@ -71,10 +71,10 @@ const CHAT_VISIBILITY_HEARTBEAT_MS = 25_000;
  * Без собственного таймаута такой запрос навсегда блокирует обновление диалога.
  */
 const MESSAGE_REQUEST_TIMEOUT_MS = 12_000;
-/** Сколько недавних DM тянуть для превью списка чатов (не всю историю). */
-const CHAT_LIST_DM_PREVIEW_LIMIT = 800;
+/** Последние DM для превью списка; более старая переписка загружается в диалоге постранично. */
+const CHAT_LIST_DM_PREVIEW_LIMIT = 100;
 /** Первый проход списка чатов: только недавние DM за MESSAGES_FAST_LOAD_DAYS. */
-const CHAT_LIST_FAST_PREVIEW_LIMIT = 200;
+const CHAT_LIST_FAST_PREVIEW_LIMIT = 100;
 /** Снимок отрисованного списка: js/chat-boot.js показывает его до загрузки модулей. */
 const CHAT_LIST_SNAPSHOT_KEY = "orders_site_chat_list_snapshot_v1";
 /** Больше одного экрана не нужно — не раздуваем localStorage. */
@@ -84,8 +84,6 @@ const CHAT_LIST_SNAPSHOT_MAX_ITEMS = 20;
  * мобильных устройствах; остальная история догружается после первого кадра.
  */
 const DIALOG_INITIAL_MESSAGE_LIMIT = 80;
-/** Верхняя граница фоновой догрузки истории для обратной совместимости. */
-const DIALOG_HISTORY_MESSAGE_LIMIT = 400;
 /** Первая отрисовка списка/диалога: только сообщения за последние N дней. */
 const MESSAGES_FAST_LOAD_DAYS = 3;
 /** Префикс peer id для группового чата. */
@@ -118,6 +116,10 @@ let chatListRefreshTimer = null;
 let unreadBadgeTimer = null;
 let pollNewMessagesInFlight = false;
 let pollNewMessagesRunId = 0;
+let dialogHistoryLoading = false;
+let dialogHistoryExhausted = true;
+let dialogHistoryOldestId = null;
+let dialogHistoryPeerId = null;
 let chatListLoadPromise = null;
 let unreadRefreshPromise = null;
 let deliveryAckPromise = null;
@@ -1805,7 +1807,7 @@ async function fetchRecentUserMessagesForChatList({ sinceIso = null, limit = CHA
   }
 
   if (error) return { rows: [], error };
-  // buildChatListEntries ожидает хронологию; reverse дешёвый на ≤800 строк.
+  // buildChatListEntries ожидает хронологию; reverse дешёвый на ≤100 строк.
   return { rows: (data || []).slice().reverse(), error: null };
 }
 
@@ -1847,7 +1849,7 @@ async function fetchUnreadIncomingDmMeta() {
 }
 
 /** Сообщения одного peer (1:1), без выгрузки всей переписки пользователя. */
-async function fetchPeerMessages(peerId, { sinceIso = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT, signal } = {}) {
+async function fetchPeerMessages(peerId, { sinceIso = null, beforeId = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT, signal } = {}) {
   const uid = getCurrentUserId();
   if (!uid || !peerId) return { rows: [], error: null };
 
@@ -1857,9 +1859,10 @@ async function fetchPeerMessages(peerId, { sinceIso = null, limit = DIALOG_INITI
       .from("user_messages")
       .select(cols)
       .or(filter)
-      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(limit);
     if (sinceIso) q = q.gte("created_at", sinceIso);
+    if (beforeId != null) q = q.lt("id", beforeId);
     return signal ? q.abortSignal(signal) : q;
   });
   if (error) return { rows, error };
@@ -1903,7 +1906,7 @@ async function fetchMyGroupChats() {
   return { chats, error: null };
 }
 
-async function fetchGroupMessages(chatId, { sinceIso = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT, signal } = {}) {
+async function fetchGroupMessages(chatId, { sinceIso = null, beforeId = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT, signal } = {}) {
   if (!chatId || groupChatsSupported === false) return { rows: [], error: null };
 
   const selectBase = "id, chat_id, sender_id, sender_email, body, created_at";
@@ -1914,9 +1917,10 @@ async function fetchGroupMessages(chatId, { sinceIso = null, limit = DIALOG_INIT
       .from("group_messages")
       .select(sel)
       .eq("chat_id", chatId)
-      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(limit);
     if (sinceIso) q = q.gte("created_at", sinceIso);
+    if (beforeId != null) q = q.lt("id", beforeId);
     return signal ? q.abortSignal(signal) : q;
   }
 
@@ -2578,16 +2582,6 @@ let loadMessagesGeneration = 0;
 /** Временная фиксация ленты внизу во время первоначальной раскладки открытого чата. */
 let messagesFeedBottomPin = null;
 
-function whenIdle(timeout = 1500) {
-  return new Promise((resolve) => {
-    if (typeof requestIdleCallback === "function") {
-      requestIdleCallback(() => resolve(), { timeout });
-      return;
-    }
-    setTimeout(resolve, 1);
-  });
-}
-
 /**
  * Пакет запросов от js/chat-boot.js: они ушли в сеть ещё во время разбора HTML,
  * до supabase-js и графа main.js. Забираем один раз, дальше — обычные запросы.
@@ -3035,6 +3029,11 @@ export async function openMessagesDialog(peerId) {
   if (!peerId) return;
   loadChatListGeneration += 1;
   invalidateMessagesPoll();
+  cancelReadScope("dialog-history");
+  dialogHistoryLoading = false;
+  dialogHistoryExhausted = false;
+  dialogHistoryOldestId = null;
+  dialogHistoryPeerId = String(peerId);
   // Повторное открытие того же peer тоже начинает с чистой ленты: сохранённый
   // iOS DOM не должен оставаться на экране, если новый запрос завис или упал.
   prepareMessagesDialogForPeer(peerId, { forceReset: true });
@@ -3096,11 +3095,11 @@ export async function loadMessages({ forceBottom = false } = {}) {
     msg.classList.remove("messages-page-message--error");
   }
 
-  async function fetchDialogRows({ since = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT } = {}) {
+  async function fetchDialogRows({ since = null, beforeId = null, limit = DIALOG_INITIAL_MESSAGE_LIMIT } = {}) {
     if (isGroupChat(peerAtStart)) {
-      return fetchGroupMessages(parseGroupId(peerAtStart), { sinceIso: since, limit, signal: scope.signal });
+      return fetchGroupMessages(parseGroupId(peerAtStart), { sinceIso: since, beforeId, limit, signal: scope.signal });
     }
-    return fetchPeerMessages(peerAtStart, { sinceIso: since, limit, signal: scope.signal });
+    return fetchPeerMessages(peerAtStart, { sinceIso: since, beforeId, limit, signal: scope.signal });
   }
 
   async function renderDialogRows(rows, { markRead = true } = {}) {
@@ -3179,30 +3178,57 @@ export async function loadMessages({ forceBottom = false } = {}) {
   }
 
   await renderDialogRows(fast.rows, { markRead: true });
+  dialogHistoryPeerId = String(peerAtStart);
+  dialogHistoryOldestId = fast.rows[0]?.id ?? null;
+  dialogHistoryExhausted = fast.rows.length < DIALOG_INITIAL_MESSAGE_LIMIT;
+  return true;
+}
 
-  // Фаза 2: догрузка более старых сообщений — только prepend, без полной перерисовки ленты.
-  void (async () => {
-    await whenIdle(2000);
-    if (!isCurrentDialogLoad(gen, peerAtStart)) return;
-    let fuller;
-    try {
-      if (!scope.current()) return;
-      fuller = await fetchDialogRows({ since: null, limit: DIALOG_HISTORY_MESSAGE_LIMIT });
-    } catch {
+async function loadOlderMessagesPage() {
+  if (
+    dialogHistoryLoading ||
+    dialogHistoryExhausted ||
+    dialogHistoryOldestId == null ||
+    messagesView !== "dialog" ||
+    !activePeerId ||
+    String(dialogHistoryPeerId || "") !== String(activePeerId)
+  ) return;
+
+  dialogHistoryLoading = true;
+  const peerAtStart = activePeerId;
+  const beforeId = dialogHistoryOldestId;
+  const scope = beginReadScope("dialog-history");
+  try {
+    const page = isGroupChat(peerAtStart)
+      ? await fetchGroupMessages(parseGroupId(peerAtStart), {
+        beforeId,
+        limit: DIALOG_INITIAL_MESSAGE_LIMIT,
+        signal: scope.signal,
+      })
+      : await fetchPeerMessages(peerAtStart, {
+        beforeId,
+        limit: DIALOG_INITIAL_MESSAGE_LIMIT,
+        signal: scope.signal,
+      });
+    if (
+      !scope.current() ||
+      page.error ||
+      messagesView !== "dialog" ||
+      String(activePeerId || "") !== String(peerAtStart)
+    ) return;
+
+    if (!page.rows.length) {
+      dialogHistoryExhausted = true;
       return;
     }
-    if (!scope.current() || !isCurrentDialogLoad(gen, peerAtStart)) return;
-    if (fuller.error) return;
-    rememberFeedMessages(fuller.rows);
-
-    const fastIds = new Set(fast.rows.map((row) => String(row.id)));
-    const hasOlderNotShown = fuller.rows.some(
-      (row) => !isMessageDeleted(row) && !fastIds.has(String(row.id)),
-    );
-    if (!hasOlderNotShown) return;
-    prependOlderMessagesToFeed(fuller.rows);
-  })();
-  return true;
+    prependOlderMessagesToFeed(page.rows);
+    dialogHistoryOldestId = page.rows[0]?.id ?? dialogHistoryOldestId;
+    dialogHistoryExhausted = page.rows.length < DIALOG_INITIAL_MESSAGE_LIMIT;
+  } catch (error) {
+    if (error?.name !== "AbortError") console.warn("Не удалось догрузить историю сообщений:", error);
+  } finally {
+    dialogHistoryLoading = false;
+  }
 }
 
 export function onMessagesSectionEnter(opts = {}) {
@@ -6283,6 +6309,9 @@ export function initMessagesSection() {
     feed.addEventListener("pointercancel", onFeedPointerUp);
     feed.addEventListener("contextmenu", onFeedContextMenu);
     feed.addEventListener("selectstart", onFeedSelectStart);
+    feed.addEventListener("scroll", () => {
+      if (feed.scrollTop <= 160) void loadOlderMessagesPage();
+    }, { passive: true });
   }
 
   const actionMenu = document.getElementById("messagesActionMenu");
@@ -6535,4 +6564,5 @@ export function initMessagesSection() {
 }
 
 export { ORDER_TOKEN_RE, GROUP_PEER_PREFIX };
+
 
