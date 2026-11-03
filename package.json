@@ -12,6 +12,7 @@
     "test:all-salaries": "node scripts/test-all-salaries.mjs",
     "test:messages-sync": "node scripts/test-messages-sync.mjs",
     "test:access-log-batching": "node scripts/test-access-log-batching.mjs",
+    "test:database-io-migration": "node scripts/test-database-io-migration.mjs",
     "test:nav-status": "node scripts/test-nav-status.mjs",
     "test:messages-body": "node scripts/test-messages-body.mjs",
     "test:messages-ios-composer": "node scripts/test-messages-ios-composer.mjs",
