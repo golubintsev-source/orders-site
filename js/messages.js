@@ -6531,6 +6531,7 @@ export function initMessagesSection() {
   void loadUsersDirectory();
   startUnreadPolling();
   initMessagesLiveSync();
+  window.dispatchEvent(new CustomEvent("messages-status-ready"));
 }
 
 export { ORDER_TOKEN_RE, GROUP_PEER_PREFIX };
