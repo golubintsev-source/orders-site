@@ -2756,7 +2756,7 @@
       </div>
       <label class="task-highlight-toggle"><input id="taskCreateDialogHighlight" type="checkbox" /> Выделить</label>
       <div class="task-create-dialog-field">
-      <span class="task-create-dialog-label">Текст</span>
+      <span class="task-create-dialog-label">Текст задачи</span>
       <div id="taskCreateComposerHost">
         <textarea id="taskCreateDialogText" class="task-create-dialog-text" rows="3" autocomplete="off" aria-label="Текст задачи"></textarea>
       </div>
@@ -2764,6 +2764,11 @@
       <input id="taskCreate-taskPhotoCameraInput" type="file" accept="image/*" capture="environment" hidden />
       <div id="taskCreate-taskPendingAttachments" class="task-pending-attachments" aria-label="Вложения задачи" hidden></div>
     </div>
+      <label id="taskCreateDialogOrderFieldBlock" class="task-create-dialog-field" hidden>
+        <span id="taskCreateDialogOrderFieldLabel" class="task-create-dialog-label"></span>
+        <input id="taskCreateDialogOrderFieldValue" class="task-create-dialog-order-field" />
+        <span id="taskCreateDialogOrderFieldHint" class="order-tasks-executors-hint" hidden></span>
+      </label>
       <div class="task-create-dialog-field">
         <span class="task-create-dialog-label">Исполнители</span>
         <div id="taskCreateDialogExecutors" class="messages-create-group-users order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>

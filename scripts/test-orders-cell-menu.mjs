@@ -12,6 +12,7 @@ class Element {
     this.classList = { add: v => values.add(v), remove: v => values.delete(v), contains: v => values.has(v) };
   }
   append(...nodes) { for (const node of nodes) { node.parent = this; this.children.push(node); } }
+  replaceChildren(...nodes) { this.children = []; this.textContent = ''; this.append(...nodes); this.textContent = nodes.map(node => node.textContent || '').join(''); }
   querySelectorAll() { return []; }
   get parentElement() { return this.parent || null; }
   appendChild(node) { node.remove(); this.append(node); }
@@ -124,6 +125,7 @@ console.log('orders cell hold: direct create/edit, movement cancellation, pinch 
 
 // Exercise the real standard dialog and its insertTask payload with isolated data services.
 const ids = ['taskCreateComposerHost', 'taskCreateDialogHighlight', 'taskCreateDialogTitle', 'taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
+  'taskCreateDialogOrderFieldBlock', 'taskCreateDialogOrderFieldLabel', 'taskCreateDialogOrderFieldValue', 'taskCreateDialogOrderFieldHint',
   'taskCreateDialogError', 'taskCreateDialogSubmitBtn', 'taskCreateDialogCancelBtn', 'taskCreateDialogCloseBtn'];
 const fields = new Map(ids.map(id => [id, new Element()]));
 const dialogBody = new Element('body');
@@ -140,9 +142,17 @@ let taskPayload;
 let draftAttachments = [];
 let failPrepare = false;
 let failInsert = false;
+const orderFieldSaves = [];
 const photoAttachment = { type: 'photo', storagePath: 'test/photo.jpg' };
 const dialogContext = vm.createContext({
-  document: { body: dialogBody, getElementById: id => fields.get(id) }, console: { error() {} }, validOrderField, renderTaskComposerHtml,
+  document: { body: dialogBody, getElementById: id => fields.get(id), createElement: tag => new Element(tag), createTextNode: value => Object.assign(new Element('#text'), { textContent: String(value) }) },
+  console: { error() {} }, validOrderField, renderTaskComposerHtml,
+  buildOrderEditUrl: id => `/new?edit_order_id=${id}`, buildOrderNumberText: id => String(id).padStart(4, '0'),
+  loadTaskOrderField: async () => ({ field: 'client', label: 'Клиент', value: 'Иван', inputType: 'text', editable: true }),
+  saveTaskOrderField: async (orderId, field, value, initial) => {
+    orderFieldSaves.push({ orderId, field, value, initial });
+    return String(value) !== String(initial);
+  },
   createTaskAttachmentComposer: options => {
     let busy = false;
     assert.equal(options.getElement('orderTaskTextInput'), fields.get('taskCreateDialogText'));
@@ -197,11 +207,14 @@ assert.equal(draftAttachments.length, 1, 'failed upload preserves attachment dra
 assert.equal(fields.get('taskCreateDialog').open, true);
 assert.equal(fields.get('taskCreateDialogSubmitBtn').disabled, false);
 failPrepare = false; failInsert = true;
+fields.get('taskCreateDialogOrderFieldValue').value = 'Пётр';
 await dialogContext.submitTaskCreateDialog();
 assert.equal(draftAttachments.length, 1, 'failed database save preserves attachment draft');
 assert.equal(fields.get('taskCreateDialog').open, true);
 failInsert = false;
 await dialogContext.submitTaskCreateDialog();
+assert.equal(orderFieldSaves.at(-2).initial, 'Иван');
+assert.equal(orderFieldSaves.at(-1).initial, 'Пётр', 'retry treats an already saved order field as current');
 assert.equal(taskPayload.attachments[0], photoAttachment);
 assert.equal(taskPayload.orderId, 99);
 assert.equal(draftAttachments.length, 0, 'successful save resets attachment draft');

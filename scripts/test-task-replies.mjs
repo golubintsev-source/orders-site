@@ -77,23 +77,25 @@ let modal = null, patchSent, updateFilters, role = 'author', conflict = false, s
 const editorSizedFields = [];
 let deleteResult = false, deletedId;
 const node = () => ({ value: '', checked: false, disabled: false, readOnly: false, dataset: {}, hidden: false, listeners: {},
-  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }, focus() {}, append() {}, appendChild() {},
+  textContent: '', addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }, focus() {}, append() {}, appendChild() {},
+  replaceChildren(...children) { this.children = children; this.textContent = children.map(child => child.textContent || '').join(''); },
   querySelector() { return null; }, querySelectorAll() { return []; },
   async emit(type) { for (const fn of this.listeners[type] || []) await fn({ preventDefault() {} }); } });
-let fields, form, editText, executors, submit, cancel;
+let fields, form, editText, executors, submit, cancel, titleEl;
 const document = {
   getElementById: id => id === 'taskEditDialog' ? modal : null,
   body: { append(dialog) { modal = dialog; dialog.isConnected = true; } },
   createTextNode: text => ({ textContent: text }),
-  createElement() {
-    fields = Object.fromEntries(['reply','completed','highlight','hint','error','delete'].map(key => [key, node()]));
-    form = node(); editText = node(); executors = node(); submit = node(); cancel = node();
+  createElement(tag) {
+    if (tag !== 'dialog') return node();
+    fields = Object.fromEntries(['reply','completed','highlight','hint','error','delete','order-field-block','order-field-label','order-field-value','order-field-hint'].map(key => [key, node()]));
+    form = node(); editText = node(); executors = node(); submit = node(); cancel = node(); titleEl = node();
     form.querySelectorAll = () => [...Object.values(fields), editText, submit, cancel];
     const dialog = node(); dialog.setAttribute = () => {};
     dialog.querySelector = selector => {
       const field = selector.match(/^\[data-field="([^"]+)"\]$/)?.[1];
       if (field) return fields[field];
-      return ({ form, '#taskEditExecutors': executors, '[type="submit"]': submit, '.task-create-dialog-cancel': cancel, '#taskEdit-orderTaskTextInput': editText })[selector] || null;
+      return ({ form, '#taskEditExecutors': executors, '[type="submit"]': submit, '.task-create-dialog-cancel': cancel, '#taskEdit-orderTaskTextInput': editText, '#taskEditTitle': titleEl })[selector] || null;
     };
     dialog.showModal = () => { dialog.open = true; };
     dialog.remove = () => { modal = null; dialog.isConnected = false; };
@@ -103,8 +105,9 @@ const document = {
 };
 const taskRow = {
   id: 50, author_login: 'author@example.com', body: 'Задача', executor_emails: ['worker@example.com'],
-  executor_reply: 'Старый ответ', is_completed: false, source_order_field: 'client', highlight_order_field: false, attachments: [],
+  executor_reply: 'Старый ответ', is_completed: false, order_id: 42, source_order_field: 'client', highlight_order_field: false, attachments: [],
 };
+let savedOrderField;
 const editorContext = vm.createContext({
   deleteModule: { softDeleteAuthorTask: async id => { deletedId = id; return deleteResult; } },
   document, console, isOfflineDataMode: () => false,
@@ -112,9 +115,13 @@ const editorContext = vm.createContext({
   isUserAuthorOfTask: () => role === 'author' || role === 'both',
   isUserExecutorOfTask: () => role === 'executor' || role === 'both',
   getCurrentUserEmail: () => role === 'author' || role === 'both' ? 'author@example.com' : 'worker@example.com',
-  normalizeExecutorEmails: () => [], isTaskExecutorVisible: () => true, visibleTaskExecutorEmails: () => [],
+  getSelectedExecutorEmailsFrom: () => ['new@example.com'],
+  normalizeExecutorEmails: value => value || [], isTaskExecutorVisible: () => true, visibleTaskExecutorEmails: value => value || [],
   ensureTaskExecutorsInList: async list => { list.dataset.loaded = '1'; }, renderTaskComposerHtml: () => '',
   createTaskAttachmentComposer: () => ({ init() {}, dispose() {}, hasAttachments: () => false }),
+  buildOrderEditUrl: id => `/new?edit_order_id=${id}`, buildOrderNumberText: id => String(id).padStart(4, '0'),
+  loadTaskOrderField: async () => ({ field: 'client', label: 'Клиент', value: 'Старый клиент', inputType: 'text', editable: true }),
+  saveTaskOrderField: async (orderId, field, value, initial) => { savedOrderField = { orderId, field, value, initial }; return true; },
   supabaseClient: { from: () => {
     let updating = false; updateFilters = [];
     return {
@@ -136,6 +143,7 @@ assert.equal(fields.completed.disabled, false);
 assert.equal(fields.highlight.disabled, false);
 assert.equal(fields.delete.hidden, false);
 assert.equal(submit.hidden, false);
+assert.equal(fields['order-field-value'].disabled, false);
 assert.match(modal.innerHTML, /Редактировать задачу/);
 assert.equal(editText.rows, 1);
 assert.ok(editorSizedFields.includes(fields.reply));
@@ -143,13 +151,17 @@ editText.value = 'Исправленная задача';
 fields.completed.checked = true;
 fields.highlight.checked = true;
 fields.reply.value = 'Cannot change';
+fields['order-field-value'].value = 'Новый клиент';
 await form.emit('submit');
 assert.equal(patchSent.body, 'Исправленная задача');
 assert.equal(patchSent.is_completed, true);
 assert.equal(patchSent.highlight_order_field, true);
 assert.equal(Object.hasOwn(patchSent, 'executor_reply'), false);
-assert.equal(Object.hasOwn(patchSent, 'executor_emails'), false);
+assert.deepEqual(patchSent.executor_emails, ['new@example.com']);
 assert.equal(savedRow.is_completed, true);
+assert.match(titleEl.textContent, /Заказ № 0042/);
+assert.equal(fields['order-field-label'].textContent, 'Клиент');
+assert.deepEqual(savedOrderField, { orderId: 42, field: 'client', value: 'Новый клиент', initial: 'Старый клиент' });
 
 role = 'executor';
 await editorContext.openTaskEditDialog(50, row => { savedRow = row; });
@@ -159,6 +171,7 @@ assert.equal(fields.completed.disabled, true);
 assert.equal(fields.highlight.disabled, true);
 assert.equal(fields.delete.hidden, true);
 assert.equal(submit.hidden, false);
+assert.equal(fields['order-field-value'].disabled, false, 'executor can edit the source order field');
 assert.match(modal.innerHTML, /Ответ на задачу/);
 fields.reply.value = 'Новый ответ';
 await form.emit('submit');
@@ -176,6 +189,7 @@ assert.equal(fields.completed.disabled, true);
 assert.equal(fields.highlight.disabled, true);
 assert.equal(fields.delete.hidden, true);
 assert.equal(submit.hidden, true);
+assert.equal(fields['order-field-value'].disabled, true, 'viewer cannot edit the source order field');
 assert.match(modal.innerHTML, /Просмотр задачи/);
 modal.close();
 

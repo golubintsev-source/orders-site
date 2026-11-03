@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v119: список исполнителей задач без Вовы и Маши, сетка в три столбца.
-const STATIC_CACHE = "orders-site-static-v120";
+// v121: редактирование исходного поля заказа и исполнителей из окна задачи.
+const STATIC_CACHE = "orders-site-static-v121";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -48,6 +48,7 @@ const PRECACHE_URLS = [
   "/js/orders-cell-menu.js",
   "/js/order-cell-highlights.js",
   "/js/task-composer-markup.js",
+  "/js/task-order-field-editor.js",
   "/js/user-names.js",
   "/js/statistics-matrix.js",
   "/js/user-place.js",

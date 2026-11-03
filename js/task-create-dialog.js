@@ -7,6 +7,8 @@ import {
   insertTask,
   resetTaskExecutorsList,
 } from "./task-form-shared.js";
+import { buildOrderEditUrl } from "./app-routes.js";
+import { buildOrderNumberText, loadTaskOrderField, saveTaskOrderField } from "./task-order-field-editor.js";
 
 let dialogInited = false;
 let attachmentComposer = null;
@@ -16,11 +18,13 @@ let pendingSourceMessage = null;
 /** @type {number | null} */
 let pendingSourceOrderId = null;
 let pendingSourceOrderField = null;
+let pendingOrderFieldState = null;
 
 function clearPendingSourceMessage() {
   pendingSourceMessage = null;
   pendingSourceOrderId = null;
   pendingSourceOrderField = null;
+  pendingOrderFieldState = null;
 }
 
 function getDialogEls() {
@@ -35,6 +39,10 @@ function getDialogEls() {
     submitBtn: document.getElementById("taskCreateDialogSubmitBtn"),
     cancelBtn: document.getElementById("taskCreateDialogCancelBtn"),
     closeBtn: document.getElementById("taskCreateDialogCloseBtn"),
+    orderFieldBlock: document.getElementById("taskCreateDialogOrderFieldBlock"),
+    orderFieldLabel: document.getElementById("taskCreateDialogOrderFieldLabel"),
+    orderFieldValue: document.getElementById("taskCreateDialogOrderFieldValue"),
+    orderFieldHint: document.getElementById("taskCreateDialogOrderFieldHint"),
   };
 }
 
@@ -52,23 +60,27 @@ function setDialogError(message) {
 }
 
 function syncCreateDisabled() {
-  const { dialog, submitBtn, cancelBtn, closeBtn, textInput, highlightInput } = getDialogEls();
+  const { dialog, submitBtn, cancelBtn, closeBtn, textInput, highlightInput, orderFieldValue } = getDialogEls();
   const busy = saving || attachmentComposer?.isBusy();
   for (const el of [submitBtn, cancelBtn, closeBtn, textInput]) {
     if (el) el.disabled = Boolean(busy);
   }
   if (highlightInput) highlightInput.disabled = Boolean(busy) || !pendingSourceOrderField;
+  if (orderFieldValue) orderFieldValue.disabled = Boolean(busy) || !pendingOrderFieldState?.editable;
   dialog?.querySelectorAll('#taskCreateDialogExecutors input').forEach(el => { el.disabled = Boolean(busy); });
 }
 
 function resetDialogForm() {
   if (saving || attachmentComposer?.isBusy()) return;
   attachmentComposer?.clear();
-  const { textInput, executorsList, titleEl } = getDialogEls();
+  const { textInput, executorsList, titleEl, orderFieldBlock, orderFieldValue, orderFieldHint } = getDialogEls();
   if (titleEl) titleEl.textContent = "Новая задача";
   const highlight = document.getElementById("taskCreateDialogHighlight");
   if (highlight) highlight.checked = false;
   if (textInput) textInput.value = "";
+  if (orderFieldBlock) orderFieldBlock.hidden = true;
+  if (orderFieldValue) { orderFieldValue.value = ""; orderFieldValue.hidden = false; }
+  if (orderFieldHint) orderFieldHint.hidden = true;
   resetTaskExecutorsList(executorsList);
   setDialogError("");
   clearPendingSourceMessage();
@@ -104,6 +116,18 @@ async function submitTaskCreateDialog() {
   syncCreateDisabled();
   try {
     const attachments = attachmentComposer ? await attachmentComposer.prepare() : [];
+    if (pendingOrderFieldState?.editable) {
+      const currentOrderFieldValue = getDialogEls().orderFieldValue?.value;
+      const orderFieldChanged = await saveTaskOrderField(
+        sourceOrderId,
+        pendingSourceOrderField,
+        currentOrderFieldValue,
+        pendingOrderFieldState.value,
+      );
+      // Если создание задачи затем завершится ошибкой, повторная попытка не должна
+      // снова сохранять уже изменённое поле заказа и получать «Нет изменений».
+      if (orderFieldChanged) pendingOrderFieldState.value = String(currentOrderFieldValue ?? "");
+    }
     const result = await insertTask({
       body: text, executorEmails, attachments,
       sourceMessageId: source?.id ?? null,
@@ -157,7 +181,10 @@ export async function openTaskCreateDialog({
   sourceOrderField = null,
 } = {}) {
   initTaskCreateDialog();
-  const { dialog, textInput, executorsList, executorsHint, titleEl } = getDialogEls();
+  const {
+    dialog, textInput, executorsList, executorsHint, titleEl,
+    orderFieldBlock, orderFieldLabel, orderFieldValue, orderFieldHint,
+  } = getDialogEls();
   if (!dialog) return;
 
   pendingSourceMessage =
@@ -177,9 +204,52 @@ export async function openTaskCreateDialog({
   }
   if (titleEl) {
     const orderLabel = String(sourceOrderLabel || pendingSourceOrderId || "").trim();
-    titleEl.textContent = pendingSourceOrderId != null
-      ? `Создание задачи к заказу № ${orderLabel}`
-      : "Новая задача";
+    if (pendingSourceOrderId != null) {
+      const link = document.createElement("a");
+      link.className = "task-dialog-order-link";
+      link.href = buildOrderEditUrl(pendingSourceOrderId);
+      link.dataset.orderId = String(pendingSourceOrderId);
+      link.textContent = orderLabel || buildOrderNumberText(pendingSourceOrderId);
+      link.title = `Редактировать заказ ${link.textContent}`;
+      titleEl.replaceChildren(document.createTextNode("Создание задачи к заказу № "), link);
+      link.addEventListener("click", (event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        if (saving || attachmentComposer?.isBusy()) return;
+        closeTaskCreateDialog();
+        void import("./orders.js").then((module) => module.editOrder(pendingSourceOrderId));
+      }, { once: true });
+    } else {
+      titleEl.textContent = "Новая задача";
+    }
+  }
+
+  pendingOrderFieldState = null;
+  if (orderFieldBlock) orderFieldBlock.hidden = true;
+  if (pendingSourceOrderId != null && pendingSourceOrderField && orderFieldBlock && orderFieldLabel && orderFieldValue) {
+    try {
+      pendingOrderFieldState = await loadTaskOrderField(pendingSourceOrderId, pendingSourceOrderField);
+      if (pendingOrderFieldState) {
+        orderFieldBlock.hidden = false;
+        orderFieldLabel.textContent = pendingOrderFieldState.label;
+        orderFieldValue.hidden = false;
+        orderFieldValue.type = pendingOrderFieldState.inputType;
+        if (pendingOrderFieldState.inputType === "number") orderFieldValue.step = "any";
+        orderFieldValue.value = pendingOrderFieldState.value;
+        if (orderFieldHint) {
+          orderFieldHint.textContent = pendingOrderFieldState.editable ? "" : "Расчётное поле нельзя изменить напрямую.";
+          orderFieldHint.hidden = pendingOrderFieldState.editable;
+        }
+      }
+    } catch (loadError) {
+      if (orderFieldBlock) orderFieldBlock.hidden = false;
+      if (orderFieldLabel) orderFieldLabel.textContent = "Поле заказа";
+      if (orderFieldValue) orderFieldValue.hidden = true;
+      if (orderFieldHint) {
+        orderFieldHint.textContent = loadError?.message || "Не удалось загрузить поле заказа.";
+        orderFieldHint.hidden = false;
+      }
+    }
   }
 
   await ensureTaskExecutorsInList(executorsList, executorsHint);
@@ -191,6 +261,7 @@ export async function openTaskCreateDialog({
   if (typeof dialog.showModal === "function") {
     dialog.showModal();
   }
+  syncCreateDisabled();
 }
 
 export function initTaskCreateDialog() {

@@ -4,9 +4,12 @@ import { supabaseClient } from "./config.js";
 import { isOfflineDataMode } from "./offline-cache.js";
 import {
   isUserAuthorOfTask, isUserExecutorOfTask, getCurrentUserEmail, ensureTaskExecutorsInList,
+  getSelectedExecutorEmailsFrom,
   visibleTaskExecutorEmails,
 } from "./task-form-shared.js";
 import { createTaskAttachmentComposer } from "./task-attachments.js";
+import { buildOrderEditUrl } from "./app-routes.js";
+import { buildOrderNumberText, loadTaskOrderField, saveTaskOrderField } from "./task-order-field-editor.js";
 
 let opening = false;
 
@@ -39,12 +42,17 @@ export async function openTaskEditDialog(taskId, onSaved) {
       <div class="task-create-dialog-header"><h3 id="taskEditTitle" class="task-create-dialog-title">${title}</h3>
         <button type="button" class="task-edit-delete" data-field="delete">Удалить задачу</button></div>
       <label class="task-highlight-toggle"><input type="checkbox" data-field="highlight" /> Выделить</label>
-      <div class="task-create-dialog-field"><label for="taskEdit-orderTaskTextInput" class="task-create-dialog-label">Текст</label>
+      <div class="task-create-dialog-field"><label for="taskEdit-orderTaskTextInput" class="task-create-dialog-label">Текст задачи</label>
         <div data-field="composer">${renderTaskComposerHtml()}</div>
         <input id="taskEdit-taskPhotoGalleryInput" type="file" accept="image/*" multiple hidden />
         <input id="taskEdit-taskPhotoCameraInput" type="file" accept="image/*" capture="environment" hidden />
         <div id="taskEdit-taskPendingAttachments" class="task-pending-attachments" aria-label="Вложения задачи" hidden></div>
       </div>
+      <label class="task-create-dialog-field" data-field="order-field-block" hidden>
+        <span class="task-create-dialog-label" data-field="order-field-label"></span>
+        <input class="task-create-dialog-order-field" data-field="order-field-value" />
+        <span class="order-tasks-executors-hint" data-field="order-field-hint" hidden></span>
+      </label>
       <div class="task-create-dialog-field"><span class="task-create-dialog-label">Исполнители</span>
         <div id="taskEditExecutors" class="messages-create-group-users order-tasks-executors-list" role="group" aria-label="Исполнители задачи"></div>
         <p class="order-tasks-executors-hint" data-field="hint"></p></div>
@@ -67,6 +75,25 @@ export async function openTaskEditDialog(taskId, onSaved) {
     if (!text) throw new Error("Поле текста задачи недоступно. Обновите страницу.");
     let saving = false;
     let attachmentBusy = false;
+    let orderFieldState = null;
+
+    if (task.order_id != null) {
+      const titleEl = dialog.querySelector("#taskEditTitle");
+      const orderLink = document.createElement("a");
+      orderLink.className = "task-dialog-order-link";
+      orderLink.href = buildOrderEditUrl(task.order_id);
+      orderLink.dataset.orderId = String(task.order_id);
+      orderLink.textContent = buildOrderNumberText(task.order_id);
+      orderLink.title = `Редактировать заказ ${orderLink.textContent}`;
+      titleEl.replaceChildren(document.createTextNode(`${title} · Заказ № `), orderLink);
+      orderLink.addEventListener("click", (event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        if (saving || attachmentBusy) return;
+        dialog.close();
+        void import("./orders.js").then((module) => module.editOrder(task.order_id));
+      });
+    }
 
     const lockReadOnlyControls = () => {
       text.readOnly = !isAuthor;
@@ -75,7 +102,13 @@ export async function openTaskEditDialog(taskId, onSaved) {
       field("completed").disabled = saving || attachmentBusy || !isAuthor;
       field("delete").hidden = !isAuthor;
       field("delete").disabled = saving || attachmentBusy || !isAuthor;
-      executors.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.disabled = true; });
+      executors.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+        input.disabled = saving || attachmentBusy || !isAuthor;
+      });
+      const orderFieldInput = field("order-field-value");
+      if (orderFieldInput) {
+        orderFieldInput.disabled = saving || attachmentBusy || !canEdit || !orderFieldState?.editable;
+      }
       dialog.querySelectorAll(
         '[id^="taskEdit-taskAttach"], #taskEdit-taskPickOrderBtn, [data-remove-photo], [data-remove-order], [data-crop]',
       ).forEach((control) => { control.disabled = true; });
@@ -144,6 +177,29 @@ export async function openTaskEditDialog(taskId, onSaved) {
       }
       input.checked = true;
     }
+    if (task.order_id != null && task.source_order_field) {
+      try {
+        orderFieldState = await loadTaskOrderField(task.order_id, task.source_order_field);
+        if (orderFieldState) {
+          field("order-field-block").hidden = false;
+          field("order-field-label").textContent = orderFieldState.label;
+          const orderFieldInput = field("order-field-value");
+          orderFieldInput.type = orderFieldState.inputType;
+          if (orderFieldState.inputType === "number") orderFieldInput.step = "any";
+          orderFieldInput.value = orderFieldState.value;
+          if (!orderFieldState.editable) {
+            field("order-field-hint").textContent = "Расчётное поле нельзя изменить напрямую.";
+            field("order-field-hint").hidden = false;
+          }
+        }
+      } catch (loadError) {
+        field("order-field-block").hidden = false;
+        field("order-field-label").textContent = "Поле заказа";
+        field("order-field-value").hidden = true;
+        field("order-field-hint").textContent = loadError?.message || "Не удалось загрузить поле заказа.";
+        field("order-field-hint").hidden = false;
+      }
+    }
     if (!dialog.isConnected) return;
     lockReadOnlyControls();
     if (isAuthor) text.focus();
@@ -164,16 +220,17 @@ export async function openTaskEditDialog(taskId, onSaved) {
           return;
         }
         patch.body = body;
+        const selectedExecutors = visibleTaskExecutorEmails(getSelectedExecutorEmailsFrom(executors));
+        const previousExecutors = visibleTaskExecutorEmails(task.executor_emails);
+        if (JSON.stringify(selectedExecutors) !== JSON.stringify(previousExecutors)) {
+          patch.executor_emails = selectedExecutors;
+        }
         patch.highlight_order_field = Boolean(task.source_order_field && field("highlight").checked);
         const completed = field("completed").checked;
         if (completed !== [true, 1, "1"].includes(task.is_completed)) patch.is_completed = completed;
       } else if (isExecutor) {
         const reply = field("reply").value;
-        if (reply === String(task.executor_reply ?? "")) {
-          dialog.close();
-          return;
-        }
-        patch.executor_reply = reply;
+        if (reply !== String(task.executor_reply ?? "")) patch.executor_reply = reply;
       }
 
       saving = true;
@@ -181,20 +238,30 @@ export async function openTaskEditDialog(taskId, onSaved) {
       let saved;
       try {
         if (isOfflineDataMode()) throw new Error("Для сохранения подключитесь к интернету.");
-        let update = supabaseClient.from("order_tasks").update(patch)
-          .eq("id", task.id).is("deleted_at", null);
-        if (isAuthor) {
-          update = update.eq("author_login", task.author_login);
-        } else {
-          update = update.eq("executor_reply", String(task.executor_reply ?? ""))
-            .contains("executor_emails", [getCurrentUserEmail()]);
+        if (Object.keys(patch).length) {
+          let update = supabaseClient.from("order_tasks").update(patch)
+            .eq("id", task.id).is("deleted_at", null);
+          if (isAuthor) {
+            update = update.eq("author_login", task.author_login);
+          } else {
+            update = update.eq("executor_reply", String(task.executor_reply ?? ""))
+              .contains("executor_emails", [getCurrentUserEmail()]);
+          }
+          const { data, error: saveError } = await update.select("id").maybeSingle();
+          if (saveError) throw saveError;
+          if (!data) {
+            throw new Error(isExecutor
+              ? "Ответ уже изменён или изменился исполнитель. Обновите задачу перед сохранением."
+              : "Задача удалена или больше недоступна.");
+          }
         }
-        const { data, error: saveError } = await update.select("id").maybeSingle();
-        if (saveError) throw saveError;
-        if (!data) {
-          throw new Error(isExecutor
-            ? "Ответ уже изменён или изменился исполнитель. Обновите задачу перед сохранением."
-            : "Задача удалена или больше недоступна.");
+        if (orderFieldState?.editable) {
+          await saveTaskOrderField(
+            task.order_id,
+            task.source_order_field,
+            field("order-field-value").value,
+            orderFieldState.value,
+          );
         }
         saved = { ...task, ...patch };
       } catch (saveError) {

@@ -4201,6 +4201,9 @@ const VOICE_PATCHABLE_KEYS = [
   "area_m2",
   "mosquito_nets",
   "construction_count",
+  "installer_payment_amount",
+  "installer_payment_by",
+  "reveals_date",
 ];
 
 function findLocalOrderForVoice(orderId) {
@@ -4247,7 +4250,11 @@ function buildOrderDataFromExistingAndPatch(existing, patch) {
       : normalizeVoiceIsoDate(existing.delivery_date);
 
   const installation =
-    patch && "installation" in patch ? Boolean(patch.installation) : Boolean(existing.installation);
+    patch && "installation" in patch
+      ? Boolean(patch.installation)
+      : patch && "installation_date" in patch
+        ? Boolean(normalizeVoiceIsoDate(patch.installation_date))
+        : Boolean(existing.installation);
   const installationDate = installation
     ? patch && "installation_date" in patch
       ? normalizeVoiceIsoDate(patch.installation_date)
@@ -4278,6 +4285,10 @@ function buildOrderDataFromExistingAndPatch(existing, patch) {
     patch && "remaining_to" in patch
       ? normalizeVoiceMoneyTo(patch.remaining_to)
       : normalizeVoiceMoneyTo(existing.remaining_to);
+
+  const revealsDate = patch && "reveals_date" in patch
+    ? normalizeVoiceIsoDate(patch.reveals_date)
+    : normalizeVoiceIsoDate(existing.reveals_date);
 
   return {
     phone,
@@ -4313,11 +4324,15 @@ function buildOrderDataFromExistingAndPatch(existing, patch) {
     delivery_date: deliveryDate,
     installation,
     installation_date: installationDate,
-    reveals: Boolean(existing.reveals),
-    reveals_date: existing.reveals_date ?? null,
+    reveals: patch && "reveals_date" in patch ? Boolean(revealsDate) : Boolean(existing.reveals),
+    reveals_date: revealsDate,
     installer_name: existing.installer_name ?? null,
-    installer_payment_amount: normalizeVoiceInteger(existing.installer_payment_amount),
-    installer_payment_by: existing.installer_payment_by ?? null,
+    installer_payment_amount: patch && "installer_payment_amount" in patch
+      ? normalizeVoiceInteger(patch.installer_payment_amount)
+      : normalizeVoiceInteger(existing.installer_payment_amount),
+    installer_payment_by: patch && "installer_payment_by" in patch
+      ? String(patch.installer_payment_by ?? "").trim() || null
+      : existing.installer_payment_by ?? null,
   };
 }
 
@@ -4332,7 +4347,7 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
     return { ok: false, message: "Недостаточно прав для редактирования заказов" };
   }
 
-  const existing = findLocalOrderForVoice(orderId);
+  const existing = findLocalOrderForVoice(orderId) || await getOrderRowForFullTooltip(orderId);
   if (!existing) {
     return { ok: false, message: `Заказ номер ${orderId} не найден` };
   }
@@ -4412,6 +4427,9 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
   }
   if (orderData.delivery && !orderData.delivery_date) {
     return { ok: false, message: "Укажите дату отправки" };
+  }
+  if (isInstallerRequiredMissing(orderData.installer_payment_by, orderData.installer_name)) {
+    return { ok: false, message: "Укажите монтажника" };
   }
   if (
     orderData.payment_status === "Заказ закрыт" &&
