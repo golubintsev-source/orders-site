@@ -88,7 +88,7 @@ const document = {
   createTextNode: text => ({ textContent: text }),
   createElement(tag) {
     if (tag !== 'dialog') return node();
-    fields = Object.fromEntries(['reply','completed','highlight','hint','error','delete','order-field-block','order-field-label','order-field-value','order-field-hint'].map(key => [key, node()]));
+    fields = Object.fromEntries(['reply','completed','highlight','hint','error','delete','task-label','order-field-block','order-field-label','order-field-value','order-field-hint'].map(key => [key, node()]));
     form = node(); editText = node(); executors = node(); submit = node(); cancel = node(); titleEl = node();
     form.querySelectorAll = () => [...Object.values(fields), editText, submit, cancel];
     const dialog = node(); dialog.setAttribute = () => {};
@@ -120,6 +120,7 @@ const editorContext = vm.createContext({
   ensureTaskExecutorsInList: async list => { list.dataset.loaded = '1'; }, renderTaskComposerHtml: () => '',
   createTaskAttachmentComposer: () => ({ init() {}, dispose() {}, hasAttachments: () => false }),
   buildOrderEditUrl: id => `/new?edit_order_id=${id}`, buildOrderNumberText: id => String(id).padStart(4, '0'),
+  displayNameByEmail: email => email === 'author@example.com' ? 'Автор' : email,
   loadTaskOrderField: async () => ({ field: 'client', label: 'Клиент', value: 'Старый клиент', inputType: 'text', editable: true }),
   saveTaskOrderField: async (orderId, field, value, initial) => { savedOrderField = { orderId, field, value, initial }; return true; },
   supabaseClient: { from: () => {
@@ -145,6 +146,10 @@ assert.equal(fields.delete.hidden, false);
 assert.equal(submit.hidden, false);
 assert.equal(fields['order-field-value'].disabled, false);
 assert.match(modal.innerHTML, /Редактировать задачу/);
+assert.match(modal.innerHTML, /Выделить в таблице/);
+assert.match(modal.innerHTML, /task-order-field-attention/);
+assert.match(modal.innerHTML, /\(по этому полю вопрос\)/);
+assert.equal(fields['task-label'].textContent, 'Задача от Автор');
 assert.equal(editText.rows, 1);
 assert.ok(editorSizedFields.includes(fields.reply));
 editText.value = 'Исправленная задача';

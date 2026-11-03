@@ -9086,6 +9086,18 @@ th {
   color: #6b7280;
 }
 
+.task-order-field-attention {
+  padding: 12px;
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  background: #fff1c7;
+}
+
+.task-order-field-question {
+  font-weight: 400;
+  color: #92400e;
+}
+
 .task-create-dialog-error {
   margin: 0 0 10px;
   font-size: 13px;

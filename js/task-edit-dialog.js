@@ -10,6 +10,7 @@ import {
 import { createTaskAttachmentComposer } from "./task-attachments.js";
 import { buildOrderEditUrl } from "./app-routes.js";
 import { buildOrderNumberText, loadTaskOrderField, saveTaskOrderField } from "./task-order-field-editor.js";
+import { displayNameByEmail } from "./user-names.js";
 
 let opening = false;
 
@@ -41,15 +42,15 @@ export async function openTaskEditDialog(taskId, onSaved) {
     dialog.innerHTML = `<form class="task-create-dialog-panel">
       <div class="task-create-dialog-header"><h3 id="taskEditTitle" class="task-create-dialog-title">${title}</h3>
         <button type="button" class="task-edit-delete" data-field="delete">Удалить задачу</button></div>
-      <label class="task-highlight-toggle"><input type="checkbox" data-field="highlight" /> Выделить</label>
-      <div class="task-create-dialog-field"><label for="taskEdit-orderTaskTextInput" class="task-create-dialog-label">Текст задачи</label>
+      <label class="task-highlight-toggle"><input type="checkbox" data-field="highlight" /> Выделить в таблице</label>
+      <div class="task-create-dialog-field"><label for="taskEdit-orderTaskTextInput" class="task-create-dialog-label" data-field="task-label">Задача</label>
         <div data-field="composer">${renderTaskComposerHtml()}</div>
         <input id="taskEdit-taskPhotoGalleryInput" type="file" accept="image/*" multiple hidden />
         <input id="taskEdit-taskPhotoCameraInput" type="file" accept="image/*" capture="environment" hidden />
         <div id="taskEdit-taskPendingAttachments" class="task-pending-attachments" aria-label="Вложения задачи" hidden></div>
       </div>
-      <label class="task-create-dialog-field" data-field="order-field-block" hidden>
-        <span class="task-create-dialog-label" data-field="order-field-label"></span>
+      <label class="task-create-dialog-field task-order-field-attention" data-field="order-field-block" hidden>
+        <span class="task-create-dialog-label"><span data-field="order-field-label"></span> <em class="task-order-field-question">(по этому полю вопрос)</em></span>
         <input class="task-create-dialog-order-field" data-field="order-field-value" />
         <span class="order-tasks-executors-hint" data-field="order-field-hint" hidden></span>
       </label>
@@ -66,6 +67,8 @@ export async function openTaskEditDialog(taskId, onSaved) {
       </div></form>`;
     document.body.append(dialog);
     const field = (name) => dialog.querySelector(`[data-field="${name}"]`);
+    const authorName = displayNameByEmail(task.author_login);
+    field("task-label").textContent = authorName ? `Задача от ${authorName}` : "Задача";
     const executors = dialog.querySelector("#taskEditExecutors");
     const form = dialog.querySelector("form");
     form.addEventListener("submit", (event) => event.preventDefault());

@@ -2754,9 +2754,9 @@
           </svg>
         </button>
       </div>
-      <label class="task-highlight-toggle"><input id="taskCreateDialogHighlight" type="checkbox" /> Выделить</label>
+      <label class="task-highlight-toggle"><input id="taskCreateDialogHighlight" type="checkbox" /> Выделить в таблице</label>
       <div class="task-create-dialog-field">
-      <span class="task-create-dialog-label">Текст задачи</span>
+      <span id="taskCreateDialogTaskLabel" class="task-create-dialog-label">Задача</span>
       <div id="taskCreateComposerHost">
         <textarea id="taskCreateDialogText" class="task-create-dialog-text" rows="3" autocomplete="off" aria-label="Текст задачи"></textarea>
       </div>
@@ -2764,8 +2764,8 @@
       <input id="taskCreate-taskPhotoCameraInput" type="file" accept="image/*" capture="environment" hidden />
       <div id="taskCreate-taskPendingAttachments" class="task-pending-attachments" aria-label="Вложения задачи" hidden></div>
     </div>
-      <label id="taskCreateDialogOrderFieldBlock" class="task-create-dialog-field" hidden>
-        <span id="taskCreateDialogOrderFieldLabel" class="task-create-dialog-label"></span>
+      <label id="taskCreateDialogOrderFieldBlock" class="task-create-dialog-field task-order-field-attention" hidden>
+        <span class="task-create-dialog-label"><span id="taskCreateDialogOrderFieldLabel"></span> <em class="task-order-field-question">(по этому полю вопрос)</em></span>
         <input id="taskCreateDialogOrderFieldValue" class="task-create-dialog-order-field" />
         <span id="taskCreateDialogOrderFieldHint" class="order-tasks-executors-hint" hidden></span>
       </label>

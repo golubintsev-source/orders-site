@@ -124,7 +124,7 @@ assert.match(dialogSource, /orderId: sourceOrderId/);
 console.log('orders cell hold: direct create/edit, movement cancellation, pinch guard, cell link, errors and synthetic-click suppression passed');
 
 // Exercise the real standard dialog and its insertTask payload with isolated data services.
-const ids = ['taskCreateComposerHost', 'taskCreateDialogHighlight', 'taskCreateDialogTitle', 'taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
+const ids = ['taskCreateComposerHost', 'taskCreateDialogHighlight', 'taskCreateDialogTitle', 'taskCreateDialogTaskLabel', 'taskCreateDialog', 'taskCreateDialogText', 'taskCreateDialogExecutors', 'taskCreateDialogExecutorsHint',
   'taskCreateDialogOrderFieldBlock', 'taskCreateDialogOrderFieldLabel', 'taskCreateDialogOrderFieldValue', 'taskCreateDialogOrderFieldHint',
   'taskCreateDialogError', 'taskCreateDialogSubmitBtn', 'taskCreateDialogCancelBtn', 'taskCreateDialogCloseBtn'];
 const fields = new Map(ids.map(id => [id, new Element()]));
@@ -148,6 +148,7 @@ const dialogContext = vm.createContext({
   document: { body: dialogBody, getElementById: id => fields.get(id), createElement: tag => new Element(tag), createTextNode: value => Object.assign(new Element('#text'), { textContent: String(value) }) },
   console: { error() {} }, validOrderField, renderTaskComposerHtml,
   buildOrderEditUrl: id => `/new?edit_order_id=${id}`, buildOrderNumberText: id => String(id).padStart(4, '0'),
+  getCurrentUserEmail: () => 'golubintsev26@gmail.com', displayNameByEmail: () => 'Дима',
   loadTaskOrderField: async () => ({ field: 'client', label: 'Клиент', value: 'Иван', inputType: 'text', editable: true }),
   saveTaskOrderField: async (orderId, field, value, initial) => {
     orderFieldSaves.push({ orderId, field, value, initial });
@@ -173,6 +174,7 @@ vm.runInContext(dialogSource.replace(/^import[^]*?from "[^\"]+";\n/gm, '')
 await dialogContext.openTaskCreateDialog(opened[1]);
 assert.equal(fields.get('taskCreateDialogText').value, cell.dataset.fulltext);
 assert.equal(fields.get('taskCreateDialogTitle').textContent, 'Создание задачи к заказу № 0099_О');
+assert.equal(fields.get('taskCreateDialogTaskLabel').textContent, 'Задача от Дима');
 assert.equal(fields.get('taskCreateDialog').open, true);
 assert.equal(fields.get('taskCreateDialogHighlight').checked, true);
 fields.get('taskCreateDialogText').value = 'Проверить заказ';
@@ -222,6 +224,9 @@ assert.equal(fields.get('taskCreateDialog').open, false);
 console.log('create dialog attachments: dedicated controls, photo-only save, upload error preserves draft and retry resets after success');
 
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+assert.match(html, /Выделить в таблице/);
+assert.match(html, /task-order-field-attention/);
+assert.match(html, /<em class="task-order-field-question">\(по этому полю вопрос\)<\/em>/);
 const messagesSection = html.match(/<section id="section-messages"[^]*?<\/section>/)?.[0];
 assert.ok(messagesSection);
 assert.ok(!messagesSection.includes('id="taskCreateDialog"'), 'new HTML must not place the shared dialog inside Chats');

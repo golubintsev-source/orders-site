@@ -3,12 +3,14 @@ import { renderTaskComposerHtml } from "./task-composer-markup.js";
 import { validOrderField } from "./order-cell-highlights.js";
 import {
   ensureTaskExecutorsInList,
+  getCurrentUserEmail,
   getSelectedExecutorEmailsFrom,
   insertTask,
   resetTaskExecutorsList,
 } from "./task-form-shared.js";
 import { buildOrderEditUrl } from "./app-routes.js";
 import { buildOrderNumberText, loadTaskOrderField, saveTaskOrderField } from "./task-order-field-editor.js";
+import { displayNameByEmail } from "./user-names.js";
 
 let dialogInited = false;
 let attachmentComposer = null;
@@ -32,6 +34,7 @@ function getDialogEls() {
     dialog: document.getElementById("taskCreateDialog"),
     textInput: document.getElementById("taskCreateDialogText"),
     titleEl: document.getElementById("taskCreateDialogTitle"),
+    taskLabel: document.getElementById("taskCreateDialogTaskLabel"),
     highlightInput: document.getElementById("taskCreateDialogHighlight"),
     executorsList: document.getElementById("taskCreateDialogExecutors"),
     executorsHint: document.getElementById("taskCreateDialogExecutorsHint"),
@@ -182,10 +185,14 @@ export async function openTaskCreateDialog({
 } = {}) {
   initTaskCreateDialog();
   const {
-    dialog, textInput, executorsList, executorsHint, titleEl,
+    dialog, textInput, executorsList, executorsHint, titleEl, taskLabel,
     orderFieldBlock, orderFieldLabel, orderFieldValue, orderFieldHint,
   } = getDialogEls();
   if (!dialog) return;
+  if (taskLabel) {
+    const authorName = displayNameByEmail(getCurrentUserEmail());
+    taskLabel.textContent = authorName ? `Задача от ${authorName}` : "Задача";
+  }
 
   pendingSourceMessage =
     sourceMessageId != null && sourceMessageKind
