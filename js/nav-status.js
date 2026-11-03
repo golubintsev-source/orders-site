@@ -11,8 +11,10 @@ let taskPending = null;
 let messagePending = null;
 let taskRefreshTimer = null;
 let messageRefreshTimer = null;
-let navStatusChannel = null;
-let navStatusRealtimeUid = null;
+let taskStatusChannel = null;
+let taskStatusRealtimeUid = null;
+let messageStatusChannel = null;
+let messageStatusRealtimeUid = null;
 
 const NAV_STATUS_FALLBACK_MS = 10 * 60_000;
 const NAV_STATUS_EVENT_DEBOUNCE_MS = 300;
@@ -92,28 +94,51 @@ function scheduleMessageStatusRefresh() {
   }, NAV_STATUS_EVENT_DEBOUNCE_MS);
 }
 
-function stopNavStatusRealtime() {
-  if (!navStatusChannel) return;
-  const channel = navStatusChannel;
-  navStatusChannel = null;
-  navStatusRealtimeUid = null;
+function stopTaskStatusRealtime() {
+  if (!taskStatusChannel) return;
+  const channel = taskStatusChannel;
+  taskStatusChannel = null;
+  taskStatusRealtimeUid = null;
   void supabaseClient.removeChannel(channel);
 }
 
-function startNavStatusRealtime() {
+function stopMessageStatusRealtime() {
+  if (!messageStatusChannel) return;
+  const channel = messageStatusChannel;
+  messageStatusChannel = null;
+  messageStatusRealtimeUid = null;
+  void supabaseClient.removeChannel(channel);
+}
+
+function startTaskStatusRealtime() {
   const uid = state.currentUser?.id;
   if (!uid) return;
-  if (navStatusChannel && navStatusRealtimeUid === String(uid)) return;
-  if (navStatusChannel) stopNavStatusRealtime();
+  if (taskStatusChannel && taskStatusRealtimeUid === String(uid)) return;
+  if (taskStatusChannel) stopTaskStatusRealtime();
 
-  navStatusRealtimeUid = String(uid);
-  navStatusChannel = supabaseClient
-    .channel(`nav-status:${uid}`)
+  taskStatusRealtimeUid = String(uid);
+  taskStatusChannel = supabaseClient
+    .channel(`nav-task-status:${uid}`)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "order_tasks" },
       scheduleTaskStatusRefresh,
     )
+    .subscribe();
+}
+
+function startMessageStatusRealtime() {
+  const uid = state.currentUser?.id;
+  if (!uid || window.__messagesStatusReady) {
+    stopMessageStatusRealtime();
+    return;
+  }
+  if (messageStatusChannel && messageStatusRealtimeUid === String(uid)) return;
+  if (messageStatusChannel) stopMessageStatusRealtime();
+
+  messageStatusRealtimeUid = String(uid);
+  messageStatusChannel = supabaseClient
+    .channel(`nav-message-status:${uid}`)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "user_messages", filter: `recipient_id=eq.${uid}` },
@@ -130,6 +155,16 @@ function startNavStatusRealtime() {
       scheduleMessageStatusRefresh,
     )
     .subscribe();
+}
+
+function startNavStatusRealtime() {
+  startTaskStatusRealtime();
+  startMessageStatusRealtime();
+}
+
+function stopNavStatusRealtime() {
+  stopTaskStatusRealtime();
+  stopMessageStatusRealtime();
 }
 
 export function initNavStatus() {
@@ -152,6 +187,7 @@ export function initNavStatus() {
   window.addEventListener("pagehide", (event) => {
     if (!event.persisted) stopNavStatusRealtime();
   });
+  window.addEventListener("messages-status-ready", stopMessageStatusRealtime);
   const onPush = (data) => {
     if (window.__messagesStatusReady) return;
     if (data?.type === "open-chat") {
