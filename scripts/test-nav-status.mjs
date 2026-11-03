@@ -23,6 +23,10 @@ assert(
   "message badge must react to message Realtime events",
 );
 assert(
+  /messages-status-ready/.test(source) && /stopMessageStatusRealtime/.test(source),
+  "lightweight message status channel must stop when full chat sync starts",
+);
+assert(
   /NAV_STATUS_EVENT_DEBOUNCE_MS/.test(source),
   "bursts of Realtime events must be debounced",
 );
