@@ -120,8 +120,7 @@ const editorContext = vm.createContext({
   ensureTaskExecutorsInList: async list => { list.dataset.loaded = '1'; }, renderTaskComposerHtml: () => '',
   createTaskAttachmentComposer: () => ({ init() {}, dispose() {}, hasAttachments: () => false }),
   buildOrderEditUrl: id => `/new?edit_order_id=${id}`, buildOrderNumberText: id => String(id).padStart(4, '0'),
-  displayNameByEmail: email => email === 'author@example.com' ? 'Автор' : email,
-  displayNameGenitiveByEmail: email => email === 'worker@example.com' ? 'Исполнителя' : email,
+  displayNameGenitiveByEmail: email => email === 'author@example.com' ? 'Автора' : email === 'worker@example.com' ? 'Исполнителя' : email,
   loadTaskOrderField: async () => ({ field: 'client', label: 'Клиент', value: 'Старый клиент', inputType: 'text', editable: true }),
   saveTaskOrderField: async (orderId, field, value, initial) => { savedOrderField = { orderId, field, value, initial }; return true; },
   supabaseClient: { from: () => {
@@ -151,7 +150,7 @@ assert.match(modal.innerHTML, /Выделить в таблице/);
 assert.match(modal.innerHTML, /task-order-field-attention/);
 assert.match(modal.innerHTML, /\(по этому полю вопрос\)/);
 assert.match(modal.innerHTML, /Задача выполнена/);
-assert.equal(fields['task-label'].textContent, 'Задача от Автор');
+assert.equal(fields['task-label'].textContent, 'Задача от Автора');
 assert.equal(fields['reply-label'].textContent, 'Ответ от Исполнителя');
 assert.equal(editText.rows, 1);
 assert.ok(editorSizedFields.includes(fields.reply));

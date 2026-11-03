@@ -9067,6 +9067,12 @@ th {
   box-sizing: border-box;
 }
 
+.task-create-dialog-text--autogrow {
+  min-height: 42px;
+  resize: none;
+  overflow-y: hidden;
+}
+
 .task-create-dialog-order-field {
   display: block;
   width: 100%;

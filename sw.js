@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v123: подпись ответа, объединённые права автора-исполнителя и новый текст выполнения.
-const STATIC_CACHE = "orders-site-static-v123";
+// v124: родительный падеж автора и однострочное авторасширяемое поле задачи.
+const STATIC_CACHE = "orders-site-static-v124";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

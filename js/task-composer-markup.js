@@ -3,9 +3,9 @@ export function renderTaskComposerHtml(prefix = "taskEdit-", textInputId = `${pr
     <div class="task-composer-row">
       <textarea
         id="taskEdit-orderTaskTextInput"
-        class="task-create-dialog-text"
+        class="task-create-dialog-text task-create-dialog-text--autogrow"
         data-field="body"
-        rows="4"
+        rows="1"
         placeholder="Текст задачи"
         autocomplete="off"
         aria-label="Текст задачи"

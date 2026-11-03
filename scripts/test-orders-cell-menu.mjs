@@ -148,7 +148,8 @@ const dialogContext = vm.createContext({
   document: { body: dialogBody, getElementById: id => fields.get(id), createElement: tag => new Element(tag), createTextNode: value => Object.assign(new Element('#text'), { textContent: String(value) }) },
   console: { error() {} }, validOrderField, renderTaskComposerHtml,
   buildOrderEditUrl: id => `/new?edit_order_id=${id}`, buildOrderNumberText: id => String(id).padStart(4, '0'),
-  getCurrentUserEmail: () => 'golubintsev26@gmail.com', displayNameByEmail: () => 'Дима',
+  getCurrentUserEmail: () => 'golubintsev26@gmail.com', displayNameGenitiveByEmail: () => 'Димы',
+  bindAutogrowTextarea: () => () => {}, resizeTextarea: () => {},
   loadTaskOrderField: async () => ({ field: 'client', label: 'Клиент', value: 'Иван', inputType: 'text', editable: true }),
   saveTaskOrderField: async (orderId, field, value, initial) => {
     orderFieldSaves.push({ orderId, field, value, initial });
@@ -174,7 +175,7 @@ vm.runInContext(dialogSource.replace(/^import[^]*?from "[^\"]+";\n/gm, '')
 await dialogContext.openTaskCreateDialog(opened[1]);
 assert.equal(fields.get('taskCreateDialogText').value, cell.dataset.fulltext);
 assert.equal(fields.get('taskCreateDialogTitle').textContent, 'Создание задачи к заказу № 0099_О');
-assert.equal(fields.get('taskCreateDialogTaskLabel').textContent, 'Задача от Дима');
+assert.equal(fields.get('taskCreateDialogTaskLabel').textContent, 'Задача от Димы');
 assert.equal(fields.get('taskCreateDialog').open, true);
 assert.equal(fields.get('taskCreateDialogHighlight').checked, true);
 fields.get('taskCreateDialogText').value = 'Проверить заказ';
@@ -200,6 +201,8 @@ console.log('standard task dialog: cell text and order title prefilled, editable
 const markup = renderTaskComposerHtml('taskCreate-', 'taskCreateDialogText');
 assert.ok(!markup.includes('<span>Прикрепить</span>'));
 assert.ok(markup.includes('messages-composer-tool-icon'));
+assert.match(markup, /class="task-create-dialog-text task-create-dialog-text--autogrow"/);
+assert.match(markup, /rows="1"/);
 for (const id of ['taskCreateDialogText', 'taskCreate-taskAttachBtn', 'taskCreate-taskAttachCameraBtn', 'taskCreate-taskAttachGalleryBtn', 'taskCreate-taskPickOrderBtn', 'taskCreate-taskComposerSuggestions']) assert.ok(markup.includes(`id="${id}"`));
 await dialogContext.openTaskCreateDialog(opened[1]);
 fields.get('taskCreateDialogText').value = '';

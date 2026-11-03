@@ -10,7 +10,7 @@ import {
 import { createTaskAttachmentComposer } from "./task-attachments.js";
 import { buildOrderEditUrl } from "./app-routes.js";
 import { buildOrderNumberText, loadTaskOrderField, saveTaskOrderField } from "./task-order-field-editor.js";
-import { displayNameByEmail, displayNameGenitiveByEmail } from "./user-names.js";
+import { displayNameGenitiveByEmail } from "./user-names.js";
 
 let opening = false;
 
@@ -66,7 +66,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
       </div></form>`;
     document.body.append(dialog);
     const field = (name) => dialog.querySelector(`[data-field="${name}"]`);
-    const authorName = displayNameByEmail(task.author_login);
+    const authorName = displayNameGenitiveByEmail(task.author_login);
     field("task-label").textContent = authorName ? `Задача от ${authorName}` : "Задача";
     const executorNames = visibleTaskExecutorEmails(task.executor_emails)
       .map(displayNameGenitiveByEmail)

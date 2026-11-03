@@ -1,5 +1,6 @@
 import { createTaskAttachmentComposer } from "./task-attachments.js";
 import { renderTaskComposerHtml } from "./task-composer-markup.js";
+import { bindAutogrowTextarea, resizeTextarea } from "./autogrow-textarea.js";
 import { validOrderField } from "./order-cell-highlights.js";
 import {
   ensureTaskExecutorsInList,
@@ -10,7 +11,7 @@ import {
 } from "./task-form-shared.js";
 import { buildOrderEditUrl } from "./app-routes.js";
 import { buildOrderNumberText, loadTaskOrderField, saveTaskOrderField } from "./task-order-field-editor.js";
-import { displayNameByEmail } from "./user-names.js";
+import { displayNameGenitiveByEmail } from "./user-names.js";
 
 let dialogInited = false;
 let attachmentComposer = null;
@@ -190,7 +191,7 @@ export async function openTaskCreateDialog({
   } = getDialogEls();
   if (!dialog) return;
   if (taskLabel) {
-    const authorName = displayNameByEmail(getCurrentUserEmail());
+    const authorName = displayNameGenitiveByEmail(getCurrentUserEmail());
     taskLabel.textContent = authorName ? `Задача от ${authorName}` : "Задача";
   }
 
@@ -267,6 +268,11 @@ export async function openTaskCreateDialog({
 
   if (typeof dialog.showModal === "function") {
     dialog.showModal();
+  }
+  if (textInput) {
+    textInput.rows = 1;
+    bindAutogrowTextarea(textInput);
+    resizeTextarea(textInput);
   }
   syncCreateDisabled();
 }
