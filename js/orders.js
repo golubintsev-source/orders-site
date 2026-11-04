@@ -505,7 +505,7 @@ function toComparableNumber(v) {
 
 /**
  * Строки для вставки в calculations (автодельты по суммам/получателям заказа).
- * Без order_id — как при онлайн-insert; при офлайне каждая строка уходит в очередь pending.
+ * order_id хранится отдельно от комментария; при офлайне каждая строка уходит в очередь pending.
  */
 function buildOrderDeltaCalculationInsertRows({
   orderId,
@@ -731,6 +731,7 @@ function buildOrderDeltaCalculationInsertRows({
     to_place: r.to_place,
     amount: r.amount,
     comment: r.comment,
+    order_id: r.order_id,
   }));
 }
 

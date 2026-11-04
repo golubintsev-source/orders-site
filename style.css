@@ -1917,14 +1917,16 @@ h2 {
 #calculationsTable td:nth-child(2),
 #calculationsTable th:nth-child(3),
 #calculationsTable td:nth-child(3),
-#calculationsTable th:nth-child(5),
-#calculationsTable td:nth-child(5),
+#calculationsTable th:nth-child(4),
+#calculationsTable td:nth-child(4),
 #calculationsTable th:nth-child(6),
 #calculationsTable td:nth-child(6),
 #calculationsTable th:nth-child(7),
 #calculationsTable td:nth-child(7),
 #calculationsTable th:nth-child(8),
-#calculationsTable td:nth-child(8) {
+#calculationsTable td:nth-child(8),
+#calculationsTable th:nth-child(9),
+#calculationsTable td:nth-child(9) {
   width: 1%;
 }
 
@@ -1951,20 +1953,22 @@ h2 {
   #calculationsTable td:nth-child(2),
   #calculationsTable th:nth-child(3),
   #calculationsTable td:nth-child(3),
-  #calculationsTable th:nth-child(5),
-  #calculationsTable td:nth-child(5),
+  #calculationsTable th:nth-child(4),
+  #calculationsTable td:nth-child(4),
   #calculationsTable th:nth-child(6),
   #calculationsTable td:nth-child(6),
   #calculationsTable th:nth-child(7),
   #calculationsTable td:nth-child(7),
   #calculationsTable th:nth-child(8),
-  #calculationsTable td:nth-child(8) {
+  #calculationsTable td:nth-child(8),
+  #calculationsTable th:nth-child(9),
+  #calculationsTable td:nth-child(9) {
     width: max-content;
     min-width: 0;
   }
 
-  #calculationsTable th:nth-child(4),
-  #calculationsTable td:nth-child(4) {
+  #calculationsTable th:nth-child(5),
+  #calculationsTable td:nth-child(5) {
     width: auto;
     min-width: 0;
   }
@@ -2010,7 +2014,9 @@ h2 {
 #calculationsTable th:nth-child(6),
 #calculationsTable td:nth-child(6),
 #calculationsTable th:nth-child(7),
-#calculationsTable td:nth-child(7) {
+#calculationsTable td:nth-child(7),
+#calculationsTable th:nth-child(8),
+#calculationsTable td:nth-child(8) {
   padding-left: 0;
   padding-right: 5px;
 }
@@ -2074,7 +2080,9 @@ h2 {
   #calculationsTable th:nth-child(6),
   #calculationsTable td:nth-child(6),
   #calculationsTable th:nth-child(7),
-  #calculationsTable td:nth-child(7) {
+  #calculationsTable td:nth-child(7),
+  #calculationsTable th:nth-child(8),
+  #calculationsTable td:nth-child(8) {
     padding-left: 0;
     padding-right: 5px;
   }
@@ -2095,6 +2103,16 @@ h2 {
   font-weight: 400;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
+#calculationsTable td.td-calc-order a {
+  color: #1f6feb;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+#calculationsTable td.td-calc-order a:hover,
+#calculationsTable td.td-calc-order a:focus-visible {
+  color: #174ea6;
 }
 #calculationsTable tr.calc-row-system td {
   background: #e3f2fd;
@@ -11915,7 +11933,7 @@ html.keyboard-open .voice-composer {
   text-overflow: clip;
 }
 
-/* Телефон в горизонтальной ориентации: все восемь столбцов в ширине экрана. */
+/* Телефон в горизонтальной ориентации: все девять столбцов в ширине экрана. */
 @media (orientation: landscape) and (max-width: 1100px) {
   #calculationsTable {
     width: 100%;
@@ -11930,14 +11948,15 @@ html.keyboard-open .voice-composer {
     overflow-wrap: anywhere;
     vertical-align: top;
   }
-  #calculationsTable th:nth-child(1), #calculationsTable td:nth-child(1) { width: 12%; }
-  #calculationsTable th:nth-child(2), #calculationsTable td:nth-child(2),
-  #calculationsTable th:nth-child(3), #calculationsTable td:nth-child(3) { width: 10%; }
-  #calculationsTable th:nth-child(4), #calculationsTable td:nth-child(4) { width: 34%; max-width: none; }
-  #calculationsTable th:nth-child(5), #calculationsTable td:nth-child(5),
-  #calculationsTable th:nth-child(6), #calculationsTable td:nth-child(6) { width: 8%; }
-  #calculationsTable th:nth-child(7), #calculationsTable td:nth-child(7) { width: 10%; }
-  #calculationsTable th:nth-child(8), #calculationsTable td:nth-child(8) { width: 8%; }
+  #calculationsTable th:nth-child(1), #calculationsTable td:nth-child(1) { width: 10%; }
+  #calculationsTable th:nth-child(2), #calculationsTable td:nth-child(2) { width: 10%; }
+  #calculationsTable th:nth-child(3), #calculationsTable td:nth-child(3),
+  #calculationsTable th:nth-child(4), #calculationsTable td:nth-child(4) { width: 9%; }
+  #calculationsTable th:nth-child(5), #calculationsTable td:nth-child(5) { width: 28%; max-width: none; }
+  #calculationsTable th:nth-child(6), #calculationsTable td:nth-child(6),
+  #calculationsTable th:nth-child(7), #calculationsTable td:nth-child(7) { width: 7%; }
+  #calculationsTable th:nth-child(8), #calculationsTable td:nth-child(8) { width: 10%; }
+  #calculationsTable th:nth-child(9), #calculationsTable td:nth-child(9) { width: 8%; }
   #calculationsTable .status-value {
     max-width: 100%;
     min-width: 0;

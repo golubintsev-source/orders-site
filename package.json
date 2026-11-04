@@ -37,7 +37,8 @@
     "test:excess-idempotency": "node scripts/test-excess-idempotency.mjs",
     "test:calculations-user-edit": "node scripts/test-calculations-user-edit.mjs",
     "test:calculations-comment-autocomplete": "node scripts/test-calculations-comment-autocomplete.mjs",
-    "test:calculations-column-filters": "node scripts/test-calculations-column-filters.mjs"
+    "test:calculations-column-filters": "node scripts/test-calculations-column-filters.mjs",
+    "test:calculations-order-column": "node scripts/test-calculations-order-column.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
