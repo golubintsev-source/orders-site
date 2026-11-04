@@ -118,6 +118,10 @@ function employeeNameBeforeSalaryTerm(words, termIndex) {
 
 /** Имя получателя выплаты из ручного комментария расчёта. */
 export function getSalaryEmployeeName(comment) {
+  const orderPayment = stripManualCalculationAuthor(comment).match(
+    /^з\/п\s+(?:монтаж|откосы)\s+—\s*(.+?)\s*—(?:,|$)/iu,
+  );
+  if (orderPayment) return orderPayment[1].trim();
   const bracketed = stripManualCalculationAuthor(comment).match(/^з\/п\s+\[([^\]]+)\](?:,|$)/iu);
   if (bracketed) return bracketed[1].trim();
   const structured = stripManualCalculationAuthor(comment).match(/^з\/п\s+([^,]+)(?:,|$)/iu);

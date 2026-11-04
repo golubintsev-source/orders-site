@@ -43,6 +43,8 @@ assert.equal(getSalaryEmployeeName("Премия Марии за сентябр�
 assert.equal(getSalaryEmployeeName("зп леша; Лена"), "Леша");
 assert.equal(getSalaryEmployeeName("Премия за сентябрь; Алексей"), "");
 assert.equal(getSalaryEmployeeName("з/п [Иван Сотников, Пётр Орлов], доплата; Алексей"), "Иван Сотников, Пётр Орлов");
+assert.equal(getSalaryEmployeeName("з/п монтаж —Иван Сотников, Пётр Орлов—; Алексей"), "Иван Сотников, Пётр Орлов");
+assert.equal(getSalaryEmployeeName("з/п откосы —Сергей и Стас—, доплата; Алексей"), "Сергей и Стас");
 
 assert.deepEqual(
   groupSalaryRowsByEmployee([
