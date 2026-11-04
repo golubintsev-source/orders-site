@@ -17,6 +17,10 @@ assert.doesNotMatch(installerBlock, />Оплатил</);
 assert.match(html, /<input type="hidden" id="installer_name"/);
 assert.match(html, /<input type="hidden" id="installer_payment_by"/);
 assert.match(html, /<option value="Монтаж" selected>Монтаж<\/option>/);
+const orderTableHead = html.match(/<table id="orderCalculationsTable">[\s\S]*?<\/thead>/)?.[0] || "";
+assert.doesNotMatch(orderTableHead, /<th>Заказ<\/th>/);
+assert.doesNotMatch(moduleSource, /buildOrderEditUrl/);
+assert.match(moduleSource, /colspan="7"/);
 assert.match(html, /order-calculation-fields--first[\s\S]*?orderCalcFrom[\s\S]*?orderCalcTo[\s\S]*?order-calculation-fields--second/);
 assert.match(html, /order-calculation-fields--second[\s\S]*?orderCalcRecipient[\s\S]*?orderCalcAmount[\s\S]*?calculations-form-row--comment-submit/);
 
