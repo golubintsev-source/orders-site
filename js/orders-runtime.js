@@ -43,12 +43,13 @@ export function ensureOrdersUI() {
 }
 
 export async function ensureOrderFormReady() {
-  const [orders, tasks] = await Promise.all([
-    ensureOrdersUI(), import("./tasks.js"), ensureOrderSettings(),
+  const [orders, tasks, , orderCalculations] = await Promise.all([
+    ensureOrdersUI(), import("./tasks.js"), ensureOrderSettings(), import("./order-calculations.js"),
   ]);
   orders.populateOrderFormInstallerSelect();
   orders.applyMoneyRecipientSelectsForRole();
   tasks.initOrderTasksSection();
+  orderCalculations.initOrderCalculations();
   await tasks.ensureOrderPageTaskExecutorsLoaded();
   return orders;
 }

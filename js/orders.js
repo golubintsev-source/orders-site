@@ -3124,6 +3124,7 @@ export function isOrderFormSessionActive() {
 }
 
 export function resetFormMode() {
+  void import("./order-calculations.js").then((m) => m.hideOrderCalculations());
   state.viewingOrderId = null;
   hideOrderViewQr();
   syncOrderIdInUrl(null);
@@ -3262,6 +3263,8 @@ export async function viewOrder(orderId) {
   }
 
   await fillForm(data);
+  const orderCalculations = await import("./order-calculations.js");
+  orderCalculations.hideOrderCalculations();
   applyOrderFormReadOnly(true);
   setMessage("", "");
 
@@ -3332,6 +3335,10 @@ export async function editOrder(orderId) {
   state.editingOrderId = orderId;
   state.editingOrderDescription = data.description || null;
   await fillForm(data);
+  const orderCalculations = await import("./order-calculations.js");
+  void orderCalculations.showOrderCalculations(data).catch((error) => {
+    console.error("Ошибка загрузки расчётов заказа:", error);
+  });
   setMessage("", "");
 
   if (submitBtn) {

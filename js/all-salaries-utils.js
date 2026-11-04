@@ -118,6 +118,8 @@ function employeeNameBeforeSalaryTerm(words, termIndex) {
 
 /** Имя получателя выплаты из ручного комментария расчёта. */
 export function getSalaryEmployeeName(comment) {
+  const bracketed = stripManualCalculationAuthor(comment).match(/^з\/п\s+\[([^\]]+)\](?:,|$)/iu);
+  if (bracketed) return bracketed[1].trim();
   const structured = stripManualCalculationAuthor(comment).match(/^з\/п\s+([^,]+)(?:,|$)/iu);
   if (structured) return structured[1].trim();
   const words = salaryCommentWords(comment);

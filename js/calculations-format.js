@@ -145,7 +145,8 @@ export function formatCalcDisplayComment(comment, calcOrderAddressById = new Map
   const isOrderDeltaRow = typeof c === "string" && c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
   const isExcessDeltaRow = typeof c === "string" && c.startsWith(EXCESS_DELTA_CALC_COMMENT_PREFIX);
   if (!isOrderDeltaRow && !isExcessDeltaRow) {
-    return formatCalcCommentEmptyPlaceholders(stripAuthorFromManualComment(c));
+    const manual = stripAuthorFromManualComment(c).replace(/^з\/п\s+\[([^\]]+)\]/iu, "з/п $1");
+    return formatCalcCommentEmptyPlaceholders(manual);
   }
   const prefix = isOrderDeltaRow ? ORDER_DELTA_CALC_COMMENT_PREFIX : EXCESS_DELTA_CALC_COMMENT_PREFIX;
   const body = c.slice(prefix.length).trim();
