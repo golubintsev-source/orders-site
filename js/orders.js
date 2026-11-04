@@ -2840,6 +2840,7 @@ export function updateInstallerPaymentAmountFromArea() {
     amountEl.value = "";
   }
 
+  document.dispatchEvent(new CustomEvent("installer-payment-amount-updated"));
   updateInstallerBlockByInstallationDate();
 }
 

@@ -1858,12 +1858,14 @@ h2 {
 }
 
 .order-calculations-block .calculations-comment-input {
-  width: var(--calc-comment-width);
-  max-width: var(--calc-comment-width);
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   height: var(--calc-submit-row-height, 40px);
   min-height: var(--calc-submit-row-height, 40px);
+  max-height: none;
   padding: 9px 8px;
+  line-height: 20px;
   box-sizing: border-box;
   overflow: hidden;
   white-space: pre-wrap;
@@ -1871,11 +1873,32 @@ h2 {
   resize: none;
 }
 
+.order-calculations-block .calculations-form-row--comment-submit {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.order-calculations-block .calculations-form-row--comment-submit .calculations-comment-wrap {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+}
+
+/* Перебивает общую высоту textarea формы заказа: пустой комментарий — ровно одна строка. */
+#section-new .order-calculations-block .calculations-comment-input {
+  height: var(--calc-submit-row-height, 40px);
+  min-height: var(--calc-submit-row-height, 40px);
+}
+
 .order-calculations-block .calculations-submit-btn {
   flex: 0 0 var(--calc-submit-row-height);
   width: var(--calc-submit-row-height);
   min-width: var(--calc-submit-row-height);
   height: var(--calc-submit-row-height);
+  max-width: var(--calc-submit-row-height);
+  min-height: var(--calc-submit-row-height);
+  box-sizing: border-box;
   padding: 0;
   display: inline-flex;
   align-items: center;
