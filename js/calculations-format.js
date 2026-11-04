@@ -164,3 +164,10 @@ export function formatCalcDisplayComment(comment, calcOrderAddressById = new Map
   }
   return formatCalcCommentEmptyPlaceholders(stripAuthorFromOrderDeltaBody(display));
 }
+
+/** Подпись автопроводки оплаты монтажа в таблице «Расчёты». */
+export function formatInstallationCalculationDisplayComment(displayComment, installerName) {
+  const names = String(installerName ?? "").trim();
+  const title = names ? `За монтаж ${names}` : "За монтаж";
+  return String(displayComment ?? "").replace(/^Монтаж(?=\s*;|$)/u, title);
+}
