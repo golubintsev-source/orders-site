@@ -173,13 +173,14 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  INSERT INTO public.calculations (created_at, from_place, to_place, amount, comment)
+  INSERT INTO public.calculations (created_at, from_place, to_place, amount, comment, order_id)
   SELECT
     COALESCE(c.created_at, now()),
     c.from_place,
     c.to_place,
     c.amount,
-    replace(c.comment, '{{ORDER_ID}}', v_saved_order_id::text)
+    replace(c.comment, '{{ORDER_ID}}', v_saved_order_id::text),
+    v_saved_order_id
   FROM jsonb_to_recordset(COALESCE(p_calculations, '[]'::jsonb)) AS c(
     created_at timestamptz,
     from_place text,

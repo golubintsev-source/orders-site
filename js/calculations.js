@@ -1,10 +1,10 @@
 import { bindAutogrowTextarea, resizeTextarea } from "./autogrow-textarea.js";
 import { isSalaryPaymentRow } from "./all-salaries-utils.js";
-import { getCalcDisplayAuthor, formatCalcDisplayComment, stripAuthorFromManualComment, parseOrderDeltaCommentOrderId } from "./calculations-format.js";
+import { getCalcDisplayAuthor, formatCalcDisplayComment, stripAuthorFromManualComment, parseOrderDeltaCommentOrderId, parseOrderDeltaCommentOrderChip } from "./calculations-format.js";
 export { getCalcDisplayAuthor } from "./calculations-format.js";
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile } from "./auth.js";
-import { formatAmount, formatAmountWholeRubles, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY, refreshRublesIntegerInputState } from "./format.js";
+import { formatAmount, formatAmountWholeRubles, formatOrderIdTypeChip, tryParseRublesInteger, MSG_SUM_INTEGER_ONLY, refreshRublesIntegerInputState } from "./format.js";
 import {
   canAccessSection,
   canEditManualCalculations,
@@ -12,7 +12,7 @@ import {
   isAdmin,
   KASSA_BEZNAL_PLACES,
 } from "./roles.js";
-import { hrefToHome } from "./app-routes.js";
+import { buildOrderEditUrl, hrefToHome } from "./app-routes.js";
 import {
   applySavedScroll,
   initUserPlaceTracking,
@@ -92,6 +92,8 @@ let calculationsSectionBound = false;
 let calcCommentSuggestionCounts = new Map();
 /** Адреса заказов для автозаписей (id → address), подставляются в комментарий при отображении. */
 let calcOrderAddressById = new Map();
+/** Типы заказов для подписи номера с буквой (id → order_type). */
+let calcOrderTypeById = new Map();
 /** Непустая строка — текстовый поиск активен. */
 let appliedCalculationsSearchQuery = null;
 
@@ -115,6 +117,7 @@ const calcColumnFilters = {
   expenseFrom: null,
   expenseTo: null,
   comment: "",
+  order: "",
 };
 
 let calcFilterPopoverEl = null;
@@ -670,15 +673,32 @@ export function getCalcDisplayComment(comment) {
   return formatCalcDisplayComment(comment, calcOrderAddressById);
 }
 
+function getCalculationOrderId(row) {
+  const direct = Number(row?.order_id);
+  if (Number.isFinite(direct) && direct !== 0) return direct;
+  return parseOrderDeltaCommentOrderId(row?.comment);
+}
+
+function getCalculationOrderLabel(row) {
+  const orderId = getCalculationOrderId(row);
+  const legacyChip = parseOrderDeltaCommentOrderChip(row?.comment);
+  if (orderId == null) return legacyChip;
+  const type = calcOrderTypeById.get(orderId) || "";
+  return (type ? formatOrderIdTypeChip(orderId, type) : legacyChip)
+    || formatOrderIdTypeChip(orderId, "")
+    || String(orderId);
+}
+
 async function fetchCalcOrderAddressesForRows(rows, signal) {
   const orderIds = [];
   for (const row of rows || []) {
-    const id = parseOrderDeltaCommentOrderId(row.comment);
+    const id = getCalculationOrderId(row);
     if (id != null) orderIds.push(id);
   }
   const uniqueIds = [...new Set(orderIds)];
   const addresses = new Map();
-  if (!uniqueIds.length) return addresses;
+  const types = new Map();
+  if (!uniqueIds.length) return { addresses, types };
 
   const fromSnapshot = () => {
     const snapOrders = readSnapshot()?.orders;
@@ -687,12 +707,15 @@ async function fetchCalcOrderAddressesForRows(rows, signal) {
       if (o?.id != null && uniqueIds.includes(o.id) && o.address != null) {
         addresses.set(o.id, String(o.address).trim());
       }
+      if (o?.id != null && uniqueIds.includes(o.id) && o.order_type != null) {
+        types.set(o.id, String(o.order_type).trim());
+      }
     }
   };
 
   if (isOfflineDataMode()) {
     fromSnapshot();
-    return addresses;
+    return { addresses, types };
   }
 
   try {
@@ -701,7 +724,7 @@ async function fetchCalcOrderAddressesForRows(rows, signal) {
         (chunkIds) =>
           supabaseClient
             .from("orders")
-            .select("id, address")
+            .select("id, address, order_type")
             .in("id", chunkIds)
             .is("deleted_at", null),
         uniqueIds,
@@ -713,12 +736,15 @@ async function fetchCalcOrderAddressesForRows(rows, signal) {
       if (o?.id != null && o.address != null && String(o.address).trim()) {
         addresses.set(o.id, String(o.address).trim());
       }
+      if (o?.id != null && o.order_type != null && String(o.order_type).trim()) {
+        types.set(o.id, String(o.order_type).trim());
+      }
     }
   } catch (e) {
     console.warn("Адреса заказов для комментариев расчётов: используем кэш.", e);
     fromSnapshot();
   }
-  return addresses;
+  return { addresses, types };
 }
 
 /** Строки, видимые в таблице (период уже в кэше; поиск и диапазон сумм). */
@@ -742,6 +768,11 @@ function filterVisibleCalculationRows(rows) {
     if (calcColumnFilters.author && author !== calcColumnFilters.author) return false;
     if (calcColumnFilters.from && String(row?.from_place || "") !== calcColumnFilters.from) return false;
     if (calcColumnFilters.to && String(row?.to_place || "") !== calcColumnFilters.to) return false;
+    if (
+      calcColumnFilters.order &&
+      normalizeCalcFilterText(getCalculationOrderLabel(row)) !==
+        normalizeCalcFilterText(calcColumnFilters.order)
+    ) return false;
 
     const amount = Number(row?.amount);
     const isIncome = CALC_INCOME_TO_PLACES.has(row?.to_place) && !isSalaryPaymentRow(row);
@@ -785,6 +816,7 @@ function uniqueCalcFilterValues(type) {
     if (type === "author") return getCalcDisplayAuthor(row?.comment);
     if (type === "from") return String(row?.from_place || "").trim();
     if (type === "to") return String(row?.to_place || "").trim();
+    if (type === "order") return getCalculationOrderLabel(row);
     return "";
   });
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru"));
@@ -807,7 +839,7 @@ function calcFilterHeadingSummary(type) {
     if (to) return `по ${to}`;
     return "";
   }
-  if (["author", "from", "to"].includes(type)) return calcColumnFilters[type] || "";
+  if (["author", "from", "to", "order"].includes(type)) return calcColumnFilters[type] || "";
   if (type === "comment") return calcColumnFilters.comment || "";
   const from = calcColumnFilters[`${type}From`];
   const to = calcColumnFilters[`${type}To`];
@@ -844,7 +876,7 @@ function calcFilterPopoverFields(type) {
       <label class="calc-column-filter-field"><span>От</span><input id="calcFilterTimeFrom" type="datetime-local" value="${escapeHtmlAttr(calcColumnFilters.timeFrom)}"></label>
       <label class="calc-column-filter-field"><span>До</span><input id="calcFilterTimeTo" type="datetime-local" value="${escapeHtmlAttr(calcColumnFilters.timeTo)}"></label>`;
   }
-  if (["author", "from", "to"].includes(type)) {
+  if (["author", "from", "to", "order"].includes(type)) {
     const current = calcColumnFilters[type];
     const options = uniqueCalcFilterValues(type)
       .map((value) => `<option value="${escapeHtmlAttr(value)}"${value === current ? " selected" : ""}>${escapeHtml(value)}</option>`)
@@ -884,7 +916,7 @@ async function applyCalcColumnFilter(type) {
     }
     calcColumnFilters.timeFrom = from;
     calcColumnFilters.timeTo = to;
-  } else if (["author", "from", "to"].includes(type)) {
+  } else if (["author", "from", "to", "order"].includes(type)) {
     calcColumnFilters[type] = popover.querySelector("#calcFilterSelect")?.value || "";
   } else if (type === "income" || type === "expense") {
     const fromRaw = popover.querySelector("#calcFilterAmountFrom")?.value || "";
@@ -914,7 +946,7 @@ async function resetCalcColumnFilter(type) {
   if (type === "time") {
     calcColumnFilters.timeFrom = "";
     calcColumnFilters.timeTo = "";
-  } else if (["author", "from", "to", "comment"].includes(type)) {
+  } else if (["author", "from", "to", "comment", "order"].includes(type)) {
     calcColumnFilters[type] = "";
   } else {
     calcColumnFilters[`${type}From`] = null;
@@ -1010,6 +1042,7 @@ function rowMatchesCalculationsSearch(row, needleLower) {
     displayComment,
     rawComment,
     String(row.id ?? ""),
+    getCalculationOrderLabel(row),
   ].join(" ");
   return haystackMatchesAllSearchTokens(haystack, needleLower);
 }
@@ -1196,7 +1229,7 @@ function renderCalculationsTableFromCache() {
 
   if (calculationsRowsCache.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td colspan=\"8\">Записей пока нет.</td>";
+    tr.innerHTML = "<td colspan=\"9\">Записей пока нет.</td>";
     tbody.appendChild(tr);
     renderCalculationsSaldoTable([]);
     return;
@@ -1204,7 +1237,7 @@ function renderCalculationsTableFromCache() {
 
   if (rows.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td colspan=\"8\">Ничего не найдено.</td>";
+    tr.innerHTML = "<td colspan=\"9\">Ничего не найдено.</td>";
     tbody.appendChild(tr);
     renderCalculationsSaldoTable([]);
     return;
@@ -1219,6 +1252,11 @@ function renderCalculationsTableFromCache() {
     const displayComment = getCalcDisplayComment(comment);
     const displayAuthor = getCalcDisplayAuthor(comment);
     const escapedComment = escapeHtml(displayComment);
+    const orderId = getCalculationOrderId(row);
+    const orderLabel = getCalculationOrderLabel(row);
+    const orderCell = orderId != null && orderId > 0 && orderLabel
+      ? `<td class="td-calc-order"><a href="${escapeHtmlAttr(buildOrderEditUrl(orderId))}" title="Редактировать заказ ${escapeHtmlAttr(orderLabel)}">${escapeHtml(orderLabel)}</a></td>`
+      : `<td class="td-calc-order">${orderLabel ? escapeHtml(orderLabel) : ""}</td>`;
     const { income, expense } = getCalcIncomeExpenseDisplay(row);
     const incomeCell = income
       ? `<td class="td-money"><span class="status-value">${escapeHtml(income)}</span></td>`
@@ -1247,6 +1285,7 @@ function renderCalculationsTableFromCache() {
     if (isOfflineRow) tr.classList.add("tr-order-offline-pending");
     tr.innerHTML = `
       <td><span class="status-value">${escapeHtml(formatCalcTimeRu(row.created_at))}</span></td>
+      ${orderCell}
       ${incomeCell}
       ${expenseCell}
       <td class="td-calc-comment" data-comment-full="${escapeHtmlAttr(displayComment)}" tabindex="0" role="button" aria-label="Показать полный комментарий"><span class="calc-table-cell-text">${escapedComment}</span></td>
@@ -1307,7 +1346,7 @@ async function performCalculationsLoad(request, period) {
     if (!isCurrent()) return { range: async () => ({ data: [], error: null }) };
     let query = supabaseClient
       .from("calculations")
-      .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
+      .select("id, created_at, from_place, to_place, amount, comment, order_id, deleted_at")
       .is("deleted_at", null);
     if (period.timeFrom) {
       query = query.gte(
@@ -1348,14 +1387,15 @@ async function performCalculationsLoad(request, period) {
 
   if (!isCurrent()) return;
   const merged = mergeCalculationRows(error ? readSnapshot()?.calculations || [] : data || []);
-  const addresses = await fetchCalcOrderAddressesForRows(merged, request.scope.signal);
+  const orderMeta = await fetchCalcOrderAddressesForRows(merged, request.scope.signal);
   if (!isCurrent()) return;
   if (error) console.error("Ошибка загрузки расчетов:", error);
   setMessage(error
     ? "Показана копия с устройства; локальные несинхронизированные строки — с жёлтой заливкой."
     : "", Boolean(error));
   calculationsRowsCache = merged;
-  calcOrderAddressById = addresses;
+  calcOrderAddressById = orderMeta.addresses;
+  calcOrderTypeById = orderMeta.types;
   if (!error) persistCalculationsSnapshot(merged);
   renderCalculationsTableFromCache();
 }

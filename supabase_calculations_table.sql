@@ -6,8 +6,11 @@ CREATE TABLE IF NOT EXISTS calculations (
   to_place text,
   amount numeric,
   comment text,
+  order_id bigint REFERENCES orders (id) ON DELETE SET NULL,
   deleted_at timestamptz NULL
 );
+
+CREATE INDEX IF NOT EXISTS calculations_order_id_idx ON calculations (order_id);
 
 -- Включить RLS и разрешить доступ по текущей политике (если у вас уже есть политики для orders — добавьте аналогичные для calculations)
 ALTER TABLE calculations ENABLE ROW LEVEL SECURITY;

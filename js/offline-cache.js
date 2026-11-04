@@ -912,6 +912,7 @@ export function pendingCalculationDisplayRows() {
       to_place: p.to_place,
       amount: p.amount,
       comment: p.comment,
+      order_id: p.order_id ?? null,
       deleted_at: null,
       __offlinePendingSync: true,
       __offlineLocalId: c.localId,

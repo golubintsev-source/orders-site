@@ -90,8 +90,10 @@ function parseOrderDeltaCommentMeta(comment) {
 function collectOrderIdsFromCalculationRows(rows) {
   const ids = new Set();
   for (const row of rows) {
+    const direct = Number(row?.order_id);
     const meta = parseOrderDeltaCommentMeta(row.comment);
-    if (meta?.orderId != null) ids.add(meta.orderId);
+    const orderId = Number.isFinite(direct) && direct > 0 ? direct : meta?.orderId;
+    if (orderId != null) ids.add(orderId);
   }
   return [...ids];
 }
@@ -145,12 +147,14 @@ function formatOrderAmountForExcel(v) {
 export function getCalculationRowValuesForExcel(row, orderById) {
   const displayComment = getCalcDisplayComment(row.comment);
   const meta = parseOrderDeltaCommentMeta(row.comment);
-  const order = meta?.orderId != null ? orderById.get(meta.orderId) : null;
+  const direct = Number(row?.order_id);
+  const orderId = Number.isFinite(direct) && direct > 0 ? direct : meta?.orderId;
+  const order = orderId != null ? orderById.get(orderId) : null;
 
   const orderNumber =
     order != null
       ? formatOrderIdTypeChip(order.id, order.order_type)
-      : meta?.orderChip || "";
+      : meta?.orderChip || (orderId != null ? String(orderId).padStart(4, "0") : "");
 
   const client =
     order?.client != null && String(order.client).trim() !== ""

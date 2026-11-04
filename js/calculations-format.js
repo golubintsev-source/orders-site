@@ -21,6 +21,15 @@ export function parseOrderDeltaCommentOrderId(comment) {
   return parseOrderIdFromChip(parts[1]);
 }
 
+export function parseOrderDeltaCommentOrderChip(comment) {
+  const c = comment ?? "";
+  if (!c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX)) return "";
+  const body = c.slice(ORDER_DELTA_CALC_COMMENT_PREFIX.length).trim();
+  const parts = body.split("; ").map((p) => p.trim());
+  const chip = parts[1] || "";
+  return parseOrderIdFromChip(chip) != null || chip.startsWith("офл.") ? chip : "";
+}
+
 /** У автозаписей заказа в конце комментария «; ЧЧ:ММ; автор» — время не показываем в комментарии. */
 function stripOrderDeltaTrailingTime(body) {
   const parts = String(body || "")
@@ -145,6 +154,12 @@ export function formatCalcDisplayComment(comment, calcOrderAddressById = new Map
     const orderId = parseOrderDeltaCommentOrderId(c);
     if (orderId != null && calcOrderAddressById.has(orderId)) {
       display = insertAddressAfterClientInDeltaComment(display, calcOrderAddressById.get(orderId));
+    }
+    // В старом формате номер заказа был второй частью служебного комментария.
+    // Теперь он показывается в отдельном столбце «Заказ».
+    if (parseOrderDeltaCommentOrderChip(c)) {
+      const parts = display.split("; ").map((p) => p.trim());
+      display = [parts[0], ...parts.slice(2)].join("; ");
     }
   }
   return formatCalcCommentEmptyPlaceholders(stripAuthorFromOrderDeltaBody(display));

@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v127: единая кнопка «Закрыть» в окнах создания и редактирования задачи.
-const STATIC_CACHE = "orders-site-static-v127";
+// v128: отдельный столбец со ссылкой на заказ в таблице «Расчёты».
+const STATIC_CACHE = "orders-site-static-v128";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -24,7 +24,7 @@ const PRECACHE_URLS = [
   "/img/startup/worker-offline.webp",
   "/img/startup/worker-data-error.webp",
   "/style.css",
-  "/style.css?v=calc-fit-20261031",
+  "/style.css?v=calc-order-20261104",
   "/js/performance-monitor.js",
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",
