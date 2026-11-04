@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v128: отдельный столбец со ссылкой на заказ в таблице «Расчёты».
-const STATIC_CACHE = "orders-site-static-v128";
+// v129: имена монтажников в комментарии автоматической выплаты монтажа.
+const STATIC_CACHE = "orders-site-static-v129";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

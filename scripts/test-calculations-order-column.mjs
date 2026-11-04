@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   formatCalcDisplayComment,
+  formatInstallationCalculationDisplayComment,
   parseOrderDeltaCommentOrderChip,
   parseOrderDeltaCommentOrderId,
 } from "../js/calculations-format.js";
@@ -27,11 +28,23 @@ assert.equal(
   formatCalcDisplayComment(current),
   "Остаток; Иван; Ленина 1; сумма 5000",
 );
+assert.equal(
+  formatInstallationCalculationDisplayComment(
+    "Монтаж; Иван; Ленина 1; оплатил Касса",
+    "Сергей, Стас",
+  ),
+  "За монтаж Сергей, Стас; Иван; Ленина 1; оплатил Касса",
+);
+assert.equal(
+  formatInstallationCalculationDisplayComment("Монтаж; Иван", ""),
+  "За монтаж; Иван",
+);
 
 assert.match(calculations, /buildOrderEditUrl\(orderId\)/);
 assert.match(calculations, /class="td-calc-order"/);
 assert.match(calculations, /comment, order_id, deleted_at/);
-assert.match(calculations, /select\("id, address, order_type"\)/);
+assert.match(calculations, /select\("id, address, order_type, installer_name"\)/);
+assert.match(calculations, /getCalcDisplayCommentForRow\(row\)/);
 assert.match(orders, /comment: .*kindLabel.*orderNumberStr.*clientStr.*addressStr/);
 assert.match(orders, /order_id: r\.order_id/);
 assert.match(offline, /order_id: p\.order_id \?\? null/);

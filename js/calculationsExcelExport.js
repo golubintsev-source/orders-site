@@ -2,7 +2,7 @@ import { supabaseClient } from "./config.js";
 import { formatAmount, formatDateShortRU, formatOrderIdTypeChip } from "./format.js";
 import {
   getFilteredCalculationRows,
-  getCalcDisplayComment,
+  getCalcDisplayCommentForRow,
   getCalcDisplayAuthor,
   getCalcIncomeExpenseDisplay,
 } from "./calculations.js";
@@ -145,7 +145,7 @@ function formatOrderAmountForExcel(v) {
 }
 
 export function getCalculationRowValuesForExcel(row, orderById) {
-  const displayComment = getCalcDisplayComment(row.comment);
+  const displayComment = getCalcDisplayCommentForRow(row);
   const meta = parseOrderDeltaCommentMeta(row.comment);
   const direct = Number(row?.order_id);
   const orderId = Number.isFinite(direct) && direct > 0 ? direct : meta?.orderId;

@@ -1,6 +1,6 @@
 import { bindAutogrowTextarea, resizeTextarea } from "./autogrow-textarea.js";
 import { isSalaryPaymentRow } from "./all-salaries-utils.js";
-import { getCalcDisplayAuthor, formatCalcDisplayComment, stripAuthorFromManualComment, parseOrderDeltaCommentOrderId, parseOrderDeltaCommentOrderChip } from "./calculations-format.js";
+import { getCalcDisplayAuthor, formatCalcDisplayComment, formatInstallationCalculationDisplayComment, stripAuthorFromManualComment, parseOrderDeltaCommentOrderId, parseOrderDeltaCommentOrderChip } from "./calculations-format.js";
 export { getCalcDisplayAuthor } from "./calculations-format.js";
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile } from "./auth.js";
@@ -94,6 +94,8 @@ let calcCommentSuggestionCounts = new Map();
 let calcOrderAddressById = new Map();
 /** Типы заказов для подписи номера с буквой (id → order_type). */
 let calcOrderTypeById = new Map();
+/** Монтажники заказа для подписи автопроводки (id → installer_name). */
+let calcOrderInstallerById = new Map();
 /** Непустая строка — текстовый поиск активен. */
 let appliedCalculationsSearchQuery = null;
 
@@ -673,6 +675,16 @@ export function getCalcDisplayComment(comment) {
   return formatCalcDisplayComment(comment, calcOrderAddressById);
 }
 
+export function getCalcDisplayCommentForRow(row) {
+  const display = getCalcDisplayComment(row?.comment);
+  if (!/^\[AUTO_ORDER_DELTA\]\s+Монтаж\s*;/u.test(String(row?.comment || ""))) {
+    return display;
+  }
+  const orderId = getCalculationOrderId(row);
+  const installerName = orderId != null ? calcOrderInstallerById.get(orderId) : "";
+  return formatInstallationCalculationDisplayComment(display, installerName);
+}
+
 function getCalculationOrderId(row) {
   const direct = Number(row?.order_id);
   if (Number.isFinite(direct) && direct !== 0) return direct;
@@ -698,7 +710,8 @@ async function fetchCalcOrderAddressesForRows(rows, signal) {
   const uniqueIds = [...new Set(orderIds)];
   const addresses = new Map();
   const types = new Map();
-  if (!uniqueIds.length) return { addresses, types };
+  const installers = new Map();
+  if (!uniqueIds.length) return { addresses, types, installers };
 
   const fromSnapshot = () => {
     const snapOrders = readSnapshot()?.orders;
@@ -710,12 +723,15 @@ async function fetchCalcOrderAddressesForRows(rows, signal) {
       if (o?.id != null && uniqueIds.includes(o.id) && o.order_type != null) {
         types.set(o.id, String(o.order_type).trim());
       }
+      if (o?.id != null && uniqueIds.includes(o.id) && o.installer_name != null) {
+        installers.set(o.id, String(o.installer_name).trim());
+      }
     }
   };
 
   if (isOfflineDataMode()) {
     fromSnapshot();
-    return { addresses, types };
+    return { addresses, types, installers };
   }
 
   try {
@@ -724,7 +740,7 @@ async function fetchCalcOrderAddressesForRows(rows, signal) {
         (chunkIds) =>
           supabaseClient
             .from("orders")
-            .select("id, address, order_type")
+            .select("id, address, order_type, installer_name")
             .in("id", chunkIds)
             .is("deleted_at", null),
         uniqueIds,
@@ -739,12 +755,15 @@ async function fetchCalcOrderAddressesForRows(rows, signal) {
       if (o?.id != null && o.order_type != null && String(o.order_type).trim()) {
         types.set(o.id, String(o.order_type).trim());
       }
+      if (o?.id != null && o.installer_name != null && String(o.installer_name).trim()) {
+        installers.set(o.id, String(o.installer_name).trim());
+      }
     }
   } catch (e) {
     console.warn("Адреса заказов для комментариев расчётов: используем кэш.", e);
     fromSnapshot();
   }
-  return { addresses, types };
+  return { addresses, types, installers };
 }
 
 /** Строки, видимые в таблице (период уже в кэше; поиск и диапазон сумм). */
@@ -790,7 +809,7 @@ function filterVisibleCalculationRows(rows) {
     const commentNeedle = normalizeCalcFilterText(calcColumnFilters.comment);
     if (
       commentNeedle &&
-      !normalizeCalcFilterText(getCalcDisplayComment(row?.comment)).includes(commentNeedle)
+      !normalizeCalcFilterText(getCalcDisplayCommentForRow(row)).includes(commentNeedle)
     ) {
       return false;
     }
@@ -1028,7 +1047,7 @@ function haystackMatchesAllSearchTokens(haystack, query) {
 
 function rowMatchesCalculationsSearch(row, needleLower) {
   if (!needleLower) return true;
-  const displayComment = getCalcDisplayComment(row.comment);
+  const displayComment = getCalcDisplayCommentForRow(row);
   const displayAuthor = getCalcDisplayAuthor(row.comment);
   const rawComment = row.comment ?? "";
   const haystack = [
@@ -1249,7 +1268,7 @@ function renderCalculationsTableFromCache() {
     const isExcessDeltaRow =
       typeof comment === "string" && comment.startsWith(EXCESS_DELTA_CALC_COMMENT_PREFIX);
     const isSystemDeltaRow = isOrderDeltaRow || isExcessDeltaRow;
-    const displayComment = getCalcDisplayComment(comment);
+    const displayComment = getCalcDisplayCommentForRow(row);
     const displayAuthor = getCalcDisplayAuthor(comment);
     const escapedComment = escapeHtml(displayComment);
     const orderId = getCalculationOrderId(row);
@@ -1396,6 +1415,7 @@ async function performCalculationsLoad(request, period) {
   calculationsRowsCache = merged;
   calcOrderAddressById = orderMeta.addresses;
   calcOrderTypeById = orderMeta.types;
+  calcOrderInstallerById = orderMeta.installers;
   if (!error) persistCalculationsSnapshot(merged);
   renderCalculationsTableFromCache();
 }
