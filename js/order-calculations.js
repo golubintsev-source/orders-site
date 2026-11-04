@@ -3,9 +3,11 @@ import { state } from "./state.js";
 import { formatAmount, formatOrderIdTypeChip, tryParseRublesInteger } from "./format.js";
 import { buildOrderEditUrl } from "./app-routes.js";
 import { getCalcDisplayAuthor, formatCalcDisplayComment, formatInstallationCalculationDisplayComment } from "./calculations-format.js";
-import { defaultSalaryPaymentFrom, salaryRecipientGroups, SALARY_PAYMENT_FROM_PLACES } from "./salary-payment.js";
+import { defaultSalaryPaymentFrom, SALARY_PAYMENT_FROM_PLACES } from "./salary-payment.js";
 import { shortLoginByEmail } from "./user-names.js";
 import { canEditManualCalculations, canSelectKassaBeznal, KASSA_BEZNAL_PLACES } from "./roles.js";
+import { getEditors } from "./settings.js";
+import { bindAutogrowTextarea, resizeTextarea } from "./autogrow-textarea.js";
 
 let activeOrder = null;
 let bound = false;
@@ -33,10 +35,6 @@ function formatTime(iso) {
   return `${date.getDate()} ${months[date.getMonth()]} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-function allWorkerNames() {
-  return salaryRecipientGroups().flatMap((group) => group.names);
-}
-
 function getIncomeExpense(row) {
   const amount = formatAmount(row?.amount);
   if (!amount) return { income: "", expense: "" };
@@ -47,15 +45,18 @@ function getIncomeExpense(row) {
 
 function renderRecipientOptions() {
   const select = document.getElementById("orderCalcRecipient");
-  const destination = document.getElementById("orderCalcTo")?.value;
+  const destination = document.getElementById("orderCalcTo")?.value || "Монтаж";
   if (!select) return;
-  const installer = String(document.getElementById("installer_name")?.value || activeOrder?.installer_name || "").trim();
-  const names = destination === "Монтаж" ? (installer ? [installer] : []) : allWorkerNames();
+  const needsRecipient = destination === "Монтаж" || destination === "Откосы";
+  const previous = select.value;
+  const names = needsRecipient ? getEditors() : [];
   select.innerHTML = names.length
-    ? names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")
+    ? ['<option value="">—</option>', ...names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)].join("")
     : '<option value="">—</option>';
-  select.disabled = destination === "Монтаж";
-  if (destination === "Монтаж" && !installer) setMessage("В заказе не указан монтажник", true);
+  select.disabled = !needsRecipient;
+  select.required = needsRecipient;
+  if (needsRecipient && names.includes(previous)) select.value = previous;
+  if (needsRecipient && !names.length) setMessage("В настройках не указаны монтажники", true);
   else setMessage("");
 }
 
@@ -105,13 +106,15 @@ export async function loadOrderCalculations() {
 function buildPayload() {
   const from = String(document.getElementById("orderCalcFrom")?.value || "").trim();
   const to = String(document.getElementById("orderCalcTo")?.value || "").trim();
-  const recipient = String(document.getElementById("orderCalcRecipient")?.value || "").trim();
+  const selectedRecipient = String(document.getElementById("orderCalcRecipient")?.value || "").trim();
+  const needsRecipient = to === "Монтаж" || to === "Откосы";
+  const recipient = needsRecipient ? selectedRecipient : to;
   const comment = String(document.getElementById("orderCalcComment")?.value || "").trim();
   const parsed = tryParseRublesInteger(document.getElementById("orderCalcAmount")?.value || "");
   if (!SALARY_PAYMENT_FROM_PLACES.includes(from)) throw new Error("Выберите, откуда выплачивается сумма");
   if (!canSelectKassaBeznal() && KASSA_BEZNAL_PLACES.has(from)) throw new Error("Этот источник недоступен для вашей роли");
   if (!["Монтаж", "Откосы", "Комиссия", "Другое"].includes(to)) throw new Error("Выберите направление выплаты");
-  if (!recipient) throw new Error(to === "Монтаж" ? "Укажите монтажника в заказе" : "Выберите получателя");
+  if (needsRecipient && !recipient) throw new Error("Выберите монтажника");
   if (parsed.invalidFormat || !Number.isSafeInteger(parsed.value) || parsed.value <= 0) throw new Error("Укажите положительную сумму в целых рублях");
   const author = shortLoginByEmail(state.currentUser?.email || "");
   return {
@@ -121,8 +124,7 @@ function buildPayload() {
   };
 }
 
-async function submit(event) {
-  event.preventDefault();
+async function submit() {
   if (saving || !activeOrder?.id) return;
   let payload;
   try { payload = buildPayload(); } catch (error) { setMessage(error.message, true); return; }
@@ -135,7 +137,11 @@ async function submit(event) {
   if (button) button.disabled = false;
   if (error) { setMessage("Не удалось добавить строку в расчёты", true); return; }
   document.getElementById("orderCalcAmount").value = "";
-  document.getElementById("orderCalcComment").value = "";
+  const comment = document.getElementById("orderCalcComment");
+  if (comment) {
+    comment.value = "";
+    resizeTextarea(comment);
+  }
   setMessage("Строка добавлена в расчёты");
   await loadOrderCalculations();
 }
@@ -143,11 +149,9 @@ async function submit(event) {
 export function initOrderCalculations() {
   if (bound) return;
   bound = true;
-  document.getElementById("orderCalculationForm")?.addEventListener("submit", submit);
+  document.getElementById("orderCalcSubmitBtn")?.addEventListener("click", () => { void submit(); });
   document.getElementById("orderCalcTo")?.addEventListener("change", renderRecipientOptions);
-  document.getElementById("installer_name")?.addEventListener("change", () => {
-    if (document.getElementById("orderCalcTo")?.value === "Монтаж") renderRecipientOptions();
-  });
+  bindAutogrowTextarea(document.getElementById("orderCalcComment"));
 }
 
 export async function showOrderCalculations(order) {
@@ -166,6 +170,13 @@ export async function showOrderCalculations(order) {
   }
   const to = document.getElementById("orderCalcTo");
   if (to) to.value = "Монтаж";
+  const amount = document.getElementById("orderCalcAmount");
+  const comment = document.getElementById("orderCalcComment");
+  if (amount) amount.value = "";
+  if (comment) {
+    comment.value = "";
+    resizeTextarea(comment);
+  }
   renderRecipientOptions();
   await loadOrderCalculations();
 }

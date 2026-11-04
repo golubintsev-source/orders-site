@@ -506,25 +506,12 @@
                 </button>
               </div>
             </div>
-            <div class="field field-installer-name">
-              <label for="installer_name">Монтажник</label>
-              <select id="installer_name">
-                <option value="">—</option>
-              </select>
-            </div>
             <div class="field">
               <label for="installer_payment_amount">з/п монтаж</label>
               <input type="text" inputmode="numeric" id="installer_payment_amount" title="Только целые рубли, без копеек" />
             </div>
-            <div class="field">
-              <label for="installer_payment_by">Оплатил</label>
-              <select id="installer_payment_by">
-                <option value="">—</option>
-                <option value="Дима">Дима</option>
-                <option value="Вова">Вова</option>
-                <option value="Касса">Касса</option>
-              </select>
-            </div>
+            <input type="hidden" id="installer_name" />
+            <input type="hidden" id="installer_payment_by" />
           </div>
 
           <div class="field installation-row" id="orderFormRevealsRow">
@@ -569,6 +556,62 @@
               </div>
             </div>
           </div>
+
+          <section id="orderCalculationsBlock" class="field full order-calculations-block" hidden aria-label="Расчёты по заказу">
+            <div id="orderCalculationForm" class="calculations-form" role="group" aria-label="Добавить расчёт по заказу">
+              <div class="calculations-form-column">
+                <div class="calculations-form-row calculations-form-row--first order-calculation-fields">
+                  <div class="field">
+                    <label for="orderCalcFrom">Откуда</label>
+                    <select id="orderCalcFrom" required>
+                      <option value="">—</option>
+                      <option value="Вова">Вова</option>
+                      <option value="Дима">Дима</option>
+                      <option value="Касса">Касса</option>
+                      <option value="Безнал">Безнал</option>
+                      <option value="Другое">Другое</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="orderCalcTo">Куда</label>
+                    <select id="orderCalcTo" required>
+                      <option value="Монтаж" selected>Монтаж</option>
+                      <option value="Откосы">Откосы</option>
+                      <option value="Комиссия">Комиссия</option>
+                      <option value="Другое">Другое</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="orderCalcRecipient">Кому</label>
+                    <select id="orderCalcRecipient" required></select>
+                  </div>
+                  <div class="field">
+                    <label for="orderCalcAmount">Сумма</label>
+                    <input type="text" id="orderCalcAmount" inputmode="numeric" title="Только целые рубли, без копеек" required />
+                  </div>
+                </div>
+                <div class="calculations-form-row calculations-form-row--comment-submit">
+                  <div class="calculations-comment-wrap field">
+                    <textarea id="orderCalcComment" rows="1" class="calculations-comment-input" placeholder="Комментарий" aria-label="Комментарий"></textarea>
+                  </div>
+                  <button type="button" id="orderCalcSubmitBtn" class="calculations-submit-btn" title="Добавить" aria-label="Добавить">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </button>
+                </div>
+                <p id="orderCalcFormMessage" class="order-calculations-message" role="status" aria-live="polite"></p>
+              </div>
+            </div>
+
+            <div class="table-wrap order-calculations-table-wrap">
+              <table id="orderCalculationsTable">
+                <thead><tr>
+                  <th>Время</th><th>Заказ</th><th class="th-money">Доход</th><th class="th-money">Расход</th>
+                  <th>Комментарий</th><th>Откуда</th><th>Куда</th><th>Автор</th>
+                </tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
 
           <div class="field full file-upload-group">
             <label for="attachments">Фото и документы</label>
@@ -622,62 +665,6 @@
           <button type="button" id="cancelEditBtn" class="btn-form-cancel" style="display: none;">Отмена</button>
         </div>
       </form>
-
-      <section id="orderCalculationsBlock" class="order-calculations-block" hidden aria-label="Расчёты по заказу">
-        <form id="orderCalculationForm" class="calculations-form" aria-label="Добавить расчёт по заказу">
-          <div class="calculations-form-column">
-            <div class="calculations-form-row calculations-form-row--first order-calculation-fields">
-              <div class="field">
-                <label for="orderCalcFrom">Откуда</label>
-                <select id="orderCalcFrom" required>
-                  <option value="">—</option>
-                  <option value="Вова">Вова</option>
-                  <option value="Дима">Дима</option>
-                  <option value="Касса">Касса</option>
-                  <option value="Безнал">Безнал</option>
-                  <option value="Другое">Другое</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="orderCalcTo">Куда</label>
-                <select id="orderCalcTo" required>
-                  <option value="Монтаж">Монтаж</option>
-                  <option value="Откосы">Откосы</option>
-                  <option value="Комиссия">Комиссия</option>
-                  <option value="Другое">Другое</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="orderCalcRecipient">Кому</label>
-                <select id="orderCalcRecipient" required></select>
-              </div>
-              <div class="field">
-                <label for="orderCalcAmount">Сумма</label>
-                <input type="text" id="orderCalcAmount" inputmode="numeric" title="Только целые рубли, без копеек" required />
-              </div>
-            </div>
-            <div class="calculations-form-row calculations-form-row--comment-submit">
-              <div class="calculations-comment-wrap field">
-                <textarea id="orderCalcComment" rows="1" class="calculations-comment-input" placeholder="Комментарий" aria-label="Комментарий"></textarea>
-              </div>
-              <button type="submit" id="orderCalcSubmitBtn" class="calculations-submit-btn" title="Добавить" aria-label="Добавить">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              </button>
-            </div>
-            <p id="orderCalcFormMessage" class="order-calculations-message" role="status" aria-live="polite"></p>
-          </div>
-        </form>
-
-        <div class="table-wrap order-calculations-table-wrap">
-          <table id="orderCalculationsTable">
-            <thead><tr>
-              <th>Время</th><th>Заказ</th><th class="th-money">Доход</th><th class="th-money">Расход</th>
-              <th>Комментарий</th><th>Откуда</th><th>Куда</th><th>Автор</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </section>
 
       <p id="message"></p>
     </div>

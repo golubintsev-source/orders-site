@@ -1865,6 +1865,9 @@ h2 {
   min-height: var(--calc-submit-row-height, 40px);
   padding: 9px 8px;
   box-sizing: border-box;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   resize: none;
 }
 
