@@ -2640,15 +2640,6 @@ export function updateConditionalRequiredHighlight() {
   const deliveryDateEl = document.getElementById("delivery_date");
   if (prepaymentToEl) prepaymentToEl.classList.toggle("conditional-invalid", !!prepaymentVal && !prepaymentToVal);
   if (deliveryDateEl) deliveryDateEl.classList.toggle("conditional-invalid", !!deliveryVal && !deliveryDateComplete);
-  const payer = document.getElementById("installer_payment_by")?.value;
-  const installer = document.getElementById("installer_name");
-  if (installer) {
-    const missing = isInstallerRequiredMissing(payer, installer.value);
-    installer.classList.toggle("conditional-invalid", missing);
-    installer.setAttribute("aria-required", isInstallerRequiredMissing(payer, "") ? "true" : "false");
-    if (missing) installer.setAttribute("aria-invalid", "true");
-    else installer.removeAttribute("aria-invalid");
-  }
 }
 
 function getInstallerPaymentElements() {
@@ -2673,6 +2664,10 @@ export function populateOrderFormInstallerSelect(selectedValue) {
     selectedValue != null
       ? String(selectedValue).trim()
       : String(sel.value || "").trim();
+  if (sel.tagName !== "SELECT") {
+    sel.value = current;
+    return;
+  }
   const names = getEditors();
   const opts = ['<option value="">—</option>'];
   const seen = new Set();
@@ -3772,11 +3767,6 @@ export async function submitOrderForm(event) {
     return;
   }
   const conditionalMissing = [];
-  const installerMissing = isInstallerRequiredMissing(
-    document.getElementById("installer_payment_by")?.value,
-    document.getElementById("installer_name")?.value,
-  );
-  if (installerMissing) conditionalMissing.push("Монтажник");
   if (prepaymentVal && !prepaymentToVal) conditionalMissing.push("Кому предоплата");
   const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
   const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
@@ -3784,7 +3774,6 @@ export async function submitOrderForm(event) {
   if (conditionalMissing.length > 0) {
     setMessage("Заполните поля: " + conditionalMissing.join(", "), "#d32f2f");
     updateConditionalRequiredHighlight();
-    if (installerMissing) document.getElementById("installer_name")?.focus();
     return;
   }
 
