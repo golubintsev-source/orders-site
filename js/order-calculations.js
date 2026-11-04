@@ -43,6 +43,13 @@ function getIncomeExpense(row) {
   return isIncome ? { income: amount, expense: "" } : { income: "", expense: amount };
 }
 
+function syncAmountFromInstallerPayment() {
+  if (document.getElementById("orderCalcTo")?.value !== "Монтаж") return;
+  const source = document.getElementById("installer_payment_amount");
+  const target = document.getElementById("orderCalcAmount");
+  if (target) target.value = String(source?.value || "").trim();
+}
+
 function renderRecipientOptions() {
   const select = document.getElementById("orderCalcRecipient");
   const destination = document.getElementById("orderCalcTo")?.value || "Монтаж";
@@ -137,6 +144,7 @@ async function submit() {
   if (button) button.disabled = false;
   if (error) { setMessage("Не удалось добавить строку в расчёты", true); return; }
   document.getElementById("orderCalcAmount").value = "";
+  syncAmountFromInstallerPayment();
   const comment = document.getElementById("orderCalcComment");
   if (comment) {
     comment.value = "";
@@ -150,7 +158,12 @@ export function initOrderCalculations() {
   if (bound) return;
   bound = true;
   document.getElementById("orderCalcSubmitBtn")?.addEventListener("click", () => { void submit(); });
-  document.getElementById("orderCalcTo")?.addEventListener("change", renderRecipientOptions);
+  document.getElementById("orderCalcTo")?.addEventListener("change", () => {
+    renderRecipientOptions();
+    syncAmountFromInstallerPayment();
+  });
+  document.getElementById("installer_payment_amount")?.addEventListener("input", syncAmountFromInstallerPayment);
+  document.addEventListener("installer-payment-amount-updated", syncAmountFromInstallerPayment);
   bindAutogrowTextarea(document.getElementById("orderCalcComment"));
 }
 
@@ -177,6 +190,7 @@ export async function showOrderCalculations(order) {
     comment.value = "";
     resizeTextarea(comment);
   }
+  syncAmountFromInstallerPayment();
   renderRecipientOptions();
   await loadOrderCalculations();
 }

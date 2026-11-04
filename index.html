@@ -560,7 +560,7 @@
           <section id="orderCalculationsBlock" class="field full order-calculations-block" hidden aria-label="Расчёты по заказу">
             <div id="orderCalculationForm" class="calculations-form" role="group" aria-label="Добавить расчёт по заказу">
               <div class="calculations-form-column">
-                <div class="calculations-form-row calculations-form-row--first order-calculation-fields">
+                <div class="calculations-form-row calculations-form-row--first order-calculation-fields order-calculation-fields--first">
                   <div class="field">
                     <label for="orderCalcFrom">Откуда</label>
                     <select id="orderCalcFrom" required>
@@ -581,6 +581,8 @@
                       <option value="Другое">Другое</option>
                     </select>
                   </div>
+                </div>
+                <div class="calculations-form-row calculations-form-row--first order-calculation-fields order-calculation-fields--second">
                   <div class="field">
                     <label for="orderCalcRecipient">Кому</label>
                     <select id="orderCalcRecipient" required></select>
