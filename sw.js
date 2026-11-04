@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v131: мобильная трёхстрочная форма расчёта заказа.
-const STATIC_CACHE = "orders-site-static-v131";
+// v132: без столбца «Заказ» во встроенной таблице расчётов.
+const STATIC_CACHE = "orders-site-static-v132";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

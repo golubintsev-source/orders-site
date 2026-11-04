@@ -1,7 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
-import { formatAmount, formatOrderIdTypeChip, tryParseRublesInteger } from "./format.js";
-import { buildOrderEditUrl } from "./app-routes.js";
+import { formatAmount, tryParseRublesInteger } from "./format.js";
 import { getCalcDisplayAuthor, formatCalcDisplayComment, formatInstallationCalculationDisplayComment } from "./calculations-format.js";
 import { defaultSalaryPaymentFrom, SALARY_PAYMENT_FROM_PLACES } from "./salary-payment.js";
 import { shortLoginByEmail } from "./user-names.js";
@@ -71,11 +70,10 @@ function renderRows(rows) {
   const tbody = document.querySelector("#orderCalculationsTable tbody");
   if (!tbody) return;
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8">По этому заказу расчётов пока нет.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7">По этому заказу расчётов пока нет.</td></tr>';
     return;
   }
   const orderId = Number(activeOrder?.id);
-  const orderLabel = formatOrderIdTypeChip(orderId, activeOrder?.order_type) || String(orderId);
   tbody.innerHTML = rows.map((row) => {
     const { income, expense } = getIncomeExpense(row);
     const addressMap = new Map([[orderId, String(activeOrder?.address || "").trim()]]);
@@ -85,7 +83,6 @@ function renderRows(rows) {
     }
     return `<tr>
       <td><span class="status-value">${escapeHtml(formatTime(row.created_at))}</span></td>
-      <td class="td-calc-order"><a href="${escapeHtml(buildOrderEditUrl(orderId))}">${escapeHtml(orderLabel)}</a></td>
       <td class="td-money">${income ? `<span class="status-value">${escapeHtml(income)}</span>` : ""}</td>
       <td class="td-money">${expense ? `<span class="status-value">${escapeHtml(expense)}</span>` : ""}</td>
       <td class="td-calc-comment">${escapeHtml(comment)}</td>
@@ -98,13 +95,13 @@ function renderRows(rows) {
 export async function loadOrderCalculations() {
   if (!activeOrder?.id) return;
   const tbody = document.querySelector("#orderCalculationsTable tbody");
-  if (tbody) tbody.innerHTML = '<tr><td colspan="8">Загрузка…</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7">Загрузка…</td></tr>';
   const { data, error } = await supabaseClient.from("calculations")
     .select("id, created_at, order_id, from_place, to_place, amount, comment, deleted_at")
     .eq("order_id", activeOrder.id).is("deleted_at", null)
     .order("created_at", { ascending: false }).order("id", { ascending: false });
   if (error) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="8">Не удалось загрузить расчёты заказа.</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7">Не удалось загрузить расчёты заказа.</td></tr>';
     return;
   }
   renderRows(data || []);
