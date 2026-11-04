@@ -1824,6 +1824,96 @@ h2 {
   opacity: 0.95;
 }
 
+/* Расчёты внутри страницы редактирования заказа. */
+.order-calculations-block {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  background: #fff1d6;
+}
+
+.order-calculations-block .calculations-form {
+  margin-bottom: 12px;
+}
+
+.order-calculations-block .calculations-form .field {
+  margin: 0;
+}
+
+.order-calculations-block .calculations-form label {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.order-calculations-block .calculations-form input,
+.order-calculations-block .calculations-form select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.order-calculations-block .calculations-comment-input {
+  width: var(--calc-comment-width);
+  max-width: var(--calc-comment-width);
+  min-width: 0;
+  height: var(--calc-submit-row-height, 40px);
+  min-height: var(--calc-submit-row-height, 40px);
+  padding: 9px 8px;
+  box-sizing: border-box;
+  resize: none;
+}
+
+.order-calculations-block .calculations-submit-btn {
+  flex: 0 0 var(--calc-submit-row-height);
+  width: var(--calc-submit-row-height);
+  min-width: var(--calc-submit-row-height);
+  height: var(--calc-submit-row-height);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: #1f6feb;
+  color: #fff;
+  cursor: pointer;
+}
+
+.order-calculations-block .calculations-submit-btn:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.order-calculations-message {
+  min-height: 18px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.order-calculations-table-wrap {
+  background: #fff;
+  border-radius: 8px;
+}
+
+#orderCalculationsTable td.td-calc-order a {
+  color: #1f6feb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (min-width: 769px) {
+  .order-calculation-fields .field {
+    flex-basis: 140px;
+    width: 140px;
+    max-width: 140px;
+  }
+}
+
 /* Строка: поле поиска и «Найти» */
 .calculations-form-row--submit-search {
   --calc-submit-row-height: 40px;

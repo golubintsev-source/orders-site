@@ -39,6 +39,10 @@ assert.equal(
   formatInstallationCalculationDisplayComment("Монтаж; Иван", ""),
   "За монтаж; Иван",
 );
+assert.equal(
+  formatCalcDisplayComment("з/п [Сергей, Стас], доплата; Алексей"),
+  "з/п Сергей, Стас, доплата",
+);
 
 assert.match(calculations, /buildOrderEditUrl\(orderId\)/);
 assert.match(calculations, /class="td-calc-order"/);
