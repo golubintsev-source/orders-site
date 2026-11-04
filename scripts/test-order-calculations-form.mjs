@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import vm from "node:vm";
 
 const root = new URL("../", import.meta.url);
 const html = await readFile(new URL("index.html", root), "utf8");
@@ -34,5 +35,15 @@ assert.match(moduleSource, /installer-payment-amount-updated/);
 assert.match(ordersSource, /new CustomEvent\("installer-payment-amount-updated"\)/);
 assert.match(styles, /#section-new \.order-calculations-block \.calculations-comment-input\s*\{[\s\S]*?min-height: var\(--calc-submit-row-height, 40px\)/);
 assert.match(styles, /\.order-calculations-block \.calculations-form-row--comment-submit \.calculations-comment-wrap\s*\{[\s\S]*?flex: 1 1 auto/);
+
+const commentBuilder = moduleSource
+  .match(/export function buildOrderCalculationComment\([^]*?\n\}/)[0]
+  .replace("export ", "");
+const context = vm.createContext({});
+vm.runInContext(commentBuilder, context);
+assert.equal(context.buildOrderCalculationComment("Монтаж", "Иван, Пётр", "", "Алексей"), "з/п монтаж —Иван, Пётр—; Алексей");
+assert.equal(context.buildOrderCalculationComment("Откосы", "Сергей", "Доплата", "Алексей"), "з/п откосы —Сергей—, Доплата; Алексей");
+assert.equal(context.buildOrderCalculationComment("Комиссия", "Комиссия", "", "Алексей"), "Комиссия; Алексей");
+assert.equal(context.buildOrderCalculationComment("Другое", "Другое", "Расход", "Алексей"), "Другое, Расход; Алексей");
 
 console.log("order calculations form: placement, fields, recipients, defaults and autogrow passed");

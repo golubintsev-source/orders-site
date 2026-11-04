@@ -107,6 +107,18 @@ export async function loadOrderCalculations() {
   renderRows(data || []);
 }
 
+export function buildOrderCalculationComment(to, recipient, comment, author) {
+  const destination = String(to || "").trim();
+  const name = String(recipient || "").trim();
+  const text = String(comment || "").trim();
+  const authorName = String(author || "").trim();
+  let base;
+  if (destination === "Монтаж") base = `з/п монтаж —${name}—`;
+  else if (destination === "Откосы") base = `з/п откосы —${name}—`;
+  else base = destination;
+  return `${base}${text ? `, ${text}` : ""}; ${authorName}`;
+}
+
 function buildPayload() {
   const from = String(document.getElementById("orderCalcFrom")?.value || "").trim();
   const to = String(document.getElementById("orderCalcTo")?.value || "").trim();
@@ -123,7 +135,7 @@ function buildPayload() {
   const author = shortLoginByEmail(state.currentUser?.email || "");
   return {
     order_id: activeOrder.id, from_place: from, to_place: to, amount: parsed.value,
-    comment: `з/п [${recipient}]${comment ? `, ${comment}` : ""}; ${author}`,
+    comment: buildOrderCalculationComment(to, recipient, comment, author),
     created_at: new Date().toISOString(),
   };
 }
