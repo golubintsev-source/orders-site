@@ -3921,6 +3921,11 @@ export async function submitOrderForm(event) {
     setMessage(`Заказ #${savedOrderId} сохранён. Не удалось открыть список заказов.`, "#b45309");
   });
   return;
+  } catch (saveError) {
+    // Ошибки подготовки данных, истории и автопроводок происходят до RPC.
+    // Без catch пользователь навсегда видит «Сохраняю…» и не знает причину.
+    console.error("Ошибка клиентского сохранения заказа:", saveError);
+    setMessage(`Не удалось сохранить заказ: ${saveError?.message || String(saveError)}`, "#d32f2f");
   } finally {
     // При ошибке/валидации снова разрешаем сохранить; при успехе кнопки остаются
     // заблокированными до resetFormMode / editOrder.
