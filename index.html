@@ -557,7 +557,63 @@
             </div>
           </div>
 
-          <section id="orderCalculationsBlock" class="field full order-calculations-block" hidden aria-label="Расчёты по заказу">
+
+
+          <div class="field full file-upload-group">
+            <label for="attachments">Фото и документы</label>
+
+            <div class="file-upload-box">
+              <input
+                type="file"
+                id="attachments"
+                multiple
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                hidden
+              />
+
+              <div id="existingOrderFilesWrap" class="existing-order-files-wrap" hidden>
+                <div class="existing-order-files-title">Уже загружено</div>
+                <div id="existingOrderFilesList" class="files-list existing-order-files-list"></div>
+              </div>
+
+              <div id="selectedFiles" class="selected-files"></div>
+
+              <div class="upload-area">
+                <button type="button" id="selectFilesBtn" class="upload-btn">
+                  <svg class="upload-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                  Загрузить
+                </button>
+                <button type="button" id="pasteClipboardImageBtn" class="upload-btn upload-btn--secondary">
+                  Вставить из буфера
+                </button>
+                <span id="clipboardPasteHint" class="clipboard-paste-hint" role="status" aria-live="polite"></span>
+                <span id="fileUploadText" class="file-upload-text" aria-live="polite"></span>
+              </div>
+            </div>
+
+            <div id="orderPhotoStrictWarning" class="order-photo-strict-warning" hidden role="alert"><strong>⚠️ ГРУБОЕ НАРУШЕНИЕ ТРЕБОВАНИЙ РУКОВОДСТВА!</strong><p>Прикрепление фотографий к заказам — обязательное требование руководства. Повторная попытка сохранить заказ без фото нарушает установленные правила и является грубым нарушением трудовой дисциплины.</p><p>Сохранение временно заблокировано. Прикрепите фотографию для немедленной разблокировки или дождитесь окончания таймера.</p><div id="orderPhotoCooldownClock" class="order-photo-cooldown-clock">03:00</div><p>Повторная попытка сохранения станет доступна после окончания обратного отсчёта.</p></div>
+            <div id="orderPhotoReminder" class="order-photo-reminder" hidden role="status" aria-live="polite">
+              <div class="order-photo-reminder-illustration" aria-hidden="true">
+                <span class="order-photo-reminder-camera">📸</span>
+                <span class="order-photo-reminder-spark">✨</span>
+              </div>
+              <div class="order-photo-reminder-copy">
+                <strong>Подарите заказу фотографию — пусть он не идёт по жизни без документов! 😊</strong>
+                <span>Фото помогает общему учёту не играть в «угадайку», уменьшает количество ошибок и помогает нам лучше обслуживать клиентов. Пожалуйста, прикрепите хотя бы одно фото — будущие мы скажут вам огромное спасибо.</span>
+                <span class="order-photo-reminder-fallback">Если фотографии нет, повторная попытка сохранения запустит временную блокировку.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" id="submitBtn" class="btn-form-save">Сохранить заказ</button>
+          <button type="button" id="cancelEditBtn" class="btn-form-cancel" style="display: none;">Отмена</button>
+        </div>
+      </form>
+
+          <section id="orderCalculationsBlock" class="field full order-calculations-block is-inactive" aria-label="Расчёты по заказу" aria-disabled="true">
+            <p class="order-calculations-inactive-note">Блок станет доступен после создания заказа.</p>
             <div id="orderCalculationForm" class="calculations-form" role="group" aria-label="Добавить расчёт по заказу">
               <div class="calculations-form-column">
                 <div class="calculations-form-row calculations-form-row--first order-calculation-fields order-calculation-fields--first">
@@ -614,59 +670,6 @@
               </table>
             </div>
           </section>
-
-          <div class="field full file-upload-group">
-            <label for="attachments">Фото и документы</label>
-
-            <div class="file-upload-box">
-              <input
-                type="file"
-                id="attachments"
-                multiple
-                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-                hidden
-              />
-
-              <div id="existingOrderFilesWrap" class="existing-order-files-wrap" hidden>
-                <div class="existing-order-files-title">Уже загружено</div>
-                <div id="existingOrderFilesList" class="files-list existing-order-files-list"></div>
-              </div>
-
-              <div id="selectedFiles" class="selected-files"></div>
-
-              <div class="upload-area">
-                <button type="button" id="selectFilesBtn" class="upload-btn">
-                  <svg class="upload-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                  Загрузить
-                </button>
-                <button type="button" id="pasteClipboardImageBtn" class="upload-btn upload-btn--secondary">
-                  Вставить из буфера
-                </button>
-                <span id="clipboardPasteHint" class="clipboard-paste-hint" role="status" aria-live="polite"></span>
-                <span id="fileUploadText" class="file-upload-text" aria-live="polite"></span>
-              </div>
-            </div>
-
-            <div id="orderPhotoStrictWarning" class="order-photo-strict-warning" hidden role="alert"><strong>⚠️ ГРУБОЕ НАРУШЕНИЕ ТРЕБОВАНИЙ РУКОВОДСТВА!</strong><p>Прикрепление фотографий к заказам — обязательное требование руководства. Повторная попытка сохранить заказ без фото нарушает установленные правила и является грубым нарушением трудовой дисциплины.</p><p>Сохранение временно заблокировано. Прикрепите фотографию для немедленной разблокировки или дождитесь окончания таймера.</p><div id="orderPhotoCooldownClock" class="order-photo-cooldown-clock">03:00</div><p>Повторная попытка сохранения станет доступна после окончания обратного отсчёта.</p></div>
-            <div id="orderPhotoReminder" class="order-photo-reminder" hidden role="status" aria-live="polite">
-              <div class="order-photo-reminder-illustration" aria-hidden="true">
-                <span class="order-photo-reminder-camera">📸</span>
-                <span class="order-photo-reminder-spark">✨</span>
-              </div>
-              <div class="order-photo-reminder-copy">
-                <strong>Подарите заказу фотографию — пусть он не идёт по жизни без документов! 😊</strong>
-                <span>Фото помогает общему учёту не играть в «угадайку», уменьшает количество ошибок и помогает нам лучше обслуживать клиентов. Пожалуйста, прикрепите хотя бы одно фото — будущие мы скажут вам огромное спасибо.</span>
-                <span class="order-photo-reminder-fallback">Если фотографии нет, повторная попытка сохранения запустит временную блокировку.</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button type="submit" id="submitBtn" class="btn-form-save">Сохранить заказ</button>
-          <button type="button" id="cancelEditBtn" class="btn-form-cancel" style="display: none;">Отмена</button>
-        </div>
-      </form>
 
       <p id="message"></p>
     </div>
