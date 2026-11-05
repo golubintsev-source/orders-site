@@ -619,7 +619,7 @@
                 <div class="calculations-form-row calculations-form-row--first order-calculation-fields order-calculation-fields--first">
                   <div class="field">
                     <label for="orderCalcFrom">Откуда</label>
-                    <select id="orderCalcFrom" required>
+                    <select id="orderCalcFrom" required disabled>
                       <option value="">—</option>
                       <option value="Вова">Вова</option>
                       <option value="Дима">Дима</option>
@@ -630,7 +630,7 @@
                   </div>
                   <div class="field">
                     <label for="orderCalcTo">Куда</label>
-                    <select id="orderCalcTo" required>
+                    <select id="orderCalcTo" required disabled>
                       <option value="Монтаж" selected>Монтаж</option>
                       <option value="Откосы">Откосы</option>
                       <option value="Комиссия">Комиссия</option>
@@ -641,18 +641,18 @@
                 <div class="calculations-form-row calculations-form-row--first order-calculation-fields order-calculation-fields--second">
                   <div class="field">
                     <label for="orderCalcRecipient">Кому</label>
-                    <select id="orderCalcRecipient" required></select>
+                    <select id="orderCalcRecipient" required disabled></select>
                   </div>
                   <div class="field">
                     <label for="orderCalcAmount">Сумма</label>
-                    <input type="text" id="orderCalcAmount" inputmode="numeric" title="Только целые рубли, без копеек" required />
+                    <input type="text" id="orderCalcAmount" inputmode="numeric" title="Только целые рубли, без копеек" required disabled />
                   </div>
                 </div>
                 <div class="calculations-form-row calculations-form-row--comment-submit">
                   <div class="calculations-comment-wrap field">
-                    <textarea id="orderCalcComment" rows="1" class="calculations-comment-input" placeholder="Комментарий" aria-label="Комментарий"></textarea>
+                    <textarea id="orderCalcComment" rows="1" class="calculations-comment-input" placeholder="Комментарий" aria-label="Комментарий" disabled></textarea>
                   </div>
-                  <button type="button" id="orderCalcSubmitBtn" class="calculations-submit-btn" title="Добавить" aria-label="Добавить">
+                  <button type="button" id="orderCalcSubmitBtn" class="calculations-submit-btn" title="Добавить" aria-label="Добавить" disabled>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   </button>
                 </div>
