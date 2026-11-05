@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   ATOMIC_ORDER_ID_PLACEHOLDER,
   buildAtomicOrderRequestSignature,
@@ -104,5 +105,19 @@ await assert.rejects(
   ),
   (error) => error?.code === "ORDER_SAVE_TIMEOUT",
 );
+
+for (const file of ["supabase_save_order_atomic.sql", "supabase_calculations_order_id.sql"]) {
+  const sql = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
+  assert.doesNotMatch(
+    sql,
+    /Order money fields were changed[\s\S]{0,160}ERRCODE\s*=\s*'40001'/,
+    `${file}: прикладной конфликт не должен запускать автоматический повтор PostgREST`,
+  );
+  assert.match(
+    sql,
+    /Order money fields were changed[\s\S]{0,300}ERRCODE\s*=\s*'P0001'/,
+    `${file}: конфликт должен завершаться обычной ошибкой P0001`,
+  );
+}
 
 console.log("order atomic save tests: ok");
