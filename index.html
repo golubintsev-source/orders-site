@@ -58,6 +58,7 @@
   <!-- cropper/leaflet CSS подгружаются лениво вместе со скриптами (см. js/lazy-cdn.js) -->
   <style>
     /* Store orders do not use installation, reveals or order expenses. */
+    body:has(#order_type option[value="Магазин"]:checked) .compact-fields-row:has(#area_m2),
     body:has(#order_type option[value="Магазин"]:checked) #orderFormInstallationRow,
     body:has(#order_type option[value="Магазин"]:checked) #installer_payment_block,
     body:has(#order_type option[value="Магазин"]:checked) #orderFormRevealsRow,
