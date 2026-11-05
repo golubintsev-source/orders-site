@@ -42,6 +42,17 @@ function getIncomeExpense(row) {
   return isIncome ? { income: amount, expense: "" } : { income: "", expense: amount };
 }
 
+function setBlockActive(active) {
+  const block = document.getElementById("orderCalculationsBlock");
+  if (!block) return;
+  block.hidden = false;
+  block.classList.toggle("is-inactive", !active);
+  block.setAttribute("aria-disabled", String(!active));
+  block.querySelectorAll("input, select, textarea, button").forEach((control) => {
+    control.disabled = !active;
+  });
+}
+
 function syncAmountFromInstallerPayment() {
   if (document.getElementById("orderCalcTo")?.value !== "Монтаж") return;
   const source = document.getElementById("installer_payment_amount");
@@ -180,7 +191,7 @@ export async function showOrderCalculations(order) {
   activeOrder = order || null;
   const block = document.getElementById("orderCalculationsBlock");
   if (!block || !activeOrder?.id) return;
-  block.hidden = false;
+  setBlockActive(true);
   const form = document.getElementById("orderCalculationForm");
   if (form) form.hidden = !canEditManualCalculations();
   const from = document.getElementById("orderCalcFrom");
@@ -207,6 +218,11 @@ export async function showOrderCalculations(order) {
 export function hideOrderCalculations() {
   activeOrder = null;
   const block = document.getElementById("orderCalculationsBlock");
-  if (block) block.hidden = true;
+  setBlockActive(false);
+  const form = document.getElementById("orderCalculationForm");
+  if (form) form.hidden = false;
+  const tbody = document.querySelector("#orderCalculationsTable tbody");
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7">Расчёты можно добавить после создания заказа.</td></tr>';
+  syncAmountFromInstallerPayment();
   setMessage("");
 }
