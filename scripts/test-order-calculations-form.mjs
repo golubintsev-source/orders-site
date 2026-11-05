@@ -8,9 +8,19 @@ const moduleSource = await readFile(new URL("js/order-calculations.js", root), "
 const ordersSource = await readFile(new URL("js/orders.js", root), "utf8");
 const styles = await readFile(new URL("style.css", root), "utf8");
 
+const orderFormStart = html.indexOf('<form id="orderForm">');
+const orderFormEnd = html.indexOf("</form>", orderFormStart);
+const bottomSaveStart = html.indexOf('id="submitBtn"', orderFormStart);
 const blockStart = html.indexOf('id="orderCalculationsBlock"');
 const filesStart = html.indexOf('class="field full file-upload-group"');
-assert.ok(blockStart > 0 && blockStart < filesStart, "блок расчётов должен находиться выше фото и документов");
+const orderFormMarkup = html.slice(orderFormStart, orderFormEnd);
+assert.ok(filesStart > 0 && filesStart < orderFormEnd, "фото и документы должны оставаться внутри формы заказа");
+assert.ok(bottomSaveStart > filesStart && bottomSaveStart < orderFormEnd, "нижняя кнопка сохранения должна завершать форму заказа");
+assert.ok(blockStart > orderFormEnd && blockStart > bottomSaveStart, "блок расчётов должен находиться ниже кнопки сохранения и вне формы заказа");
+assert.doesNotMatch(orderFormMarkup, /orderCalc(?:From|To|Recipient|Amount|Comment|SubmitBtn)/, "поля расчётов не должны участвовать в форме заказа");
+assert.match(html, /id="orderCalculationsBlock" class="field full order-calculations-block is-inactive"[^>]*aria-disabled="true"/);
+assert.match(html, /id="orderCalcFrom" required disabled/);
+assert.match(html, /id="orderCalcSubmitBtn"[^>]*disabled/);
 
 const installerBlock = html.match(/id="installer_payment_block"[\s\S]*?<\/div>\s*<\/div>/)?.[0] || "";
 assert.doesNotMatch(installerBlock, />Монтажник</);
@@ -30,11 +40,16 @@ assert.match(moduleSource, /const names = needsRecipient \? getEditors\(\) : \[\
 assert.match(moduleSource, /select\.disabled = !needsRecipient/);
 assert.match(moduleSource, /bindAutogrowTextarea\(document\.getElementById\("orderCalcComment"\)\)/);
 assert.match(moduleSource, /document\.getElementById\("orderCalcSubmitBtn"\).*addEventListener\("click"/s);
+assert.match(moduleSource, /function setBlockActive\(active\)[\s\S]*?querySelectorAll\("input, select, textarea, button"\)/);
+assert.match(moduleSource, /showOrderCalculations[\s\S]*?setBlockActive\(true\)/);
+assert.match(moduleSource, /hideOrderCalculations[\s\S]*?setBlockActive\(false\)/);
+assert.match(moduleSource, /hideOrderCalculations[\s\S]*?syncAmountFromInstallerPayment\(\)/);
 assert.match(moduleSource, /syncAmountFromInstallerPayment/);
 assert.match(moduleSource, /installer-payment-amount-updated/);
 assert.match(ordersSource, /new CustomEvent\("installer-payment-amount-updated"\)/);
 assert.match(styles, /#section-new \.order-calculations-block \.calculations-comment-input\s*\{[\s\S]*?min-height: var\(--calc-submit-row-height, 40px\)/);
 assert.match(styles, /\.order-calculations-block \.calculations-form-row--comment-submit \.calculations-comment-wrap\s*\{[\s\S]*?flex: 1 1 auto/);
+assert.match(styles, /\.order-calculations-block\.is-inactive\s*\{[\s\S]*?background: #e5e7eb/);
 
 const commentBuilder = moduleSource
   .match(/export function buildOrderCalculationComment\([^]*?\n\}/)[0]
@@ -46,4 +61,4 @@ assert.equal(context.buildOrderCalculationComment("Откосы", "Сергей"
 assert.equal(context.buildOrderCalculationComment("Комиссия", "Комиссия", "", "Алексей"), "Комиссия; Алексей");
 assert.equal(context.buildOrderCalculationComment("Другое", "Другое", "Расход", "Алексей"), "Другое, Расход; Алексей");
 
-console.log("order calculations form: placement, fields, recipients, defaults and autogrow passed");
+console.log("order calculations form: independent placement, inactive state, fields, recipients, defaults and autogrow passed");
