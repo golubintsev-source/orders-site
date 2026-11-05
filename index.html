@@ -56,6 +56,15 @@
   <link rel="modulepreload" href="./js/auth.js">
   <link rel="modulepreload" href="./js/section-nav.js">
   <!-- cropper/leaflet CSS подгружаются лениво вместе со скриптами (см. js/lazy-cdn.js) -->
+  <style>
+    /* Store orders do not use installation, reveals or order expenses. */
+    body:has(#order_type option[value="Магазин"]:checked) #orderFormInstallationRow,
+    body:has(#order_type option[value="Магазин"]:checked) #installer_payment_block,
+    body:has(#order_type option[value="Магазин"]:checked) #orderFormRevealsRow,
+    body:has(#order_type option[value="Магазин"]:checked) #orderCalculationsBlock {
+      display: none !important;
+    }
+  </style>
 </head>
 <body>
   <div id="startupScreen" aria-label="Загрузка системы">
