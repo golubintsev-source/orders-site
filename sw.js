@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v133: новые подписи комментариев проводок заказа.
-const STATIC_CACHE = "orders-site-static-v133";
+// v134: независимый блок расчётов под формой заказа.
+const STATIC_CACHE = "orders-site-static-v134";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
