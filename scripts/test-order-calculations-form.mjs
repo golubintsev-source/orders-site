@@ -19,6 +19,8 @@ assert.ok(bottomSaveStart > filesStart && bottomSaveStart < orderFormEnd, "ни�
 assert.ok(blockStart > orderFormEnd && blockStart > bottomSaveStart, "блок расчётов должен находиться ниже кнопки сохранения и вне формы заказа");
 assert.doesNotMatch(orderFormMarkup, /orderCalc(?:From|To|Recipient|Amount|Comment|SubmitBtn)/, "поля расчётов не должны участвовать в форме заказа");
 assert.match(html, /id="orderCalculationsBlock" class="field full order-calculations-block is-inactive"[^>]*aria-disabled="true"/);
+assert.match(html, /id="orderCalcFrom" required disabled/);
+assert.match(html, /id="orderCalcSubmitBtn"[^>]*disabled/);
 
 const installerBlock = html.match(/id="installer_payment_block"[\s\S]*?<\/div>\s*<\/div>/)?.[0] || "";
 assert.doesNotMatch(installerBlock, />Монтажник</);
