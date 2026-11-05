@@ -3902,17 +3902,25 @@ export async function submitOrderForm(event) {
     return;
   }
 
-  await uploadFiles(savedOrderId);
-
-  await leaveOrderFormAfterSave(savedOrderId);
+  // Запись заказа уже подтверждена сервером. Загрузка файлов и переход
+  // не должны оставлять форму навсегда в состоянии «Сохраняю…».
   saveFinishedOk = true;
-
-  setMessage(
-    wasEditing
-    ? `Заявка #${savedOrderId} обновлена`
-    : `Заявка #${savedOrderId} сохранена`,
-    ""
-  );
+  setMessage(wasEditing ? `Заявка #${savedOrderId} обновлена` : `Заявка #${savedOrderId} сохранена`, "");
+  try {
+    await Promise.race([
+      uploadFiles(savedOrderId),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Превышено время загрузки вложений")), 20000)),
+    ]);
+  } catch (uploadError) {
+    console.error("Ошибка загрузки вложений после сохранения заказа:", uploadError);
+    setMessage(`Заказ #${savedOrderId} сохранён, но вложения могли не загрузиться: ${uploadError.message || uploadError}`, "#b45309");
+  }
+  // Переход на список запускается отдельно: он может ждать длительную загрузку таблицы.
+  void leaveOrderFormAfterSave(savedOrderId).catch((navigationError) => {
+    console.error("Ошибка перехода после сохранения заказа:", navigationError);
+    setMessage(`Заказ #${savedOrderId} сохранён. Не удалось открыть список заказов.`, "#b45309");
+  });
+  return;
   } finally {
     // При ошибке/валидации снова разрешаем сохранить; при успехе кнопки остаются
     // заблокированными до resetFormMode / editOrder.
