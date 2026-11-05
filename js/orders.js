@@ -2503,7 +2503,7 @@ function buildOrderHistoryComment(prev, next, wasEditing) {
 function selectOptionValues(selectId) {
   const sel = document.getElementById(selectId);
   if (!sel) return [];
-  return [...sel.options].map((o) => o.value);
+  return Array.from(sel.options || []).map((o) => o.value);
 }
 
 function recoverLostMoneyRecipientsFromForm(orderData) {
@@ -3648,6 +3648,7 @@ export async function submitOrderForm(event) {
   // не создавали дубликаты заказов.
   setOrderFormSaveButtonsBusy(true);
   let saveFinishedOk = false;
+  let saveStage = "проверка полей";
 
   try {
   if (state.viewingOrderId != null) {
@@ -3829,6 +3830,7 @@ export async function submitOrderForm(event) {
 
   setMessage("Сохраняю...", "");
 
+  saveStage = "подготовка полей заказа";
   const orderData = recoverLostMoneyRecipientsFromForm(getFormData());
   // Идемпотентный ключ нужен только для создания нового заказа.
   if (!state.editingOrderId && orderData?.save_idempotency_key == null) {
@@ -3856,9 +3858,11 @@ export async function submitOrderForm(event) {
 
   const wasEditing = Boolean(state.editingOrderId);
   const calculationOrderId = wasEditing ? state.editingOrderId : ATOMIC_ORDER_ID_PLACEHOLDER;
+  saveStage = "подготовка истории изменений";
   const historyComments = wasEditing
     ? buildEditOrderHistoryComments(orderData)
     : buildOrderHistoryComments(null, orderData, false);
+  saveStage = "подготовка автоматических расчётов";
   const calculations = buildOrderDeltaCalculationInsertRows({
     orderId: calculationOrderId,
     wasEditing,
@@ -3875,11 +3879,13 @@ export async function submitOrderForm(event) {
       ? buildExpectedOrderMoney(state.initialOrderSums, state.initialOrderParticipants)
       : null,
   };
+  saveStage = "подготовка транзакции";
   const requestId = ensureOrderFormAtomicRequestId(atomicPayload);
   let savedOrderId = state.editingOrderId;
   let error = null;
 
   try {
+    saveStage = "отправка транзакции";
     savedOrderId = await saveOrderAtomicWithRetry(
       supabaseClient,
       { requestId, ...atomicPayload },
@@ -3924,8 +3930,8 @@ export async function submitOrderForm(event) {
   } catch (saveError) {
     // Ошибки подготовки данных, истории и автопроводок происходят до RPC.
     // Без catch пользователь навсегда видит «Сохраняю…» и не знает причину.
-    console.error("Ошибка клиентского сохранения заказа:", saveError);
-    setMessage(`Не удалось сохранить заказ: ${saveError?.message || String(saveError)}`, "#d32f2f");
+    console.error(`Ошибка клиентского сохранения заказа (${saveStage}):`, saveError);
+    setMessage(`Не удалось сохранить заказ (${saveStage}): ${saveError?.message || String(saveError)}`, "#d32f2f");
   } finally {
     // При ошибке/валидации снова разрешаем сохранить; при успехе кнопки остаются
     // заблокированными до resetFormMode / editOrder.
