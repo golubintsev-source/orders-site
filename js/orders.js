@@ -101,6 +101,7 @@ import {
   buildAtomicOrderRequestSignature,
   createAtomicOrderRequestId,
   saveOrderAtomic,
+  saveOrderAtomicWithRetry,
 } from "./order-atomic-save.js";
 
 function mergedLocalOrdersForOfflineDisplayMeta() {
@@ -3879,8 +3880,12 @@ export async function submitOrderForm(event) {
   let error = null;
 
   try {
-    savedOrderId = await raceWithTimeout(
-      saveOrderAtomic(supabaseClient, { requestId, ...atomicPayload }),
+    savedOrderId = await saveOrderAtomicWithRetry(
+      supabaseClient,
+      { requestId, ...atomicPayload },
+      {
+        onRetry: () => setMessage("Сервер отвечает медленно. Повторяю сохранение…", ""),
+      },
     );
   } catch (e) {
     error = e;

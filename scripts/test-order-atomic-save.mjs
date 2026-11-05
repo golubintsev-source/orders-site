@@ -4,6 +4,7 @@ import {
   buildAtomicOrderRequestSignature,
   createAtomicOrderRequestId,
   saveOrderAtomic,
+  saveOrderAtomicWithRetry,
 } from "../js/order-atomic-save.js";
 
 assert.equal(ATOMIC_ORDER_ID_PLACEHOLDER, "{{ORDER_ID}}");
@@ -74,5 +75,34 @@ await assert.rejects(
   /не вернула номер/,
 );
 assert.equal(rpcCalls, 1, "При некорректном ответе не должно быть раздельного fallback-сохранения");
+
+let retryCalls = 0;
+let retryNoticeCalls = 0;
+const retryClient = {
+  rpc() {
+    retryCalls += 1;
+    if (retryCalls === 1) return new Promise(() => {});
+    return Promise.resolve({ data: 1401, error: null });
+  },
+};
+assert.equal(
+  await saveOrderAtomicWithRetry(
+    retryClient,
+    { requestId, orderData },
+    { attemptTimeoutMs: 5, onRetry: () => { retryNoticeCalls += 1; } },
+  ),
+  1401,
+);
+assert.equal(retryCalls, 2, "Зависшее сохранение должно автоматически повторяться один раз");
+assert.equal(retryNoticeCalls, 1, "Интерфейс должен получить уведомление о повторе");
+
+await assert.rejects(
+  saveOrderAtomicWithRetry(
+    { rpc: () => new Promise(() => {}) },
+    { requestId, orderData },
+    { attemptTimeoutMs: 5 },
+  ),
+  (error) => error?.code === "ORDER_SAVE_TIMEOUT",
+);
 
 console.log("order atomic save tests: ok");
