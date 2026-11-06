@@ -1300,6 +1300,10 @@ function renderCalculationsTableFromCache() {
     }
     const tr = document.createElement("tr");
     if (isSystemDeltaRow) tr.classList.add("calc-row-system");
+    // Only manual expenses linked to an order originate from its "Добавить расходы" form.
+    if (orderId != null && orderId > 0 && !isSystemDeltaRow && !isSalaryPaymentRow(row)) {
+      tr.classList.add("calc-row-order-expense");
+    }
     if (isSalaryPaymentRow(row)) tr.classList.add("calc-row-salary-payment");
     if (isOfflineRow) tr.classList.add("tr-order-offline-pending");
     tr.innerHTML = `
