@@ -1,3 +1,4 @@
+import { captureNavigationState, updateNavigationBackButton } from "./navigation-history.js";
 /**
  * Служебный путь снимка строки «Сейчас» при открытии «Баланс».
  * Пишется в site_access_logs (как обычные обращения); не является UI-разделом.
@@ -284,7 +285,9 @@ export function syncBrowserUrlToSection(sectionId) {
     const targetHash = sectionId === "all" ? "" : `#${sectionId}`;
     const next = `${base}${targetHash}`;
     if (`${window.location.pathname}${window.location.search}${window.location.hash}` === next) return;
+    captureNavigationState();
     history.pushState(null, "", next);
+    updateNavigationBackButton();
     return;
   }
 
@@ -294,5 +297,7 @@ export function syncBrowserUrlToSection(sectionId) {
   const curSearch = window.location.search || "";
   if (curSection === sectionId && !window.location.hash && curSearch === q) return;
 
+  captureNavigationState();
   history.pushState(null, "", want + q);
+  updateNavigationBackButton();
 }
