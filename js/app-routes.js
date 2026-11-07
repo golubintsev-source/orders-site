@@ -282,6 +282,7 @@ export function syncBrowserUrlToSection(sectionId) {
   const search = new URLSearchParams(window.location.search);
   if (sectionId !== "new") {
     search.delete("order_id");
+    search.delete("edit_order_id");
   }
   if (sectionId !== "messages") {
     search.delete("chat");
