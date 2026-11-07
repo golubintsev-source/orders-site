@@ -21,6 +21,9 @@ export function captureNavigationState() {
   const id = key();
   const section = document.querySelector(".content-section.active");
   const scrolls = [];
+  const shellScrolls = ["appContainer", "section-calculations", "section-all", "ordersTableScrollBottom", "ordersTableScrollInner"]
+    .map(id => { const el = document.getElementById(id); return el ? [id, el.scrollTop, el.scrollLeft] : null; })
+    .filter(Boolean);
   if (section) {
     section.querySelectorAll("*").forEach((el, index) => {
       if (el.scrollTop || el.scrollLeft) scrolls.push([index, el.scrollTop, el.scrollLeft]);
@@ -31,7 +34,7 @@ export function captureNavigationState() {
     documentTop: document.scrollingElement?.scrollTop || 0,
     documentLeft: document.scrollingElement?.scrollLeft || 0,
     sectionTop: section?.scrollTop || 0, sectionLeft: section?.scrollLeft || 0,
-    scrolls, sectionId: section?.id || "",
+    scrolls, shellScrolls, sectionId: section?.id || "",
     extra: captureExtra?.() || null,
   };
   try {
@@ -59,6 +62,10 @@ export async function restoreNavigationScroll(snapshot) {
     if (document.scrollingElement) {
       document.scrollingElement.scrollTop = top;
       document.scrollingElement.scrollLeft = left;
+    }
+    for (const [id, top, left] of snapshot.shellScrolls || []) {
+      const el = document.getElementById(id);
+      if (el) { el.scrollTop = top; el.scrollLeft = left; }
     }
     const section = document.getElementById(snapshot.sectionId);
     if (!section) return;
@@ -97,6 +104,7 @@ export function initNavigationHistory({ capture }) {
   window.addEventListener("pagehide", captureNavigationState);
   window.addEventListener("pageshow", () => { if (!restoring) updateNavigationBackButton(); });
   window.addEventListener("scroll", () => {
+    if (restoring) return;
     if (window.__navigationCaptureTimer) clearTimeout(window.__navigationCaptureTimer);
     window.__navigationCaptureTimer = setTimeout(captureNavigationState, 250);
   }, { passive: true, capture: true });
