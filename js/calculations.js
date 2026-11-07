@@ -1983,17 +1983,72 @@ function setupCalculationsForm() {
 }
 
 /** Привязка формы и фильтров без загрузки данных (данные — при открытии раздела). */
-export function bindCalculationsSection() {
+export // iOS standalone PWA may discard the previous page's history scroll snapshot.
+// Keep the clicked calculation row and its viewport offset independently.
+const CALC_RETURN_ANCHOR_KEY = "orders_calc_return_anchor_v2";
+let calcReturnAnchorApplied = false;
+
+function saveCalculationReturnAnchor(event) {
+  const link = event.target.closest("#calculationsTable tbody a[href]");
+  if (!link) return;
+  const row = link.closest("tr");
+  if (!row) return;
+  const rows = [...document.querySelectorAll("#calculationsTable tbody tr")];
+  const anchor = {
+    rowIndex: rows.indexOf(row),
+    rowTop: row.getBoundingClientRect().top,
+    scrollY: window.scrollY,
+    sectionScrollTop: document.getElementById("section-calculations")?.scrollTop || 0,
+    tableScrollTop: document.getElementById("calculationsTable")?.parentElement?.scrollTop || 0,
+    href: location.pathname,
+    at: Date.now(),
+  };
+  try { localStorage.setItem(CALC_RETURN_ANCHOR_KEY, JSON.stringify(anchor)); } catch {}
+  calcReturnAnchorApplied = false;
+}
+
+function restoreCalculationReturnAnchor() {
+  if (calcReturnAnchorApplied || !document.getElementById("section-calculations")?.classList.contains("active")) return;
+  let anchor;
+  try { anchor = JSON.parse(localStorage.getItem(CALC_RETURN_ANCHOR_KEY) || "null"); } catch { return; }
+  if (!anchor || anchor.href !== location.pathname || Date.now() - anchor.at > 86400000) return;
+  const rows = document.querySelectorAll("#calculationsTable tbody tr");
+  const row = rows[anchor.rowIndex];
+  if (!row || rows.length < 2) return;
+  calcReturnAnchorApplied = true;
+  const restore = () => {
+    const target = document.querySelectorAll("#calculationsTable tbody tr")[anchor.rowIndex];
+    if (!target) return;
+    // Scroll the actual iOS scroll container, not just window.scrollY.
+    const delta = target.getBoundingClientRect().top - anchor.rowTop;
+    const section = document.getElementById("section-calculations");
+    const scroller = document.scrollingElement;
+    const scrollableSection = section && section.scrollHeight > section.clientHeight + 2;
+    if (scrollableSection) section.scrollTop += delta;
+    else if (scroller) scroller.scrollTop += delta;
+    else window.scrollBy(0, delta);
+  };
+  requestAnimationFrame(() => {
+    restore();
+    setTimeout(restore, 300);
+    setTimeout(restore, 900);
+    setTimeout(restore, 1800);
+  });
+}
+
+function bindCalculationsSection() {
   ensureCurrentUserEmail();
   initCalculationsDateRangeDefaults();
   if (calculationsSectionBound) return;
   setupCalculationsForm();
+  document.addEventListener("click", saveCalculationReturnAnchor, true);
   calculationsSectionBound = true;
 }
 
 export async function initCalculationsSection() {
   bindCalculationsSection();
   await loadCalculations();
+  restoreCalculationReturnAnchor();
 }
 
 export async function initCalculationsPage() {
