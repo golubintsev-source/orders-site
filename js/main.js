@@ -179,9 +179,10 @@ async function init() {
   else await applySavedScroll(saved);
   await window.__appStartup?.complete();
   // The startup shell changes layout height on iOS PWA; restore after it is removed.
-  if (historySnapshot) {
-    await restoreNavigationScroll(historySnapshot);
-    await restoreHistoryRowAnchor(historySnapshot);
+  if (historySnapshot) await restoreNavigationScroll(historySnapshot);
+  if (getCurrentSectionId() === "calculations") {
+    const calculations = await import("./calculations.js");
+    calculations.restoreCalculationReturnAnchor();
   }
   void import("./nav-status.js").then((m) => m.initNavStatus()).catch(console.error);
   void import("./push-notifications.js").then((m) => m.initPushNotifications()).catch(console.error);
