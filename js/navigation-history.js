@@ -8,6 +8,7 @@ const URL_PREFIX = "orders_site_navigation_url_v1:";
 let restoring = false;
 let navigationLeaving = false;
 let captureExtra = null;
+let departureAnchor = null;
 
 function key() {
   let id = history.state?.[ENTRY];
@@ -36,6 +37,7 @@ export function captureNavigationState() {
     documentLeft: document.scrollingElement?.scrollLeft || 0,
     sectionTop: section?.scrollTop || 0, sectionLeft: section?.scrollLeft || 0,
     scrolls, shellScrolls, sectionId: section?.id || "",
+    anchor: departureAnchor,
     extra: captureExtra?.() || null,
   };
   try {
@@ -97,6 +99,16 @@ export async function restoreNavigationScroll(snapshot) {
   // iOS PWA can finish laying out the calculations table after the route resolves.
   await new Promise(resolve => setTimeout(resolve, 900));
   apply();
+  // As a fallback, return to the exact row whose order link was opened.
+  // This also handles iOS restoring scroll before the table has its final height.
+  if (snapshot.anchor?.sectionId === snapshot.sectionId && snapshot.anchor?.rowIndex >= 0) {
+    const section = document.getElementById(snapshot.sectionId);
+    const row = section?.querySelectorAll("table tbody tr")[snapshot.anchor.rowIndex];
+    if (row && (snapshot.documentTop || snapshot.y || 0) > 0 &&
+        Math.abs(window.scrollY - (snapshot.documentTop || snapshot.y)) > 60) {
+      row.scrollIntoView({ block: "center", behavior: "instant" });
+    }
+  }
   restoring = false;
 }
 
@@ -108,7 +120,15 @@ export function initNavigationHistory({ capture }) {
   // during pagehide, which must never replace the departure position.
   document.addEventListener("click", event => {
     const link = event.target.closest("a[href]");
-    if (link && link.origin === location.origin && !event.defaultPrevented) prepareNavigationDeparture();
+    if (link && link.origin === location.origin && !event.defaultPrevented) {
+      const section = link.closest(".content-section");
+      const row = link.closest("tbody tr");
+      departureAnchor = section && row ? {
+        sectionId: section.id,
+        rowIndex: [...section.querySelectorAll("table tbody tr")].indexOf(row),
+      } : null;
+      prepareNavigationDeparture();
+    }
   }, true);
   window.addEventListener("pagehide", () => { if (!restoring && !navigationLeaving) captureNavigationState(); });
   window.addEventListener("pageshow", () => { if (!restoring) updateNavigationBackButton(); });
