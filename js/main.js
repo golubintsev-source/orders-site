@@ -20,12 +20,6 @@ import { trySecretLoginFromUrl, getLoginKeyFromUrl } from "./secret-login.js";
 import { updateTopbarUserName } from "./user-names.js";
 import { initNavigationHistory, readNavigationState, restoreNavigationScroll, beginNavigationRestore, endNavigationRestore, updateNavigationBackButton } from "./navigation-history.js";
 
-async function restoreHistoryRowAnchor(snapshot) {
-  if (snapshot?.sectionId !== "section-calculations") return;
-  const calculations = await import("./calculations.js");
-  calculations.restoreCalculationReturnAnchor();
-}
-
 async function restoreHistoryFilters(snapshot) {
   if (snapshot?.sectionId !== "section-calculations" || !snapshot.extra?.calculations) return;
   const calculations = await import("./calculations.js");
@@ -44,7 +38,34 @@ async function navigateFromMenu(id) {
   await switchSection(id);
 }
 
+function bindOrderEditLinks() {
+  let openingOrder = false;
+  document.getElementById("appContainer")?.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest(".content-section a[href]");
+    if (!link || link.origin !== location.origin || (link.target && link.target !== "_self") || link.hasAttribute("download")) return;
+    const orderId = getOrderEditIdFromUrl(link);
+    if (orderId == null || getCurrentSectionId() === "new") return;
+
+    event.preventDefault();
+    if (openingOrder) return;
+    openingOrder = true;
+    const sourceUrl = location.href;
+    const row = link.closest("#calculationsTable tr[data-calculation-id]");
+    const navigationAnchor = row && {
+      calculationId: row.dataset.calculationId,
+      top: row.getBoundingClientRect().top,
+    };
+    const sourceSection = getCurrentSectionId();
+    const isCurrent = () => location.href === sourceUrl && getCurrentSectionId() === sourceSection;
+    void import("./orders-runtime.js").then((runtime) => runtime.ensureOrdersUI()).then((orders) => {
+      if (isCurrent()) return orders.editOrder(orderId, { navigationAnchor, isCurrent });
+    }).catch(reportError).finally(() => { openingOrder = false; });
+  });
+}
+
 function bindShell() {
+  bindOrderEditLinks();
   initSectionNavDropdown({ onSectionItemSelect: (id) => {
     void navigateFromMenu(id).catch(reportError);
   } });
@@ -99,8 +120,12 @@ async function openRoute({ savedApp = null, initial = false } = {}) {
     const runtime = await import("./orders-runtime.js");
     const orders = await runtime.ensureOrdersUI();
     if (viewId != null) await orders.viewOrder(viewId);
-    else await orders.editOrder(editId);
+    else await orders.editOrder(editId, { skipUrlSync: true });
   } else {
+    if (state.viewingOrderId != null || state.editingOrderId != null) {
+      const orders = await import("./orders.js");
+      orders.resetFormMode();
+    }
     await switchSection(sectionId, {
       skipUrlSync: true, logInitialAccess: initial, restoreMessagesChat: true,
     });
@@ -145,11 +170,11 @@ async function init() {
     }),
   });
   const historySnapshot = readNavigationState();
-  if (historySnapshot) beginNavigationRestore();
+  const startupRestoration = historySnapshot && beginNavigationRestore();
   await restoreHistoryFilters(historySnapshot);
   const saved = readSavedPlaceForCurrentPage(user.id);
   const skipResume = consumeSkipUserPlaceResume();
-  if (!skipResume && !saved && shouldRedirectToSavedPlace(captureHref(), readUserPlace(user.id)?.href)) {
+  if (!historySnapshot && !skipResume && !saved && shouldRedirectToSavedPlace(captureHref(), readUserPlace(user.id)?.href)) {
     window.location.replace(getResumeHref(user.id, captureHref()));
     return;
   }
@@ -164,26 +189,19 @@ async function init() {
   bindShell();
   window.addEventListener("popstate", () => {
     const snapshot = readNavigationState();
-    beginNavigationRestore();
+    const restoration = beginNavigationRestore();
     void (async () => {
       await restoreHistoryFilters(snapshot);
       await openRoute();
-      await restoreNavigationScroll(snapshot);
-      await restoreHistoryRowAnchor(snapshot);
+      await restoreNavigationScroll(snapshot, restoration);
       updateNavigationBackButton();
-    })().catch((error) => { endNavigationRestore(); reportError(error); });
+    })().catch((error) => { endNavigationRestore(restoration); reportError(error); });
   });
   if (routeReady) await routeReady;
   else await openRoute({ savedApp: skipResume ? null : saved?.app, initial: true });
-  if (historySnapshot) await restoreNavigationScroll(historySnapshot);
-  else await applySavedScroll(saved);
   await window.__appStartup?.complete();
-  // The startup shell changes layout height on iOS PWA; restore after it is removed.
-  if (historySnapshot) await restoreNavigationScroll(historySnapshot);
-  if (getCurrentSectionId() === "calculations") {
-    const calculations = await import("./calculations.js");
-    calculations.restoreCalculationReturnAnchor();
-  }
+  if (historySnapshot) await restoreNavigationScroll(historySnapshot, startupRestoration);
+  else await applySavedScroll(saved);
   void import("./nav-status.js").then((m) => m.initNavStatus()).catch(console.error);
   void import("./push-notifications.js").then((m) => m.initPushNotifications()).catch(console.error);
 }

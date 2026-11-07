@@ -8,7 +8,8 @@ const URL_PREFIX = "orders_site_navigation_url_v1:";
 let restoring = false;
 let navigationLeaving = false;
 let captureExtra = null;
-let departureAnchor = null;
+let restoreGeneration = 0;
+const entrySnapshots = new Map();
 
 function key() {
   let id = history.state?.[ENTRY];
@@ -18,7 +19,7 @@ function key() {
   return id;
 }
 
-export function captureNavigationState() {
+export function captureNavigationState(anchor = null) {
   if (restoring || navigationLeaving) return null;
   const id = key();
   const section = document.querySelector(".content-section.active");
@@ -37,50 +38,75 @@ export function captureNavigationState() {
     documentLeft: document.scrollingElement?.scrollLeft || 0,
     sectionTop: section?.scrollTop || 0, sectionLeft: section?.scrollLeft || 0,
     scrolls, shellScrolls, sectionId: section?.id || "",
-    anchor: departureAnchor,
+    anchor,
     extra: captureExtra?.() || null,
   };
+  entrySnapshots.set(id, snapshot);
   try {
-    sessionStorage.setItem(PREFIX + id, JSON.stringify(snapshot));
-    sessionStorage.setItem(URL_PREFIX + location.pathname + location.search + location.hash, JSON.stringify(snapshot));
+    const serialized = JSON.stringify(snapshot);
+    sessionStorage.setItem(PREFIX + id, serialized);
+    sessionStorage.setItem(URL_PREFIX + location.pathname + location.search + location.hash, serialized);
   } catch {}
   return snapshot;
 }
 
 export function readNavigationState() {
   const id = history.state?.[ENTRY];
+  const inMemory = entrySnapshots.get(id);
+  if (inMemory?.url === location.href) return inMemory;
   try {
     const data = JSON.parse((id && sessionStorage.getItem(PREFIX + id)) || sessionStorage.getItem(URL_PREFIX + location.pathname + location.search + location.hash) || "null");
     return data?.url === location.href ? data : null;
   } catch { return null; }
 }
 
-export function beginNavigationRestore() { restoring = true; navigationLeaving = false; }
+export function beginNavigationRestore() {
+  restoring = true;
+  navigationLeaving = false;
+  clearTimeout(window.__navigationCaptureTimer);
+  return ++restoreGeneration;
+}
 export function prepareNavigationDeparture() {
   if (restoring || navigationLeaving) return;
   captureNavigationState();
   navigationLeaving = true;
   clearTimeout(window.__navigationCaptureTimer);
 }
-export function endNavigationRestore() { restoring = false; }
+export function endNavigationRestore(generation) {
+  if (generation === restoreGeneration) restoring = false;
+}
 
-export async function restoreNavigationScroll(snapshot) {
-  if (!snapshot) { restoring = false; return; }
-  restoring = true;
-  const apply = () => {
-    const top = snapshot.documentTop ?? snapshot.y ?? 0;
-    const left = snapshot.documentLeft ?? snapshot.x ?? 0;
-    window.scrollTo(left, top);
-    if (document.scrollingElement) {
-      document.scrollingElement.scrollTop = top;
-      document.scrollingElement.scrollLeft = left;
+function restoreRowOffset(section, anchor) {
+  if (!anchor?.calculationId) return;
+  const row = section.querySelector(`#calculationsTable tr[data-calculation-id="${CSS.escape(anchor.calculationId)}"]`);
+  if (!row) return;
+
+  // Reposition the same transaction if a refresh added or removed rows above it.
+  for (let el = row.parentElement; el && el !== document.scrollingElement; el = el.parentElement) {
+    const delta = row.getBoundingClientRect().top - anchor.top;
+    if (Math.abs(delta) < 1) return;
+    if (el.scrollHeight > el.clientHeight && /^(auto|scroll|overlay)$/.test(getComputedStyle(el).overflowY)) {
+      el.scrollTop += delta;
     }
+  }
+  const delta = row.getBoundingClientRect().top - anchor.top;
+  if (Math.abs(delta) >= 1) window.scrollBy(0, delta);
+}
+
+export async function restoreNavigationScroll(snapshot, generation) {
+  try {
+    if (!snapshot) return;
+    // Wait for the active section's layout and for native history traversal to finish.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (generation !== restoreGeneration) return;
+    const section = document.getElementById(snapshot.sectionId);
+    if (!section?.classList.contains("active")) return;
+
+    window.scrollTo(snapshot.documentLeft || snapshot.x || 0, snapshot.documentTop || snapshot.y || 0);
     for (const [id, top, left] of snapshot.shellScrolls || []) {
       const el = document.getElementById(id);
       if (el) { el.scrollTop = top; el.scrollLeft = left; }
     }
-    const section = document.getElementById(snapshot.sectionId);
-    if (!section) return;
     section.scrollTop = snapshot.sectionTop || 0;
     section.scrollLeft = snapshot.sectionLeft || 0;
     const nodes = section.querySelectorAll("*");
@@ -88,57 +114,43 @@ export async function restoreNavigationScroll(snapshot) {
       const el = nodes[index];
       if (el) { el.scrollTop = top; el.scrollLeft = left; }
     }
-  };
-  apply();
-  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  apply();
-  await new Promise(resolve => setTimeout(resolve, 200));
-  apply();
-  await new Promise(resolve => setTimeout(resolve, 400));
-  apply();
-  // iOS PWA can finish laying out the calculations table after the route resolves.
-  await new Promise(resolve => setTimeout(resolve, 900));
-  apply();
-  // As a fallback, return to the exact row whose order link was opened.
-  // This also handles iOS restoring scroll before the table has its final height.
-  if (snapshot.anchor?.sectionId === snapshot.sectionId && snapshot.anchor?.rowIndex >= 0) {
-    const section = document.getElementById(snapshot.sectionId);
-    const row = section?.querySelectorAll("table tbody tr")[snapshot.anchor.rowIndex];
-    if (row && (snapshot.documentTop || snapshot.y || 0) > 0 &&
-        Math.abs(window.scrollY - (snapshot.documentTop || snapshot.y)) > 60) {
-      row.scrollIntoView({ block: "center", behavior: "instant" });
-    }
+    restoreRowOffset(section, snapshot.anchor);
+  } finally {
+    endNavigationRestore(generation);
   }
-  restoring = false;
 }
 
 export function initNavigationHistory({ capture }) {
   captureExtra = capture;
   key();
   try { history.scrollRestoration = "manual"; } catch {}
-  // Freeze the outgoing snapshot on link activation. iOS may scroll to top
-  // during pagehide, which must never replace the departure position.
+  // Observe links after app handlers so an intercepted SPA link doesn't freeze capture.
   document.addEventListener("click", event => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const link = event.target.closest("a[href]");
-    if (link && link.origin === location.origin && !event.defaultPrevented) {
-      const section = link.closest(".content-section");
-      const row = link.closest("tbody tr");
-      departureAnchor = section && row ? {
-        sectionId: section.id,
-        rowIndex: [...section.querySelectorAll("table tbody tr")].indexOf(row),
-      } : null;
+    if (link?.origin === location.origin && (!link.target || link.target === "_self") &&
+        !link.hasAttribute("download") && (link.pathname !== location.pathname || link.search !== location.search)) {
       prepareNavigationDeparture();
     }
-  }, true);
-  window.addEventListener("pagehide", () => { if (!restoring && !navigationLeaving) captureNavigationState(); });
-  window.addEventListener("pageshow", () => { if (!restoring) updateNavigationBackButton(); });
+  });
+  window.addEventListener("pagehide", () => captureNavigationState());
+  window.addEventListener("pageshow", (event) => {
+    updateNavigationBackButton();
+    if (!event.persisted) return;
+    navigationLeaving = false;
+    const snapshot = readNavigationState();
+    if (!snapshot || snapshot.sectionId !== document.querySelector(".content-section.active")?.id) return;
+    void restoreNavigationScroll(snapshot, beginNavigationRestore());
+  });
   window.addEventListener("scroll", () => {
-    if (restoring) return;
+    if (restoring || navigationLeaving) return;
     if (window.__navigationCaptureTimer) clearTimeout(window.__navigationCaptureTimer);
     window.__navigationCaptureTimer = setTimeout(captureNavigationState, 250);
   }, { passive: true, capture: true });
   document.getElementById("navigationBackBtn")?.addEventListener("click", () => {
-    if (history.length > 1) history.back();
+    if (history.length <= 1 || restoring || navigationLeaving) return;
+    prepareNavigationDeparture();
+    history.back();
   });
   updateNavigationBackButton();
 }

@@ -158,8 +158,8 @@ export function getOrderIdFromUrl() {
 }
 
 /** ID заказа для редактирования из ?edit_order_id= или null. */
-export function getOrderEditIdFromUrl() {
-  const raw = new URLSearchParams(window.location.search).get("edit_order_id");
+export function getOrderEditIdFromUrl(url = window.location) {
+  const raw = new URLSearchParams(url.search).get("edit_order_id");
   if (raw == null || raw === "") return null;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : null;

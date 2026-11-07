@@ -367,7 +367,7 @@ function toggleSectionNavDropdown() {
 /**
  * Переключить раздел и обновить заголовок в шапке (без открытого дропдауна).
  * @param {string} sectionId
- * @param {{ skipUrlSync?: boolean, logInitialAccess?: boolean, skipAccessLog?: boolean, restoreMessagesChat?: boolean }} [opts]
+ * @param {{ skipUrlSync?: boolean, logInitialAccess?: boolean, skipAccessLog?: boolean, restoreMessagesChat?: boolean, navigationAnchor?: object }} [opts]
  */
 export function switchSection(sectionId, opts = {}) {
   if (!sectionId) return;
@@ -381,7 +381,7 @@ export function switchSection(sectionId, opts = {}) {
   if (!contentSections.length) return;
 
   const prevSectionId = currentSectionId;
-  if (prevSectionId !== sectionId && !opts.skipUrlSync) captureNavigationState();
+  if (prevSectionId !== sectionId && !opts.skipUrlSync) captureNavigationState(opts.navigationAnchor);
   const { skipUrlSync = false, skipAccessLog = false } = opts;
 
   if (prevSectionId !== sectionId) {
