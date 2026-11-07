@@ -219,6 +219,18 @@ async function loadCalcCommentSuggestions() {
  * «Касса» и «Безнал» в «Откуда»/«Куда» — только для admin/user.
  * Текущее значение при редактировании сохраняется в списке.
  */
+function syncCalcFromToOptions() {
+  const from = document.getElementById("calcFrom");
+  const to = document.getElementById("calcTo");
+  if (!from || !to) return;
+  for (const option of to.options) {
+    option.disabled = Boolean(from.value && option.value === from.value);
+  }
+  for (const option of from.options) {
+    option.disabled = Boolean(to.value && option.value === to.value);
+  }
+}
+
 export function applyCalcPlaceSelectsForRole() {
   const allowed = canSelectKassaBeznal();
   for (const id of CALC_PLACE_SELECT_IDS) {
@@ -257,6 +269,7 @@ export function applyCalcPlaceSelectsForRole() {
       if (sel.value !== current) sel.value = "";
     }
   }
+  syncCalcFromToOptions();
 }
 
 function bindCalcPlaceSelectRoleGuards() {
@@ -1542,6 +1555,7 @@ function resetForm() {
   const commentEl = document.getElementById("calcComment");
   if (fromEl) fromEl.value = "";
   if (toEl) toEl.value = "";
+  syncCalcFromToOptions();
   if (amountEl) {
     amountEl.value = "";
     amountEl.classList.remove("sum-input-invalid");
@@ -1903,11 +1917,11 @@ function setupCalculationsForm() {
   const toEl = document.getElementById("calcTo");
   if (fromEl && !fromEl.dataset.fromToBound) {
     fromEl.dataset.fromToBound = "1";
-    fromEl.addEventListener("change", clearFormError);
+    fromEl.addEventListener("change", () => { clearFormError(); syncCalcFromToOptions(); });
   }
   if (toEl && !toEl.dataset.fromToBound) {
     toEl.dataset.fromToBound = "1";
-    toEl.addEventListener("change", clearFormError);
+    toEl.addEventListener("change", () => { clearFormError(); syncCalcFromToOptions(); });
   }
   bindCalcPlaceSelectRoleGuards();
   applyCalcPlaceSelectsForRole();
