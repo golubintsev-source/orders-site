@@ -3290,18 +3290,19 @@ export async function viewOrder(orderId) {
   scheduleSaveUserPlace();
 }
 
-export async function editOrder(orderId) {
+export async function editOrder(orderId, { skipUrlSync = false, navigationAnchor, isCurrent = () => true } = {}) {
   if (!canMutateOrders()) {
     setMessage("Недостаточно прав для редактирования заявок", "#d32f2f");
     return;
   }
 
   await import("./orders-runtime.js").then((m) => m.ensureOrderFormReady());
+  if (!isCurrent()) return;
   orderFormAtomicRequest = null;
 
   state.viewingOrderId = null;
   hideOrderViewQr();
-  syncOrderIdInUrl(null);
+  if (!skipUrlSync) syncOrderIdInUrl(null);
   applyOrderFormReadOnly(false);
 
   let data = null;
@@ -3312,6 +3313,7 @@ export async function editOrder(orderId) {
     setMessage("Ошибка загрузки заявки", "#d32f2f");
     return;
   }
+  if (!isCurrent()) return;
   if (data?.error) {
     console.error("Ошибка загрузки заявки:", data.error);
     setMessage("Ошибка загрузки заявки", "#d32f2f");
@@ -3328,10 +3330,11 @@ export async function editOrder(orderId) {
     return;
   }
 
-  state.editingOrderId = orderId;
-  state.editingOrderDescription = data.description || null;
   await fillForm(data);
   const orderCalculations = await import("./order-calculations.js");
+  if (!isCurrent()) return;
+  state.editingOrderId = orderId;
+  state.editingOrderDescription = data.description || null;
   void orderCalculations.showOrderCalculations(data).catch((error) => {
     console.error("Ошибка загрузки расчётов заказа:", error);
   });
@@ -3355,11 +3358,11 @@ export async function editOrder(orderId) {
   if (cancelEditBtnTop) cancelEditBtnTop.style.display = "inline-block";
 
   captureOrderFormReturnSection();
-  switchSection("new", { skipAccessLog: true });
+  switchSection("new", { skipAccessLog: true, skipUrlSync, navigationAnchor });
   syncOrderEditIdInUrl(orderId);
   logOrderPageAccess({ orderId, mode: "edit" });
 
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo(0, 0);
   scheduleSaveUserPlace();
 }
 

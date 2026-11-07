@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v135: тайм-аут и безопасный повтор зависшего сохранения заказа.
-const STATIC_CACHE = "orders-site-static-v135";
+// v136: восстановление прокрутки при возврате между разделами.
+const STATIC_CACHE = "orders-site-static-v136";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -29,7 +29,7 @@ const PRECACHE_URLS = [
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",
   "/js/boot-route.js",
-  "/js/main.js?v=45",
+  "/js/main.js?v=46",
   "/js/config.js",
   "/js/read-requests.js",
   "/js/state.js",
@@ -42,6 +42,7 @@ const PRECACHE_URLS = [
   "/js/ordersTableStickyHeader.js",
   "/js/ordersTableMobileFit.js",
   "/js/app-routes.js",
+  "/js/navigation-history.js",
   "/js/roles.js",
   "/js/format.js",
   "/js/autogrow-textarea.js",
