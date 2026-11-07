@@ -122,6 +122,36 @@ const calcColumnFilters = {
   order: "",
 };
 
+/** State of the calculations table for browser-history restoration. */
+export function captureCalculationsView() {
+  return {
+    filters: { ...calcColumnFilters },
+    search: appliedCalculationsSearchQuery,
+    amountFrom: appliedCalcAmountFrom, amountTo: appliedCalcAmountTo,
+    dateFrom: appliedCalcDateFromYmd, dateTo: appliedCalcDateToYmd,
+    inputs: Object.fromEntries(["calcSearchInput", "calcAmountFrom", "calcAmountTo", "calcDateFrom", "calcDateTo"]
+      .map(id => [id, document.getElementById(id)?.value ?? ""])),
+  };
+}
+
+export function restoreCalculationsView(saved) {
+  if (!saved?.filters) return;
+  Object.assign(calcColumnFilters, saved.filters);
+  calcFiltersInitialized = true;
+  appliedCalculationsSearchQuery = saved.search ?? null;
+  appliedCalcAmountFrom = saved.amountFrom ?? null;
+  appliedCalcAmountTo = saved.amountTo ?? null;
+  appliedCalcDateFromYmd = saved.dateFrom || "";
+  appliedCalcDateToYmd = saved.dateTo || "";
+  for (const [id, value] of Object.entries(saved.inputs || {})) {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  }
+  updateCalculationsSearchButton();
+  updateCalcFilterHeadingStates();
+  renderCalculationsTableFromCache();
+}
+
 let calcFilterPopoverEl = null;
 let calcFilterPopoverType = "";
 let calcFiltersInitialized = false;
