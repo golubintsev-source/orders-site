@@ -20,6 +20,12 @@ import { trySecretLoginFromUrl, getLoginKeyFromUrl } from "./secret-login.js";
 import { updateTopbarUserName } from "./user-names.js";
 import { initNavigationHistory, readNavigationState, restoreNavigationScroll, beginNavigationRestore, endNavigationRestore, updateNavigationBackButton } from "./navigation-history.js";
 
+async function restoreHistoryRowAnchor(snapshot) {
+  if (snapshot?.sectionId !== "section-calculations") return;
+  const calculations = await import("./calculations.js");
+  calculations.restoreCalculationReturnAnchor();
+}
+
 async function restoreHistoryFilters(snapshot) {
   if (snapshot?.sectionId !== "section-calculations" || !snapshot.extra?.calculations) return;
   const calculations = await import("./calculations.js");
@@ -163,6 +169,7 @@ async function init() {
       await restoreHistoryFilters(snapshot);
       await openRoute();
       await restoreNavigationScroll(snapshot);
+      await restoreHistoryRowAnchor(snapshot);
       updateNavigationBackButton();
     })().catch((error) => { endNavigationRestore(); reportError(error); });
   });
@@ -172,7 +179,10 @@ async function init() {
   else await applySavedScroll(saved);
   await window.__appStartup?.complete();
   // The startup shell changes layout height on iOS PWA; restore after it is removed.
-  if (historySnapshot) await restoreNavigationScroll(historySnapshot);
+  if (historySnapshot) {
+    await restoreNavigationScroll(historySnapshot);
+    await restoreHistoryRowAnchor(historySnapshot);
+  }
   void import("./nav-status.js").then((m) => m.initNavStatus()).catch(console.error);
   void import("./push-notifications.js").then((m) => m.initPushNotifications()).catch(console.error);
 }
