@@ -3,7 +3,7 @@ import { state } from "./state.js";
 import { formatAmount, tryParseRublesInteger } from "./format.js";
 import { getCalcDisplayAuthor, formatCalcDisplayComment, formatInstallationCalculationDisplayComment } from "./calculations-format.js";
 import { defaultSalaryPaymentFrom, SALARY_PAYMENT_FROM_PLACES } from "./salary-payment.js";
-import { shortLoginByEmail } from "./user-names.js";
+import { shortLoginByEmail, displayNameByEmail } from "./user-names.js";
 import { canEditManualCalculations, canSelectKassaBeznal, KASSA_BEZNAL_PLACES } from "./roles.js";
 import { getEditors } from "./settings.js";
 import { bindAutogrowTextarea, resizeTextarea } from "./autogrow-textarea.js";
@@ -138,7 +138,7 @@ function buildPayload() {
   const recipient = needsRecipient ? selectedRecipient : to;
   const comment = String(document.getElementById("orderCalcComment")?.value || "").trim();
   const parsed = tryParseRublesInteger(document.getElementById("orderCalcAmount")?.value || "");
-  if (!SALARY_PAYMENT_FROM_PLACES.includes(from)) throw new Error("Выберите, откуда выплачивается сумма");
+  if (!SALARY_PAYMENT_FROM_PLACES.includes(from) || from === "Другое") throw new Error("Выберите, откуда выплачивается сумма");
   if (!canSelectKassaBeznal() && KASSA_BEZNAL_PLACES.has(from)) throw new Error("Этот источник недоступен для вашей роли");
   if (!["Монтаж", "Откосы", "Комиссия", "Другое"].includes(to)) throw new Error("Выберите направление выплаты");
   if (needsRecipient && !recipient) throw new Error("Выберите монтажника");
@@ -199,7 +199,9 @@ export async function showOrderCalculations(order) {
     for (const option of from.options) {
       option.disabled = !canSelectKassaBeznal() && KASSA_BEZNAL_PLACES.has(option.value);
     }
-    from.value = defaultSalaryPaymentFrom();
+    const userName = displayNameByEmail(state.currentUser?.email);
+    from.value = ["Лена", "Алексей"].includes(userName) ? "" : defaultSalaryPaymentFrom();
+    if (from.value === "Другое") from.value = "";
   }
   const to = document.getElementById("orderCalcTo");
   if (to) to.value = "Монтаж";
