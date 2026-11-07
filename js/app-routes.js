@@ -169,6 +169,15 @@ export function getOrderEditIdFromUrl() {
  * Синхронизировать ?order_id= в адресной строке (replaceState).
  * @param {number | string | null | undefined} orderId — null/undefined убирает параметр
  */
+/** Persist the edit route in the current history entry without adding an extra step. */
+export function syncOrderEditIdInUrl(orderId) {
+  const u = new URL(window.location.href);
+  u.searchParams.delete("order_id");
+  if (orderId == null) u.searchParams.delete("edit_order_id");
+  else u.searchParams.set("edit_order_id", String(orderId));
+  history.replaceState(history.state, "", u.pathname + u.search + u.hash);
+}
+
 export function syncOrderIdInUrl(orderId) {
   const u = new URL(window.location.href);
   if (orderId == null || orderId === "") {
@@ -181,7 +190,7 @@ export function syncOrderIdInUrl(orderId) {
     u.searchParams.set("order_id", next);
   }
   const path = u.pathname + u.search + u.hash;
-  history.replaceState(null, "", path || "/");
+  history.replaceState(history.state, "", path || "/");
 }
 
 const CHAT_PEER_RE =
@@ -211,7 +220,7 @@ export function syncChatPeerInUrl(peerId) {
     u.searchParams.set("chat", next);
   }
   const path = u.pathname + u.search + u.hash;
-  history.replaceState(null, "", path || "/");
+  history.replaceState(history.state, "", path || "/");
 }
 
 function stripHashAndExportParam() {
@@ -233,10 +242,10 @@ export function tryConsumeOrdersExcelExport(canAccessOrdersExcel) {
   if (!isExcel) return false;
   const clean = stripHashAndExportParam();
   if (!canAccessOrdersExcel) {
-    history.replaceState(null, "", clean);
+    history.replaceState(history.state, "", clean);
     return false;
   }
-  history.replaceState(null, "", clean);
+  history.replaceState(history.state, "", clean);
   void import("./ordersExcelExport.js").then((m) => m.exportOrdersToExcel());
   return true;
 }
@@ -264,7 +273,7 @@ export function migrateLegacyHashToPathIfNeeded() {
   if (usesHashOnlyRouting()) return;
   const h = window.location.hash.replace(/^#/, "");
   if (!h || h === "orders-excel" || !ROUTE_SECTION_IDS.has(h)) return;
-  history.replaceState(null, "", pathForRouteSection(h) + window.location.search);
+  history.replaceState(history.state, "", pathForRouteSection(h) + window.location.search);
 }
 
 export function syncBrowserUrlToSection(sectionId) {
@@ -285,7 +294,7 @@ export function syncBrowserUrlToSection(sectionId) {
     const targetHash = sectionId === "all" ? "" : `#${sectionId}`;
     const next = `${base}${targetHash}`;
     if (`${window.location.pathname}${window.location.search}${window.location.hash}` === next) return;
-    history.pushState(null, "", next);
+    history.pushState({}, "", next);
     updateNavigationBackButton();
     return;
   }
