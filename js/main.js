@@ -139,6 +139,7 @@ async function init() {
     }),
   });
   const historySnapshot = readNavigationState();
+  if (historySnapshot) beginNavigationRestore();
   await restoreHistoryFilters(historySnapshot);
   const saved = readSavedPlaceForCurrentPage(user.id);
   const skipResume = consumeSkipUserPlaceResume();
