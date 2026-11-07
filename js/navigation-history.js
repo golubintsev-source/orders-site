@@ -4,6 +4,8 @@
  */
 const PREFIX = "orders_site_navigation_v1:";
 const ENTRY = "__ordersNavigationEntry";
+const URL_PREFIX = "orders_site_navigation_url_v1:";
+let restoring = false;
 let captureExtra = null;
 
 function key() {
@@ -15,6 +17,7 @@ function key() {
 }
 
 export function captureNavigationState() {
+  if (restoring) return null;
   const id = key();
   const section = document.querySelector(".content-section.active");
   const scrolls = [];
@@ -31,21 +34,24 @@ export function captureNavigationState() {
     scrolls, sectionId: section?.id || "",
     extra: captureExtra?.() || null,
   };
-  try { sessionStorage.setItem(PREFIX + id, JSON.stringify(snapshot)); } catch {}
+  try {
+    sessionStorage.setItem(PREFIX + id, JSON.stringify(snapshot));
+    sessionStorage.setItem(URL_PREFIX + location.pathname + location.search + location.hash, JSON.stringify(snapshot));
+  } catch {}
   return snapshot;
 }
 
 export function readNavigationState() {
   const id = history.state?.[ENTRY];
-  if (!id) return null;
   try {
-    const data = JSON.parse(sessionStorage.getItem(PREFIX + id) || "null");
+    const data = JSON.parse((id && sessionStorage.getItem(PREFIX + id)) || sessionStorage.getItem(URL_PREFIX + location.pathname + location.search + location.hash) || "null");
     return data?.url === location.href ? data : null;
   } catch { return null; }
 }
 
 export async function restoreNavigationScroll(snapshot) {
   if (!snapshot) return;
+  restoring = true;
   const apply = () => {
     const top = snapshot.documentTop ?? snapshot.y ?? 0;
     const left = snapshot.documentLeft ?? snapshot.x ?? 0;
@@ -74,6 +80,7 @@ export async function restoreNavigationScroll(snapshot) {
   // iOS PWA can finish laying out the calculations table after the route resolves.
   await new Promise(resolve => setTimeout(resolve, 900));
   apply();
+  restoring = false;
 }
 
 export function initNavigationHistory({ capture }) {
@@ -88,6 +95,7 @@ export function initNavigationHistory({ capture }) {
     if (event.target.closest("a[href]")) captureNavigationState();
   }, true);
   window.addEventListener("pagehide", captureNavigationState);
+  window.addEventListener("pageshow", () => { if (!restoring) updateNavigationBackButton(); });
   window.addEventListener("scroll", () => {
     if (window.__navigationCaptureTimer) clearTimeout(window.__navigationCaptureTimer);
     window.__navigationCaptureTimer = setTimeout(captureNavigationState, 250);
