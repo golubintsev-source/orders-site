@@ -152,6 +152,8 @@ export function restoreCalculationsView(saved) {
   renderCalculationsTableFromCache();
 }
 
+if (typeof window !== "undefined") window.__captureCalculationsView = captureCalculationsView;
+
 let calcFilterPopoverEl = null;
 let calcFilterPopoverType = "";
 let calcFiltersInitialized = false;
