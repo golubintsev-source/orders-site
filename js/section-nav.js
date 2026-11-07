@@ -1,3 +1,4 @@
+import { captureNavigationState } from "./navigation-history.js";
 import { state } from "./state.js";
 import { enterSection, leaveSection } from "./section-loader.js";
 import { scheduleOrdersStickyHeaderUpdate } from "./ordersTableStickyHeader.js";
@@ -380,6 +381,7 @@ export function switchSection(sectionId, opts = {}) {
   if (!contentSections.length) return;
 
   const prevSectionId = currentSectionId;
+  if (prevSectionId !== sectionId && !opts.skipUrlSync) captureNavigationState();
   const { skipUrlSync = false, skipAccessLog = false } = opts;
 
   if (prevSectionId !== sectionId) {
