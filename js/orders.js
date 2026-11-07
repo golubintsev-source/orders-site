@@ -21,7 +21,7 @@ import {
   STANDALONE_SECTION_NAV_ID,
 } from "./section-nav.js";
 import { markSkipUserPlaceResume, rememberUserPlaceNow, scheduleSaveUserPlace } from "./user-place.js";
-import { pathForRouteSection, syncOrderIdInUrl } from "./app-routes.js";
+import { pathForRouteSection, syncOrderIdInUrl, syncOrderEditIdInUrl } from "./app-routes.js";
 import { logOrderPageAccess } from "./access-log.js";
 import { hideOrderViewQr, showOrderViewQr } from "./order-qr.js";
 import {
@@ -3357,6 +3357,7 @@ export async function editOrder(orderId) {
 
   captureOrderFormReturnSection();
   switchSection("new", { skipAccessLog: true });
+  syncOrderEditIdInUrl(orderId);
   logOrderPageAccess({ orderId, mode: "edit" });
 
   window.scrollTo({ top: 0, behavior: "smooth" });
