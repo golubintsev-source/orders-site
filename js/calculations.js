@@ -2007,7 +2007,7 @@ function saveCalculationReturnAnchor(event) {
   calcReturnAnchorApplied = false;
 }
 
-function restoreCalculationReturnAnchor() {
+export function restoreCalculationReturnAnchor() {
   if (calcReturnAnchorApplied || !document.getElementById("section-calculations")?.classList.contains("active")) return;
   let anchor;
   try { anchor = JSON.parse(localStorage.getItem(CALC_RETURN_ANCHOR_KEY) || "null"); } catch { return; }
