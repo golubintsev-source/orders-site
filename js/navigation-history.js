@@ -25,6 +25,9 @@ export function captureNavigationState() {
   }
   const snapshot = {
     url: location.href, x: window.scrollX, y: window.scrollY,
+    documentTop: document.scrollingElement?.scrollTop || 0,
+    documentLeft: document.scrollingElement?.scrollLeft || 0,
+    sectionTop: section?.scrollTop || 0, sectionLeft: section?.scrollLeft || 0,
     scrolls, sectionId: section?.id || "",
     extra: captureExtra?.() || null,
   };
@@ -44,9 +47,17 @@ export function readNavigationState() {
 export async function restoreNavigationScroll(snapshot) {
   if (!snapshot) return;
   const apply = () => {
-    window.scrollTo(snapshot.x || 0, snapshot.y || 0);
+    const top = snapshot.documentTop ?? snapshot.y ?? 0;
+    const left = snapshot.documentLeft ?? snapshot.x ?? 0;
+    window.scrollTo(left, top);
+    if (document.scrollingElement) {
+      document.scrollingElement.scrollTop = top;
+      document.scrollingElement.scrollLeft = left;
+    }
     const section = document.getElementById(snapshot.sectionId);
     if (!section) return;
+    section.scrollTop = snapshot.sectionTop || 0;
+    section.scrollLeft = snapshot.sectionLeft || 0;
     const nodes = section.querySelectorAll("*");
     for (const [index, top, left] of snapshot.scrolls || []) {
       const el = nodes[index];
@@ -60,6 +71,9 @@ export async function restoreNavigationScroll(snapshot) {
   apply();
   await new Promise(resolve => setTimeout(resolve, 400));
   apply();
+  // iOS PWA can finish laying out the calculations table after the route resolves.
+  await new Promise(resolve => setTimeout(resolve, 900));
+  apply();
 }
 
 export function initNavigationHistory({ capture }) {
@@ -68,6 +82,9 @@ export function initNavigationHistory({ capture }) {
   try { history.scrollRestoration = "manual"; } catch {}
   // Capture before normal links (including the order link in calculations) navigate.
   document.addEventListener("click", event => {
+    if (event.target.closest("a[href]")) captureNavigationState();
+  }, true);
+  document.addEventListener("pointerdown", event => {
     if (event.target.closest("a[href]")) captureNavigationState();
   }, true);
   window.addEventListener("pagehide", captureNavigationState);
