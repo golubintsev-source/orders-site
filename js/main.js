@@ -18,7 +18,7 @@ import {
 } from "./user-place.js";
 import { trySecretLoginFromUrl, getLoginKeyFromUrl } from "./secret-login.js";
 import { updateTopbarUserName } from "./user-names.js";
-import { initNavigationHistory, readNavigationState, restoreNavigationScroll, updateNavigationBackButton } from "./navigation-history.js";
+import { initNavigationHistory, readNavigationState, restoreNavigationScroll, beginNavigationRestore, endNavigationRestore, updateNavigationBackButton } from "./navigation-history.js";
 
 async function restoreHistoryFilters(snapshot) {
   if (snapshot?.sectionId !== "section-calculations" || !snapshot.extra?.calculations) return;
@@ -156,13 +156,14 @@ async function init() {
   refreshSectionNavAfterProfile();
   bindShell();
   window.addEventListener("popstate", () => {
+    const snapshot = readNavigationState();
+    beginNavigationRestore();
     void (async () => {
-      const snapshot = readNavigationState();
       await restoreHistoryFilters(snapshot);
       await openRoute();
       await restoreNavigationScroll(snapshot);
       updateNavigationBackButton();
-    })().catch(reportError);
+    })().catch((error) => { endNavigationRestore(); reportError(error); });
   });
   if (routeReady) await routeReady;
   else await openRoute({ savedApp: skipResume ? null : saved?.app, initial: true });
