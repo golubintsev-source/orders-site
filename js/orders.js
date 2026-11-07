@@ -3071,7 +3071,6 @@ function clearStickyOrderFormIds() {
   state.viewingOrderId = null;
   state.orderFormReturnSectionId = null;
   hideOrderViewQr();
-  syncOrderIdInUrl(null);
 }
 
 async function applyPostOrderFormNavigation(returnSectionId, { savedOrderId = null, reloadOrders = true } = {}) {
