@@ -18,6 +18,13 @@ import {
 } from "./user-place.js";
 import { trySecretLoginFromUrl, getLoginKeyFromUrl } from "./secret-login.js";
 import { updateTopbarUserName } from "./user-names.js";
+import { initNavigationHistory, readNavigationState, restoreNavigationScroll, updateNavigationBackButton } from "./navigation-history.js";
+
+async function restoreHistoryFilters(snapshot) {
+  if (snapshot?.sectionId !== "section-calculations" || !snapshot.extra?.calculations) return;
+  const calculations = await import("./calculations.js");
+  calculations.restoreCalculationsView(snapshot.extra.calculations);
+}
 
 async function navigateFromMenu(id) {
   if (state.viewingOrderId != null || state.editingOrderId != null) {
@@ -125,6 +132,14 @@ async function init() {
       };
     },
   });
+  initNavigationHistory({
+    capture: () => ({
+      calculations: document.getElementById("section-calculations")?.classList.contains("active")
+        ? window.__captureCalculationsView?.() : null,
+    }),
+  });
+  const historySnapshot = readNavigationState();
+  await restoreHistoryFilters(historySnapshot);
   const saved = readSavedPlaceForCurrentPage(user.id);
   const skipResume = consumeSkipUserPlaceResume();
   if (!skipResume && !saved && shouldRedirectToSavedPlace(captureHref(), readUserPlace(user.id)?.href)) {
@@ -140,10 +155,19 @@ async function init() {
   await loadProfile();
   refreshSectionNavAfterProfile();
   bindShell();
-  window.addEventListener("popstate", () => { void openRoute().catch(reportError); });
+  window.addEventListener("popstate", () => {
+    void (async () => {
+      const snapshot = readNavigationState();
+      await restoreHistoryFilters(snapshot);
+      await openRoute();
+      await restoreNavigationScroll(snapshot);
+      updateNavigationBackButton();
+    })().catch(reportError);
+  });
   if (routeReady) await routeReady;
   else await openRoute({ savedApp: skipResume ? null : saved?.app, initial: true });
-  await applySavedScroll(saved);
+  if (historySnapshot) await restoreNavigationScroll(historySnapshot);
+  else await applySavedScroll(saved);
   await window.__appStartup?.complete();
   void import("./nav-status.js").then((m) => m.initNavStatus()).catch(console.error);
   void import("./push-notifications.js").then((m) => m.initPushNotifications()).catch(console.error);
