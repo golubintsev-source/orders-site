@@ -52,8 +52,11 @@ export function readNavigationState() {
   } catch { return null; }
 }
 
+export function beginNavigationRestore() { restoring = true; }
+export function endNavigationRestore() { restoring = false; }
+
 export async function restoreNavigationScroll(snapshot) {
-  if (!snapshot) return;
+  if (!snapshot) { restoring = false; return; }
   restoring = true;
   const apply = () => {
     const top = snapshot.documentTop ?? snapshot.y ?? 0;
@@ -101,7 +104,7 @@ export function initNavigationHistory({ capture }) {
   document.addEventListener("pointerdown", event => {
     if (event.target.closest("a[href]")) captureNavigationState();
   }, true);
-  window.addEventListener("pagehide", captureNavigationState);
+  window.addEventListener("pagehide", () => { if (!restoring) captureNavigationState(); });
   window.addEventListener("pageshow", () => { if (!restoring) updateNavigationBackButton(); });
   window.addEventListener("scroll", () => {
     if (restoring) return;
