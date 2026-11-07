@@ -6,6 +6,7 @@ const PREFIX = "orders_site_navigation_v1:";
 const ENTRY = "__ordersNavigationEntry";
 const URL_PREFIX = "orders_site_navigation_url_v1:";
 let restoring = false;
+let navigationLeaving = false;
 let captureExtra = null;
 
 function key() {
@@ -17,7 +18,7 @@ function key() {
 }
 
 export function captureNavigationState() {
-  if (restoring) return null;
+  if (restoring || navigationLeaving) return null;
   const id = key();
   const section = document.querySelector(".content-section.active");
   const scrolls = [];
@@ -52,7 +53,13 @@ export function readNavigationState() {
   } catch { return null; }
 }
 
-export function beginNavigationRestore() { restoring = true; }
+export function beginNavigationRestore() { restoring = true; navigationLeaving = false; }
+export function prepareNavigationDeparture() {
+  if (restoring || navigationLeaving) return;
+  captureNavigationState();
+  navigationLeaving = true;
+  clearTimeout(window.__navigationCaptureTimer);
+}
 export function endNavigationRestore() { restoring = false; }
 
 export async function restoreNavigationScroll(snapshot) {
@@ -97,14 +104,13 @@ export function initNavigationHistory({ capture }) {
   captureExtra = capture;
   key();
   try { history.scrollRestoration = "manual"; } catch {}
-  // Capture before normal links (including the order link in calculations) navigate.
+  // Freeze the outgoing snapshot on link activation. iOS may scroll to top
+  // during pagehide, which must never replace the departure position.
   document.addEventListener("click", event => {
-    if (event.target.closest("a[href]")) captureNavigationState();
+    const link = event.target.closest("a[href]");
+    if (link && link.origin === location.origin && !event.defaultPrevented) prepareNavigationDeparture();
   }, true);
-  document.addEventListener("pointerdown", event => {
-    if (event.target.closest("a[href]")) captureNavigationState();
-  }, true);
-  window.addEventListener("pagehide", () => { if (!restoring) captureNavigationState(); });
+  window.addEventListener("pagehide", () => { if (!restoring && !navigationLeaving) captureNavigationState(); });
   window.addEventListener("pageshow", () => { if (!restoring) updateNavigationBackButton(); });
   window.addEventListener("scroll", () => {
     if (restoring) return;
