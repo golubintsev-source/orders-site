@@ -78,9 +78,6 @@ export function initOrdersCellMenu({
     suppressed = { cell: context.cell, until: Date.now() + 1500 };
     try {
       const existing = await findTask(context);
-      if (existing?.__offlinePendingSync || (existing && Number(existing.id) <= 0)) {
-        throw new Error("Сначала синхронизируйте задачу.");
-      }
       if (existing) {
         await editTask(existing.id);
       } else {

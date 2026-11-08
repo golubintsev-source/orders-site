@@ -6,7 +6,6 @@ import {
   getCalcDisplayAuthor,
   getCalcIncomeExpenseDisplay,
 } from "./calculations.js";
-import { readSnapshot } from "./offline-cache.js";
 import { downloadXlsxBuffer } from "./xlsxDownload.js";
 import { ensureXlsx } from "./lazy-cdn.js";
 import { fetchSupabaseByIdsInChunks } from "./supabase-fetch.js";
@@ -102,19 +101,6 @@ async function fetchOrdersByIds(orderIds) {
   const map = new Map();
   if (!orderIds.length) return map;
 
-  const fromSnapshot = () => {
-    const snapOrders = readSnapshot()?.orders;
-    if (!Array.isArray(snapOrders)) return;
-    for (const o of snapOrders) {
-      if (o?.id != null && orderIds.includes(o.id)) map.set(o.id, o);
-    }
-  };
-
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
-    fromSnapshot();
-    return map;
-  }
-
   try {
     const { data, error } = await fetchSupabaseByIdsInChunks(
       (chunkIds) =>
@@ -132,8 +118,7 @@ async function fetchOrdersByIds(orderIds) {
       if (o?.id != null) map.set(o.id, o);
     }
   } catch (e) {
-    console.warn("Экспорт расчётов: не удалось загрузить заказы, используем кэш.", e);
-    fromSnapshot();
+    console.warn("Экспорт расчётов: не удалось загрузить сведения о заказах.", e);
   }
 
   return map;

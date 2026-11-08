@@ -27,14 +27,6 @@ import {
   isUserExecutorOfTask,
   isUserAuthorOfTask,
 } from "./task-form-shared.js";
-import {
-  persistOrderTasksSnapshot,
-  mergeOrderTasksRowsForAllTasks,
-  mergeOrderTasksRowsForOrder,
-  updatePendingTaskCompleted,
-  removePendingTaskByLocalId,
-  isOfflineDataMode,
-} from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { buildOrderEditUrl } from "./app-routes.js";
 import { showFloatingCellTooltip, hideFloatingCellTooltip } from "./cell-tooltip.js";
@@ -100,7 +92,6 @@ function renderMyTaskStatusCell(row) {
   const statusText = completed ? "Выполнена" : "Не выполнена";
   const canToggle = canUserCompleteTask(row);
   const taskId = row.id != null ? String(row.id) : "";
-  const offlineLocalId = row.__offlineLocalId ? String(row.__offlineLocalId) : "";
   const checkboxHtml = canToggle
     ? `
       <label class="my-tasks-status-toggle" title="Отметить выполнение">
@@ -108,7 +99,6 @@ function renderMyTaskStatusCell(row) {
           type="checkbox"
           class="order-tasks-completed-cb"
           data-task-id="${escapeHtml(taskId)}"
-          data-offline-local-id="${escapeHtml(offlineLocalId)}"
           ${completed ? "checked" : ""}
         />
       </label>
@@ -172,21 +162,17 @@ function renderTaskTextCellHtml(row, { orderPopup = false } = {}) {
 function renderAuthorTaskDeleteCell(row, { editable = false } = {}) {
   if (!isUserAuthorOfTask(row)) return `<td class="my-tasks-actions-cell"></td>`;
   const taskId = row.id != null ? String(row.id) : "";
-  const offlineLocalId = row.__offlineLocalId ? String(row.__offlineLocalId) : "";
-  const title = offlineLocalId
-    ? "Удалить локальную задачу (ещё не в базе)"
-    : "Скрыть задачу (в базе останется пометка удаления)";
+  const title = "Скрыть задачу (в базе останется пометка удаления)";
   return `
     <td class="my-tasks-actions-cell">
       ${editable ? `<button type="button" class="btn-icon btn-edit btn-edit-task"
         data-task-id="${escapeHtml(taskId)}"
-        ${offlineLocalId ? 'disabled title="Редактирование доступно после отправки задачи в базу"' : 'title="Редактировать задачу"'}
+        title="Редактировать задачу"
         aria-label="Редактировать задачу"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L9 17l-4 1 1-4Z"/></svg></button>` : ""}
       <button
         type="button"
         class="btn-icon btn-delete btn-delete-task"
         data-task-id="${escapeHtml(taskId)}"
-        data-offline-local-id="${escapeHtml(offlineLocalId)}"
         title="${escapeHtml(title)}"
         aria-label="Удалить задачу"
       >${TASK_ICON_DELETE_SVG}</button>
@@ -196,10 +182,9 @@ function renderAuthorTaskDeleteCell(row, { editable = false } = {}) {
 
 function renderMyAuthorTasksRow(row, { showOrder = false, orderPopup = false, editable = false, showReply = false } = {}) {
   const completed = !isActiveTask(row);
-  const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
   const rowClass = completed
-    ? `my-tasks-row my-tasks-row--completed${offlineCls}`
-    : `my-tasks-row my-tasks-row--pending${offlineCls}`;
+    ? `my-tasks-row my-tasks-row--completed`
+    : `my-tasks-row my-tasks-row--pending`;
   const executors = formatTaskExecutors(visibleTaskExecutorEmails(row.executor_emails), displayNameByEmail);
   const orderCell = showOrder ? renderTaskOrderCellHtml(row) : "";
   return `
@@ -222,10 +207,9 @@ function formatTaskAuthorName(raw) {
 
 function renderMyTasksRow(row, { showOrder = false, showExecutors = true, orderPopup = false, showReply = false } = {}) {
   const completed = !isActiveTask(row);
-  const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
   const rowClass = completed
-    ? `my-tasks-row my-tasks-row--completed${offlineCls}`
-    : `my-tasks-row my-tasks-row--pending${offlineCls}`;
+    ? `my-tasks-row my-tasks-row--completed`
+    : `my-tasks-row my-tasks-row--pending`;
   const orderCell = showOrder ? renderTaskOrderCellHtml(row) : "";
   const executorsCell = showExecutors
     ? `<td class="order-tasks-executors-cell">${escapeHtml(
@@ -455,11 +439,7 @@ async function ensureMyTasksExecutorsLoaded() {
 
 export { ensureMyTasksExecutorsLoaded as ensureOrderTaskExecutorsLoaded };
 
-async function setTaskCompleted(taskId, offlineLocalId, completed) {
-  if (offlineLocalId) {
-    updatePendingTaskCompleted(offlineLocalId, completed);
-    return { error: null };
-  }
+async function setTaskCompleted(taskId, completed) {
   if (taskId == null || taskId === "") return { error: new Error("missing task id") };
   return supabaseClient
     .from("order_tasks")
@@ -501,26 +481,10 @@ async function insertTaskHistoryComments(taskId, comments, userEmail) {
 }
 
 /** Запись не удаляется из БД — только выставляется deleted_at. Только автор. */
-export async function softDeleteAuthorTask(taskId, offlineLocalId) {
+export async function softDeleteAuthorTask(taskId) {
   if (!state.currentUser) return;
 
-  if (offlineLocalId) {
-    if (!confirm("Удалить локальную задачу? Она ещё не отправлена в базу.")) return;
-    removePendingTaskByLocalId(offlineLocalId);
-    await loadAllTasks();
-    void loadOrderTasks();
-    void refreshMyTasksNavBadge();
-    void import("./message-task-links.js").then((m) => m.refreshActiveTaskMessageRefs());
-    void import("./order-task-links.js").then((m) => m.refreshActiveTaskOrderRefs());
-    return true;
-  }
-
   if (taskId == null || taskId === "") return;
-
-  if (isOfflineDataMode()) {
-    window.alert("Без связи с базой нельзя удалять задачи из базы.");
-    return;
-  }
 
   if (
     !confirm(
@@ -591,11 +555,10 @@ export async function softDeleteAuthorTask(taskId, offlineLocalId) {
 async function onTaskCompletedCheckboxChange(checkbox) {
   if (!checkbox || checkbox.disabled) return;
   const taskId = checkbox.getAttribute("data-task-id");
-  const offlineLocalId = checkbox.getAttribute("data-offline-local-id");
   const completed = checkbox.checked;
   checkbox.disabled = true;
 
-  const { error } = await setTaskCompleted(taskId, offlineLocalId || null, completed);
+  const { error } = await setTaskCompleted(taskId, completed);
   if (error) {
     console.error("Ошибка обновления статуса задачи:", error);
     checkbox.checked = !completed;
@@ -628,8 +591,7 @@ function bindAuthorTaskDeleteDelegation(root) {
     if (!btn || !root.contains(btn) || btn.disabled) return;
     e.preventDefault();
     const taskId = btn.getAttribute("data-task-id");
-    const offlineLocalId = btn.getAttribute("data-offline-local-id");
-    void softDeleteAuthorTask(taskId || null, offlineLocalId || null);
+    void softDeleteAuthorTask(taskId || null);
   });
 }
 
@@ -756,11 +718,8 @@ export async function loadAllTasks() {
   }
 
   const baseRows = filterNotDeletedTasks(data || []);
-  if (!error && data) persistOrderTasksSnapshot(baseRows);
-
-  const mergedAll = filterNotDeletedTasks(mergeOrderTasksRowsForAllTasks(baseRows));
-  const executorRows = sortTasksByDueAt(filterMyExecutorTasks(mergedAll));
-  const authorRows = sortTasksByDueAt(filterMyAuthorTasks(mergedAll));
+  const executorRows = sortTasksByDueAt(filterMyExecutorTasks(baseRows));
+  const authorRows = sortTasksByDueAt(filterMyAuthorTasks(baseRows));
   await ensureOrderSummaries([...executorRows, ...authorRows].flatMap((row) => [row.order_id, ...taskAttachmentOrderIds(row)]), scope.signal);
   if (!scope.current()) return;
 
@@ -842,7 +801,7 @@ export async function loadOrderTasks() {
     return;
   }
 
-  const merged = filterNotDeletedTasks(mergeOrderTasksRowsForOrder(data || [], oid));
+  const merged = filterNotDeletedTasks(data || []);
   await ensureOrderSummaries(merged.flatMap(taskAttachmentOrderIds), scope.signal);
   if (!scope.current()) return;
   renderOrderTasksTables(merged, oid, {
@@ -887,9 +846,6 @@ export async function createOrderTask() {
     if (msg) {
       msg.textContent = "Сохранение задачи…";
       msg.classList.remove("order-tasks-message--error");
-    }
-    if (isOfflineDataMode() && hasTaskDraftAttachments()) {
-      throw new Error("Для сохранения задачи с вложениями подключитесь к интернету.");
     }
     const attachments = await prepareTaskAttachments();
     const { error } = await insertTask({ body: text, executorEmails, attachments });

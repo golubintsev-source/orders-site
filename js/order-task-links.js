@@ -1,7 +1,6 @@
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { buildOrderCellHighlights, validOrderField } from "./order-cell-highlights.js";
 import { supabaseClient } from "./config.js";
-import { readPendingTasksQueueForMessageLinks, isOfflineDataMode } from "./offline-cache.js";
 import { isUserAuthorOfTask, isUserExecutorOfTask } from "./task-form-shared.js";
 import { taskLinkedOrderIds } from "./task-attachment-data.js";
 
@@ -63,7 +62,7 @@ export async function refreshActiveTaskOrderRefs(root = document) {
   if (generation !== refreshGeneration) return;
 
   if (!error && data) lastTaskRows = data;
-  const rows = [...lastTaskRows, ...readPendingTasksQueueForMessageLinks()];
+  const rows = lastTaskRows;
   activeTaskOrderIds.clear();
   for (const row of rows) ingestTaskRow(row);
   cellHighlights = buildOrderCellHighlights(rows);
@@ -76,18 +75,11 @@ export async function findOrderCellTask(orderId, orderField) {
   const id = Number(orderId);
   const field = validOrderField(orderField);
   if (!Number.isFinite(id) || id <= 0 || !field) return null;
-  const pending = readPendingTasksQueueForMessageLinks()
-    .filter(row => Number(row.order_id) === id && row.source_order_field === field && !row.deleted_at)
-    .map(row => ({ ...row, id: row.tempTaskId, __offlinePendingSync: true }));
-  if (isOfflineDataMode()) {
-    const rows = [...pending, ...lastTaskRows.filter(row => Number(row.order_id) === id && row.source_order_field === field && !row.deleted_at)];
-    return rows.sort((a, b) => Number(!isActiveTaskRow(a)) - Number(!isActiveTaskRow(b)) || Number(b.id) - Number(a.id))[0] || null;
-  }
   const { data, error } = await supabaseClient.from("order_tasks")
     .select("id, order_id, source_order_field, is_completed")
     .eq("order_id", id).eq("source_order_field", field).is("deleted_at", null)
     .order("is_completed", { ascending: true }).order("id", { ascending: false })
     .limit(1).maybeSingle();
   if (error) throw new Error("Не удалось проверить задачу этой ячейки. Попробуйте ещё раз.");
-  return data || pending[0] || null;
+  return data || null;
 }

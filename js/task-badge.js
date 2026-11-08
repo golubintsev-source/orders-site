@@ -1,7 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { isUserExecutorOfTask } from "./task-form-shared.js";
-import { mergeOrderTasksRowsForAllTasks } from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 function isActiveTask(row) {
   return row.is_completed !== true && row.is_completed !== 1 && row.is_completed !== "1";
@@ -34,7 +33,7 @@ export async function refreshMyTasksNavBadge() {
     return;
   }
 
-  const n = countMyPendingExecutorTasks(mergeOrderTasksRowsForAllTasks(data || []));
+  const n = countMyPendingExecutorTasks(data || []);
   if (n > 0) {
     badge.textContent = n > 99 ? "99+" : String(n);
     badge.hidden = false;

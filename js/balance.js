@@ -2,8 +2,6 @@ import { supabaseClient } from "./config.js";
 import { isUserLite, isUserShop } from "./roles.js";
 import { formatAmountWholeRubles, toWholeRublesNumber } from "./format.js";
 import { state } from "./state.js";
-import { persistBalanceOfflineView, readBalanceOfflineView, isOfflineDataMode } from "./offline-cache.js";
-import { isOfflineWorkModeEnabled } from "./config.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { beginReadScope } from "./read-requests.js";
 import { displayNameByEmail } from "./user-names.js";
@@ -114,21 +112,7 @@ function computeBalanceMetricsFromCalcRows(calcRows) {
   return { balances, turnover };
 }
 
-function isBalanceOfflineDocRenderable(doc) {
-  if (!doc?.balances || !doc?.turnover) return false;
-  for (const p of PARTICIPANTS) {
-    if (!Object.prototype.hasOwnProperty.call(doc.balances, p)) return false;
-    const t = doc.turnover[p];
-    if (!t || typeof t !== "object") return false;
-    for (const k of ["hour", "today", "m1", "m2", "m3"]) {
-      if (typeof t[k] !== "number" || !Number.isFinite(t[k])) return false;
-    }
-    if (typeof doc.balances[p] !== "number" || !Number.isFinite(doc.balances[p])) return false;
-  }
-  return true;
-}
-
-/** Рисует таблицу по уже готовым числам (из БД или из кеша). */
+/** Рисует таблицу по уже готовым числам с сервера. */
 function paintBalanceTable(balances, turnover, messageEl) {
   const theadRow = document.querySelector("#balanceTable thead tr");
   const tbody = document.querySelector("#balanceTable tbody");
@@ -162,19 +146,6 @@ function paintBalanceTable(balances, turnover, messageEl) {
     `
     )
     .join("");
-}
-
-function tryPaintBalanceFromOfflineCache(messageEl, cacheHint) {
-  const doc = readBalanceOfflineView();
-  if (!doc || !isBalanceOfflineDocRenderable(doc)) return false;
-  paintBalanceTable(doc.balances, doc.turnover, messageEl);
-  if (messageEl) {
-    const savedAt = doc.at ? new Date(doc.at).toLocaleString("ru-RU") : "";
-    messageEl.textContent = savedAt
-      ? `${cacheHint} Сохранено: ${savedAt}.`
-      : cacheHint;
-  }
-  return true;
 }
 
 /**
@@ -248,22 +219,13 @@ export async function loadBalance(opts = {}) {
   const tbody = document.querySelector("#balanceTable tbody");
   if (!theadRow || !tbody) return;
 
-  const offlineMsg = "Показаны сохранённые значения баланса (без сети).";
-
-  if (isOfflineWorkModeEnabled() && isOfflineDataMode()) {
-    if (tryPaintBalanceFromOfflineCache(messageEl, offlineMsg)) return;
-    if (messageEl) {
-      messageEl.textContent = "Нет сети и нет сохранённого баланса. Откройте раздел при подключении к интернету.";
-    }
-    return;
-  }
-
   let calcRes;
   try {
     calcRes = await fetchAllCalculationsForBalance(scope.signal);
   } catch (e) {
     if (!scope.current()) return;
     console.error("Ошибка загрузки расчётов для баланса:", e);
+    tbody.replaceChildren();
     if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса.";
     return;
   }
@@ -271,6 +233,7 @@ export async function loadBalance(opts = {}) {
   if (!scope.current()) return;
   if (calcRes.error) {
     console.error("Ошибка загрузки расчётов для баланса:", calcRes.error);
+    tbody.replaceChildren();
     if (messageEl) messageEl.textContent = "Ошибка загрузки расчётов для баланса.";
     return;
   }
@@ -278,7 +241,6 @@ export async function loadBalance(opts = {}) {
   const calcRows = calcRes.data || [];
   const metrics = computeBalanceMetricsFromCalcRows(calcRows);
   paintBalanceTable(metrics.balances, metrics.turnover, messageEl);
-  persistBalanceOfflineView(metrics);
 
   if (recordView) {
     void recordBalanceViewSnapshot(metrics.balances);

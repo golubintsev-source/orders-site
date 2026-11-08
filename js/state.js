@@ -1,8 +1,4 @@
 export const state = {
-  /** true — список заказов сейчас из localStorage (последний снимок + офлайн-очередь), не с сервера */
-  ordersFromCache: false,
-  /** true — последний пинг БД завершился ошибкой или таймаутом (офлайн-режим данных) */
-  dbUnavailable: false,
   currentUser: null,
   currentRole: "user",
   editingOrderId: null,

@@ -10,7 +10,6 @@ import {
 const root = new URL("../", import.meta.url);
 const calculations = await readFile(new URL("js/calculations.js", root), "utf8");
 const orders = await readFile(new URL("js/orders.js", root), "utf8");
-const offline = await readFile(new URL("js/offline-cache.js", root), "utf8");
 const migration = await readFile(new URL("supabase_calculations_order_id.sql", root), "utf8");
 
 const legacy = "[AUTO_ORDER_DELTA] Остаток; 0123_О; Иван; Ленина 1; сумма 5000; 12:30; Алексей";
@@ -51,7 +50,6 @@ assert.match(calculations, /select\("id, address, order_type, installer_name"\)/
 assert.match(calculations, /getCalcDisplayCommentForRow\(row\)/);
 assert.match(orders, /comment: .*kindLabel.*orderNumberStr.*clientStr.*addressStr/);
 assert.match(orders, /order_id: r\.order_id/);
-assert.match(offline, /order_id: p\.order_id \?\? null/);
 assert.match(migration, /ADD COLUMN IF NOT EXISTS order_id bigint/i);
 assert.match(migration, /FOREIGN KEY \(order_id\)/i);
 assert.match(migration, /comment, order_id/i);

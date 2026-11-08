@@ -30,17 +30,6 @@ import {
   shortLoginByEmail,
 } from "./user-names.js";
 import { state } from "./state.js";
-import {
-  readSnapshot,
-  persistCalculationsSnapshot,
-  mergeCalculationRows,
-  addPendingOfflineCalculation,
-  nextOfflineTempCalcId,
-  removePendingCalcByTempId,
-  isOfflineDataMode,
-  isBrowserOffline,
-  raceWithTimeout,
-} from "./offline-cache.js";
 import { fetchAllSupabaseRows, fetchSupabaseByIdsInChunks } from "./supabase-fetch.js";
 import { beginReadScope } from "./read-requests.js";
 import { attachFieldAutocomplete } from "./clientAutocomplete.js";
@@ -86,6 +75,7 @@ const DEFAULT_VOICE_EXPENSE_TO = "Покупка";
 
 /** Полные строки с сервера; фильтр поиска применяется при отрисовке. */
 let calculationsRowsCache = [];
+let calculationsLoadFailed = false;
 let calculationsLoadRequest = null;
 let calculationsSectionBound = false;
 /** Ранее введённые ручные комментарии: нормализованное значение → подпись и частота. */
@@ -190,28 +180,22 @@ function getCalcCommentSuggestions(query) {
 }
 
 async function loadCalcCommentSuggestions() {
-  if (isBrowserOffline()) {
-    rebuildCalcCommentSuggestions(readSnapshot()?.calculations || calculationsRowsCache);
-    return;
-  }
   try {
-    const result = await raceWithTimeout(
-      fetchAllSupabaseRows(() =>
-        supabaseClient
-          .from("calculations")
-          .select("comment, created_at")
-          .is("deleted_at", null)
-          .not("comment", "is", null)
-          .not("comment", "like", `${ORDER_DELTA_CALC_COMMENT_PREFIX}%`)
-          .not("comment", "like", `${EXCESS_DELTA_CALC_COMMENT_PREFIX}%`)
-          .order("created_at", { ascending: false }),
-      ),
+    const result = await fetchAllSupabaseRows(() =>
+      supabaseClient
+        .from("calculations")
+        .select("comment, created_at")
+        .is("deleted_at", null)
+        .not("comment", "is", null)
+        .not("comment", "like", `${ORDER_DELTA_CALC_COMMENT_PREFIX}%`)
+        .not("comment", "like", `${EXCESS_DELTA_CALC_COMMENT_PREFIX}%`)
+        .order("created_at", { ascending: false }),
     );
     if (result?.error) throw result.error;
     rebuildCalcCommentSuggestions(result?.data || []);
   } catch (error) {
     console.warn("Не удалось загрузить подсказки комментариев расчётов:", error);
-    rebuildCalcCommentSuggestions(readSnapshot()?.calculations || calculationsRowsCache);
+    rebuildCalcCommentSuggestions(calculationsRowsCache);
   }
 }
 
@@ -666,27 +650,6 @@ export async function createCalculationFromVoicePayload(draft) {
     created_at: new Date().toISOString(),
   };
 
-  if (isOfflineDataMode()) {
-    const localId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `calc-${Date.now()}`;
-    addPendingOfflineCalculation({
-      localId,
-      tempCalcId: nextOfflineTempCalcId(),
-      insertPayload,
-    });
-    try {
-      await loadCalculations({ force: true });
-    } catch {
-      /* таблица обновится при открытии раздела */
-    }
-    return {
-      ok: true,
-      message: `Расход ${formatAmountWholeRubles(amount)} ₽ сохранён на устройстве (${description}). Отправка в базу при появлении связи.`,
-    };
-  }
-
   const { error } = await supabaseClient.from("calculations").insert([insertPayload]);
   if (error) {
     console.error("voice calc insert:", error);
@@ -758,39 +721,16 @@ async function fetchCalcOrderAddressesForRows(rows, signal) {
   const installers = new Map();
   if (!uniqueIds.length) return { addresses, types, installers };
 
-  const fromSnapshot = () => {
-    const snapOrders = readSnapshot()?.orders;
-    if (!Array.isArray(snapOrders)) return;
-    for (const o of snapOrders) {
-      if (o?.id != null && uniqueIds.includes(o.id) && o.address != null) {
-        addresses.set(o.id, String(o.address).trim());
-      }
-      if (o?.id != null && uniqueIds.includes(o.id) && o.order_type != null) {
-        types.set(o.id, String(o.order_type).trim());
-      }
-      if (o?.id != null && uniqueIds.includes(o.id) && o.installer_name != null) {
-        installers.set(o.id, String(o.installer_name).trim());
-      }
-    }
-  };
-
-  if (isOfflineDataMode()) {
-    fromSnapshot();
-    return { addresses, types, installers };
-  }
-
   try {
-    const { data, error } = await raceWithTimeout(
-      fetchSupabaseByIdsInChunks(
-        (chunkIds) =>
-          supabaseClient
-            .from("orders")
-            .select("id, address, order_type, installer_name")
-            .in("id", chunkIds)
-            .is("deleted_at", null),
-        uniqueIds,
-        { signal },
-      ),
+    const { data, error } = await fetchSupabaseByIdsInChunks(
+      (chunkIds) =>
+        supabaseClient
+          .from("orders")
+          .select("id, address, order_type, installer_name")
+          .in("id", chunkIds)
+          .is("deleted_at", null),
+      uniqueIds,
+      { signal },
     );
     if (error) throw error;
     for (const o of data || []) {
@@ -805,8 +745,7 @@ async function fetchCalcOrderAddressesForRows(rows, signal) {
       }
     }
   } catch (e) {
-    console.warn("Адреса заказов для комментариев расчётов: используем кэш.", e);
-    fromSnapshot();
+    if (!signal?.aborted) console.warn("Не удалось загрузить адреса заказов для расчётов:", e);
   }
   return { addresses, types, installers };
 }
@@ -1289,6 +1228,13 @@ function renderCalculationsTableFromCache() {
   tbody.innerHTML = "";
   updateCalcFilterHeadingStates();
 
+  if (calculationsLoadFailed) {
+    tbody.innerHTML = '<tr><td colspan="9">Не удалось загрузить расчёты.</td></tr>';
+    const saldoBody = document.querySelector("#calculationsSaldoTable tbody");
+    if (saldoBody) saldoBody.innerHTML = "";
+    return;
+  }
+
   const rows = filterVisibleCalculationRows(calculationsRowsCache);
 
   if (calculationsRowsCache.length === 0) {
@@ -1328,14 +1274,9 @@ function renderCalculationsTableFromCache() {
     const expenseCell = expense
       ? `<td class="td-money"><span class="status-value">${escapeHtml(expense)}</span></td>`
       : `<td class="td-money"></td>`;
-    const isOfflineRow = row.__offlinePendingSync === true;
     const canEditRow = canEditManualCalculations() && !isSystemDeltaRow;
     let actionsCell = `<td class="td-actions td-actions--readonly" aria-hidden="true"><span class="calc-actions-grid"></span></td>`;
-    if (isOfflineRow && isAdmin()) {
-      actionsCell = `<td class="td-actions">
-        <span class="calc-actions-grid"><button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" data-offline-pending="1" title="Удалить локальную запись (ещё не в базе)">${CALC_ICON_DELETE_SVG}</button></span>
-      </td>`;
-    } else if (!isOfflineRow && (canEditRow || isAdmin())) {
+    if (canEditRow || isAdmin()) {
       actionsCell = `<td class="td-actions">
         <span class="calc-actions-grid">
           ${canEditRow ? `<button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>` : ""}
@@ -1351,7 +1292,6 @@ function renderCalculationsTableFromCache() {
       tr.classList.add("calc-row-order-expense");
     }
     if (isSalaryPaymentRow(row)) tr.classList.add("calc-row-salary-payment");
-    if (isOfflineRow) tr.classList.add("tr-order-offline-pending");
     tr.innerHTML = `
       <td><span class="status-value">${escapeHtml(formatCalcTimeRu(row.created_at))}</span></td>
       ${orderCell}
@@ -1374,15 +1314,7 @@ function renderCalculationsTableFromCache() {
   if (isAdmin()) {
     tbody.querySelectorAll(".btn-delete-calc").forEach((btn) => {
       const id = Number(btn.dataset.id);
-      if (btn.dataset.offlinePending === "1") {
-        btn.addEventListener("click", () => {
-          if (!confirm("Удалить локальную запись расчёта? Она ещё не отправлена в базу.")) return;
-          removePendingCalcByTempId(id);
-          void loadCalculations({ force: true });
-        });
-      } else {
-        btn.addEventListener("click", () => softDeleteCalculationRow(id));
-      }
+      btn.addEventListener("click", () => softDeleteCalculationRow(id));
     });
   }
 
@@ -1434,39 +1366,39 @@ async function performCalculationsLoad(request, period) {
       .order("id", { ascending: false });
   };
 
-  let data = null;
-  let error = null;
-  if (isBrowserOffline()) {
-    error = { message: "offline" };
-  } else {
-    try {
-      const res = await fetchAllSupabaseRows(calculationsQuery, { signal: request.scope.signal });
-      data = res.data;
-      error = res.error;
-    } catch (e) {
-      if (e?.code === "TIMEOUT") {
-        data = null;
-        error = { message: "timeout" };
-      } else {
-        data = null;
-        error = e;
-      }
-    }
+  let result;
+  try {
+    result = await fetchAllSupabaseRows(calculationsQuery, { signal: request.scope.signal });
+  } catch (error) {
+    result = { error };
   }
 
   if (!isCurrent()) return;
-  const merged = mergeCalculationRows(error ? readSnapshot()?.calculations || [] : data || []);
-  const orderMeta = await fetchCalcOrderAddressesForRows(merged, request.scope.signal);
+  if (result.error) {
+    console.error("Ошибка загрузки расчётов:", result.error);
+    calculationsRowsCache = [];
+    calcOrderAddressById = new Map();
+    calcOrderTypeById = new Map();
+    calcOrderInstallerById = new Map();
+    calculationsLoadFailed = true;
+    const exportBtn = document.getElementById("calcExportExcelBtn");
+    if (exportBtn) exportBtn.disabled = true;
+    renderCalculationsTableFromCache();
+    setMessage("Не удалось загрузить расчёты с сервера. Повторите попытку.", true);
+    return;
+  }
+
+  const rows = result.data || [];
+  const orderMeta = await fetchCalcOrderAddressesForRows(rows, request.scope.signal);
   if (!isCurrent()) return;
-  if (error) console.error("Ошибка загрузки расчетов:", error);
-  setMessage(error
-    ? "Показана копия с устройства; локальные несинхронизированные строки — с жёлтой заливкой."
-    : "", Boolean(error));
-  calculationsRowsCache = merged;
+  setMessage("");
+  calculationsLoadFailed = false;
+  const exportBtn = document.getElementById("calcExportExcelBtn");
+  if (exportBtn) exportBtn.disabled = false;
+  calculationsRowsCache = rows;
   calcOrderAddressById = orderMeta.addresses;
   calcOrderTypeById = orderMeta.types;
   calcOrderInstallerById = orderMeta.installers;
-  if (!error) persistCalculationsSnapshot(merged);
   renderCalculationsTableFromCache();
 }
 
@@ -1571,14 +1503,6 @@ function resetForm() {
 
 function startEdit(id) {
   if (!canEditManualCalculations()) return;
-  if (isOfflineDataMode() && typeof id === "number" && id < 0) {
-    setMessage("Локальную запись нельзя редактировать.", true);
-    return;
-  }
-  if (isOfflineDataMode()) {
-    setMessage("Без связи с базой нельзя редактировать сохранённые в базе расчёты.", true);
-    return;
-  }
   editingId = id;
   editingCreatedAt = null;
   setCalcSubmitMode("save");
@@ -1645,14 +1569,6 @@ async function submitForm(e) {
   }
 
   if (editingId) {
-    if (isOfflineDataMode() && typeof editingId === "number" && editingId < 0) {
-      setMessage("Редактирование локальной записи расчёта недоступно. Удалите и создайте заново.", true);
-      return;
-    }
-    if (isOfflineDataMode()) {
-      setMessage("Без связи с базой нельзя изменять сохранённые в базе расчёты.", true);
-      return;
-    }
     if (!canEditManualCalculations()) {
       setMessage("Изменение записей недоступно для вашей роли.", true);
       resetForm();
@@ -1699,22 +1615,6 @@ async function submitForm(e) {
     resetForm();
   } else {
     const insertPayload = { ...payload, created_at: new Date().toISOString() };
-    if (isOfflineDataMode()) {
-      const localId =
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `calc-${Date.now()}`;
-      addPendingOfflineCalculation({
-        localId,
-        tempCalcId: nextOfflineTempCalcId(),
-        insertPayload,
-      });
-      setMessage("Запись сохранена на устройстве; отправка в базу при появлении связи.", false);
-      resetForm();
-      await loadCalculations({ force: true });
-      void loadCalcCommentSuggestions();
-      return;
-    }
     const { error } = await supabaseClient.from("calculations").insert([insertPayload]);
     if (error) {
       console.error("Ошибка добавления:", error);
@@ -1818,16 +1718,6 @@ async function insertCalculationHistoryComments(calculationId, comments, userEma
 /** Запись не удаляется из БД — только выставляется deleted_at. */
 async function softDeleteCalculationRow(id) {
   if (!isAdmin()) return;
-  if (typeof id === "number" && id < 0) {
-    if (!confirm("Удалить локальную запись расчёта? Она ещё не отправлена в базу.")) return;
-    removePendingCalcByTempId(id);
-    await loadCalculations({ force: true });
-    return;
-  }
-  if (isOfflineDataMode()) {
-    setMessage("Без связи с базой нельзя скрывать расчёты из базы.", true);
-    return;
-  }
   if (
     !confirm(
       "Скрыть эту запись из списка? В базе останется пометка удаления, строка не удаляется физически."

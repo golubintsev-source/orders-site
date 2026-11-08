@@ -1,22 +1,10 @@
+import { expandOrderHistoryCommentLines } from "./order-history-format.js";
 import { beginReadScope } from "./read-requests.js";
 import { ensureOrderSummaries, getOrderSummary } from "./order-summary-cache.js";
-import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
+import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatAmount } from "./format.js";
 import { isOrderHiddenForCurrentRole } from "./roles.js";
-import {
-  readSnapshot,
-  persistOrderHistorySnapshot,
-  persistExcessHistorySnapshot,
-  persistSettingsHistorySnapshot,
-  persistCalculationHistorySnapshot,
-  persistTaskHistorySnapshot,
-  mergeOrderHistoryRows,
-  raceWithTimeout,
-  isOfflineDataMode,
-  OFFLINE_SUPABASE_WAIT_MS,
-  expandOrderHistoryCommentLines,
-} from "./offline-cache.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { displayNameByEmail } from "./user-names.js";
 
@@ -105,9 +93,6 @@ function buildOrderTypeByIdMap() {
 
 function sortAllChangesDisplayRows(rows) {
   return [...rows].sort((a, b) => {
-    const ap = a.__offlinePendingSync ? 1 : 0;
-    const bp = b.__offlinePendingSync ? 1 : 0;
-    if (ap !== bp) return bp - ap;
     const ta = new Date(a.created_at || 0).getTime();
     const tb = new Date(b.created_at || 0).getTime();
     if (tb !== ta) return tb - ta;
@@ -148,7 +133,7 @@ async function paintAllChangesFromBaseRows(
   const orderTypeById = buildOrderTypeByIdMap();
   const displayRows = [];
 
-  const orderRows = mergeOrderHistoryRows(orderHistoryBaseRows).filter((r) =>
+  const orderRows = (orderHistoryBaseRows || []).filter((r) =>
     rowInCreatedAtRange(r, startIso, endIso),
   );
   for (const row of orderRows) {
@@ -163,7 +148,6 @@ async function paintAllChangesFromBaseRows(
         chip,
         order_id: oid,
         comment,
-        __offlinePendingSync: Boolean(row.__offlinePendingSync),
         id: row.id,
       });
     }
@@ -182,7 +166,6 @@ async function paintAllChangesFromBaseRows(
         chip: "Излишек",
         order_id: "",
         comment,
-        __offlinePendingSync: false,
         id: row.id != null ? `exh-${row.id}` : undefined,
       });
     }
@@ -202,7 +185,6 @@ async function paintAllChangesFromBaseRows(
       chip: "Излишек",
       order_id: "",
       comment: `Излишек: ${client}; сумма ${amount}; кому ${paidTo}`,
-      __offlinePendingSync: false,
       id: row.id != null ? `ex-${row.id}` : undefined,
     });
   }
@@ -218,7 +200,6 @@ async function paintAllChangesFromBaseRows(
         chip: "Корректировки",
         order_id: "",
         comment,
-        __offlinePendingSync: false,
         id: row.id != null ? `sh-${row.id}` : undefined,
       });
     }
@@ -235,7 +216,6 @@ async function paintAllChangesFromBaseRows(
         chip: "Расчёт",
         order_id: "",
         comment,
-        __offlinePendingSync: false,
         id: row.id != null ? `cah-${row.id}` : undefined,
       });
     }
@@ -252,7 +232,6 @@ async function paintAllChangesFromBaseRows(
         chip: "Задача",
         order_id: "",
         comment,
-        __offlinePendingSync: false,
         id: row.id != null ? `th-${row.id}` : undefined,
       });
     }
@@ -261,9 +240,8 @@ async function paintAllChangesFromBaseRows(
   const sorted = sortAllChangesDisplayRows(displayRows);
   const lines = [];
   for (const row of sorted) {
-    const offlineCls = row.__offlinePendingSync ? " tr-order-offline-pending" : "";
     lines.push(`
-    <tr class="all-changes-row${offlineCls}" data-order-id="${escapeHtml(row.order_id || "")}">
+    <tr class="all-changes-row" data-order-id="${escapeHtml(row.order_id || "")}">
       <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
       <td>${escapeHtml(displayNameByEmail(row.user_email) || "—")}</td>
       <td>${escapeHtml(row.chip || "—")}</td>
@@ -274,7 +252,7 @@ async function paintAllChangesFromBaseRows(
 
   if (lines.length === 0 && msg) {
     msg.textContent = error
-      ? "Нет сохранённой копии изменений за выбранный период на этом устройстве."
+      ? "Не удалось загрузить историю изменений с сервера."
       : "За выбранный период записей нет.";
   }
 
@@ -373,62 +351,6 @@ async function fetchTaskHistoryRows(startIso, endIso, signal) {
   return { data: data || [], error: null };
 }
 
-function excessHistoryQuery(startIso, endIso) {
-  return () =>
-    supabaseClient
-      .from("excess_history")
-      .select("id, created_at, user_email, comment, excess_id")
-      .gte("created_at", startIso)
-      .lte("created_at", endIso)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false });
-}
-
-function excessesQuery(startIso, endIso) {
-  return () =>
-    supabaseClient
-      .from("excesses")
-      .select("id, created_at, client, amount, paid_to, created_by")
-      .is("deleted_at", null)
-      .gte("created_at", startIso)
-      .lte("created_at", endIso)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false });
-}
-
-function settingsHistoryQuery(startIso, endIso) {
-  return () =>
-    supabaseClient
-      .from("settings_history")
-      .select("id, created_at, user_email, comment, setting_key")
-      .gte("created_at", startIso)
-      .lte("created_at", endIso)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false });
-}
-
-function calculationHistoryQuery(startIso, endIso) {
-  return () =>
-    supabaseClient
-      .from("calculation_history")
-      .select("id, created_at, user_email, comment, calculation_id")
-      .gte("created_at", startIso)
-      .lte("created_at", endIso)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false });
-}
-
-function taskHistoryQuery(startIso, endIso) {
-  return () =>
-    supabaseClient
-      .from("task_history")
-      .select("id, created_at, user_email, comment, task_id")
-      .gte("created_at", startIso)
-      .lte("created_at", endIso)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false });
-}
-
 export async function loadAllChanges() {
   const scope = beginReadScope("changes-all");
   const tbody = document.querySelector("#allChangesTable tbody");
@@ -441,172 +363,46 @@ export async function loadAllChanges() {
 
   const { startIso, endIso } = readAllChangesDateRangeFromInputs();
 
-  if (!isOfflineWorkModeEnabled()) {
-    const [histRes, excessHistRes, excessesRes, settingsHistRes, calcHistRes, taskHistRes] =
-      await Promise.all([
-        fetchAllSupabaseRows(() =>
-          supabaseClient
-            .from("order_history")
-            .select("created_at, user_email, comment, order_id")
-            .gte("created_at", startIso)
-            .lte("created_at", endIso)
-            .order("created_at", { ascending: false })
-            .order("id", { ascending: false }),
-          { signal: scope.signal },
-        ),
-        fetchExcessHistoryRows(startIso, endIso, scope.signal),
-        fetchExcessesRows(startIso, endIso, scope.signal),
-        fetchSettingsHistoryRows(startIso, endIso, scope.signal),
-        fetchCalculationHistoryRows(startIso, endIso, scope.signal),
-        fetchTaskHistoryRows(startIso, endIso, scope.signal),
-      ]);
-
-    if (!scope.current()) return;
-    if (histRes.error) {
-      console.error("Ошибка загрузки истории изменений:", histRes.error);
-      if (msg) {
-        msg.textContent = "Ошибка загрузки истории изменений.";
-        msg.classList.add("order-tasks-message--error");
-      }
-      await paintAllChangesFromBaseRows(startIso, endIso, [], [], [], [], [], [], { error: histRes.error, current: scope.current });
-      return;
-    }
-
-    await paintAllChangesFromBaseRows(
-      startIso,
-      endIso,
-      histRes.data || [],
-      excessHistRes.data || [],
-      excessesRes.data || [],
-      settingsHistRes.data || [],
-      calcHistRes.data || [],
-      taskHistRes.data || [],
-      { error: null, current: scope.current },
-    );
-    return;
-  }
-
-  const snapRows = readSnapshot()?.order_history || [];
-  const snapFiltered = snapRows.filter((r) => rowInCreatedAtRange(r, startIso, endIso));
-  const snapExcessHist = (readSnapshot()?.excess_history || []).filter((r) =>
-    rowInCreatedAtRange(r, startIso, endIso),
-  );
-  const snapExcesses = (readSnapshot()?.excesses || []).filter(
-    (r) => !r.deleted_at && rowInCreatedAtRange(r, startIso, endIso),
-  );
-  const snapSettingsHist = (readSnapshot()?.settings_history || []).filter((r) =>
-    rowInCreatedAtRange(r, startIso, endIso),
-  );
-  const snapCalcHist = (readSnapshot()?.calculation_history || []).filter((r) =>
-    rowInCreatedAtRange(r, startIso, endIso),
-  );
-  const snapTaskHist = (readSnapshot()?.task_history || []).filter((r) =>
-    rowInCreatedAtRange(r, startIso, endIso),
-  );
-
-  const historyQuery = () =>
-    supabaseClient
-      .from("order_history")
-      .select("created_at, user_email, comment, order_id")
-      .gte("created_at", startIso)
-      .lte("created_at", endIso)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false });
-
-  const skipNetwork =
-    (typeof navigator !== "undefined" && navigator.onLine === false) || isOfflineDataMode();
-
-  let data = null;
-  let error = null;
-  let excessHistData = snapExcessHist;
-  let excessesData = snapExcesses;
-  let settingsHistData = snapSettingsHist;
-  let calcHistData = snapCalcHist;
-  let taskHistData = snapTaskHist;
-
-  const hasSnap =
-    snapFiltered.length > 0 ||
-    snapExcessHist.length > 0 ||
-    snapExcesses.length > 0 ||
-    snapSettingsHist.length > 0 ||
-    snapCalcHist.length > 0 ||
-    snapTaskHist.length > 0;
-
-  if (skipNetwork) {
-    error = { message: "offline" };
-  } else {
-    if (hasSnap) {
-      await paintAllChangesFromBaseRows(
-        startIso,
-        endIso,
-        snapFiltered,
-        snapExcessHist,
-        snapExcesses,
-        snapSettingsHist,
-        snapCalcHist,
-        snapTaskHist,
-        { error: null, current: scope.current },
-      );
-    }
-    try {
-      const waitMs = hasSnap ? 1800 : OFFLINE_SUPABASE_WAIT_MS;
-      const [histRes, excessHistRes, excessesRes, settingsHistRes, calcHistRes, taskHistRes] =
-        await raceWithTimeout(
-          Promise.all([
-            fetchAllSupabaseRows(historyQuery, { signal: scope.signal }),
-            fetchAllSupabaseRows(excessHistoryQuery(startIso, endIso), { signal: scope.signal }),
-            fetchAllSupabaseRows(excessesQuery(startIso, endIso), { signal: scope.signal }),
-            fetchAllSupabaseRows(settingsHistoryQuery(startIso, endIso), { signal: scope.signal }),
-            fetchAllSupabaseRows(calculationHistoryQuery(startIso, endIso), { signal: scope.signal }),
-            fetchAllSupabaseRows(taskHistoryQuery(startIso, endIso), { signal: scope.signal }),
-          ]),
-          waitMs,
-        );
-      data = histRes.data;
-      error = histRes.error;
-      if (!excessHistRes.error) excessHistData = excessHistRes.data || [];
-      if (!excessesRes.error) excessesData = excessesRes.data || [];
-      if (!settingsHistRes.error) settingsHistData = settingsHistRes.data || [];
-      if (!calcHistRes.error) calcHistData = calcHistRes.data || [];
-      if (!taskHistRes.error) taskHistData = taskHistRes.data || [];
-    } catch (e) {
-      if (e?.code === "TIMEOUT") {
-        data = null;
-        error = { message: "timeout" };
-      } else {
-        data = null;
-        error = e;
-      }
-    }
-  }
-
-  if (error) {
-    console.error("Ошибка загрузки истории изменений:", error);
-    if (msg) {
-      msg.textContent =
-        "Показаны сохранённые на устройстве изменения; новые записи без сети — внизу с жёлтой заливкой.";
-      msg.classList.remove("order-tasks-message--error");
-    }
-  }
+  const [histRes, excessHistRes, excessesRes, settingsHistRes, calcHistRes, taskHistRes] =
+    await Promise.all([
+      fetchAllSupabaseRows(() =>
+        supabaseClient
+          .from("order_history")
+          .select("created_at, user_email, comment, order_id")
+          .gte("created_at", startIso)
+          .lte("created_at", endIso)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false }),
+        { signal: scope.signal },
+      ),
+      fetchExcessHistoryRows(startIso, endIso, scope.signal),
+      fetchExcessesRows(startIso, endIso, scope.signal),
+      fetchSettingsHistoryRows(startIso, endIso, scope.signal),
+      fetchCalculationHistoryRows(startIso, endIso, scope.signal),
+      fetchTaskHistoryRows(startIso, endIso, scope.signal),
+    ]);
 
   if (!scope.current()) return;
-  const baseRows = error ? snapFiltered : data || [];
-  if (!error && data) persistOrderHistorySnapshot(data);
-  if (!error && Array.isArray(excessHistData)) persistExcessHistorySnapshot(excessHistData);
-  if (!error && Array.isArray(settingsHistData)) persistSettingsHistorySnapshot(settingsHistData);
-  if (!error && Array.isArray(calcHistData)) persistCalculationHistorySnapshot(calcHistData);
-  if (!error && Array.isArray(taskHistData)) persistTaskHistorySnapshot(taskHistData);
+  if (histRes.error) {
+    console.error("Ошибка загрузки истории изменений:", histRes.error);
+    if (msg) {
+      msg.textContent = "Ошибка загрузки истории изменений.";
+      msg.classList.add("order-tasks-message--error");
+    }
+    await paintAllChangesFromBaseRows(startIso, endIso, [], [], [], [], [], [], { error: histRes.error, current: scope.current });
+    return;
+  }
 
   await paintAllChangesFromBaseRows(
     startIso,
     endIso,
-    baseRows,
-    error ? snapExcessHist : excessHistData || [],
-    error ? snapExcesses : excessesData || [],
-    error ? snapSettingsHist : settingsHistData || [],
-    error ? snapCalcHist : calcHistData || [],
-    error ? snapTaskHist : taskHistData || [],
-    { error, current: scope.current },
+    histRes.data || [],
+    excessHistRes.data || [],
+    excessesRes.data || [],
+    settingsHistRes.data || [],
+    calcHistRes.data || [],
+    taskHistRes.data || [],
+    { error: null, current: scope.current },
   );
 }
 

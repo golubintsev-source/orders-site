@@ -1,7 +1,6 @@
 import { bindAutogrowTextarea } from "./autogrow-textarea.js";
 import { supabaseClient } from "./config.js";
 import { getCurrentUserEmail, isUserExecutorOfTask } from "./task-form-shared.js";
-import { isOfflineDataMode, updatePendingTaskReply } from "./offline-cache.js";
 
 const drafts = new Map();
 const replySizing = new Map();
@@ -14,11 +13,6 @@ export function replyIsDirty(value, saved) {
 export async function saveExecutorReply(row, value, previous) {
   if (!isUserExecutorOfTask(row)) return { ok: false, message: "Сохранить ответ может только исполнитель задачи." };
   const reply = String(value ?? "");
-  if (row.__offlineLocalId) {
-    const ok = updatePendingTaskReply(row.__offlineLocalId, reply);
-    return ok ? { ok: true, reply } : { ok: false, message: "Задача уже синхронизирована. Обновите список и повторите сохранение." };
-  }
-  if (isOfflineDataMode()) return { ok: false, message: "Для сохранения ответа подключитесь к интернету. Введённый текст сохранён в поле." };
   try {
     const { data, error } = await supabaseClient.from("order_tasks")
       .update({ executor_reply: reply }).eq("id", row.id)
@@ -35,7 +29,7 @@ export async function saveExecutorReply(row, value, previous) {
 
 export function renderTaskReplyCell(row) {
   if (!isUserExecutorOfTask(row)) return `<td class="task-reply-cell">${escape(row.executor_reply)}</td>`;
-  const key = `${getCurrentUserEmail()}:${row.__offlineLocalId || row.id}`;
+  const key = `${getCurrentUserEmail()}:${row.id}`;
   const saved = String(row.executor_reply ?? "");
   let draft = drafts.get(key);
   if (!draft || (!draft.saving && !replyIsDirty(draft.value, draft.saved))) {

@@ -1,12 +1,6 @@
 import { createReadFetch } from "./read-requests.js";
 const { createClient } = window.supabase;
 
-export function isOfflineWorkModeEnabled() {
-  // Жёстко отключено: приложение работает только с сервером/БД.
-  // (Раньше могла быть ручная активация через window.__OFFLINE_WORK_MODE_ENABLED__.)
-  return false;
-}
-
 export const SUPABASE_URL =
   typeof window !== "undefined" && window.__SUPABASE_URL__
     ? window.__SUPABASE_URL__

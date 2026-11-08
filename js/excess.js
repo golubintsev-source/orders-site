@@ -7,7 +7,6 @@ import {
   refreshRublesIntegerInputState,
   tryParseRublesInteger,
 } from "./format.js";
-import { raceWithTimeout } from "./offline-cache.js";
 import { beginReadScope } from "./read-requests.js";
 import { shortLoginByEmail } from "./user-names.js";
 import { canSelectKassaBeznal, KASSA_BEZNAL_PLACES } from "./roles.js";
@@ -701,7 +700,7 @@ async function saveExcessRows() {
   if (saveBtn) saveBtn.disabled = true;
 
   try {
-    const result = await raceWithTimeout(insertExcessesIdempotently(payloads));
+    const result = await insertExcessesIdempotently(payloads);
     if (result?.error) {
       console.error("excesses insert:", result.error);
       const errorText = String(result.error?.message || "");
@@ -877,14 +876,12 @@ async function saveEditedExcess() {
   };
 
   try {
-    const result = await raceWithTimeout(
-      supabaseClient
-        .from("excesses")
-        .update(payload)
-        .eq("id", id)
-        .is("deleted_at", null)
-        .select(),
-    );
+    const result = await supabaseClient
+      .from("excesses")
+      .update(payload)
+      .eq("id", id)
+      .is("deleted_at", null)
+      .select();
     if (result?.error) {
       console.error("excesses update:", result.error);
       setFormMessage("Не удалось сохранить изменения.", true);
@@ -1021,12 +1018,10 @@ async function deleteExcess(id) {
   const existing = excessesRowsCache.find((r) => Number(r.id) === n);
 
   try {
-    const result = await raceWithTimeout(
-      supabaseClient
-        .from("excesses")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", n),
-    );
+    const result = await supabaseClient
+      .from("excesses")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", n);
     if (result?.error) {
       console.error("excesses delete:", result.error);
       setTableMessage("Не удалось удалить запись.");
