@@ -891,6 +891,7 @@ h2 {
 }
 
 #section-new .client-suggestions,
+#routePointAddressSuggestions,
 #section-excess .client-suggestions,
 #section-calculations .client-suggestions,
 .calculations-page .client-suggestions {
@@ -911,6 +912,7 @@ h2 {
 }
 
 #section-new .client-suggestions li,
+#routePointAddressSuggestions li,
 #section-excess .client-suggestions li,
 #section-calculations .client-suggestions li,
 .calculations-page .client-suggestions li {
@@ -925,7 +927,9 @@ h2 {
 }
 
 #section-new .client-suggestions li[aria-selected="true"],
+#routePointAddressSuggestions li[aria-selected="true"],
 #section-new .client-suggestions li:hover,
+#routePointAddressSuggestions li:hover,
 #section-excess .client-suggestions li[aria-selected="true"],
 #section-excess .client-suggestions li:hover,
 #section-calculations .client-suggestions li[aria-selected="true"],
@@ -936,6 +940,7 @@ h2 {
 }
 
 #section-new .client-suggestions .client-suggestion-text,
+#routePointAddressSuggestions .client-suggestion-text,
 #section-excess .client-suggestions .client-suggestion-text,
 #section-calculations .client-suggestions .client-suggestion-text,
 .calculations-page .client-suggestions .client-suggestion-text {
@@ -946,6 +951,7 @@ h2 {
 }
 
 #section-new .client-suggestions .client-suggestion-count,
+#routePointAddressSuggestions .client-suggestion-count,
 #section-excess .client-suggestions .client-suggestion-count,
 #section-calculations .client-suggestions .client-suggestion-count,
 .calculations-page .client-suggestions .client-suggestion-count {
@@ -955,17 +961,24 @@ h2 {
   color: #6b7280;
 }
 
-#section-new #addressSuggestions li {
+#routePointAddressSuggestions {
+  font-weight: 400;
+}
+
+#section-new #addressSuggestions li,
+#routePointAddressSuggestions li {
   align-items: flex-start;
 }
 
-#section-new #addressSuggestions .address-suggestion-content {
+#section-new #addressSuggestions .address-suggestion-content,
+#routePointAddressSuggestions .address-suggestion-content {
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
 }
 
-#section-new #addressSuggestions .client-suggestion-text {
+#section-new #addressSuggestions .client-suggestion-text,
+#routePointAddressSuggestions .client-suggestion-text {
   display: block;
   overflow: visible;
   line-height: 1.35;
@@ -974,7 +987,8 @@ h2 {
   white-space: normal;
 }
 
-#section-new #addressSuggestions .address-suggestion-source {
+#section-new #addressSuggestions .address-suggestion-source,
+#routePointAddressSuggestions .address-suggestion-source {
   margin-top: 1px;
   font-weight: 500;
 }
