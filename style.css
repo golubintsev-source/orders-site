@@ -12251,3 +12251,55 @@ html.keyboard-open .voice-composer {
 .order-photo-strict-warning[hidden] {display:none;}
 .order-photo-strict-warning strong {font-size:17px;}
 .order-photo-cooldown-clock {text-align:center;font-size:38px;font-weight:800;font-variant-numeric:tabular-nums;color:#b91c1c;}
+
+/* Маршрутный лист: тот же компактный выпадающий список, что в «Новый заказ». */
+#routeSheetAddPointDialog .client-input-wrap {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+#routeSheetAddPointDialog .client-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+  margin: 4px 0 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .12);
+}
+#routeSheetAddPointDialog .client-suggestions[hidden] { display: none; }
+#routeSheetAddPointDialog .client-suggestions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: #111827;
+}
+#routeSheetAddPointDialog .client-suggestions li[aria-selected="true"],
+#routeSheetAddPointDialog .client-suggestions li:hover { background: #f3f4f6; }
+#routeSheetAddPointDialog .client-suggestion-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+  font-weight: 400;
+}
+#routeSheetAddPointDialog .client-suggestion-count {
+  flex: 0 0 auto;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
