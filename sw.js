@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v137: обновление CSS подсказок маршрутного листа для iPhone PWA.
-const STATIC_CACHE = "orders-site-static-v137";
+// v138: общие стили подсказок адреса в заказе и маршрутном листе.
+const STATIC_CACHE = "orders-site-static-v138";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -24,7 +24,7 @@ const PRECACHE_URLS = [
   "/img/startup/worker-offline.webp",
   "/img/startup/worker-data-error.webp",
   "/style.css",
-  "/style.css?v=route-suggest-20261108",
+  "/style.css?v=route-address-list-20261108",
   "/js/performance-monitor.js",
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",

@@ -7,6 +7,8 @@ const handler = require("../api/address-suggest.js");
 const source = await readFile(new URL("../js/clientAutocomplete.js", import.meta.url), "utf8");
 const apiSource = await readFile(new URL("../api/address-suggest.js", import.meta.url), "utf8");
 const styleSource = await readFile(new URL("../style.css", import.meta.url), "utf8");
+const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+const routeSheet = await readFile(new URL("../js/route-sheet.js", import.meta.url), "utf8");
 const swSource = await readFile(new URL("../sw.js", import.meta.url), "utf8");
 
 const items = handler.mapDadataSuggestions({
@@ -157,7 +159,24 @@ assert.match(apiSource, /suggestions\.dadata\.ru\/suggestions\/api\/4_1\/rs\/sug
 assert.match(apiSource, /locations_boost: \[\{ kladr_id: VOLGOGRAD_KLADR_ID \}\]/);
 assert.doesNotMatch(source, /address-suggestion-subtitle/);
 assert.doesNotMatch(apiSource, /postal_code/);
-assert.match(styleSource, /#addressSuggestions \.client-suggestion-text[\s\S]*white-space: normal/);
-assert.match(swSource, /orders-site-static-v84/);
+const routeList = routeSheet.match(/wrapInput\(address, "(\w+)"/)?.[1];
+assert.ok(routeList, "The route sheet must supply an address suggestion list");
+const sharedRules = [
+  ["#section-new .client-suggestions", "", "list-style: none"],
+  ["#section-new .client-suggestions", " li", "display: flex"],
+  ["#section-new .client-suggestions", " .client-suggestion-count", "flex-shrink: 0"],
+  ["#section-new #addressSuggestions", " .client-suggestion-text", "white-space: normal"],
+  ["#section-new #addressSuggestions", " .address-suggestion-source", "font-weight: 500"],
+];
+for (const [orderList, suffix, declaration] of sharedRules) {
+  const rule = [...styleSource.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(([, selector, body]) => {
+    const selectors = selector.split(",").map((item) => item.trim());
+    return selectors.includes(orderList + suffix) && selectors.includes("#" + routeList + suffix)
+      && body.includes(declaration);
+  });
+  assert.ok(rule, `Missing shared address dropdown style for ${suffix || "the list"}`);
+}
+const styleUrl = html.match(/id="appStyles"[^>]+href="\.(\/style\.css\?[^"]+)"/)?.[1];
+assert.ok(styleUrl && swSource.includes(JSON.stringify(styleUrl)), "Precache the stylesheet requested by the app");
 
 console.log("address suggest tests: ok");
