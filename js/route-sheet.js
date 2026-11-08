@@ -1,4 +1,5 @@
 import { state } from "./state.js";
+import { attachFieldAutocomplete, attachAddressAutocomplete } from "./clientAutocomplete.js";
 import {
   isOrderEditLockedForUserLite,
   isOrderHiddenForCurrentRole,
@@ -4018,6 +4019,69 @@ async function confirmRouteSheetAddPoint() {
   loadRouteSheet();
 }
 
+function initRouteSheetPointAutocomplete() {
+  const client = document.getElementById("routeSheetAddPointClient");
+  const address = document.getElementById("routeSheetAddPointAddress");
+  if (!client || !address || client.dataset.routePointAutocomplete) return;
+  client.dataset.routePointAutocomplete = "1";
+
+  const latest = (field, value) => [...(state.allOrders || [])]
+    .filter(order => String(order[field] || "").trim() === String(value || "").trim())
+    .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
+
+  const applyOrder = (order, pickedField) => {
+    if (!order) return;
+    const mapping = {
+      routeSheetAddPointClient: "client",
+      routeSheetAddPointAddress: "address",
+      routeSheetAddPointPhone: "phone",
+      routeSheetAddPointCoordinates: "coordinates",
+      routeSheetAddPointDescription: "description",
+      routeSheetAddPointRemainder: "remaining_amount",
+      routeSheetAddPointAreaM2: "area_m2",
+      routeSheetAddPointConstruction: "construction_count",
+    };
+    for (const [id, field] of Object.entries(mapping)) {
+      if (field === pickedField) continue;
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const value = order[field];
+      if (value != null && value !== "") el.value = field === "remaining_amount" ? formatAmount(value) : String(value);
+    }
+    for (const [id, field] of [["routeSheetAddPointInstallation", "installation"], ["routeSheetAddPointReveals", "reveals"]]) {
+      const el = document.getElementById(id);
+      if (el && order[field] != null) el.checked = Boolean(order[field]);
+    }
+  };
+
+  const wrapInput = (input, listId, listClass, label) => {
+    const wrap = document.createElement("div");
+    wrap.className = "client-input-wrap";
+    wrap.style.cssText = "position:relative;width:100%;min-width:0";
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    input.style.width = "100%";
+    const list = document.createElement("ul");
+    list.id = listId;
+    list.className = listClass;
+    list.hidden = true;
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", label);
+    wrap.appendChild(list);
+    return { input, list, wrap };
+  };
+
+  attachFieldAutocomplete({
+    ...wrapInput(client, "routePointClientSuggestions", "client-suggestions", "Подсказки клиентов"),
+    field: "client",
+    onPick: value => applyOrder(latest("client", value), "client"),
+  });
+  attachAddressAutocomplete({
+    ...wrapInput(address, "routePointAddressSuggestions", "address-suggestions", "Подсказки адресов"),
+    onPick: value => applyOrder(latest("address", value), "address"),
+  });
+}
+
 function initRouteSheetAddPointDialog() {
   const dlg = document.getElementById("routeSheetAddPointDialog");
   const openBtn = document.getElementById("routeSheetAddPointOpenBtn");
@@ -4027,6 +4091,7 @@ function initRouteSheetAddPointDialog() {
 
   if (!dlg || !openBtn || dlg.dataset.routeSheetAddPointBound) return;
   dlg.dataset.routeSheetAddPointBound = "1";
+  initRouteSheetPointAutocomplete();
 
   openBtn.addEventListener("click", () => openRouteSheetAddPointDialog());
   if (closeBtn) closeBtn.addEventListener("click", () => closeRouteSheetAddPointDialog());
