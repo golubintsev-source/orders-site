@@ -2413,6 +2413,8 @@ export function updateConditionalRequiredHighlight() {
   const deliveryDateComplete = !!parseOrderFormDdMmYyyyToIso(deliveryDateVal);
   const prepaymentToEl = document.getElementById("prepayment_to");
   const deliveryDateEl = document.getElementById("delivery_date");
+  const deliveryEl = document.getElementById("delivery");
+  if (deliveryEl) deliveryEl.classList.toggle("conditional-invalid", !!deliveryDateComplete && !deliveryVal);
   if (prepaymentToEl) prepaymentToEl.classList.toggle("conditional-invalid", !!prepaymentVal && !prepaymentToVal);
   if (deliveryDateEl) deliveryDateEl.classList.toggle("conditional-invalid", !!deliveryVal && !deliveryDateComplete);
 }
@@ -3401,7 +3403,8 @@ export async function submitOrderForm(event) {
   if (prepaymentVal && !prepaymentToVal) conditionalMissing.push("Кому предоплата");
   const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
   const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
-  if (deliveryVal && !parseOrderFormDdMmYyyyToIso(deliveryDateVal)) conditionalMissing.push("Дата");
+  if (deliveryVal && !parseOrderFormDdMmYyyyToIso(deliveryDateVal)) conditionalMissing.push("Дата отправки");
+  if (parseOrderFormDdMmYyyyToIso(deliveryDateVal) && !deliveryVal) conditionalMissing.push("Отправка");
   if (conditionalMissing.length > 0) {
     setMessage("Заполните поля: " + conditionalMissing.join(", "), "#d32f2f");
     updateConditionalRequiredHighlight();
@@ -3742,6 +3745,9 @@ export async function createOrderFromVoicePayload(draft) {
   const deliveryDate = normalizeVoiceIsoDate(draft?.delivery_date);
   if (delivery && !deliveryDate) {
     return { ok: false, message: "Укажите дату отправки" };
+  }
+  if (deliveryDate && !delivery) {
+    return { ok: false, message: "Укажите отправку: Доставка или Самовывоз" };
   }
 
   const installation = Boolean(draft?.installation);
