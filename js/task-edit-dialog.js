@@ -1,7 +1,6 @@
 import { bindAutogrowTextarea } from "./autogrow-textarea.js";
 import { renderTaskComposerHtml } from "./task-composer-markup.js";
 import { supabaseClient } from "./config.js";
-import { isOfflineDataMode } from "./offline-cache.js";
 import {
   isUserAuthorOfTask, isUserExecutorOfTask, getCurrentUserEmail, ensureTaskExecutorsInList,
   getSelectedExecutorEmailsFrom,
@@ -16,7 +15,6 @@ let opening = false;
 
 export async function openTaskEditDialog(taskId, onSaved) {
   if (opening || document.getElementById("taskEditDialog")) return;
-  if (isOfflineDataMode()) throw new Error("Для открытия задачи подключитесь к интернету.");
   opening = true;
   let dialog;
   let composer;
@@ -140,7 +138,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
       let deleted = false;
       try {
         const { softDeleteAuthorTask } = await import("./tasks.js");
-        deleted = await softDeleteAuthorTask(task.id, null);
+        deleted = await softDeleteAuthorTask(task.id);
       } catch (error) {
         errorEl.textContent = error?.message || "Не удалось удалить задачу. Попробуйте ещё раз.";
         errorEl.hidden = false;
@@ -263,7 +261,6 @@ export async function openTaskEditDialog(taskId, onSaved) {
       lockReadOnlyControls();
       let saved;
       try {
-        if (isOfflineDataMode()) throw new Error("Для сохранения подключитесь к интернету.");
         if (Object.keys(patch).length) {
           let update = supabaseClient.from("order_tasks").update(patch)
             .eq("id", task.id).is("deleted_at", null);

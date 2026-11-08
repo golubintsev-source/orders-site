@@ -1,8 +1,7 @@
-import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
+import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { isAdmin, canManageWorkerSettings } from "./roles.js";
 import { tryParseRublesInteger, formatAmount } from "./format.js";
-import { readSnapshot, persistSettingsSnapshotFromRows } from "./offline-cache.js";
 
 const KEY_INSTALLER_RATE = "installer_rate_per_m2";
 const KEY_PHOTO_DELAY = "order_photo_cooldown_minutes";
@@ -443,11 +442,6 @@ export async function loadSettings() {
  }
  const card = document.getElementById("settingsPhotoCooldownCard");
  if (card) card.hidden = !isAdmin();
-  if (isOfflineWorkModeEnabled() && typeof navigator !== "undefined" && navigator.onLine === false) {
-    const snap = readSnapshot();
-    applySettingsRowsToStateAndDom(snap?.settingsRows || []);
-    return state.defaultInstallerRatePerM2;
-  }
 
   const keys = [
     KEY_INSTALLER_RATE,
@@ -459,14 +453,11 @@ export async function loadSettings() {
     ...MANAGER_SALARY_PARAM_FIELDS.flatMap((f) => [f.baseKey, f.percentKey]),
   ];
   const { data: rows, error } = await supabaseClient.from("app_settings").select("key, value").in("key", keys);
-  let effectiveRows = rows || [];
   if (error) {
-    console.error("Ошибка загрузки настроек:", error);
-  } else if (rows?.length) {
-    persistSettingsSnapshotFromRows(rows);
+    throw error;
   }
 
-  applySettingsRowsToStateAndDom(effectiveRows);
+  applySettingsRowsToStateAndDom(rows || []);
   return state.defaultInstallerRatePerM2;
 }
 
@@ -507,7 +498,6 @@ export function updateEditorsSaveButtonState() {
   btn.disabled = !isDirty;
   btn.classList.toggle("settings-save-btn-inactive", !isDirty);
 }
-
 
 export function updateOtherWorkersSaveButtonState() {
   const btn = document.getElementById("settingsSaveOtherWorkersBtn");
@@ -644,7 +634,6 @@ export async function saveEditors() {
   updateEditorsSaveButtonState();
   return true;
 }
-
 
 export async function saveOtherWorkers() {
   if (!canManageWorkerSettings()) return false;

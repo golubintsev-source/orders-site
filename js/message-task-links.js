@@ -1,5 +1,4 @@
 import { supabaseClient } from "./config.js";
-import { readPendingTasksQueueForMessageLinks } from "./offline-cache.js";
 
 /** @type {Set<string>} */
 const activeTaskMessageRefs = new Set();
@@ -55,10 +54,6 @@ export async function refreshActiveTaskMessageRefs() {
 
   if (!error && data) {
     for (const row of data) ingestTaskRow(row);
-  }
-
-  for (const row of readPendingTasksQueueForMessageLinks()) {
-    ingestTaskRow(row);
   }
 
   applyMessageTaskHighlightsInFeed();

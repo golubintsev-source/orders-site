@@ -78,9 +78,6 @@ const stubs = {
   } }) } },
   "./user-names.js": { displayNameByEmail: (email) => email },
   "./users-directory.js": { loadTaskExecutorPickerUsers: async () => [] },
-  "./offline-cache.js": {
-    addPendingOfflineTask() {}, nextOfflineTempTaskId: () => -1, isOfflineDataMode: () => false,
-  },
   "./orders-runtime.js": { ensureOrdersData: async () => ({
     buildOrderPickerRowHtml: (order) => `<div class="messages-suggestion-order-row">${order.id}</div>`,
   }) },
@@ -219,7 +216,6 @@ const submitContext = vm.createContext({
   document, state: { currentUser: { id: "user" } }, console: { error() {} },
   isTaskAttachmentsBusy: () => false, hasTaskDraftAttachments: () => true,
   getSelectedExecutorEmails: () => ["worker@example.com"], datetimeLocalToIso: () => null,
-  isOfflineDataMode: () => false,
   setTaskFormDisabled: (value) => { formDisabled = value; }, setTaskAttachmentsBusy() {},
   prepareTaskAttachments: () => new Promise((resolve) => { releaseUpload = () => resolve(savedAttachments); }),
   insertTask: async () => { saveCalls++; return { error: shouldFail ? new Error("save failed") : null }; },

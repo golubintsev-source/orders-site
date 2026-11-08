@@ -8,7 +8,7 @@ const source = read("js/calculations.js");
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 async function harness() {
-  const queries = [], saved = [], rendered = [], messages = [];
+  const queries = [], rendered = [], messages = [];
   let authCalls = 0, bindings = 0;
   const context = vm.createContext({ console, AbortController, document: {
     querySelector: () => ({}), getElementById: () => null,
@@ -30,11 +30,6 @@ async function harness() {
   const values = {
     supabaseClient: client, state: { currentUser: { id: "test-user" } },
     checkAuth: async () => { authCalls++; return { id: "test-user" }; },
-    raceWithTimeout: (promise) => promise,
-    mergeCalculationRows: (rows) => rows,
-    readSnapshot: () => ({ calculations: [{ id: -1 }], orders: [] }),
-    persistCalculationsSnapshot: (rows) => saved.push(rows),
-    isBrowserOffline: () => false, isOfflineDataMode: () => false,
   };
   const mod = new vm.SourceTextModule(source + `
     renderCalculationsTableFromCache = () => recordRows(calculationsRowsCache);
@@ -57,7 +52,7 @@ async function harness() {
     }, { context });
   });
   await mod.evaluate();
-  return { api: mod.namespace, queries, saved, rendered, messages,
+  return { api: mod.namespace, queries, rendered, messages,
     authCalls: () => authCalls, bindings: () => bindings };
 }
 
@@ -105,7 +100,6 @@ for (const staleError of [false, true]) {
     h.queries[0].resolve({ data: [{ id: 1 }], error: staleError ? new Error("old") : null });
     await old;
     assert.equal(h.api.testState.rows()[0].id, 2);
-    assert.equal(h.saved.length, 1);
     assert.equal(h.rendered.length, 1);
     assert.equal(h.messages.length, 1);
   });
@@ -159,17 +153,17 @@ test("late order-address response cannot overwrite newer rows or addresses", asy
   await old;
   assert.equal(h.api.testState.rows()[0].id, 2);
   assert.equal(h.api.testState.addresses().size, 0);
-  assert.equal(h.saved.length, 1);
 });
 
-test("failed load falls back and a later call retries", async () => {
+test("failed server load clears rows and a later call retries", async () => {
   const h = await harness();
   const first = h.api.loadCalculations();
   await tick();
   h.queries[0].resolve({ data: null, error: { message: "test failure" } });
   await first;
-  assert.equal(h.api.testState.rows()[0].id, -1);
-  assert.equal(h.saved.length, 0);
+  assert.equal(h.api.testState.rows().length, 0);
+  assert.match(h.messages.at(-1)[0], /Не удалось загрузить расчёты с сервера/);
+  assert.equal(h.messages.at(-1)[1], true);
   const retry = h.api.loadCalculations();
   await tick();
   h.queries[1].resolve({ data: [{ id: 2 }], error: null });

@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v138: общие стили подсказок адреса в заказе и маршрутном листе.
-const STATIC_CACHE = "orders-site-static-v138";
+// v139: удаление устаревшего офлайн-режима данных.
+const STATIC_CACHE = "orders-site-static-v139";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -24,17 +24,16 @@ const PRECACHE_URLS = [
   "/img/startup/worker-offline.webp",
   "/img/startup/worker-data-error.webp",
   "/style.css",
-  "/style.css?v=route-address-list-20261108",
+  "/style.css?v=server-only-20261108",
   "/js/performance-monitor.js",
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",
   "/js/boot-route.js",
-  "/js/main.js?v=46",
+  "/js/main.js?v=47",
   "/js/config.js",
   "/js/read-requests.js",
   "/js/state.js",
   "/js/auth.js",
-  "/js/offline-cache.js",
   "/js/dom.js",
   "/js/section-nav.js",
   "/js/section-loader.js",
@@ -55,8 +54,6 @@ const PRECACHE_URLS = [
   "/js/user-place.js",
   "/js/secret-login.js",
   "/js/access-log.js",
-  "/js/db-ping.js",
-  "/js/dbHealth.js",
   "/js/motivationQuotes.js",
   "/js/register-sw.js",
   "/manifest.webmanifest",

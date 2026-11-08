@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-let allowed = true, offline = false, pendingFound = true, pendingReply, calls = [], resolveWrite;
+let allowed = true, calls = [], resolveWrite;
 let sizedFields = [], disposedFields = [];
 const context = vm.createContext({
   bindAutogrowTextarea: field => { sizedFields.push(field); return () => disposedFields.push(field); },
   getCurrentUserEmail: () => 'worker@example.com', isUserExecutorOfTask: () => allowed,
-  isOfflineDataMode: () => offline, updatePendingTaskReply: (id, reply) => { pendingReply = reply; return pendingFound; },
   supabaseClient: { from: table => {
     assert.equal(table, 'order_tasks'); const call = { filters: [] };
     return {
@@ -61,17 +60,13 @@ assert.equal(controls.button.disabled, true, 'clearing saved reply can be saved'
 allowed = false;
 assert.equal((await context.saveExecutorReply(row, 'No', '')).ok, false);
 assert.ok(!context.renderTaskReplyCell(row).includes('<textarea'));
-allowed = true; offline = true;
-assert.equal((await context.saveExecutorReply(row, 'No', '')).ok, false);
-assert.equal((await context.saveExecutorReply({ ...row, __offlineLocalId: 'local' }, 'Local', '')).ok, true);
-assert.equal(pendingReply, 'Local'); pendingFound = false;
-assert.equal((await context.saveExecutorReply({ ...row, __offlineLocalId: 'local' }, 'Local', '')).ok, false);
+allowed = true;
 assert.ok(!context.renderTaskReplyCell({ ...row, id: 43, executor_reply: '</textarea><script>x</script>' }).includes('<script>'));
 controls.input.isConnected = false;
 root.editor = { querySelector: () => ({ isConnected: true }) };
 context.resizeTaskReplyFields(root);
 assert.equal(disposedFields.length, 1, 're-render removes sizing handlers for old fields');
-console.log('task replies: grey/green dirty state, save, duplicate prevention, edit/clear, errors/conflict, draft preservation, executor guard, offline task and escaping passed');
+console.log('task replies: grey/green dirty state, save, duplicate prevention, edit/clear, errors/conflict, draft preservation, executor guard and escaping passed');
 // Exercise the real shared edit dialog used from task lists and order cells.
 let modal = null, patchSent, updateFilters, role = 'author', conflict = false, savedRow;
 const editorSizedFields = [];
@@ -110,7 +105,7 @@ const taskRow = {
 let savedOrderField;
 const editorContext = vm.createContext({
   deleteModule: { softDeleteAuthorTask: async id => { deletedId = id; return deleteResult; } },
-  document, console, isOfflineDataMode: () => false,
+  document, console,
   bindAutogrowTextarea: field => { editorSizedFields.push(field); return () => {}; },
   isUserAuthorOfTask: () => role === 'author' || role === 'both',
   isUserExecutorOfTask: () => role === 'executor' || role === 'both',
@@ -234,19 +229,3 @@ deleteResult = true;
 await fields.delete.emit('click');
 assert.equal(modal, null, 'successful soft deletion closes editor');
 console.log('shared edit dialog: author, executor, combined and viewer permissions, conflict handling and soft deletion passed');
-
-let queue = [{ localId: 'local', tempTaskId: -1, executor_reply: '' }], synced;
-const offlineContext = vm.createContext({
-  console, readPendingTasksQueue: () => queue, writePendingTasksItems: rows => { queue = rows; },
-  supabaseClient: { from: () => ({ insert: async payload => { synced = payload; return { error: null }; } }) },
-});
-const offlineSource = fs.readFileSync(new URL('../js/offline-cache.js', import.meta.url), 'utf8');
-for (const name of ['updatePendingTaskReply', 'pendingTaskDisplayRows', 'syncPendingTasksToSupabase']) {
-  vm.runInContext(offlineSource.match(new RegExp(`(?:export )?(?:async )?function ${name}\\([^]*?\\n\\}(?=\\n|$)`))[0].replace('export ', ''), offlineContext);
-}
-assert.equal(offlineContext.updatePendingTaskReply('local', 'Офлайн ответ'), true);
-assert.equal(offlineContext.pendingTaskDisplayRows()[0].executor_reply, 'Офлайн ответ');
-await offlineContext.syncPendingTasksToSupabase();
-assert.equal(synced.executor_reply, 'Офлайн ответ'); assert.equal(queue.length, 0);
-console.log('offline executor reply survives queue update, display and database synchronization');
-

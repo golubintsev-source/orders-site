@@ -1,7 +1,7 @@
+import { expandOrderHistoryCommentLines } from "./order-history-format.js";
 import { supabaseClient } from "./config.js";
 import { checkAuth, loadProfile, logout } from "./auth.js";
 import { isOrderHiddenForCurrentRole } from "./roles.js";
-import { mergeOrderHistoryRows, expandOrderHistoryCommentLines } from "./offline-cache.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import {
@@ -131,8 +131,7 @@ async function loadHistory() {
   tbody.innerHTML = "";
 
   const baseRows = error ? [] : data || [];
-  const merged = mergeOrderHistoryRows(baseRows);
-  const rows = merged.filter((r) => String(r.order_id) === String(orderId)).sort((a, b) => {
+  const rows = baseRows.filter((r) => String(r.order_id) === String(orderId)).sort((a, b) => {
     const ta = new Date(a.created_at || 0).getTime();
     const tb = new Date(b.created_at || 0).getTime();
     return ta - tb;
@@ -156,7 +155,6 @@ async function loadHistory() {
     const commentLines = expandOrderHistoryCommentLines(row.comment);
     for (const comment of commentLines) {
       const tr = document.createElement("tr");
-      if (row.__offlinePendingSync) tr.classList.add("tr-order-offline-pending");
       tr.innerHTML = `<td>${escapeHtml(createdAt)}</td><td>${escapeHtml(author)}</td><td class="order-tasks-text-cell">${escapeHtml(comment || "")}</td>`;
       tbody.appendChild(tr);
     }
@@ -214,4 +212,8 @@ async function init() {
   await applySavedScroll(readSavedPlaceForCurrentPage(user.id));
 }
 
-init();
+void init().catch((error) => {
+  console.error("Не удалось открыть историю заказа:", error);
+  const message = document.getElementById("historyMessage");
+  if (message) message.textContent = "Не удалось загрузить историю с сервера.";
+});

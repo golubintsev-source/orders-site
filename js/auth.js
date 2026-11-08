@@ -1,7 +1,7 @@
-import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
+import { isNetworkFetchError } from "./network-errors.js";
+import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { normalizeRole } from "./roles.js";
-import { isNetworkFetchError, raceWithTimeout } from "./offline-cache.js";
 import { captureHref } from "./user-place.js";
 
 const PROFILE_ROLE_CACHE_KEY = "orders_site_cache_profile_role_v1";
@@ -40,18 +40,13 @@ function writeCachedRole(role) {
   }
 }
 
-/** Синхронно до loadProfile: корректные фильтры user_lite при ранней отрисовке из localStorage. */
+/** Синхронно до loadProfile: первичная отрисовка до подтверждения роли сервером. */
 export function hydrateCachedRoleFromStorage() {
   const raw = readCachedRoleRaw();
   if (raw == null) return;
   state.currentRole = normalizeRole(raw);
 }
 
-/**
- * Вход в приложение без сети: getUser() ходит на Auth API и падает офлайн,
- * из‑за чего раньше срабатывал редирект на login и не вызывался loadOrders() с кэшем localStorage.
- * getSession() берёт JWT из локального хранилища Supabase и достаточен для старта UI.
- */
 export async function checkAuth() {
   const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
   const sessionUser = sessionData?.session?.user;
@@ -62,61 +57,35 @@ export async function checkAuth() {
 
   state.currentUser = sessionUser;
 
-  const shouldValidateWithServer = !isOfflineWorkModeEnabled() || navigator.onLine !== false;
-  if (shouldValidateWithServer) {
-    void supabaseClient.auth
-      .getUser()
-      .then(({ data, error }) => {
-        if (!error && data?.user) {
-          state.currentUser = data.user;
-          return;
-        }
-        if (error && !isNetworkFetchError(error)) {
-          window.location.href = loginPageHref();
-        }
-      })
-      .catch((e) => {
-        if (!isNetworkFetchError(e)) {
-          console.error("Ошибка проверки сессии:", e);
-        }
-      });
-  }
+  void supabaseClient.auth
+    .getUser()
+    .then(({ data, error }) => {
+      if (!error && data?.user) {
+        state.currentUser = data.user;
+        return;
+      }
+      if (error && !isNetworkFetchError(error)) {
+        window.location.href = loginPageHref();
+      }
+    })
+    .catch((e) => {
+      if (!isNetworkFetchError(e)) {
+        console.error("Ошибка проверки сессии:", e);
+      }
+    });
 
   return state.currentUser;
 }
 
 export async function loadProfile() {
-  if (isOfflineWorkModeEnabled() && typeof navigator !== "undefined" && navigator.onLine === false) {
-    state.currentRole = normalizeRole(readCachedRoleRaw());
-    return;
+  const { data, error } = await supabaseClient.from("profiles").select("role").eq("id", state.currentUser.id).single();
+  if (error || !data) {
+    state.currentRole = null;
+    throw error || new Error("Не удалось загрузить профиль.");
   }
 
-  let res;
-  try {
-    res = isOfflineWorkModeEnabled()
-      ? await raceWithTimeout(
-          supabaseClient.from("profiles").select("role").eq("id", state.currentUser.id).single(),
-        )
-      : await supabaseClient.from("profiles").select("role").eq("id", state.currentUser.id).single();
-  } catch (e) {
-    if (e?.code === "TIMEOUT") {
-      state.currentRole = normalizeRole(readCachedRoleRaw());
-      return;
-    }
-    console.error("Ошибка загрузки профиля:", e);
-    state.currentRole = normalizeRole(readCachedRoleRaw());
-    return;
-  }
-
-  const { data, error } = res;
-  if (error) {
-    console.error("Ошибка загрузки профиля:", error);
-    state.currentRole = normalizeRole(readCachedRoleRaw());
-    return;
-  }
-
-  state.currentRole = normalizeRole(data?.role);
-  writeCachedRole(data?.role);
+  state.currentRole = normalizeRole(data.role);
+  writeCachedRole(data.role);
 }
 
 export async function logout() {

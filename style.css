@@ -193,42 +193,6 @@ body {
   color: #222;
 }
 
-.db-unavailable-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 16px;
-  background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
-  border-bottom: 1px solid #f59e0b;
-  color: #78350f;
-  font-size: 15px;
-  font-weight: 600;
-  text-align: center;
-}
-.db-unavailable-banner[hidden] {
-  display: none !important;
-}
-.db-unavailable-banner__icon {
-  flex-shrink: 0;
-  line-height: 0;
-}
-.db-unavailable-banner__text {
-  line-height: 1.35;
-  max-width: 52rem;
-}
-
-/* Офлайн-очередь: заказы, задачи, изменения, расчёты (ещё не в Supabase) */
-#ordersTable tbody tr.tr-order-offline-pending td,
-#allTasksTable tbody tr.tr-order-offline-pending td,
-#orderTasksTable tbody tr.tr-order-offline-pending td,
-#allChangesTable tbody tr.tr-order-offline-pending td,
-#calculationsTable tbody tr.tr-order-offline-pending td,
-#historyTable tbody tr.tr-order-offline-pending td {
-  background-color: #fff9c4;
-}
-
 .container {
   max-width: 1200px;
   margin: 0 auto;
@@ -359,64 +323,6 @@ h2 {
   flex-shrink: 0;
   margin-left: 2px;
   margin-bottom: 2px;
-}
-
-.db-ping-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px 4px 6px;
-  border-radius: 10px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  user-select: none;
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
-}
-
-.db-ping-indicator__icon {
-  flex-shrink: 0;
-}
-
-.db-ping-indicator__label {
-  font-size: 12px;
-  font-weight: 700;
-  color: inherit;
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-}
-
-.db-ping-indicator--pending {
-  color: #6b7280;
-  border-color: #d1d5db;
-  background: #f9fafb;
-}
-
-.db-ping-indicator--ok {
-  color: #15803d;
-  border-color: #86efac;
-  background: #f0fdf4;
-}
-
-.db-ping-indicator--slow {
-  color: #a16207;
-  border-color: #fde047;
-  background: #fefce8;
-}
-
-.db-ping-indicator--error {
-  color: #b91c1c;
-  border-color: #fecaca;
-  background: #fef2f2;
-}
-
-@media (max-width: 480px) {
-  .db-ping-indicator__label {
-    display: none;
-  }
-
-  .db-ping-indicator {
-    padding: 6px;
-  }
 }
 
 .section-nav-current:hover {
@@ -6043,22 +5949,6 @@ button:active {
   /* Отступ под шапку, вынесенную из потока (position: fixed); только если есть .topbar */
   .container:has(.topbar) {
     padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
-  }
-
-  /*
-   * Баннер БД — первый в body; фикс. topbar перекрывал жёлтый блок (iOS Safari).
-   * Пока баннер виден, не дублировать отступ под шапку в .container — иначе огромный зазор до таблицы.
-   */
-  body:has(.topbar) #dbUnavailableBanner:not([hidden]) {
-    margin-top: calc(env(safe-area-inset-top, 0px) + 56px);
-  }
-
-  body:has(#dbUnavailableBanner:not([hidden])) .container:has(.topbar) {
-    padding-top: 3px;
-  }
-
-  body:has(#dbUnavailableBanner:not([hidden])) #section-all > .card {
-    padding-top: 0;
   }
 
   /* Раздел «Заказы»: ширина как на ПК; колонка таблицы — на всю высоту под topbar (flex, без урезания max-height). */

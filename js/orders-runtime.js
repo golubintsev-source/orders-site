@@ -67,9 +67,9 @@ export async function ensureOrdersData({ current = () => true, refresh = false }
     const owner = dataOwner;
     await dataPromise;
     // An earlier consumer may have left its screen while we were waiting.
-    if (current() && !state.ordersFullyLoaded && !state.ordersFromCache) {
+    if (current() && !state.ordersFullyLoaded) {
       if (!owner?.()) await orders.loadOrders({ full: true, shouldContinue: current });
-      if (current() && !state.ordersFullyLoaded && !state.ordersFromCache) throw new Error("Не удалось загрузить заказы");
+      if (current() && !state.ordersFullyLoaded) throw new Error("Не удалось загрузить заказы");
     }
   }
   return orders;

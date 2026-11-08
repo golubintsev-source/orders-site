@@ -1,8 +1,6 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
-import { isOfflineDataMode } from "./offline-cache.js";
 import { buildPagePathForSection, normalizeAccessLogPath } from "./app-routes.js";
-import { isDbPingIndicatingOffline } from "./db-ping.js";
 
 const GEO_CACHE_KEY = "orders_site_access_geo_v1";
 const PENDING_LOGS_KEY = "orders_site_pending_access_logs_v1";
@@ -223,21 +221,6 @@ export function measureAfterPaint(callback) {
   });
 }
 
-function isUiShowingDbOffline() {
-  const banner = document.getElementById("dbUnavailableBanner");
-  if (banner && !banner.hidden) return true;
-  const ping = document.getElementById("dbPingIndicator");
-  if (ping?.classList.contains("db-ping-indicator--error")) return true;
-  return false;
-}
-
-function getWorkMode() {
-  if (isOfflineDataMode()) return "offline";
-  if (isDbPingIndicatingOffline()) return "offline";
-  if (isUiShowingDbOffline()) return "offline";
-  return "online";
-}
-
 function queuePendingLog(row) {
   const list = readJsonStorage(PENDING_LOGS_KEY, []);
   list.push({ ...row, queuedAt: new Date().toISOString() });
@@ -338,24 +321,19 @@ export async function flushPendingAccessLogs(user = state.currentUser) {
  * Записать обращение к странице/разделу в site_access_logs.
  * Обращения складываются локально и отправляются пакетами. Повтор одного пути
  * в течение 10 секунд дедуплицируется, если вызов не помечен force.
- * @param {{ pagePath?: string, pageTitle?: string, responseTimeMs?: number|null, user?: object|null, force?: boolean, workMode?: string }} opts
+ * @param {{ pagePath?: string, pageTitle?: string, responseTimeMs?: number|null, user?: object|null, force?: boolean }} opts
  */
 export async function logSiteAccess(opts = {}) {
   const pagePath = normalizeAccessLogPath(opts.pagePath || getCurrentPagePath());
   const flightId = nextLogFlightId++;
   inFlightLogIds.add(flightId);
 
-  // Режим фиксируем сразу; после await перепроверяем (пинг БД мог стать красным).
-  const workModeAtStart = opts.workMode ?? getWorkMode();
   const visitedAt = new Date().toISOString();
 
   try {
     const user = opts.user ?? state.currentUser ?? null;
     if (isDuplicateAccess(pagePath, user, opts.force === true)) return;
     const { device, geo } = await collectAccessContext();
-
-    const workMode =
-      workModeAtStart === "offline" || getWorkMode() === "offline" ? "offline" : "online";
 
     const row = {
       user_id: user?.id ?? null,
@@ -370,20 +348,12 @@ export async function logSiteAccess(opts = {}) {
       country: geo.country,
       vpn_detected: geo.vpnDetected,
       response_time_ms: opts.responseTimeMs ?? null,
-      work_mode: workMode,
+      work_mode: "online",
       visited_at: visitedAt,
     };
 
     const queuedCount = queuePendingLog(row);
     if (!user?.id) {
-      return;
-    }
-
-    // В офлайне не пишем в БД сразу: иначе insert может пройти при navigator.onLine === true.
-    if (
-      workMode === "offline" ||
-      (typeof navigator !== "undefined" && navigator.onLine === false)
-    ) {
       return;
     }
 
@@ -458,9 +428,6 @@ export function logOrderPageAccess(opts) {
 
 export function initAccessLogging() {
   window.addEventListener("online", () => {
-    void flushPendingAccessLogs();
-  });
-  window.addEventListener("db-ping-ok", () => {
     void flushPendingAccessLogs();
   });
   document.addEventListener("visibilitychange", () => {

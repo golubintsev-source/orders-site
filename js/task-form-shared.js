@@ -4,11 +4,6 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { displayNameByEmail } from "./user-names.js";
 import { loadTaskExecutorPickerUsers } from "./users-directory.js";
-import {
-  addPendingOfflineTask,
-  nextOfflineTempTaskId,
-  isOfflineDataMode,
-} from "./offline-cache.js";
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -270,30 +265,6 @@ export async function insertTask({
     source_message_id: sourceMessageId ?? null,
     source_message_kind: sourceMessageKind || null,
   };
-
-  if (isOfflineDataMode()) {
-    const localId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `task-${Date.now()}`;
-    addPendingOfflineTask({
-      localId,
-      tempTaskId: nextOfflineTempTaskId(),
-      author_login: author,
-      body: text,
-      ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
-      executor_emails: payload.executor_emails,
-      due_at: payload.due_at,
-      is_completed: false,
-      order_id: payload.order_id,
-      source_order_field: payload.source_order_field,
-      highlight_order_field: payload.highlight_order_field,
-      source_message_id: payload.source_message_id,
-      source_message_kind: payload.source_message_kind,
-      created_at: new Date().toISOString(),
-    });
-    return { error: null };
-  }
 
   const { error } = await supabaseClient.from("order_tasks").insert(payload);
   return { error: error || null };

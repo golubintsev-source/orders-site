@@ -1,5 +1,4 @@
-import { supabaseClient, isOfflineWorkModeEnabled } from "./config.js";
-import { syncDbUnavailableBanner } from "./dbHealth.js";
+import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import { beginReadScope } from "./read-requests.js";
@@ -59,34 +58,6 @@ import {
   isUserLite,
   isUserShop,
 } from "./roles.js";
-import {
-  readSnapshot,
-  readPendingQueue,
-  mergeServerOrdersWithPendingDisplayRows,
-  persistServerOrdersForOffline,
-  syncPendingOfflineDataToSupabase,
-  addPendingOfflineOrderHistory,
-  shouldSaveNewOrderToLocalQueue,
-  isOfflineClientOrderId,
-  addPendingOfflineOrder,
-  updatePendingOfflineOrder,
-  removePendingByLocalId,
-  buildDisplayRowForPendingOrder,
-  insertPayloadFromFormData,
-  nextOfflineTempOrderId,
-  nextOfflineTempCalcId,
-  addPendingOfflineCalculation,
-  cloneOrderWithoutOfflineMeta,
-  sortOrdersWithOfflinePendingFirst,
-  isNetworkFetchError,
-  isOfflineDataMode,
-  isBrowserOffline,
-  persistEmergencyOrdersView,
-  readEmergencyOrdersBaseForMerge,
-  readPendingOrderEditsQueue,
-  addOrAppendPendingServerOrderEdit,
-  raceWithTimeout,
-} from "./offline-cache.js";
 import { shortLoginByEmail } from "./user-names.js";
 import { getEditors } from "./settings.js";
 import { ORDER_TABLE_FIELD_KEYS } from "./order-cell-highlights.js";
@@ -104,20 +75,6 @@ import {
   saveOrderAtomicWithRetry,
 } from "./order-atomic-save.js";
 
-function mergedLocalOrdersForOfflineDisplayMeta() {
-  const snap = readSnapshot();
-  const merged = mergeServerOrdersWithPendingDisplayRows(snap?.orders || []);
-  if (merged.length > 0 || readPendingQueue().length > 0 || readPendingOrderEditsQueue().length > 0) {
-    return { rows: merged, fromSnap: true };
-  }
-  const rows = mergeServerOrdersWithPendingDisplayRows(readEmergencyOrdersBaseForMerge());
-  return { rows, fromSnap: false };
-}
-
-function mergedLocalOrdersForOfflineDisplay() {
-  return mergedLocalOrdersForOfflineDisplayMeta().rows;
-}
-
 /** 7 и +7 → 8 в phone (отображение и последующее сохранение). */
 function normalizeOrdersPhones(orders) {
   if (!Array.isArray(orders)) return orders;
@@ -129,69 +86,11 @@ function normalizeOrdersPhones(orders) {
   });
 }
 
-function paintOrdersFromCacheRaw(ordersRaw, filesCountRaw) {
-  if (!ordersRaw) return false;
-  const orders = JSON.parse(ordersRaw);
-  if (!Array.isArray(orders) || orders.length === 0) return false;
-  state.allOrders = normalizeOrdersPhones(orders);
-  state.filesCountMap = filesCountRaw ? JSON.parse(filesCountRaw) : {};
-  applyFiltersAndRender();
-  updateSectionNavRicherStat();
-  return true;
-}
-
 function refreshFilesCountMapInBackground() {
   void loadFilesCountMap().then(() => {
     if (!state.allOrders.length) return;
     applyFiltersAndRender();
   });
-}
-
-/**
- * Сразу после входа: таблица из localStorage без ожидания сети (Safari/iOS).
- * При navigator.onLine === false сразу включает офлайн-режим (F5 без сети).
- */
-export function paintOrdersFromLocalStorageIfAny() {
-  if (!isOfflineWorkModeEnabled()) return;
-  const rows = mergedLocalOrdersForOfflineDisplay();
-  if (rows.length > 0) {
-    state.allOrders = normalizeOrdersPhones(rows);
-    state.filesCountMap = state.filesCountMap || {};
-    applyFiltersAndRender();
-    updateSectionNavRicherStat();
-  }
-  if (isBrowserOffline()) {
-    state.ordersFromCache = true;
-    state.dbUnavailable = true;
-    syncDbUnavailableBanner();
-  }
-}
-
-/** Вызывается при подтверждённой недоступности БД (пинг): переключить UI на локальную копию. */
-export function applyOfflineModeFromDbUnavailable() {
-  if (!isOfflineWorkModeEnabled()) return;
-  state.dbUnavailable = true;
-  if (state.ordersFromCache) {
-    syncDbUnavailableBanner();
-    return;
-  }
-  const { rows: merged } = mergedLocalOrdersForOfflineDisplayMeta();
-  if (merged.length > 0) {
-    state.ordersFromCache = true;
-    state.allOrders = normalizeOrdersPhones(merged);
-    persistEmergencyOrdersView(state.allOrders);
-    state.filesCountMap = {};
-    syncDbUnavailableBanner();
-    applyFiltersAndRender();
-    updateSectionNavRicherStat();
-    return;
-  }
-  if (state.allOrders.length > 0) {
-    state.ordersFromCache = true;
-    syncDbUnavailableBanner();
-    return;
-  }
-  syncDbUnavailableBanner();
 }
 
 function refreshOrdersDependentSections() {
@@ -286,17 +185,8 @@ async function fetchOrdersFromDb({ sinceOrderDateYmd = null, shouldContinue = ()
   return { data, error };
 }
 
-function commitOrdersToUi(rawOrders, { persistCache = true } = {}) {
-  state.dbUnavailable = false;
-  let finalData = rawOrders || [];
-  if (isOfflineWorkModeEnabled()) {
-    finalData = mergeServerOrdersWithPendingDisplayRows(finalData);
-    persistServerOrdersForOffline(rawOrders || []);
-    persistEmergencyOrdersView(finalData);
-  }
-  state.ordersFromCache = false;
-  state.allOrders = normalizeOrdersPhones(finalData);
-  syncDbUnavailableBanner();
+function commitOrdersToUi(rawOrders) {
+  state.allOrders = normalizeOrdersPhones(rawOrders || []);
   if (getCurrentSectionId() === "all") applyFiltersAndRender();
   updateSectionNavRicherStat();
   refreshOrdersDependentSections();
@@ -306,75 +196,32 @@ function commitOrdersToUi(rawOrders, { persistCache = true } = {}) {
 function applyOrdersLoadError(error) {
   console.error("Ошибка загрузки:", error);
 
-  if (!isOfflineWorkModeEnabled()) {
-    state.dbUnavailable = false;
-    state.ordersFromCache = false;
-    state.allOrders = [];
-    state.filesCountMap = {};
-    syncDbUnavailableBanner();
-    applyFiltersAndRender();
-    updateSectionNavRicherStat();
-    setMessage("Ошибка загрузки заявок", "#d32f2f");
-    refreshOrdersDependentSections();
-    return;
-  }
-
-  state.dbUnavailable = true;
-  const { rows: merged, fromSnap } = mergedLocalOrdersForOfflineDisplayMeta();
-
-  if (merged.length > 0) {
-    state.ordersFromCache = true;
-    state.allOrders = normalizeOrdersPhones(merged);
-    persistEmergencyOrdersView(state.allOrders);
-    state.filesCountMap = {};
-    syncDbUnavailableBanner();
-    applyFiltersAndRender();
-    updateSectionNavRicherStat();
-    setMessage(
-      fromSnap
-        ? "Нет связи с базой. Открыта последняя копия с этого устройства; новые заявки сохраняются локально и отправятся при появлении связи."
-        : "Нет связи с базой. Восстановлен последний сохранённый на этом устройстве список заказов (офлайн-очередь подмешана).",
-      "#92400e"
-    );
-    refreshOrdersDependentSections();
-    return;
-  }
-
-  syncDbUnavailableBanner();
-  state.ordersFromCache = false;
   state.allOrders = [];
   state.filesCountMap = {};
   applyFiltersAndRender();
   updateSectionNavRicherStat();
   setMessage("Ошибка загрузки заявок", "#d32f2f");
   refreshOrdersDependentSections();
+
 }
 
 /**
  * Быстрый старт: сначала заказы за 3 дня → сразу таблица,
  * затем в фоне — полный список.
- * Если уже есть кэш на экране — не сжимаем таблицу до 3 дней, сразу догружаем полное.
+ * Если на экране уже есть данные сервера — не сжимаем таблицу до 3 дней, сразу догружаем полное.
  */
 export async function loadOrders({ full = false, shouldContinue = () => true } = {}) {
   const scope = beginReadScope("orders");
   const gen = ++loadOrdersGeneration;
   const current = () => scope.current() && gen === loadOrdersGeneration && shouldContinue();
   state.ordersFullyLoaded = false;
-  const hadPaintedCache = Array.isArray(state.allOrders) && state.allOrders.length > 0;
+  const hadLoadedOrders = Array.isArray(state.allOrders) && state.allOrders.length > 0;
 
-  if (isOfflineWorkModeEnabled()) {
-    try {
-      await syncPendingOfflineDataToSupabase();
-    } catch (e) {
-      console.warn("Офлайн-синхронизация перед загрузкой заказов:", e);
-    }
-  }
-
-  if (!hadPaintedCache) {
+  if (!hadLoadedOrders) {
     const recent = await fetchOrdersFromDb({ sinceOrderDateYmd: getOrdersFastLoadSinceYmd(), shouldContinue: current, signal: scope.signal });
     if (!current()) return;
     if (!recent.error && recent.data) {
-      commitOrdersToUi(recent.data, { persistCache: false });
+      commitOrdersToUi(recent.data);
       if (full) await loadOrdersFullInBackground(gen, current, scope.signal);
       else if (current() && ["all", "route-sheet", "manager-salary", "debts"].includes(getCurrentSectionId())) void loadOrdersFullInBackground(gen, current, scope.signal);
       return;
@@ -392,12 +239,13 @@ export async function loadOrders({ full = false, shouldContinue = () => true } =
 
   if (!all.error && all.data) {
     state.ordersFullyLoaded = true;
-    commitOrdersToUi(all.data, { persistCache: true });
+    commitOrdersToUi(all.data);
     return;
   }
 
-  if (hadPaintedCache) {
+  if (hadLoadedOrders) {
     console.error("Ошибка фоновой/полной загрузки заказов:", all.error);
+    setMessage("Не удалось обновить список заказов.", "#d32f2f");
     return;
   }
   applyOrdersLoadError(all.error);
@@ -408,10 +256,11 @@ async function loadOrdersFullInBackground(gen, current, signal) {
   if (!current()) return;
   if (!all.error && all.data) {
     state.ordersFullyLoaded = true;
-    commitOrdersToUi(all.data, { persistCache: true });
+    commitOrdersToUi(all.data);
     return;
   }
   console.error("Ошибка полной загрузки заказов:", all.error);
+  setMessage("Не удалось загрузить полный список заказов.", "#d32f2f");
 }
 
 const STATUS_OPTIONS = [
@@ -506,7 +355,7 @@ function toComparableNumber(v) {
 
 /**
  * Строки для вставки в calculations (автодельты по суммам/получателям заказа).
- * order_id хранится отдельно от комментария; при офлайне каждая строка уходит в очередь pending.
+ * order_id хранится отдельно от комментария.
  */
 function buildOrderDeltaCalculationInsertRows({
   orderId,
@@ -734,33 +583,6 @@ function buildOrderDeltaCalculationInsertRows({
     comment: r.comment,
     order_id: r.order_id,
   }));
-}
-
-function queueOrderDeltaCalculationsForOffline({
-  orderTempId,
-  wasEditing,
-  initialSums,
-  initialParticipants,
-  orderData,
-}) {
-  const rows = buildOrderDeltaCalculationInsertRows({
-    orderId: orderTempId,
-    wasEditing,
-    initialSums,
-    initialParticipants,
-    orderData,
-  });
-  for (const insertPayload of rows) {
-    const localId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `calc-delta-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    addPendingOfflineCalculation({
-      localId,
-      tempCalcId: nextOfflineTempCalcId(),
-      insertPayload,
-    });
-  }
 }
 
 /** В полях даты формы заказа год по маске 20** — 2000–2099 (ровно 4 цифры, префикс «20»). */
@@ -1340,7 +1162,7 @@ export function getFilteredOrders() {
     list = list.filter((order) => orderMatchesDeliveryDateRange(order, ddf, ddt));
   }
 
-  return sortOrdersWithOfflinePendingFirst(list);
+  return [...list].sort((a, b) => Number(b.id) - Number(a.id));
 }
 
 /** Календарная дата YYYY-MM-DD в локальной зоне (для сравнения с input type=date). */
@@ -1387,18 +1209,6 @@ function orderMatchesOrderDateRange(order, fromYmd, toYmd) {
 
 function orderMatchesDeliveryDateRange(order, fromYmd, toYmd) {
   return orderMatchesDateRange(getDeliveryCalendarYmd(order), fromYmd, toYmd);
-}
-
-function rebaselineAllOrdersFromStateAndPendingQueue() {
-  const snap = readSnapshot();
-  let serverLike = (snap?.orders || []).map((o) => cloneOrderWithoutOfflineMeta({ ...o }));
-  if (serverLike.length === 0) {
-    serverLike = readEmergencyOrdersBaseForMerge();
-  }
-  state.allOrders = normalizeOrdersPhones(mergeServerOrdersWithPendingDisplayRows(serverLike));
-  persistEmergencyOrdersView(state.allOrders);
-  applyFiltersAndRender();
-  updateSectionNavRicherStat();
 }
 
 export function applyFiltersAndRender() {
@@ -1494,10 +1304,6 @@ export function canShowEditButtonForOrder(order) {
 
 export async function setLockEditForUserLite(orderId, locked) {
   if (isUserLite()) return false;
-  if (state.ordersFromCache) {
-    setMessage("В режиме локальной копии нельзя менять блокировку заявок", "#d32f2f");
-    return false;
-  }
   const val = locked ? 1 : 0;
   const { error } = await supabaseClient
     .from("orders")
@@ -1647,11 +1453,8 @@ export async function getOrderRowForFullTooltip(orderId) {
   if (!Number.isFinite(idNum) || idNum <= 0) return null;
   const fromList = state.allOrders?.find((o) => Number(o.id) === idNum);
   if (fromList) return isOrderHiddenForCurrentRole(fromList) ? null : fromList;
-  if (isOfflineDataMode() || isOfflineClientOrderId(idNum)) return null;
   try {
-    const res = await raceWithTimeout(
-      supabaseClient.from("orders").select(ORDERS_LIST_SELECT).eq("id", idNum).maybeSingle(),
-    );
+    const res = await supabaseClient.from("orders").select(ORDERS_LIST_SELECT).eq("id", idNum).maybeSingle();
     if (res.error || !res.data) return null;
     return isOrderHiddenForCurrentRole(res.data) ? null : res.data;
   } catch {
@@ -1754,19 +1557,17 @@ export function renderOrders(orders) {
   const parts = new Array(orders.length);
   for (let i = 0; i < orders.length; i++) {
     const order = orders[i];
-    const allowDeleteThisRow =
-      canDeleteOrders() && (!state.ordersFromCache || isOfflineClientOrderId(Number(order.id)));
+    const allowDeleteThisRow = canDeleteOrders();
     const deleteButton = allowDeleteThisRow
       ? `<button type="button" class="btn-icon btn-delete" onclick="deleteOrder(${order.id})" title="Удалить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>`
       : "";
-    const trClass = order.__offlinePendingSync ? ' class="tr-order-offline-pending"' : "";
 
     const { filesCount, phone, client, address, description, orderIdChipClasses, orderNumberDisplay } =
       buildOrderMainFieldsCellsHtml(order);
     const statusDisplayText =
       order.payment_status === "нет" ? "Контакт с клиентом" : (order.payment_status ?? "Контакт с клиентом");
     parts[i] = `
-      <tr${trClass}>
+      <tr>
         <td class="td-order-id" data-order-id="${order.id ?? ""}" data-phone="${escapeAttr(phone)}" data-files-count="${filesCount}" data-lock-edit-user-lite="${isOrderEditLockedForUserLite(order) ? "1" : "0"}">
           <span class="${orderIdChipClasses.join(" ")}">
             ${orderNumberDisplay}
@@ -2527,33 +2328,6 @@ function buildEditOrderHistoryComments(orderData) {
   );
 }
 
-/**
- * Очередь офлайн-истории: по одной pending-записи на каждый комментарий.
- */
-function queueOfflineOrderHistoryComments({
-  pending_order_local_id,
-  order_temp_id,
-  comments,
-  user_email,
-  created_at,
-}) {
-  const list = (comments || []).map((c) => String(c || "").trim()).filter(Boolean);
-  for (const comment of list) {
-    const localId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `hist-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    addPendingOfflineOrderHistory({
-      localId,
-      pending_order_local_id,
-      order_temp_id,
-      user_email: user_email || "",
-      comment,
-      created_at,
-    });
-  }
-}
-
 export function getFormData() {
   const orderNumberEl = document.getElementById("order_number");
   return {
@@ -2848,8 +2622,6 @@ export function updateInstallerPaymentAmountFromArea() {
 /** При открытии заказа проверить, есть ли уже запись об оплате монтажнику; если да — заполнить и отключить блок. */
 export async function checkInstallerPaymentDone(orderId) {
   if (orderId == null) return;
-  if (isOfflineClientOrderId(orderId)) return;
-  if (isOfflineDataMode()) return;
   const { data } = await supabaseClient
     .from("calculations")
     .select("from_place, amount")
@@ -3206,22 +2978,8 @@ export function resetFormMode() {
 }
 
 async function loadOrderRowForForm(orderId) {
-  const idNum = Number(orderId);
-  const fromList = state.allOrders.find((x) => Number(x.id) === idNum);
-  if (fromList && (isOfflineDataMode() || isOfflineClientOrderId(idNum))) {
-    return fromList;
-  }
-  try {
-    const res = await raceWithTimeout(
-      supabaseClient.from("orders").select("*").eq("id", orderId).single(),
-    );
-    if (!res.error && res.data) return res.data;
-    if (fromList) return fromList;
-    return { error: res.error || new Error("not found") };
-  } catch (e) {
-    if (fromList) return fromList;
-    throw e;
-  }
+  const { data, error } = await supabaseClient.from("orders").select("*").eq("id", orderId).single();
+  return error || !data ? { error: error || new Error("not found") } : data;
 }
 
 /** Просмотр заказа: та же форма, что при редактировании, без изменения данных. */
@@ -3369,26 +3127,6 @@ export async function editOrder(orderId, { skipUrlSync = false, navigationAnchor
 export async function deleteOrder(orderId) {
   if (!canDeleteOrders()) return;
 
-  const idNum = Number(orderId);
-
-  if (state.ordersFromCache && !isOfflineClientOrderId(idNum)) {
-    setMessage("В режиме локальной копии нельзя удалять заявки с сервера", "#d32f2f");
-    return;
-  }
-
-  if (isOfflineClientOrderId(idNum)) {
-    const order = state.allOrders.find((x) => Number(x.id) === idNum);
-    const localId = order?.__offlineLocalId;
-    if (!localId) return;
-    const chip = formatOrderIdTypeChip(idNum, order?.order_type);
-    const ok = confirm(`Удалить несинхронизированную заявку ${chip}?`);
-    if (!ok) return;
-    removePendingByLocalId(localId);
-    rebaselineAllOrdersFromStateAndPendingQueue();
-    setMessage("Заявка удалена из локальной очереди", "");
-    return;
-  }
-
   const ok = confirm(`Удалить заявку #${orderId}?`);
   if (!ok) return;
 
@@ -3414,105 +3152,6 @@ export async function deleteOrder(orderId) {
 
   setMessage(`Заявка #${orderId} удалена`, "");
   await loadOrders();
-}
-
-/** Сохранить правку существующего заказа с сервера в локальную очередь (офлайн).
- *  @returns {boolean} true — ушли с формы / сохранили в очередь; false — нечего сохранять. */
-function commitServerOrderEditToOfflineStorage(orderData) {
-  const orderId = Number(state.editingOrderId);
-  const historyComments = buildEditOrderHistoryComments(orderData);
-  if (isNoOpOrderHistoryComments(historyComments)) {
-    setMessage("Нет изменений для сохранения", "");
-    return false;
-  }
-  const changedAt = new Date().toISOString();
-  addOrAppendPendingServerOrderEdit({
-    orderId,
-    orderData,
-    prevSnapshot: state.initialOrderSnapshot,
-    historyComments,
-    user_email: state.currentUser?.email || "",
-    changedAt,
-    initialSums: state.initialOrderSums,
-    initialParticipants: state.initialOrderParticipants,
-  });
-  queueOrderDeltaCalculationsForOffline({
-    orderTempId: orderId,
-    wasEditing: true,
-    initialSums: state.initialOrderSums,
-    initialParticipants: state.initialOrderParticipants,
-    orderData,
-  });
-  state.dbUnavailable = true;
-  state.ordersFromCache = true;
-  rebaselineAllOrdersFromStateAndPendingQueue();
-  syncDbUnavailableBanner();
-  void leaveOrderFormAfterSave(orderId);
-  setMessage("Изменения сохранены на устройстве; отправка в базу при появлении связи.", "#92400e");
-  return true;
-}
-
-/** Сохранить заказ только в localStorage (очередь офлайн). editingOffline — правка существующей офлайн-заявки. */
-function commitOrderFormToOfflineStorage(orderData, editingOffline) {
-  const insertPayload = insertPayloadFromFormData(orderData);
-  let highlightId;
-
-  if (!editingOffline) {
-    const localId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const tempId = nextOfflineTempOrderId();
-    const displayRow = buildDisplayRowForPendingOrder(orderData, tempId, localId);
-    addPendingOfflineOrder({ localId, displayRow, insertPayload });
-    queueOfflineOrderHistoryComments({
-      pending_order_local_id: localId,
-      order_temp_id: tempId,
-      user_email: state.currentUser?.email || "",
-      comments: buildOrderHistoryComments(null, orderData, false),
-    });
-    highlightId = tempId;
-  } else {
-    const cur = state.allOrders.find((x) => x.id === state.editingOrderId);
-    const localId = cur?.__offlineLocalId;
-    if (!localId) {
-      setMessage("Не удалось обновить локальную заявку", "#d32f2f");
-      return;
-    }
-    const displayRow = buildDisplayRowForPendingOrder(orderData, state.editingOrderId, localId);
-    updatePendingOfflineOrder(localId, displayRow, insertPayload);
-    const historyComments = buildEditOrderHistoryComments(orderData);
-    if (!isNoOpOrderHistoryComments(historyComments)) {
-      queueOfflineOrderHistoryComments({
-        pending_order_local_id: localId,
-        order_temp_id: state.editingOrderId,
-        user_email: state.currentUser?.email || "",
-        comments: historyComments,
-      });
-    }
-    highlightId = state.editingOrderId;
-  }
-
-  const orderTempIdForCalcs = editingOffline ? state.editingOrderId : highlightId;
-  queueOrderDeltaCalculationsForOffline({
-    orderTempId: orderTempIdForCalcs,
-    wasEditing: editingOffline,
-    initialSums: editingOffline ? state.initialOrderSums : undefined,
-    initialParticipants: editingOffline ? state.initialOrderParticipants : undefined,
-    orderData,
-  });
-
-  state.dbUnavailable = true;
-  state.ordersFromCache = true;
-  rebaselineAllOrdersFromStateAndPendingQueue();
-  syncDbUnavailableBanner();
-  void leaveOrderFormAfterSave(highlightId);
-  setMessage(
-    editingOffline
-      ? "Изменения сохранены на устройстве; отправка в базу при появлении связи."
-      : "Заявка сохранена на устройстве; отправка в базу при появлении связи.",
-    "#92400e"
-  );
 }
 
 /** Флаг и UI-блокировка кнопок «Сохранить», чтобы не создавать дубликаты при повторных нажатиях. */
@@ -3557,7 +3196,6 @@ function restorePhotoCooldown() {
   }
   updatePhotoCooldownUI();
 }
-
 
 function showNewOrderPhotoReminder() {
   const reminder = document.getElementById("orderPhotoReminder");
@@ -3673,32 +3311,19 @@ export async function submitOrderForm(event) {
     return;
   }
 
-  if (state.editingOrderId && isUserLite() && !isOfflineClientOrderId(state.editingOrderId)) {
-    if (state.ordersFromCache) {
-      const lockRow = state.allOrders.find((x) => Number(x.id) === Number(state.editingOrderId));
-      if (lockRow && isOrderEditLockedForUserLite(lockRow)) {
-        setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
-        return;
-      }
-    } else {
-      try {
-        const { data: lockRow, error: lockErr } = await supabaseClient
-          .from("orders")
-          .select("lock_edit_for_user_lite")
-          .eq("id", state.editingOrderId)
-          .single();
-        if (!lockErr && lockRow && isOrderEditLockedForUserLite(lockRow)) {
-          setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
-          return;
-        }
-      } catch (e) {
-        if (!isNetworkFetchError(e)) throw e;
-        const lockRow = state.allOrders.find((x) => Number(x.id) === Number(state.editingOrderId));
-        if (lockRow && isOrderEditLockedForUserLite(lockRow)) {
-          setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
-          return;
-        }
-      }
+  if (state.editingOrderId && isUserLite()) {
+    const { data: lockRow, error: lockError } = await supabaseClient
+      .from("orders")
+      .select("lock_edit_for_user_lite")
+      .eq("id", state.editingOrderId)
+      .single();
+    if (lockError || !lockRow) {
+      setMessage("Не удалось проверить блокировку заказа.", "#d32f2f");
+      return;
+    }
+    if (isOrderEditLockedForUserLite(lockRow)) {
+      setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
+      return;
     }
   }
 
@@ -3838,25 +3463,6 @@ export async function submitOrderForm(event) {
   // Идемпотентный ключ нужен только для создания нового заказа.
   if (!state.editingOrderId && orderData?.save_idempotency_key == null) {
     orderData.save_idempotency_key = ensureOrderFormNewOrderIdempotencyKey();
-  }
-
-  const saveLocalNew = !state.editingOrderId && shouldSaveNewOrderToLocalQueue();
-  const saveLocalEdit = Boolean(state.editingOrderId && isOfflineClientOrderId(state.editingOrderId));
-  const saveLocalServerEdit = Boolean(
-    state.editingOrderId && !isOfflineClientOrderId(state.editingOrderId) && isOfflineDataMode(),
-  );
-
-  if (saveLocalNew || saveLocalEdit) {
-    commitOrderFormToOfflineStorage(orderData, saveLocalEdit);
-    saveFinishedOk = true;
-    return;
-  }
-  if (saveLocalServerEdit) {
-    if (!commitServerOrderEditToOfflineStorage(orderData)) {
-      return;
-    }
-    saveFinishedOk = true;
-    return;
   }
 
   const wasEditing = Boolean(state.editingOrderId);
@@ -4067,7 +3673,7 @@ function normalizeVoiceIsoDate(raw) {
 /**
  * Создать заказ из голосового ассистента (без открытия формы).
  * @param {Record<string, unknown>} draft
- * @returns {Promise<{ ok: boolean, orderId?: number|string, message: string, offline?: boolean }>}
+ * @returns {Promise<{ ok: boolean, orderId?: number|string, message: string }>}
  */
 export async function createOrderFromVoicePayload(draft) {
   if (!canMutateOrders()) {
@@ -4185,42 +3791,6 @@ export async function createOrderFromVoicePayload(draft) {
       : `voice-order-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   orderData.save_idempotency_key = saveIdempotencyKey;
 
-  const saveVoiceOrderOffline = () => {
-    const insertPayload = insertPayloadFromFormData(orderData);
-    const localId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const tempId = nextOfflineTempOrderId();
-    const displayRow = buildDisplayRowForPendingOrder(orderData, tempId, localId);
-    addPendingOfflineOrder({ localId, displayRow, insertPayload });
-    queueOfflineOrderHistoryComments({
-      pending_order_local_id: localId,
-      order_temp_id: tempId,
-      user_email: state.currentUser?.email || "",
-      comments: buildOrderHistoryComments(null, orderData, false),
-    });
-    queueOrderDeltaCalculationsForOffline({
-      orderTempId: tempId,
-      wasEditing: false,
-      orderData,
-    });
-    state.dbUnavailable = true;
-    state.ordersFromCache = true;
-    rebaselineAllOrdersFromStateAndPendingQueue();
-    syncDbUnavailableBanner();
-    return {
-      ok: true,
-      orderId: tempId,
-      offline: true,
-      message: `Заявка сохранена на устройстве (временный номер ${tempId}). Отправится в базу при появлении связи.`,
-    };
-  };
-
-  if (shouldSaveNewOrderToLocalQueue()) {
-    return saveVoiceOrderOffline();
-  }
-
   const historyComments = buildOrderHistoryComments(null, orderData, false);
   const calculations = buildOrderDeltaCalculationInsertRows({
     orderId: ATOMIC_ORDER_ID_PLACEHOLDER,
@@ -4230,14 +3800,12 @@ export async function createOrderFromVoicePayload(draft) {
   let savedOrderId = null;
   let error = null;
   try {
-    savedOrderId = await raceWithTimeout(
-      saveOrderAtomic(supabaseClient, {
-        requestId: createAtomicOrderRequestId(),
-        orderData,
-        historyComments,
-        calculations,
-      }),
-    );
+    savedOrderId = await saveOrderAtomic(supabaseClient, {
+      requestId: createAtomicOrderRequestId(),
+      orderData,
+      historyComments,
+      calculations,
+    });
   } catch (e) {
     error = e;
   }
@@ -4417,7 +3985,7 @@ function buildOrderDataFromExistingAndPatch(existing, patch) {
  * Обновить заказ из голосового ассистента (патч полей, без открытия формы).
  * @param {number|string} orderId
  * @param {Record<string, unknown>} patch
- * @returns {Promise<{ ok: boolean, orderId?: number|string, message: string, offline?: boolean }>}
+ * @returns {Promise<{ ok: boolean, orderId?: number|string, message: string }>}
  */
 export async function updateOrderFromVoicePayload(orderId, patch) {
   if (!canMutateOrders()) {
@@ -4516,8 +4084,7 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
     return { ok: false, message: "Заказ нельзя закрыть, если он не оплачен" };
   }
 
-  const prevSnapshot = cloneOrderWithoutOfflineMeta(existing);
-  const historyComments = buildOrderHistoryComments(prevSnapshot, orderData, true);
+  const historyComments = buildOrderHistoryComments(existing, orderData, true);
   if (isNoOpOrderHistoryComments(historyComments)) {
     return { ok: false, message: "Нет изменений для сохранения" };
   }
@@ -4535,70 +4102,6 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
 
   const idNum = Number(orderId);
 
-  if (isOfflineClientOrderId(idNum)) {
-    const localId = existing.__offlineLocalId;
-    if (!localId) {
-      return { ok: false, message: "Не удалось обновить локальную заявку" };
-    }
-    const insertPayload = insertPayloadFromFormData(orderData);
-    const displayRow = buildDisplayRowForPendingOrder(orderData, idNum, localId);
-    updatePendingOfflineOrder(localId, displayRow, insertPayload);
-    queueOfflineOrderHistoryComments({
-      pending_order_local_id: localId,
-      order_temp_id: idNum,
-      user_email: state.currentUser?.email || "",
-      comments: historyComments,
-    });
-    queueOrderDeltaCalculationsForOffline({
-      orderTempId: idNum,
-      wasEditing: true,
-      initialSums,
-      initialParticipants,
-      orderData,
-    });
-    state.dbUnavailable = true;
-    state.ordersFromCache = true;
-    rebaselineAllOrdersFromStateAndPendingQueue();
-    syncDbUnavailableBanner();
-    return {
-      ok: true,
-      orderId: idNum,
-      offline: true,
-      message: `Заявка номер ${idNum} обновлена на устройстве. Отправится в базу при появлении связи.`,
-    };
-  }
-
-  if (isOfflineDataMode()) {
-    const changedAt = new Date().toISOString();
-    addOrAppendPendingServerOrderEdit({
-      orderId: idNum,
-      orderData,
-      prevSnapshot,
-      historyComments,
-      user_email: state.currentUser?.email || "",
-      changedAt,
-      initialSums,
-      initialParticipants,
-    });
-    queueOrderDeltaCalculationsForOffline({
-      orderTempId: idNum,
-      wasEditing: true,
-      initialSums,
-      initialParticipants,
-      orderData,
-    });
-    state.dbUnavailable = true;
-    state.ordersFromCache = true;
-    rebaselineAllOrdersFromStateAndPendingQueue();
-    syncDbUnavailableBanner();
-    return {
-      ok: true,
-      orderId: idNum,
-      offline: true,
-      message: `Изменения заказа ${idNum} сохранены на устройстве; отправка в базу при появлении связи.`,
-    };
-  }
-
   let error = null;
   let savedOrderId = idNum;
   const calculations = buildOrderDeltaCalculationInsertRows({
@@ -4609,16 +4112,14 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
     orderData,
   });
   try {
-    savedOrderId = await raceWithTimeout(
-      saveOrderAtomic(supabaseClient, {
-        requestId: createAtomicOrderRequestId(),
-        orderId: idNum,
-        orderData,
-        historyComments,
-        calculations,
-        expectedMoney: buildExpectedOrderMoney(initialSums, initialParticipants),
-      }),
-    );
+    savedOrderId = await saveOrderAtomic(supabaseClient, {
+      requestId: createAtomicOrderRequestId(),
+      orderId: idNum,
+      orderData,
+      historyComments,
+      calculations,
+      expectedMoney: buildExpectedOrderMoney(initialSums, initialParticipants),
+    });
   } catch (e) {
     error = e;
   }

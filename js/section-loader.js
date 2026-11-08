@@ -19,7 +19,6 @@ const lifecycle = createSectionLifecycle({
     return { load: async (_, current) => {
       const orders = await runtime.ensureOrdersUI();
       if (!current()) return;
-      orders.paintOrdersFromLocalStorageIfAny();
       const links = await import("./order-task-links.js");
       if (!current()) return;
       void links.refreshActiveTaskOrderRefs();

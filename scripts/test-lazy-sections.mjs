@@ -85,8 +85,7 @@ async function registryHarness() {
   const imports = [], calls = [];
   const context = vm.createContext({ window: {}, document: {} });
   const state = { currentUser: { id: "user" }, viewingOrderId: null, editingOrderId: null };
-  const orders = { paintOrdersFromLocalStorageIfAny: () => calls.push("paintOrders"),
-    loadOrders: () => calls.push("ordersData"), resetFormMode: () => calls.push("resetForm") };
+  const orders = { loadOrders: () => calls.push("ordersData"), resetFormMode: () => calls.push("resetForm") };
   const synthetic = async (values) => {
     const m = new vm.SyntheticModule(Object.keys(values), function () {
       for (const [name, value] of Object.entries(values)) this.setExport(name, value);
