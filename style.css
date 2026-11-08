@@ -12207,22 +12207,3 @@ html.keyboard-open .voice-composer {
   font-weight: 400;
   white-space: nowrap;
 }
-
-.route-sheet-include-shop-label {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: fit-content;
-  max-width: 100%;
-  margin: 10px 0 14px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  cursor: pointer;
-}
-.route-sheet-include-shop-label input {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  accent-color: #2563eb;
-}
