@@ -413,7 +413,7 @@ function initFieldAutocomplete({ inputId, listId, wrapSelector, field, onPick })
 }
 
 /** Подсказки адресов: сначала локальные совпадения, затем справочник ФИАС/ГАР DaData. */
-function attachAddressAutocomplete({ input, list, wrap }) {
+export function attachAddressAutocomplete({ input, list, wrap, onPick }) {
   if (!input || !list || !wrap) return () => {};
 
   let debounceTimer = null;
@@ -450,7 +450,7 @@ function attachAddressAutocomplete({ input, list, wrap }) {
     hide();
     input.focus();
     input.dispatchEvent(new Event("input", { bubbles: true }));
-    applyClientAndPhoneFromAddressPick(value);
+    if (onPick) onPick(value); else applyClientAndPhoneFromAddressPick(value);
   };
 
   const render = (items) => {
