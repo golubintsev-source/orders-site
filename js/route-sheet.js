@@ -376,10 +376,14 @@ function isInDateRange(order, fromKey, toKey) {
   return key >= fromKey && key <= toKey;
 }
 
+function includeShopOrdersOnRouteSheet() {
+  return Boolean(document.getElementById("routeSheetIncludeShopOrders")?.checked);
+}
+
 function isMainRouteType(order) {
   const t = (order.order_type || "").trim();
   if (!t) return true;
-  return MAIN_ORDER_TYPES.has(t);
+  return MAIN_ORDER_TYPES.has(t) || (includeShopOrdersOnRouteSheet() && t === SHOP_TYPE);
 }
 
 function boolDaNet(v) {
@@ -448,13 +452,12 @@ function isShopType(order) {
 }
 
 function filterRouteSheetDeliveryOrdersByShipment(orders, fromKey, toKey, shipment) {
-  const allowAllTypesForRouteSheetDelivery = isUserShop();
   return orders
     .filter(
       (o) =>
         (o.delivery || "").trim() === shipment &&
         isInDateRange(o, fromKey, toKey) &&
-        (allowAllTypesForRouteSheetDelivery || isMainRouteType(o) || isShopType(o)),
+        isMainRouteType(o),
     )
     .sort(sortByDeliveryThenId);
 }
@@ -2470,6 +2473,12 @@ function excelFileNameTimestamp() {
  * @returns {{ mlDateKey: string, driverName: string }}
  */
 function getRouteSheetMlMetaFromDom() {
+  const shopCheckbox = document.getElementById("routeSheetIncludeShopOrders");
+  if (shopCheckbox && !shopCheckbox.dataset.routeSheetBound) {
+    shopCheckbox.dataset.routeSheetBound = "1";
+    shopCheckbox.addEventListener("change", () => loadRouteSheet());
+  }
+
   const mlDateEl = document.getElementById("routeSheetMlDate");
   const driverEl = document.getElementById("routeSheetDriver");
   const mlDateKey = String(mlDateEl?.value ?? "").trim();
