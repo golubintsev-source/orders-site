@@ -20,53 +20,76 @@ const SHOP_TYPE = "Магазин";
 const DELIVERY_SHIP = "Доставка";
 const DELIVERY_PICKUP = "Самовывоз";
 
-const ROUTE_SHEET_MANUAL_STORAGE_KEY = "routeSheetManualDelivery_v1";
+const ROUTE_SHEET_POINTS_TABLE = "route_sheet_manual_points";
+const ROUTE_SHEET_POINT_COLUMNS =
+  "id, display_no, delivery_date, client, address, coordinates, description, remaining_amount, area_m2, construction_count, installation, reveals, phone, created_at, updated_at";
 
-/** Точки доставки, добавленные вручную на маршрутном листе (не заказы в БД). */
+/** Точки доставки, добавленные вручную и загруженные из БД (не заказы). */
 const routeSheetManualDeliveryOrders = [];
 
 /** id ручной точки при редактировании в диалоге «Добавить точку»; null — создание. */
 let routeSheetAddPointEditingId = null;
 
-function newRouteSheetManualPointId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `rspt-${crypto.randomUUID()}`;
-  }
-  return `rspt-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+function routeSheetManualPointFromDb(row) {
+  return {
+    route_sheet_manual: true,
+    id: String(row.id),
+    route_sheet_display_no: String(row.display_no || ""),
+    order_type: "",
+    delivery: DELIVERY_SHIP,
+    remaining_to: "",
+    mosquito_nets: "",
+    delivery_date: String(row.delivery_date || ""),
+    client: String(row.client || ""),
+    address: String(row.address || ""),
+    coordinates: String(row.coordinates || ""),
+    description: String(row.description || ""),
+    remaining_amount: row.remaining_amount,
+    area_m2: row.area_m2,
+    construction_count: row.construction_count,
+    installation: Boolean(row.installation),
+    reveals: Boolean(row.reveals),
+    phone: String(row.phone || ""),
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null,
+  };
 }
 
-function loadRouteSheetManualFromSession() {
-  routeSheetManualDeliveryOrders.length = 0;
-  try {
-    const raw = sessionStorage.getItem(ROUTE_SHEET_MANUAL_STORAGE_KEY);
-    if (!raw) return;
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return;
-    for (const o of arr) {
-      if (o && o.route_sheet_manual === true && o.id != null && String(o.id).startsWith("rspt-")) {
-        routeSheetManualDeliveryOrders.push(o);
-      }
-    }
-  } catch {
-    routeSheetManualDeliveryOrders.length = 0;
+async function loadRouteSheetManualFromDatabase() {
+  const { data, error } = await supabaseClient
+    .from(ROUTE_SHEET_POINTS_TABLE)
+    .select(ROUTE_SHEET_POINT_COLUMNS)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("route sheet manual points load:", error);
+    setMessage(`Не удалось загрузить добавленные точки: ${error.message || "ошибка базы данных"}`, "#d32f2f");
+    return false;
   }
+  routeSheetManualDeliveryOrders.splice(
+    0,
+    routeSheetManualDeliveryOrders.length,
+    ...(data || []).map(routeSheetManualPointFromDb),
+  );
+  return true;
 }
 
-function persistRouteSheetManualToSession() {
-  try {
-    sessionStorage.setItem(ROUTE_SHEET_MANUAL_STORAGE_KEY, JSON.stringify(routeSheetManualDeliveryOrders));
-  } catch {
-    /* ignore quota */
-  }
-}
-
-function deleteRouteSheetManualPointById(manualId) {
+async function deleteRouteSheetManualPointById(manualId) {
   const idStr = String(manualId ?? "").trim();
   if (!idStr) return false;
   const idx = routeSheetManualDeliveryOrders.findIndex((o) => String(o.id) === idStr);
   if (idx < 0) return false;
+  const { error } = await supabaseClient
+    .from(ROUTE_SHEET_POINTS_TABLE)
+    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", idStr)
+    .is("deleted_at", null);
+  if (error) {
+    console.error("route sheet manual point delete:", error);
+    setMessage(`Не удалось удалить точку: ${error.message || "ошибка базы данных"}`, "#d32f2f");
+    return false;
+  }
   routeSheetManualDeliveryOrders.splice(idx, 1);
-  persistRouteSheetManualToSession();
   return true;
 }
 
@@ -3604,8 +3627,18 @@ function initRouteSheetAddressGeoPopover() {
         if (!mo) return;
         saveBtn.disabled = true;
         try {
-          mo.coordinates = payload.coordinates != null ? payload.coordinates : "";
-          persistRouteSheetManualToSession();
+          const nextCoordinates = payload.coordinates != null ? payload.coordinates : "";
+          const { error } = await supabaseClient
+            .from(ROUTE_SHEET_POINTS_TABLE)
+            .update({ coordinates: nextCoordinates, updated_at: new Date().toISOString() })
+            .eq("id", manualId)
+            .is("deleted_at", null);
+          if (error) {
+            console.error("route-sheet manual point coordinates update:", error);
+            setMessage(`Не удалось сохранить координаты: ${error.message || "ошибка базы данных"}`, "#d32f2f");
+            return;
+          }
+          mo.coordinates = nextCoordinates;
           const geoOk = await persistGeoForAddress(mo.coordinates);
           closeRouteSheetAddressGeoPopover();
           setMessage(
@@ -3986,37 +4019,61 @@ async function confirmRouteSheetAddPoint() {
     coordinates,
     description: (descEl?.value ?? "").trim(),
     remaining_amount,
-    area_m2: (areaEl?.value ?? "").trim(),
-    construction_count: (consEl?.value ?? "").trim(),
+    area_m2: (areaEl?.value ?? "").trim() || null,
+    construction_count: (consEl?.value ?? "").trim() || null,
     installation: Boolean(instEl?.checked),
     reveals: Boolean(revEl?.checked),
     phone: (phoneEl?.value ?? "").trim(),
+    updated_at: new Date().toISOString(),
   };
 
-  if (existing) {
-    Object.assign(existing, fields);
-  } else {
-    routeSheetManualDeliveryOrders.push({
-      route_sheet_manual: true,
-      id: newRouteSheetManualPointId(),
-      route_sheet_display_no: nextRouteSheetManualDisplayNo(),
-      order_type: "",
-      delivery: DELIVERY_SHIP,
-      remaining_to: "",
-      mosquito_nets: "",
-      ...fields,
-    });
-  }
-
-  persistRouteSheetManualToSession();
-  if (coordinates && address) {
-    const parsedGeo = parseLatLonCommaInput(coordinates);
-    if (parsedGeo) {
-      await persistCoordinatesAttachedToAddress(address, parsedGeo.lat, parsedGeo.lon, null);
+  const confirmBtn = document.getElementById("routeSheetAddPointConfirmBtn");
+  if (confirmBtn) confirmBtn.disabled = true;
+  try {
+    let savedRow = null;
+    let saveError = null;
+    if (existing) {
+      const result = await supabaseClient
+        .from(ROUTE_SHEET_POINTS_TABLE)
+        .update(fields)
+        .eq("id", editingId)
+        .is("deleted_at", null)
+        .select(ROUTE_SHEET_POINT_COLUMNS)
+        .single();
+      savedRow = result.data;
+      saveError = result.error;
+    } else {
+      const result = await supabaseClient
+        .from(ROUTE_SHEET_POINTS_TABLE)
+        .insert({ display_no: nextRouteSheetManualDisplayNo(), ...fields })
+        .select(ROUTE_SHEET_POINT_COLUMNS)
+        .single();
+      savedRow = result.data;
+      saveError = result.error;
     }
+    if (saveError || !savedRow) {
+      console.error("route sheet manual point save:", saveError);
+      setRouteSheetAddPointFormError(
+        `Не удалось сохранить точку: ${saveError?.message || "база данных не вернула запись"}`,
+      );
+      return;
+    }
+
+    const savedPoint = routeSheetManualPointFromDb(savedRow);
+    if (existing) Object.assign(existing, savedPoint);
+    else routeSheetManualDeliveryOrders.push(savedPoint);
+
+    if (coordinates && address) {
+      const parsedGeo = parseLatLonCommaInput(coordinates);
+      if (parsedGeo) {
+        await persistCoordinatesAttachedToAddress(address, parsedGeo.lat, parsedGeo.lon, null);
+      }
+    }
+    closeRouteSheetAddPointDialog();
+    loadRouteSheet();
+  } finally {
+    if (confirmBtn) confirmBtn.disabled = false;
   }
-  closeRouteSheetAddPointDialog();
-  loadRouteSheet();
 }
 
 function initRouteSheetPointAutocomplete() {
@@ -4025,9 +4082,62 @@ function initRouteSheetPointAutocomplete() {
   if (!client || !address || client.dataset.routePointAutocomplete) return;
   client.dataset.routePointAutocomplete = "1";
 
-  const latest = (field, value) => [...(state.allOrders || [])]
-    .filter(order => String(order[field] || "").trim() === String(value || "").trim())
-    .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
+  const suggestionKey = value => String(value || "").trim().toLocaleLowerCase("ru-RU").replace(/\s+/g, " ");
+  const latest = (field, value) => {
+    const key = suggestionKey(value);
+    const savedPoint = [...routeSheetManualDeliveryOrders]
+      .filter(point => suggestionKey(point[field]) === key)
+      .sort((a, b) => String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")))[0];
+    if (savedPoint) return savedPoint;
+    return [...(state.allOrders || [])]
+      .filter(order => suggestionKey(order[field]) === key)
+      .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
+  };
+
+  const sourceSuggestions = (rows, field, query, source) => {
+    const q = suggestionKey(query);
+    const byKey = new Map();
+    for (const row of rows) {
+      const name = String(row[field] || "").trim();
+      const key = suggestionKey(name);
+      if (!key || !key.includes(q)) continue;
+      const current = byKey.get(key);
+      if (current) current.count += 1;
+      else byKey.set(key, { name, count: 1, source });
+    }
+    return [...byKey.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ru"));
+  };
+
+  const routePointFieldSuggestions = (field, query) => {
+    const points = sourceSuggestions(routeSheetManualDeliveryOrders, field, query, "route_points")
+      .map(item => ({ ...item, badge: "Точка" }));
+    const seen = new Set(points.map(item => suggestionKey(item.name)));
+    const orders = sourceSuggestions(state.allOrders || [], field, query, "orders")
+      .filter(item => !seen.has(suggestionKey(item.name)));
+    return [...points, ...orders].slice(0, 15);
+  };
+
+  const routePointAddressSuggestions = query => routePointFieldSuggestions("address", query).map(item => ({
+    value: item.name,
+    title: item.name,
+    count: item.count,
+    source: item.source,
+    badge: item.source === "route_points" ? "Точка" : String(item.count || ""),
+  }));
+
+  const mergeRoutePointAddressSuggestions = (localItems, remoteItems) => {
+    const merged = [];
+    const seen = new Set();
+    for (const item of [...(localItems || []), ...(remoteItems || [])]) {
+      const value = String(item?.value || item?.title || "").trim();
+      const key = suggestionKey(value);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push({ ...item, value, title: String(item?.title || value).trim() || value });
+      if (merged.length >= 15) break;
+    }
+    return merged;
+  };
 
   const applyOrder = (order, pickedField) => {
     if (!order) return;
@@ -4074,10 +4184,14 @@ function initRouteSheetPointAutocomplete() {
   attachFieldAutocomplete({
     ...wrapInput(client, "routePointClientSuggestions", "client-suggestions", "Подсказки клиентов"),
     field: "client",
+    getSuggestions: query => routePointFieldSuggestions("client", query),
+    countAriaLabel: "Источник",
     onPick: value => applyOrder(latest("client", value), "client"),
   });
   attachAddressAutocomplete({
     ...wrapInput(address, "routePointAddressSuggestions", "address-suggestions", "Подсказки адресов"),
+    getLocalSuggestions: routePointAddressSuggestions,
+    mergeSuggestions: mergeRoutePointAddressSuggestions,
     onPick: value => applyOrder(latest("address", value), "address"),
   });
 }
@@ -4105,7 +4219,10 @@ function initRouteSheetAddPointDialog() {
 }
 
 export function initRouteSheetSection() {
-  loadRouteSheetManualFromSession();
+  routeSheetManualDeliveryOrders.length = 0;
+  void loadRouteSheetManualFromDatabase().then((loaded) => {
+    if (loaded) loadRouteSheet();
+  });
   initRouteSheetPointByNoDialog();
   initRouteSheetAddPointDialog();
 
@@ -4145,7 +4262,7 @@ export function initRouteSheetSection() {
   const routeSheetSection = document.getElementById("section-route-sheet");
   if (routeSheetSection && !routeSheetSection.dataset.routeSheetOrderIdMenuBound) {
     routeSheetSection.dataset.routeSheetOrderIdMenuBound = "1";
-    routeSheetSection.addEventListener("click", (e) => {
+    routeSheetSection.addEventListener("click", async (e) => {
       const editBtn = e.target.closest(".route-sheet-manual-edit-btn");
       if (editBtn && routeSheetSection.contains(editBtn)) {
         e.preventDefault();
@@ -4162,7 +4279,7 @@ export function initRouteSheetSection() {
         e.preventDefault();
         e.stopPropagation();
         const id = delBtn.getAttribute("data-manual-id");
-        if (id && deleteRouteSheetManualPointById(id)) {
+        if (id && await deleteRouteSheetManualPointById(id)) {
           closeRouteSheetAddressGeoPopover();
           loadRouteSheet();
         }

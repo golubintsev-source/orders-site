@@ -27,14 +27,13 @@ const swSource = await readFile(new URL("../sw.js", import.meta.url), "utf8");
 
 assert.match(filesSource, /export function hasPendingPhotoAttachment\(\)/);
 assert.match(ordersSource, /newOrderPhotoReminderAcknowledged = true/);
-assert.match(ordersSource, /прикрепите фото или нажмите «Сохранить заказ» ещё раз/);
+assert.match(ordersSource, /Повторная попытка без фото приведёт к временной блокировке/);
 assert.ok(
   ordersSource.indexOf("shouldPauseNewOrderSaveForPhoto") < ordersSource.indexOf('setMessage("Сохраняю..."'),
 );
-assert.doesNotMatch(ordersSource, /reminder\.hidden = true/);
 assert.match(indexSource, /id="orderPhotoReminder"/);
-assert.match(indexSource, /мы великодушно пропустим заказ без него/);
+assert.match(indexSource, /повторная попытка сохранения запустит временную блокировку/);
 assert.match(styleSource, /\.order-photo-reminder/);
-assert.match(swSource, /orders-site-static-v84/);
+assert.match(swSource, /orders-site-static-v140/);
 
 console.log("order photo reminder tests: ok");

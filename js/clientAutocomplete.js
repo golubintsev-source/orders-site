@@ -286,7 +286,8 @@ export function attachFieldAutocomplete({
       const li = document.createElement("li");
       li.setAttribute("role", "option");
       li.dataset.index = String(i);
-      li.innerHTML = `<span class="client-suggestion-text">${escapeHtml(item.name)}</span><span class="client-suggestion-count" aria-label="${escapeHtml(countAriaLabel)}">${item.count}</span>`;
+      const badge = item.badge != null ? item.badge : item.count;
+      li.innerHTML = `<span class="client-suggestion-text">${escapeHtml(item.name)}</span><span class="client-suggestion-count" aria-label="${escapeHtml(countAriaLabel)}">${escapeHtml(badge)}</span>`;
       li.addEventListener("mousedown", (e) => {
         e.preventDefault();
         pickSuggestion(item.name);
@@ -413,7 +414,14 @@ function initFieldAutocomplete({ inputId, listId, wrapSelector, field, onPick })
 }
 
 /** Подсказки адресов: сначала локальные совпадения, затем справочник ФИАС/ГАР DaData. */
-export function attachAddressAutocomplete({ input, list, wrap, onPick }) {
+export function attachAddressAutocomplete({
+  input,
+  list,
+  wrap,
+  onPick,
+  getLocalSuggestions = localAddressSuggestions,
+  mergeSuggestions = mergeAddressSuggestions,
+}) {
   if (!input || !list || !wrap) return () => {};
 
   let debounceTimer = null;
@@ -450,7 +458,7 @@ export function attachAddressAutocomplete({ input, list, wrap, onPick }) {
     hide();
     input.focus();
     input.dispatchEvent(new Event("input", { bubbles: true }));
-    if (onPick) onPick(value); else applyClientAndPhoneFromAddressPick(value);
+    if (onPick) onPick(value, item); else applyClientAndPhoneFromAddressPick(value);
   };
 
   const render = (items) => {
@@ -467,7 +475,14 @@ export function attachAddressAutocomplete({ input, list, wrap, onPick }) {
       li.id = `${list.id}-option-${index}`;
       li.setAttribute("role", "option");
       li.dataset.index = String(index);
-      const badge = item.source === "orders" ? String(item.count || "") : "DaData";
+      const badge =
+        item.badge != null
+          ? String(item.badge)
+          : item.source === "orders"
+            ? String(item.count || "")
+            : item.source === "route_points"
+              ? "Точка"
+              : "DaData";
       li.innerHTML = `<span class="address-suggestion-content"><span class="client-suggestion-text">${escapeHtml(item.title || item.value)}</span></span><span class="client-suggestion-count address-suggestion-source">${escapeHtml(badge)}</span>`;
       li.addEventListener("mousedown", (event) => {
         event.preventDefault();
@@ -490,8 +505,8 @@ export function attachAddressAutocomplete({ input, list, wrap, onPick }) {
     requestController?.abort();
     const controller = new AbortController();
     requestController = controller;
-    const localItems = localAddressSuggestions(query);
-    render(mergeAddressSuggestions(localItems, []));
+    const localItems = getLocalSuggestions(query);
+    render(mergeSuggestions(localItems, []));
 
     try {
       const remoteItems = await fetchRemoteAddressSuggestions(query, controller.signal);
@@ -503,7 +518,7 @@ export function attachAddressAutocomplete({ input, list, wrap, onPick }) {
       ) {
         return;
       }
-      render(mergeAddressSuggestions(localItems, remoteItems));
+      render(mergeSuggestions(localItems, remoteItems));
     } catch (error) {
       if (error?.name !== "AbortError") {
         console.warn("Подсказки адресов DaData недоступны:", error);
