@@ -321,7 +321,7 @@ h2 {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-  margin-left: 2px;
+  margin-left: auto;
   margin-bottom: 2px;
 }
 
