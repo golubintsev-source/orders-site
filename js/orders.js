@@ -3195,6 +3195,9 @@ function restorePhotoCooldown() {
   if (photoCooldownUntil > Date.now()) {
     newOrderPhotoReminderAcknowledged = true;
     if (!photoCooldownTimer) photoCooldownTimer = setInterval(updatePhotoCooldownUI, 1000);
+  } else if (photoCooldownUntil) {
+    // Истёкший таймер разрешает сохранение только в той форме, где закончился.
+    writePhotoCooldown(0);
   }
   updatePhotoCooldownUI();
 }
