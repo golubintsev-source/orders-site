@@ -69,7 +69,7 @@ function bindShell() {
   initSectionNavDropdown({ onSectionItemSelect: (id) => {
     void navigateFromMenu(id).catch(reportError);
   } });
-  document.getElementById("logoutBtn")?.addEventListener("click", logout);
+  document.getElementById("settingsLogoutBtn")?.addEventListener("click", logout);
   document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
     void navigateFromMenu("all").catch(reportError);
   });

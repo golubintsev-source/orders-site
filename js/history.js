@@ -1,6 +1,6 @@
 import { expandOrderHistoryCommentLines } from "./order-history-format.js";
 import { supabaseClient } from "./config.js";
-import { checkAuth, loadProfile, logout } from "./auth.js";
+import { checkAuth, loadProfile } from "./auth.js";
 import { isOrderHiddenForCurrentRole } from "./roles.js";
 import { formatOrderIdTypeChip, formatTaskDateRu, formatTaskAuthorShort } from "./format.js";
 import { fetchAllSupabaseRows } from "./supabase-fetch.js";
@@ -41,7 +41,7 @@ function setHistorySectionLabel(orderType) {
   setStandaloneSectionNavLabel(text);
 }
 
-function wireHistorySearchAndLogout() {
+function wireHistorySearch() {
   const ordersSearchOpenBtn = document.getElementById("ordersSearchOpenBtn");
   const ordersSearchPopupInput = document.getElementById("ordersSearchPopupInput");
   const ordersSearchFindBtn = document.getElementById("ordersSearchFindBtn");
@@ -104,10 +104,6 @@ function wireHistorySearchAndLogout() {
       }
     });
   }
-
-  document.getElementById("logoutBtn")?.addEventListener("click", () => {
-    void logout();
-  });
 
   document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
     navigateWithUserPlace(hrefToAppSection("all"));
@@ -181,7 +177,7 @@ async function init() {
     },
   });
   setStandaloneSectionNavLabel("Изменения");
-  wireHistorySearchAndLogout();
+  wireHistorySearch();
 
   if (!orderId) {
     document.getElementById("historyMessage").textContent = "Не указан номер заказа.";

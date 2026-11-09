@@ -240,13 +240,6 @@
       </nav>
       <div class="topbar-toolbar">
         <span id="topbarUserName" class="topbar-user-name" aria-label="Текущий пользователь"></span>
-        <button id="logoutBtn" class="logout-icon-btn" type="button" title="Выйти">
-          <svg class="logout-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-            <path d="M16 17l5-5-5-5"/>
-            <path d="M21 12H9"/>
-          </svg>
-        </button>
       </div>
     </div>
 
@@ -2305,6 +2298,9 @@
     </section>
 
     <section id="section-settings" class="content-section">
+      <div class="settings-logout-row">
+        <button type="button" id="settingsLogoutBtn" class="settings-logout-btn">Выйти из системы</button>
+      </div>
 <div id="settingsPhotoCooldownCard" class="card" hidden><h3>Сохранение заказа без фотографии</h3><label for="settingsPhotoCooldownMinutes">Задержка повторного сохранения (минуты)</label><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><input id="settingsPhotoCooldownMinutes" type="number" min="1" max="120" step="1" value="3" style="width:100px"><button type="button" class="btn-primary" id="settingsPhotoCooldownSave">Сохранить</button></div><p id="settingsPhotoCooldownStatus" role="status"></p></div>
       <div id="pushNotificationsCard" class="card push-notifications-card" hidden>
         <h3 class="push-notifications-title">Уведомления</h3>

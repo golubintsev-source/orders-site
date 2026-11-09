@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v141: новый заказ не наследует истёкший таймер сохранения без фото.
-const STATIC_CACHE = "orders-site-static-v141";
+// v142: выход перенесён из шапки в начало страницы «Настройки».
+const STATIC_CACHE = "orders-site-static-v142";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

@@ -616,13 +616,10 @@ h2 {
 .topbar-toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: flex-end;
   flex-shrink: 0;
+  margin-left: auto;
   padding-bottom: 4px;
-}
-
-.topbar-toolbar .logout-icon-btn {
-  margin-left: 0;
 }
 
 .topbar-link {
@@ -642,10 +639,11 @@ h2 {
   font-size: 14px;
   font-weight: 600;
   color: #333;
-  padding: 4px 6px 4px 0;
-  max-width: 120px;
+  padding: 4px 0 4px 6px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: right;
   white-space: nowrap;
 }
 
@@ -670,33 +668,6 @@ h2 {
 
 .topbar-link.topbar-link-icon:hover img {
   opacity: 0.82;
-}
-
-.logout-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  margin-left: auto;
-  border: none;
-  background: transparent;
-  color: #6b7280;
-  cursor: pointer;
-  border-radius: 6px;
-  flex-shrink: 0;
-  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
-}
-
-.logout-icon-btn:hover {
-  background: #f3f4f6;
-  color: #111827;
-  opacity: 1;
-}
-
-.logout-icon-btn:active {
-  transform: translateY(1px);
 }
 
 /* ===== меню разделов (в шапке — линия у .topbar) ===== */
@@ -4916,6 +4887,40 @@ h2 {
   color: #b91c1c;
 }
 
+#section-settings .settings-logout-row {
+  display: flex;
+  justify-content: flex-start;
+  margin: 0 0 16px;
+}
+
+#section-settings .settings-logout-btn {
+  min-height: 42px;
+  padding: 9px 18px;
+  border: 1px solid #dc2626;
+  border-radius: 9px;
+  background: #fff;
+  color: #b91c1c;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+#section-settings .settings-logout-btn:hover {
+  background: #dc2626;
+  color: #fff;
+}
+
+#section-settings .settings-logout-btn:active {
+  transform: translateY(1px);
+}
+
+#section-settings .settings-logout-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2);
+}
+
 #section-settings .login-links-card {
   margin-top: 16px;
 }
@@ -5010,17 +5015,6 @@ h2 {
   border-radius: 12px;
   display: block;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-}
-
-.logout-icon {
-  width: 18px;
-  height: 18px;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  fill: none;
-  display: block;
 }
 
 /* ===== сетка формы ===== */
@@ -6017,7 +6011,7 @@ button:active {
   }
 
   /*
-   * Шапка с лупой, разделом и выходом — фиксирована к верху экрана.
+   * Шапка с лупой, разделом и именем пользователя — фиксирована к верху экрана.
    * position: sticky на iOS часто не срабатывает, если у предков overflow-x: hidden (scroll containment).
    */
   .topbar {
@@ -8480,6 +8474,11 @@ th {
 
   .topbar-toolbar {
     margin-left: auto;
+  }
+
+  #section-settings .settings-logout-row,
+  #section-settings .settings-logout-btn {
+    width: 100%;
   }
 
   .actions {
