@@ -393,7 +393,28 @@ export function bindUIEvents() {
     }
     ordersSearchPanel.hidden = false;
     ordersSearchOpenBtn.setAttribute("aria-expanded", "true");
-    ordersSearchOpenBtn.classList.add("section-nav-search-btn--open");
+    ordersSearchOpenBtn.classList.add("orders-client-search-btn--open");
+    const anchorRect = ordersSearchOpenBtn.__ordersSearchAnchorRect || ordersSearchOpenBtn.getBoundingClientRect();
+    delete ordersSearchOpenBtn.__ordersSearchAnchorRect;
+    const panelRect = ordersSearchPanel.getBoundingClientRect();
+    const margin = 8;
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const viewportLeft = window.visualViewport?.offsetLeft ?? 0;
+    const viewportTop = window.visualViewport?.offsetTop ?? 0;
+    const panelWidth = panelRect.width || 280;
+    const panelHeight = panelRect.height || 160;
+    const left = Math.min(
+      Math.max(anchorRect.left, viewportLeft + margin),
+      Math.max(viewportLeft + margin, viewportLeft + viewportWidth - panelWidth - margin)
+    );
+    const below = anchorRect.bottom + 4;
+    const above = anchorRect.top - panelHeight - 4;
+    const top = below + panelHeight <= viewportTop + viewportHeight - margin
+      ? below
+      : Math.max(viewportTop + margin, above);
+    ordersSearchPanel.style.left = `${Math.round(left)}px`;
+    ordersSearchPanel.style.top = `${Math.round(top)}px`;
     syncIosFormControlLocks();
     queueMicrotask(() => ordersSearchPopupInput?.focus());
   }

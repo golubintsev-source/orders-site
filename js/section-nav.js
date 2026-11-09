@@ -271,13 +271,13 @@ function updateCurrentLabel() {
   if (labelEl) labelEl.textContent = labelForSection(currentSectionId);
 }
 
-/** Синяя лупа, если в скрытом поле поиска есть текст; иначе серая (через color у кнопки). */
+/** Синяя лупа в заголовке «Клиент», если в скрытом поле поиска есть текст. */
 export function syncOrdersSearchIconAccent() {
   const btn = document.getElementById("ordersSearchOpenBtn");
   const input = document.getElementById("clientSearch");
   if (!btn || !input) return;
   const hasQuery = (input.value || "").trim().length > 0;
-  btn.classList.toggle("section-nav-search-btn--active-query", hasQuery);
+  btn.classList.toggle("orders-client-search-btn--active-query", hasQuery);
 }
 
 /** Закрыть выпадающее меню поиска (лупа). */
@@ -287,48 +287,16 @@ export function closeOrdersSearchPanel() {
   if (panel) panel.hidden = true;
   if (btn) {
     btn.setAttribute("aria-expanded", "false");
-    btn.classList.remove("section-nav-search-btn--open");
+    btn.classList.remove("orders-client-search-btn--open", "section-nav-search-btn--open");
   }
   syncIosFormControlLocks();
 }
 
-/** Лупа поиска по заказам — на «Заказы» и на отдельных страницах с шапкой (history.html). */
+/** В основном приложении ярлык «Заказы» показывается только вне таблицы заказов. */
 function updateOrdersSearchBtnVisibility(sectionId) {
   const searchBtn = document.getElementById("ordersSearchOpenBtn");
-  if (searchBtn) {
-    const isOrdersPage = sectionId === "all";
-    searchBtn.hidden = false;
-    searchBtn.dataset.navMode = isOrdersPage ? "search" : "orders";
-
-    // Иконки: на странице «Заказы» показываем лупу, иначе показываем картинку «Заказы».
-    if (isOrdersPage) {
-      searchBtn.setAttribute("title", "Поиск по заказам");
-      searchBtn.setAttribute("aria-label", "Поиск по заказам");
-      searchBtn.innerHTML = `
-        <svg class="section-nav-search-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle>
-          <path d="M20 20l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
-        </svg>
-      `;
-      searchBtn.classList.remove("section-nav-search-btn--active-orders");
-    } else {
-      searchBtn.setAttribute("title", "Заказы");
-      searchBtn.setAttribute("aria-label", "Заказы");
-      // Простой "документ/список" как иконка «Заказы».
-      searchBtn.innerHTML = `
-        <svg class="section-nav-orders-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M6 2h9l3 3v17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
-          <path d="M15 2v5h5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
-          <path d="M7 13h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
-          <path d="M7 17h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
-        </svg>
-      `;
-      searchBtn.classList.remove("section-nav-search-btn--active-query");
-    }
-  }
-
   if (sectionId !== "all") closeOrdersSearchPanel();
-  if (sectionId === "all") syncOrdersSearchIconAccent();
+  if (sectionId === "all" && searchBtn) syncOrdersSearchIconAccent();
 }
 
 export function closeSectionNavDropdown() {

@@ -87,9 +87,9 @@ export function shortLoginByEmail(email) {
   return name || "неизв..";
 }
 
-/** Имя вошедшего пользователя в шапке (#topbarUserName). */
-export function updateTopbarUserName(email) {
-  const el = document.getElementById("topbarUserName");
+/** Имя вошедшего пользователя в начале страницы «Настройки». */
+export function updateSettingsCurrentUserName(email) {
+  const el = document.getElementById("settingsCurrentUserName");
   if (!el) return;
   const name = displayNameByEmail(email);
   el.textContent = name;

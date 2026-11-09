@@ -17,7 +17,7 @@ import {
   scheduleSaveUserPlace, shouldRedirectToSavedPlace,
 } from "./user-place.js";
 import { trySecretLoginFromUrl, getLoginKeyFromUrl } from "./secret-login.js";
-import { updateTopbarUserName } from "./user-names.js";
+import { updateSettingsCurrentUserName } from "./user-names.js";
 import { initNavigationHistory, readNavigationState, restoreNavigationScroll, beginNavigationRestore, endNavigationRestore, updateNavigationBackButton } from "./navigation-history.js";
 
 async function restoreHistoryFilters(snapshot) {
@@ -72,12 +72,6 @@ function bindShell() {
   document.getElementById("settingsLogoutBtn")?.addEventListener("click", logout);
   document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
     void navigateFromMenu("all").catch(reportError);
-  });
-  // Outside orders, the magnifier is a shortcut to orders, not an order-module dependency.
-  document.getElementById("ordersSearchOpenBtn")?.addEventListener("click", () => {
-    if (getCurrentSectionId() !== "all" && !window.__ordersUiReady) {
-      void navigateFromMenu("all").catch(reportError);
-    }
   });
 }
 
@@ -149,7 +143,7 @@ async function init() {
   }
   const user = await checkAuth();
   if (!user) return;
-  updateTopbarUserName(user.email);
+  updateSettingsCurrentUserName(user.email);
   void flushPendingAccessLogs(user);
   initUserPlaceTracking(user.id, {
     getAppContext: () => {

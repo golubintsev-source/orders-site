@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v142: выход перенесён из шапки в начало страницы «Настройки».
-const STATIC_CACHE = "orders-site-static-v142";
+// v145: ярлык перехода к заказам удалён из левого края верхней панели.
+const STATIC_CACHE = "orders-site-static-v145";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

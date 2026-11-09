@@ -548,6 +548,11 @@ h2 {
   padding: 12px 14px;
 }
 
+.orders-search-dropdown-panel--table {
+  position: fixed;
+  z-index: 1300;
+}
+
 /* Иначе display:flex из блока выше перебивает атрибут hidden — панель всегда видна */
 .orders-search-dropdown-panel[hidden] {
   display: none !important;
@@ -603,23 +608,15 @@ h2 {
   color: #374151;
 }
 
-.section-nav-search-btn.section-nav-search-btn--open {
+.section-nav-search-btn.section-nav-search-btn--open,
+.orders-client-search-btn.orders-client-search-btn--open {
   background: #f3f4f6;
   color: #374151;
 }
 
-/* Скрытое поле #clientSearch — значение синхронизируется с меню поиска в шапке */
+/* Скрытое поле #clientSearch — значение синхронизируется с поиском в заголовке «Клиент» */
 #section-all .search-box.search-box--hidden {
   display: none;
-}
-
-.topbar-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-shrink: 0;
-  margin-left: auto;
-  padding-bottom: 4px;
 }
 
 .topbar-link {
@@ -633,18 +630,6 @@ h2 {
 
 .topbar-link:hover {
   text-decoration: underline;
-}
-
-.topbar-user-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
-  padding: 4px 0 4px 6px;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: right;
-  white-space: nowrap;
 }
 
 /* Ссылка-иконка в шапке (например «Расчет окон») */
@@ -4887,10 +4872,23 @@ h2 {
   color: #b91c1c;
 }
 
-#section-settings .settings-logout-row {
+#section-settings .settings-account-block {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
   justify-content: flex-start;
   margin: 0 0 16px;
+}
+
+#section-settings .settings-current-user {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+}
+
+#section-settings .settings-current-user strong {
+  font-weight: 700;
 }
 
 #section-settings .settings-logout-btn {
@@ -7477,6 +7475,56 @@ th {
   flex-shrink: 0;
 }
 
+#ordersTable th.th-client-search-header,
+#ordersTableStickyHeadTable th.th-client-search-header {
+  padding: 0 2px;
+  vertical-align: middle;
+}
+
+.orders-client-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 3px 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.orders-client-search-btn:hover,
+.orders-client-search-btn--open {
+  background: rgba(31, 111, 235, 0.08);
+}
+
+.orders-client-search-icon {
+  display: block;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  color: #6b7280;
+  pointer-events: none;
+}
+
+.orders-client-search-btn--active-query .orders-client-search-icon {
+  color: #1f6feb;
+}
+
+.orders-client-search-btn:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(31, 111, 235, 0.35);
+}
+
 .status-filter-dropdown {
   /* Выше закреплённой шапки таблицы (.orders-sticky-head-wrap 950), иначе список не виден */
   z-index: 1200;
@@ -8472,11 +8520,6 @@ th {
     align-items: flex-end;
   }
 
-  .topbar-toolbar {
-    margin-left: auto;
-  }
-
-  #section-settings .settings-logout-row,
   #section-settings .settings-logout-btn {
     width: 100%;
   }

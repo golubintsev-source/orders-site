@@ -7,10 +7,7 @@ import { fetchAllSupabaseRows } from "./supabase-fetch.js";
 import {
   initSectionNavDropdown,
   setStandaloneSectionNavLabel,
-  closeOrdersSearchPanel,
-  closeSectionNavDropdown,
   refreshSectionNavAfterProfile,
-  syncIosFormControlLocks,
 } from "./section-nav.js";
 import { hrefToAppSection } from "./app-routes.js";
 import { flushPendingAccessLogs, logSiteAccess, measureNavigationResponseMs } from "./access-log.js";
@@ -20,7 +17,6 @@ import {
   navigateWithUserPlace,
   readSavedPlaceForCurrentPage,
 } from "./user-place.js";
-import { updateTopbarUserName } from "./user-names.js";
 
 const params = new URLSearchParams(window.location.search);
 const orderId = params.get("order_id");
@@ -39,75 +35,6 @@ function setHistorySectionLabel(orderType) {
   const chip = formatOrderIdTypeChip(orderId, orderType);
   const text = chip ? `Изменения ${chip}` : `Изменения #${orderId}`;
   setStandaloneSectionNavLabel(text);
-}
-
-function wireHistorySearch() {
-  const ordersSearchOpenBtn = document.getElementById("ordersSearchOpenBtn");
-  const ordersSearchPopupInput = document.getElementById("ordersSearchPopupInput");
-  const ordersSearchFindBtn = document.getElementById("ordersSearchFindBtn");
-  const ordersSearchCloseBtn = document.getElementById("ordersSearchCloseBtn");
-  const ordersSearchPanel = document.getElementById("ordersSearchDropdownPanel");
-
-  function goToOrdersWithSearch(query) {
-    sessionStorage.setItem("pendingOrdersSearch", query.trim());
-    navigateWithUserPlace(hrefToAppSection("all"));
-  }
-
-  function openOrdersSearchDropdown() {
-    if (!ordersSearchOpenBtn || !ordersSearchPanel) return;
-    closeSectionNavDropdown();
-    ordersSearchPanel.hidden = false;
-    ordersSearchOpenBtn.setAttribute("aria-expanded", "true");
-    ordersSearchOpenBtn.classList.add("section-nav-search-btn--open");
-    syncIosFormControlLocks();
-    queueMicrotask(() => ordersSearchPopupInput?.focus());
-  }
-
-  function toggleOrdersSearchDropdown() {
-    if (!ordersSearchPanel || !ordersSearchOpenBtn) return;
-    if (ordersSearchPanel.hidden) openOrdersSearchDropdown();
-    else closeOrdersSearchPanel();
-  }
-
-  if (ordersSearchOpenBtn) {
-    ordersSearchOpenBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (ordersSearchOpenBtn.dataset.navMode === "orders") {
-        navigateWithUserPlace(hrefToAppSection("all"));
-        return;
-      }
-      toggleOrdersSearchDropdown();
-    });
-  }
-  if (ordersSearchFindBtn) {
-    ordersSearchFindBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const q = (ordersSearchPopupInput?.value || "").trim();
-      closeOrdersSearchPanel();
-      goToOrdersWithSearch(q);
-    });
-  }
-  if (ordersSearchCloseBtn) {
-    ordersSearchCloseBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (ordersSearchPopupInput) ordersSearchPopupInput.value = "";
-      closeOrdersSearchPanel();
-    });
-  }
-  if (ordersSearchPopupInput) {
-    ordersSearchPopupInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const q = (ordersSearchPopupInput.value || "").trim();
-        closeOrdersSearchPanel();
-        goToOrdersWithSearch(q);
-      }
-    });
-  }
-
-  document.getElementById("backToOrdersBtn")?.addEventListener("click", () => {
-    navigateWithUserPlace(hrefToAppSection("all"));
-  });
 }
 
 async function loadHistory() {
@@ -160,7 +87,6 @@ async function loadHistory() {
 async function init() {
   const user = await checkAuth();
   if (!user) return;
-  updateTopbarUserName(user.email);
   await flushPendingAccessLogs(user);
   initUserPlaceTracking(user.id);
   await loadProfile();
@@ -177,7 +103,13 @@ async function init() {
     },
   });
   setStandaloneSectionNavLabel("Изменения");
-  wireHistorySearch();
+  document.getElementById("navigationBackBtn")?.addEventListener("click", () => {
+    if (document.referrer && new URL(document.referrer).origin === window.location.origin) {
+      window.history.back();
+      return;
+    }
+    navigateWithUserPlace(hrefToAppSection("all"));
+  });
 
   if (!orderId) {
     document.getElementById("historyMessage").textContent = "Не указан номер заказа.";

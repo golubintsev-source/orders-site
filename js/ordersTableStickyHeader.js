@@ -173,6 +173,18 @@ export function initOrdersTableStickyHeader() {
   wrap.addEventListener(
     "click",
     (e) => {
+      const searchBtn = e.target.closest(".orders-client-search-btn");
+      if (searchBtn && wrap.contains(searchBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        const originalSearchBtn = document.getElementById("ordersSearchOpenBtn");
+        if (originalSearchBtn) {
+          originalSearchBtn.__ordersSearchAnchorRect = searchBtn.getBoundingClientRect();
+          originalSearchBtn.click();
+        }
+        return;
+      }
       const typeBtn = e.target.closest(".order-type-filter-btn");
       if (typeBtn && wrap.contains(typeBtn)) {
         e.preventDefault();

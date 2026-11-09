@@ -97,20 +97,6 @@
   <div class="container" id="appContainer" inert aria-busy="true">
     <div class="topbar">
       <nav class="section-nav topbar-section-nav" role="navigation">
-
-        <div class="section-nav-dropdown-wrap section-nav-search-wrap">
-          <button type="button" class="section-nav-search-btn" id="ordersSearchOpenBtn" title="Поиск по заказам" aria-label="Поиск по заказам" aria-haspopup="true" aria-expanded="false" aria-controls="ordersSearchDropdownPanel">
-            <svg class="section-nav-search-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/>
-              <path d="M20 20l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </button>
-          <div id="ordersSearchDropdownPanel" class="section-nav-dropdown-panel orders-search-dropdown-panel" hidden role="dialog" aria-label="Поиск по заказам">
-            <input type="text" id="ordersSearchPopupInput" class="orders-search-dropdown-input" placeholder="Поиск по всем полям заказа…" autocomplete="off" />
-            <button type="button" id="ordersSearchFindBtn" class="orders-search-dropdown-btn orders-search-dropdown-btn-primary">Найти</button>
-            <button type="button" id="ordersSearchCloseBtn" class="orders-search-dropdown-btn orders-search-dropdown-btn-secondary">Отмена</button>
-          </div>
-        </div>
         <button type="button" id="navigationBackBtn" class="navigation-back-btn" aria-label="Назад на предыдущую страницу" title="Назад" disabled>
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
         </button>
@@ -238,9 +224,6 @@
           </button>
         </div>
       </nav>
-      <div class="topbar-toolbar">
-        <span id="topbarUserName" class="topbar-user-name" aria-label="Текущий пользователь"></span>
-      </div>
     </div>
 
     <!-- Вне .content-section: иначе при скрытии «Заказы» меню не видно (напр. маршрутный лист). -->
@@ -694,6 +677,11 @@
           tabindex="-1"
         />
       </div>
+      <div id="ordersSearchDropdownPanel" class="section-nav-dropdown-panel orders-search-dropdown-panel orders-search-dropdown-panel--table" hidden role="dialog" aria-label="Поиск по заказам">
+        <input type="text" id="ordersSearchPopupInput" class="orders-search-dropdown-input" placeholder="Поиск по всем полям заказа…" autocomplete="off" />
+        <button type="button" id="ordersSearchFindBtn" class="orders-search-dropdown-btn orders-search-dropdown-btn-primary">Найти</button>
+        <button type="button" id="ordersSearchCloseBtn" class="orders-search-dropdown-btn orders-search-dropdown-btn-secondary">Отмена</button>
+      </div>
 
       <div id="statusFilterDropdown" class="status-filter-dropdown" role="dialog" aria-label="Фильтр по статусу" style="display: none;">
         <div class="status-filter-dropdown-inner" id="statusFilterCheckboxes"></div>
@@ -764,10 +752,14 @@
                   <span class="orders-filter-heading-label">Дата</span>
                 </button>
               </th>
-              <th class="th-orders-col-150">
-                <div class="th-status-header-inner">
-                  <span class="th-status-label">Клиент</span>
-                </div>
+              <th class="th-orders-col-150 th-client-search-header">
+                <button type="button" class="orders-client-search-btn" id="ordersSearchOpenBtn" title="Поиск по заказам" aria-label="Поиск по заказам" aria-haspopup="dialog" aria-expanded="false" aria-controls="ordersSearchDropdownPanel">
+                  <span>Клиент</span>
+                  <svg class="orders-client-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle>
+                    <path d="M20 20l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                  </svg>
+                </button>
               </th>
               <th class="th-paid th-paid-header th-order-filter-heading-cell">
                 <button type="button" class="orders-filter-heading-btn paid-filter-btn" id="paidFilterBtn" title="Фильтр по оплате" aria-haspopup="true" aria-expanded="false">
@@ -2298,7 +2290,8 @@
     </section>
 
     <section id="section-settings" class="content-section">
-      <div class="settings-logout-row">
+      <div class="settings-account-block">
+        <p class="settings-current-user">Текущий пользователь: <strong id="settingsCurrentUserName"></strong></p>
         <button type="button" id="settingsLogoutBtn" class="settings-logout-btn">Выйти из системы</button>
       </div>
 <div id="settingsPhotoCooldownCard" class="card" hidden><h3>Сохранение заказа без фотографии</h3><label for="settingsPhotoCooldownMinutes">Задержка повторного сохранения (минуты)</label><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><input id="settingsPhotoCooldownMinutes" type="number" min="1" max="120" step="1" value="3" style="width:100px"><button type="button" class="btn-primary" id="settingsPhotoCooldownSave">Сохранить</button></div><p id="settingsPhotoCooldownStatus" role="status"></p></div>
