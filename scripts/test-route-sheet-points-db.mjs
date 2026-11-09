@@ -23,6 +23,6 @@ assert.match(migrationSource, /CREATE TABLE IF NOT EXISTS public\.route_sheet_ma
 assert.match(migrationSource, /ALTER TABLE public\.route_sheet_manual_points ENABLE ROW LEVEL SECURITY/);
 assert.match(migrationSource, /GRANT SELECT, INSERT, UPDATE ON TABLE public\.route_sheet_manual_points TO authenticated/);
 assert.match(migrationSource, /REVOKE ALL ON TABLE public\.route_sheet_manual_points FROM anon/);
-assert.match(serviceWorkerSource, /orders-site-static-v140/);
+assert.match(serviceWorkerSource, /orders-site-static-v141/);
 
 console.log("route sheet points database tests: ok");

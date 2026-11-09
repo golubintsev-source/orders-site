@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v140: точки маршрутного листа сохраняются в БД, обновлены приоритетные подсказки.
-const STATIC_CACHE = "orders-site-static-v140";
+// v141: новый заказ не наследует истёкший таймер сохранения без фото.
+const STATIC_CACHE = "orders-site-static-v141";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
