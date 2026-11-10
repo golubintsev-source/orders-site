@@ -278,8 +278,9 @@ test("real startup script resolves saved route before loading, and order URL tak
   assert.deepEqual(denied.calls.filter(([name]) => name === "section"), [["section", "all"]]);
 });
 
-test("header status uses scoped counts, not message histories, and yields to chat module", async () => {
-  const queries = [], badges = [];
+test("header status shares the chat summary, falls back to scoped counts, and yields to chat module", async () => {
+  const queries = [], badges = [], summaries = [];
+  let summaryAvailable = true;
   const window = {};
   const context = vm.createContext({ console, window, document: { getElementById: () => null } });
   const client = { from(table) {
@@ -302,7 +303,13 @@ test("header status uses scoped counts, not message histories, and yields to cha
   } };
   const exports = { supabaseClient: client, state: { currentUser: { id: "u1" } },
     refreshMyTasksNavBadge() {}, setPushBadgeCount: async (n) => badges.push(n),
-    fetchAllSupabaseRows: async (query) => query(), conversationPeerFromPushData() {} };
+    fetchAllSupabaseRows: async (query) => query(), conversationPeerFromPushData() {},
+    readChatSummary(options) {
+      summaries.push(options.badgeOnly);
+      return summaryAvailable ? { unread_count: 6 } : null;
+    },
+    paintMessagesNavBadge() {},
+  };
   const source = read("js/nav-status.js");
   const m = new vm.SourceTextModule(source, { context });
   await m.link(async (path) => {
@@ -311,7 +318,12 @@ test("header status uses scoped counts, not message histories, and yields to cha
     return new vm.SyntheticModule(names, function () { for (const name of names) this.setExport(name, exports[name]); }, { context });
   });
   await m.evaluate(); await m.namespace.refreshHeaderMessages();
-  assert.deepEqual(badges, [4]);
+  assert.deepEqual(summaries, [true]);
+  assert.equal(queries.length, 0);
+  assert.deepEqual(badges, [6]);
+  summaryAvailable = false;
+  await m.namespace.refreshHeaderMessages();
+  assert.deepEqual(badges, [6, 4]);
   assert.equal(queries.length, 4);
   for (const query of queries.filter((q) => q.table.endsWith("messages"))) {
     assert.equal(query.columns, "id"); assert.equal(query.options.head, true);

@@ -1,3 +1,4 @@
+import { readChatSummary, paintMessagesNavBadge } from "./chat-summary.js";
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
@@ -44,7 +45,6 @@ import {
   laterIsoTimestamp,
   timestampMs,
   shouldResetDialogFeed,
-  mergePartialChatListPeerIds,
   planGroupDeliveryUpdates,
 } from "./messages-sync-utils.js";
 import {
@@ -73,19 +73,13 @@ const CHAT_VISIBILITY_HEARTBEAT_MS = 25_000;
 const MESSAGE_REQUEST_TIMEOUT_MS = 12_000;
 /** Последние DM для превью списка; более старая переписка загружается в диалоге постранично. */
 const CHAT_LIST_DM_PREVIEW_LIMIT = 100;
-/** Первый проход списка чатов: только недавние DM за MESSAGES_FAST_LOAD_DAYS. */
-const CHAT_LIST_FAST_PREVIEW_LIMIT = 100;
 /** Снимок отрисованного списка: js/chat-boot.js показывает его до загрузки модулей. */
 const CHAT_LIST_SNAPSHOT_KEY = "orders_site_chat_list_snapshot_v1";
 /** Больше одного экрана не нужно — не раздуваем localStorage. */
 const CHAT_LIST_SNAPSHOT_MAX_ITEMS = 20;
-/**
- * Первый экран диалога. 400 сообщений заметно блокировали разбор JSON и DOM на
- * мобильных устройствах; остальная история догружается после первого кадра.
- */
-const DIALOG_INITIAL_MESSAGE_LIMIT = 80;
-/** Первая отрисовка списка/диалога: только сообщения за последние N дней. */
-const MESSAGES_FAST_LOAD_DAYS = 3;
+/** Render a small first page; older history is fetched as the user scrolls up. */
+const DIALOG_INITIAL_MESSAGE_LIMIT = 30;
+const DIALOG_HISTORY_PAGE_SIZE = 50;
 /** Префикс peer id для группового чата. */
 const GROUP_PEER_PREFIX = "group:";
 const ATTACHMENT_SELECT_COLS =
@@ -1711,13 +1705,6 @@ function hydrateMessageAttachments(root = document.getElementById("messagesFeed"
   queueMessageAttachmentsForHydration(pending);
 }
 
-function getMessagesFastLoadSinceIso(days = MESSAGES_FAST_LOAD_DAYS) {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - Math.max(0, days - 1));
-  return d.toISOString();
-}
-
 async function fetchUserMessagesQuery(buildQuery) {
   let query = buildQuery(messageSelectColumns());
   let { data, error } = await query;
@@ -1769,20 +1756,16 @@ async function fetchAllUserMessages() {
 }
 
 /** Недавние DM для списка чатов (превью последнего сообщения). */
-async function fetchRecentUserMessagesForChatList({ sinceIso = null, limit = CHAT_LIST_DM_PREVIEW_LIMIT } = {}) {
+async function fetchRecentUserMessagesForChatList() {
   const uid = getCurrentUserId();
   if (!uid) return { rows: [], error: null };
 
-  const runQuery = (cols) => {
-    let q = supabaseClient
-      .from("user_messages")
-      .select(cols)
-      .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
-      .order("created_at", { ascending: false })
-      .limit(limit);
-    if (sinceIso) q = q.gte("created_at", sinceIso);
-    return q;
-  };
+  const runQuery = (cols) => supabaseClient
+    .from("user_messages")
+    .select(cols)
+    .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
+    .order("created_at", { ascending: false })
+    .limit(CHAT_LIST_DM_PREVIEW_LIMIT);
 
   let cols = chatListPreviewSelectColumns();
   let { data, error } = await runQuery(cols);
@@ -1861,6 +1844,7 @@ async function fetchPeerMessages(peerId, { sinceIso = null, beforeId = null, lim
       .or(filter)
       .order("id", { ascending: false })
       .limit(limit);
+    if (cols.includes("deleted_at")) q = q.is("deleted_at", null);
     if (sinceIso) q = q.gte("created_at", sinceIso);
     if (beforeId != null) q = q.lt("id", beforeId);
     return signal ? q.abortSignal(signal) : q;
@@ -1919,6 +1903,7 @@ async function fetchGroupMessages(chatId, { sinceIso = null, beforeId = null, li
       .eq("chat_id", chatId)
       .order("id", { ascending: false })
       .limit(limit);
+    if (sel.includes("deleted_at")) q = q.is("deleted_at", null);
     if (sinceIso) q = q.gte("created_at", sinceIso);
     if (beforeId != null) q = q.lt("id", beforeId);
     return signal ? q.abortSignal(signal) : q;
@@ -1989,7 +1974,7 @@ async function fetchLastGroupMessagesByChat(chatIds) {
           break;
         }
         loaded = true;
-        if (data?.[0]) lastByChat.set(String(chatId), data[0]);
+        lastByChat.set(String(chatId), data?.[0] ?? null);
         break;
       }
       if (!loaded && groupChatsSupported === false) return;
@@ -2174,7 +2159,7 @@ function buildChatListEntries(
       avatarStoragePath: chat.avatarStoragePath || null,
       memberIds: chat.memberIds || [],
       unreadCount,
-      lastPending: groupMessagesPending && !last,
+      lastPending: groupMessagesPending && !lastGroupMessages?.has(chat.id),
       lastOutgoing: lastGroupOutgoingMessages?.get(String(chat.id)) || null,
       last: last
         ? {
@@ -2493,7 +2478,9 @@ function updateChatListItemEl(button, entry, groupReceiptsByChat) {
     const timeEl = button.querySelector(".messages-chat-item-time");
     if (timeEl) timeEl.textContent = time;
 
-    updateChatListItemTicks(button.querySelector(".messages-chat-item-time-wrap"), ticks);
+    if (entry.kind !== "group" || groupReceiptsByChat != null) {
+      updateChatListItemTicks(button.querySelector(".messages-chat-item-time-wrap"), ticks);
+    }
 
     const previewEl = button.querySelector(".messages-chat-item-preview");
     if (previewEl) previewEl.textContent = preview || " ";
@@ -2504,7 +2491,7 @@ function updateChatListItemEl(button, entry, groupReceiptsByChat) {
   replaceChatListItemAvatar(button, entry);
 }
 
-function syncChatListDom(list, entries, groupReceiptsByChat, { retainUnseen = false } = {}) {
+function syncChatListDom(list, entries, groupReceiptsByChat) {
   const existingByPeer = new Map();
   for (const el of list.querySelectorAll(".messages-chat-item[data-peer-id]")) {
     existingByPeer.set(el.getAttribute("data-peer-id") || "", el);
@@ -2512,12 +2499,8 @@ function syncChatListDom(list, entries, groupReceiptsByChat, { retainUnseen = fa
 
   const entryByPeer = new Map(entries.map((entry) => [entry.peerId, entry]));
   const nextPeerIds = entries.map((entry) => entry.peerId);
-  const order = retainUnseen
-    ? mergePartialChatListPeerIds(nextPeerIds, [...existingByPeer.keys()])
-    : nextPeerIds;
-
   const seen = new Set();
-  for (const peerId of order) {
+  for (const peerId of nextPeerIds) {
     if (!peerId || seen.has(peerId)) continue;
     seen.add(peerId);
     const entry = entryByPeer.get(peerId);
@@ -2529,16 +2512,11 @@ function syncChatListDom(list, entries, groupReceiptsByChat, { retainUnseen = fa
         el = createChatListItemElement(entry, groupReceiptsByChat);
       }
       list.appendChild(el);
-    } else if (el) {
-      // Частичная выборка не знает этот диалог — оставляем на месте внизу.
-      list.appendChild(el);
     }
   }
 
-  if (!retainUnseen) {
-    for (const [peerId, el] of existingByPeer) {
-      if (!seen.has(peerId)) el.remove();
-    }
+  for (const [peerId, el] of existingByPeer) {
+    if (!seen.has(peerId)) el.remove();
   }
 }
 
@@ -2582,46 +2560,10 @@ let loadMessagesGeneration = 0;
 /** Временная фиксация ленты внизу во время первоначальной раскладки открытого чата. */
 let messagesFeedBottomPin = null;
 
-/**
- * Пакет запросов от js/chat-boot.js: они ушли в сеть ещё во время разбора HTML,
- * до supabase-js и графа main.js. Забираем один раз, дальше — обычные запросы.
- */
-function takeChatBootPack() {
-  const boot = window.__chatBoot;
-  if (!boot) return null;
-  delete window.__chatBoot;
-  if (String(boot.uid) !== String(getCurrentUserId())) return null;
-  return boot;
-}
-
-/** chat-boot.js просит полный набор колонок: успешный ответ = все опциональные поля есть. */
-function noteFullMessageSchemaSupported() {
-  if (deliveredAtSupported !== false) deliveredAtSupported = true;
-  if (messageActionsSupported !== false) messageActionsSupported = true;
-  if (attachmentColumnsSupported !== false) attachmentColumnsSupported = true;
-}
-
-function adoptBootDmRows(pack, sinceIso) {
-  if (!pack?.rows) {
-    return fetchRecentUserMessagesForChatList({ sinceIso, limit: CHAT_LIST_FAST_PREVIEW_LIMIT });
-  }
-  noteFullMessageSchemaSupported();
-  return { rows: pack.rows, error: null };
-}
-
-function adoptBootUnreadRows(pack) {
-  if (!pack?.rows) return fetchUnreadIncomingDmMeta();
-  noteFullMessageSchemaSupported();
-  return { rows: pack.rows, error: null };
-}
-
-function adoptBootGroupChats(pack) {
-  if (!pack?.rows) return fetchMyGroupChats();
-  groupChatsSupported = true;
-  groupAvatarSupported = true;
-  const chats = pack.rows.map(mapGroupChatRow);
-  groupChatsById = new Map(chats.map((chat) => [chat.id, chat]));
-  return { chats, error: null };
+function takeChatSummaryBoot(uid) {
+  const boot = window.__chatSummaryBoot;
+  delete window.__chatSummaryBoot;
+  return String(boot?.uid) === String(uid) ? boot.summary : null;
 }
 
 /**
@@ -2678,7 +2620,7 @@ function paintChatListEntries(
   lastGroupMessages,
   groupUnreadByChat,
   groupReceiptsByChat,
-  { partial = false, announce = false, groupMessagesPending = false, lastGroupOutgoingMessages = null } = {},
+  { announce = false, groupMessagesPending = false, lastGroupOutgoingMessages = null, enrich = true } = {},
 ) {
   const uid = getCurrentUserId();
   const dmUnreadByPeer = buildDmUnreadByPeer(unreadRows);
@@ -2692,107 +2634,105 @@ function paintChatListEntries(
     dmUnreadByPeer,
     { groupMessagesPending, lastGroupOutgoingMessages },
   );
-  const signature = buildChatListSignature(entries) + "|" + [...(groupReceiptsByChat || new Map())].map(([chatId, receipts]) => `${chatId}:${[...(receipts || new Map())].map(([userId, receipt]) => `${userId}:${JSON.stringify(receipt)}`).join(",")}`).join(";");
-  if (!partial) {
-    list.dataset.chatListFull = "1";
-    delete list.dataset.chatListFromSnapshot;
-  }
-  if (list.dataset.chatListSig === signature) return;
-  list.dataset.chatListSig = signature;
-  // Снимок и уже отрисованные старые DM не сбрасываем на частичном проходе:
-  // иначе нижний чат мигает, пока не доедет полная выборка.
-  syncChatListDom(list, entries, groupReceiptsByChat, { retainUnseen: partial });
-  void hydrateGroupAvatars(list);
-  void preloadChatListAvatarsForEntries(entries);
-  if (announce) document.dispatchEvent(new CustomEvent("chat-list-painted"));
-  // Не сохраняем промежуточное «Загрузка…» вместо настоящего превью.
-  if (!entries.some((entry) => entry.lastPending)) saveChatListSnapshot(list);
-  return entries;
+  renderChatListEntries(list, entries, groupReceiptsByChat, { announce, enrich });
 }
 
-/**
- * Первый кадр списка не должен зависеть от тяжёлых групповых счётчиков.
- * DM и карточки групп рисуются сразу, а последние сообщения/галочки/unread
- * добавляются отдельной фоновой фазой.
- */
-async function paintChatListFromData(
-  list,
-  rows,
-  unreadRows,
-  groupChats,
-  { partial = false, progressive = false, isCurrent = null } = {},
-) {
-  const chatIds = (groupChats || []).map((chat) => chat.id);
+function renderChatListEntries(list, entries, groupReceiptsByChat, { announce = false, enrich = true } = {}) {
+  const receiptSignature = groupReceiptsByChat
+    ? [...groupReceiptsByChat].map(([chatId, receipts]) => `${chatId}:${JSON.stringify([...receipts])}`).join(";")
+    : "pending";
+  const signature = `${buildChatListSignature(entries)}|${receiptSignature}`;
+  list.dataset.chatListFull = "1";
+  delete list.dataset.chatListFromSnapshot;
+  const changed = list.dataset.chatListSig !== signature;
+  list.dataset.chatListSig = signature;
+  if (changed) syncChatListDom(list, entries, groupReceiptsByChat);
+  if (enrich) {
+    void hydrateGroupAvatars(list);
+    void preloadChatListAvatarsForEntries(entries);
+  }
+  if (announce) document.dispatchEvent(new CustomEvent("chat-list-painted"));
+  // Не сохраняем промежуточное «Загрузка…» вместо настоящего превью.
+  if (enrich && !entries.some((entry) => entry.lastPending)) saveChatListSnapshot(list);
+}
 
-  if (progressive) {
-    paintChatListEntries(
-      list,
-      rows,
-      unreadRows,
-      groupChats,
-      new Map(),
-      new Map(),
-      new Map(),
-      { partial, announce: true, groupMessagesPending: true },
-    );
+async function enrichChatList(list, rows, unreadRows, groupChats, isCurrent, firstPaint) {
+  const chatIds = groupChats.map((chat) => chat.id);
+  const { lastByChat } = await fetchLastGroupMessagesByChat(chatIds);
+  if (!isCurrent()) return;
 
-    if (!chatIds.length) return;
-    await (async () => {
-      const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat, lastGroupOutgoingMessages] = await Promise.all([
-        fetchLastGroupMessagesByChat(chatIds),
-        fetchGroupMemberReceiptsByChat(chatIds),
-        fetchLastOutgoingGroupMessagesByChat(chatIds, getCurrentUserId()),
-      ]);
-      if (typeof isCurrent === "function" && !isCurrent()) return;
-      const uid = getCurrentUserId();
-      const lastReadByChat = ownReadsFromGroupReceipts(groupReceiptsByChat, uid);
-      const groupUnreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
-      if (typeof isCurrent === "function" && !isCurrent()) return;
-      paintChatListEntries(
-        list,
-        rows,
-        unreadRows,
-        groupChats,
-        lastGroupMessages,
-        groupUnreadByChat,
-        groupReceiptsByChat,
-        { partial, lastGroupOutgoingMessages },
-      );
-    })().catch((error) => console.warn("Фоновое обновление групповых чатов:", error));
-    return;
+  // Update previews even if receipt or unread requests are still pending.
+  if (firstPaint) {
+    paintChatListEntries(list, rows, unreadRows, groupChats, lastByChat, new Map(), new Map(), {
+      groupMessagesPending: true,
+    });
   }
 
-  const [{ lastByChat: lastGroupMessages }, groupReceiptsByChat, lastGroupOutgoingMessages] = await Promise.all([
-    fetchLastGroupMessagesByChat(chatIds),
-    fetchGroupMemberReceiptsByChat(chatIds),
-    fetchLastOutgoingGroupMessagesByChat(chatIds, getCurrentUserId()),
-  ]);
-  if (typeof isCurrent === "function" && !isCurrent()) return;
   const uid = getCurrentUserId();
-  const lastReadByChat = ownReadsFromGroupReceipts(groupReceiptsByChat, uid);
-  const groupUnreadByChat = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
-  if (typeof isCurrent === "function" && !isCurrent()) return;
-  paintChatListEntries(
-    list,
-    rows,
-    unreadRows,
-    groupChats,
-    lastGroupMessages,
-    groupUnreadByChat,
-    groupReceiptsByChat,
-    { partial, announce: true, lastGroupOutgoingMessages },
-  );
+  const [receipts, outgoing] = await Promise.all([
+    fetchGroupMemberReceiptsByChat(chatIds),
+    fetchLastOutgoingGroupMessagesByChat(chatIds, uid),
+  ]);
+  if (!isCurrent()) return;
+  const lastReadByChat = ownReadsFromGroupReceipts(receipts, uid);
+  const unread = await fetchGroupUnreadCounts(chatIds, uid, lastReadByChat);
+  if (!isCurrent()) return;
+  paintChatListEntries(list, rows, unreadRows, groupChats, lastByChat, unread, receipts, {
+    groupMessagesPending: true,
+    lastGroupOutgoingMessages: outgoing,
+    announce: !firstPaint,
+  });
+  void refreshMessagesUnreadBadge();
 }
 
 function showChatListLoadError(list, msg, error) {
   console.error("Ошибка загрузки сообщений:", error);
   if (msg) {
-    msg.textContent = "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
+    msg.textContent = "Не удалось загрузить список чатов. Попробуйте ещё раз.";
     msg.classList.add("messages-page-message--error");
   }
   list.innerHTML = "";
   list.removeAttribute("data-chat-list-sig");
   delete list.dataset.chatListFull;
+}
+
+function renderChatSummary(list, summary, isCurrent) {
+  const groups = summary.dialogs.filter((row) => row.kind === "group").map((row) => mapGroupChatRow(row.group_chat));
+  groupChatsById = new Map(groups.map((chat) => [chat.id, chat]));
+  const entries = summary.dialogs.map((row) => {
+    const last = row.last_message;
+    const group = row.group_chat ? groupChatsById.get(String(row.group_chat.id)) : null;
+    const email = group ? "" : (last?.sender_id === getCurrentUserId() ? last?.recipient_email : last?.sender_email) || "";
+    return {
+      peerId: row.peer_id,
+      kind: row.kind,
+      name: group?.name || displayNameByEmail(email) || "—",
+      email,
+      avatarStoragePath: group?.avatarStoragePath,
+      memberIds: group?.memberIds,
+      unreadCount: row.unread_count,
+      last,
+      lastOutgoing: row.last_outgoing,
+      sortAt: last?.created_at || group?.created_at || "",
+    };
+  });
+  renderChatListEntries(list, entries, null, { announce: true, enrich: false });
+  paintMessagesNavBadge(summary.unread_count);
+  void setAppUnreadBadgeCount(summary.unread_count);
+
+  void Promise.resolve(window.__appStartup?.ready).then(async () => {
+    if (!isCurrent()) return;
+    const ids = groups.map((group) => group.id);
+    const [receipts, outgoing] = await Promise.all([
+      fetchGroupMemberReceiptsByChat(ids),
+      fetchLastOutgoingGroupMessagesByChat(ids, getCurrentUserId()),
+    ]);
+    if (!isCurrent()) return;
+    for (const entry of entries) {
+      if (entry.kind === "group") entry.lastOutgoing = outgoing.get(parseGroupId(entry.peerId));
+    }
+    renderChatListEntries(list, entries, receipts);
+  }).catch((error) => console.warn("Фоновое обновление чатов:", error));
 }
 
 async function loadChatListOnce() {
@@ -2802,42 +2742,63 @@ async function loadChatListOnce() {
   const uid = getCurrentUserId();
   if (!uid) return true;
   const gen = ++loadChatListGeneration;
-  const isCurrent = () => gen === loadChatListGeneration && messagesView === "list";
+  const isCurrent = () => gen === loadChatListGeneration && messagesView === "list" && getCurrentUserId() === uid;
 
   if (msg) {
-    msg.textContent = "";
+    msg.textContent = list.querySelector(".messages-chat-item") ? "" : "Загрузка чатов…";
     msg.classList.remove("messages-page-message--error");
   }
 
-  // Не показываем неполный список из трёхдневной выборки.
-  // Существующий снимок остаётся на экране до получения согласованного результата.
-  // Boot-пакет DM ограничен тремя днями; для полного списка он не подходит.
-  const boot = takeChatBootPack();
-  const [dmPack, unreadPack, groupPack] = await Promise.all([
-    fetchRecentUserMessagesForChatList({ sinceIso: null, limit: CHAT_LIST_DM_PREVIEW_LIMIT }),
-    boot ? boot.unread.then(adoptBootUnreadRows) : fetchUnreadIncomingDmMeta(),
-    boot ? boot.groups.then(adoptBootGroupChats) : fetchMyGroupChats(),
-  ]);
-  if (!isCurrent()) return true;
-  if (dmPack.error) {
-    if (!list.querySelector(".messages-chat-item")) showChatListLoadError(list, msg, dmPack.error);
-    else console.warn("Не удалось обновить список чатов:", dmPack.error);
+  let summary;
+  try {
+    summary = await readChatSummary({ boot: takeChatSummaryBoot(uid) });
+  } catch (error) {
+    if (isCurrent() && !list.querySelector(".messages-chat-item")) showChatListLoadError(list, msg, error);
+    else console.warn("Не удалось обновить список чатов:", error);
     return false;
   }
-  if (groupPack.error || unreadPack.error) {
-    console.warn("Не удалось полностью обновить список чатов:", groupPack.error || unreadPack.error);
-    // Не заменяем предыдущий корректный список неполными данными.
-    if (list.querySelector(".messages-chat-item")) return false;
+  if (!isCurrent()) return true;
+  if (summary) {
+    renderChatSummary(list, summary, isCurrent);
+    if (msg) msg.textContent = summary.dialogs.length ? "" : "Нет чатов";
+    return true;
   }
-  await paintChatListFromData(
-    list,
-    dmPack.rows,
-    unreadPack.rows || [],
-    groupPack.error ? [...groupChatsById.values()] : (groupPack.chats || []),
-    { isCurrent },
-  );
-  if (isCurrent()) void refreshMessagesUnreadBadge();
-  return !groupPack.error && !unreadPack.error;
+
+  const [dmPack, unreadPack, groupPack] = await Promise.all([
+    fetchRecentUserMessagesForChatList(),
+    fetchUnreadIncomingDmMeta(),
+    fetchMyGroupChats(),
+  ]);
+  if (!isCurrent()) return true;
+
+  const error = dmPack.error || unreadPack.error || groupPack.error;
+  if (error) {
+    if (!list.querySelector(".messages-chat-item")) showChatListLoadError(list, msg, error);
+    else console.warn("Не удалось обновить список чатов:", error);
+    return false;
+  }
+
+  const firstPaint = !list.dataset.chatListFull;
+  if (firstPaint) {
+    paintChatListEntries(list, dmPack.rows, unreadPack.rows, groupPack.chats, new Map(), new Map(), new Map(), {
+      announce: true,
+      groupMessagesPending: true,
+      enrich: false,
+    });
+  }
+  const enrich = async () => {
+    if (!isCurrent()) return;
+    await enrichChatList(list, dmPack.rows, unreadPack.rows, groupPack.chats, isCurrent, firstPaint);
+    if (isCurrent() && msg) msg.textContent = list.querySelector(".messages-chat-item") ? "" : "Нет чатов";
+  };
+  if (firstPaint) {
+    if (msg) msg.textContent = list.querySelector(".messages-chat-item") ? "" : "Нет чатов";
+    void Promise.resolve(window.__appStartup?.ready).then(enrich)
+      .catch((error) => console.warn("Фоновое обновление чатов:", error));
+  } else {
+    await enrich();
+  }
+  return true;
 }
 
 /** Один сетевой проход списка за раз: при медленной БД polling не создаёт лавину запросов. */
@@ -3028,6 +2989,7 @@ export function showMessagesChatList() {
 export async function openMessagesDialog(peerId) {
   if (!peerId) return;
   loadChatListGeneration += 1;
+  chatListLoadPromise = null;
   invalidateMessagesPoll();
   cancelReadScope("dialog-history");
   dialogHistoryLoading = false;
@@ -3063,7 +3025,10 @@ export async function openMessagesDialog(peerId) {
     syncComposerForActivePeer();
     if (isGroupChat()) applyGroupOutgoingReceiptsToFeed();
   }).catch((error) => console.warn("Фоновая загрузка данных диалога:", error));
-  const initialLoadOk = await loadMessages({ forceBottom: true });
+  const boot = window.__chatDialogPreviewBoot;
+  delete window.__chatDialogPreviewBoot;
+  const initialRows = boot?.peerId === peerId && String(boot.uid) === String(getCurrentUserId()) ? boot.dialog : null;
+  const initialLoadOk = await loadMessages({ forceBottom: true, initialRows });
   if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
   startMessagesFeedPolling();
   if (initialLoadOk === false) {
@@ -3075,7 +3040,7 @@ export async function openMessagesDialog(peerId) {
   return initialLoadOk;
 }
 
-export async function loadMessages({ forceBottom = false } = {}) {
+export async function loadMessages({ forceBottom = false, initialRows = null } = {}) {
   const feed = document.getElementById("messagesFeed");
   const msg = document.getElementById("messagesPageMessage");
   if (!feed) return;
@@ -3157,7 +3122,9 @@ export async function loadMessages({ forceBottom = false } = {}) {
   // ложное «нет сообщений» до фоновой догрузки, а LIMIT сохраняет быстрый ответ.
   let fast;
   try {
-    fast = await fetchDialogRows({ since: null, limit: DIALOG_INITIAL_MESSAGE_LIMIT });
+    fast = initialRows ? await initialRows : null;
+    if (!scope.current() || !isCurrentDialogLoad(gen, peerAtStart)) return;
+    if (!fast || fast.error) fast = await fetchDialogRows({ since: null, limit: DIALOG_INITIAL_MESSAGE_LIMIT });
   } catch (error) {
     fast = { rows: [], error };
   }
@@ -3181,7 +3148,18 @@ export async function loadMessages({ forceBottom = false } = {}) {
   dialogHistoryPeerId = String(peerAtStart);
   dialogHistoryOldestId = fast.rows[0]?.id ?? null;
   dialogHistoryExhausted = fast.rows.length < DIALOG_INITIAL_MESSAGE_LIMIT;
+  loadHistoryIfFeedFits(feed, peerAtStart);
   return true;
+}
+
+function loadHistoryIfFeedFits(feed, peerId) {
+  if (dialogHistoryExhausted) return;
+  requestAnimationFrame(() => {
+    if (activePeerId === peerId && isMessagesSectionActive() &&
+        feed.clientHeight > 0 && feed.scrollHeight <= feed.clientHeight) {
+      void loadOlderMessagesPage();
+    }
+  });
 }
 
 async function loadOlderMessagesPage() {
@@ -3202,12 +3180,12 @@ async function loadOlderMessagesPage() {
     const page = isGroupChat(peerAtStart)
       ? await fetchGroupMessages(parseGroupId(peerAtStart), {
         beforeId,
-        limit: DIALOG_INITIAL_MESSAGE_LIMIT,
+        limit: DIALOG_HISTORY_PAGE_SIZE,
         signal: scope.signal,
       })
       : await fetchPeerMessages(peerAtStart, {
         beforeId,
-        limit: DIALOG_INITIAL_MESSAGE_LIMIT,
+        limit: DIALOG_HISTORY_PAGE_SIZE,
         signal: scope.signal,
       });
     if (
@@ -3223,7 +3201,9 @@ async function loadOlderMessagesPage() {
     }
     prependOlderMessagesToFeed(page.rows);
     dialogHistoryOldestId = page.rows[0]?.id ?? dialogHistoryOldestId;
-    dialogHistoryExhausted = page.rows.length < DIALOG_INITIAL_MESSAGE_LIMIT;
+    dialogHistoryExhausted = page.rows.length < DIALOG_HISTORY_PAGE_SIZE;
+    const feed = document.getElementById("messagesFeed");
+    if (feed) loadHistoryIfFeedFits(feed, peerAtStart);
   } catch (error) {
     if (error?.name !== "AbortError") console.warn("Не удалось догрузить историю сообщений:", error);
   } finally {
@@ -3234,10 +3214,14 @@ async function loadOlderMessagesPage() {
 export function onMessagesSectionEnter(opts = {}) {
   initMessagesSection();
   const peerFromUrl = opts.restoreFromUrl ? getChatPeerFromUrl() : null;
-  if (peerFromUrl) {
-    return openMessagesDialog(peerFromUrl);
-  }
-  return showMessagesChatList();
+  const ready = peerFromUrl ? openMessagesDialog(peerFromUrl) : showMessagesChatList();
+  void ready.then(async () => {
+    await window.__appStartup?.ready;
+    startUnreadPolling({ refreshNow: false });
+    initMessagesLiveSync();
+    if (isMessagesSectionActive()) void acknowledgeIncomingDelivered();
+  }).catch(console.warn);
+  return ready;
 }
 
 function getFeedMessageIds() {
@@ -3704,6 +3688,8 @@ function stopChatListPolling() {
 }
 
 export function stopMessagesPolling() {
+  loadChatListGeneration += 1;
+  chatListLoadPromise = null;
   invalidateMessagesPoll();
   cancelReadScope("dialog");
   stopMessagesFeedPolling();
@@ -4266,17 +4252,23 @@ async function countUnreadGroupMessagesTotal() {
 }
 
 async function refreshMessagesUnreadBadgeOnce() {
-  const badge = document.getElementById("messagesUnreadBadge");
-  const btn = document.getElementById("messagesNavBtn");
-
   const uid = getCurrentUserId();
   if (!uid) {
-    if (badge) badge.hidden = true;
+    paintMessagesNavBadge(0);
     void setAppUnreadBadgeCount(0);
     return true;
   }
 
   startMessagesRealtime();
+
+  const openGroupId = canMarkMessagesRead() && isGroupChat() ? parseGroupId() : null;
+  const summary = await readChatSummary({ badgeOnly: true, openGroupId });
+  if (getCurrentUserId() !== uid) return true;
+  if (summary) {
+    paintMessagesNavBadge(summary.unread_count);
+    void setAppUnreadBadgeCount(summary.unread_count);
+    return true;
+  }
 
   let query = supabaseClient
     .from("user_messages")
@@ -4299,7 +4291,7 @@ async function refreshMessagesUnreadBadgeOnce() {
 
   if (error) {
     console.warn("Не удалось получить число непрочитанных:", error);
-    if (badge) badge.hidden = true;
+    paintMessagesNavBadge(0);
     return false;
   }
 
@@ -4312,16 +4304,8 @@ async function refreshMessagesUnreadBadgeOnce() {
   }
 
   const n = dmUnread + groupUnread;
-  if (badge && btn) {
-    if (n > 0) {
-      badge.textContent = n > 99 ? "99+" : String(n);
-      badge.hidden = false;
-      btn.classList.add("messages-nav-btn--has-unread");
-    } else {
-      badge.hidden = true;
-      btn.classList.remove("messages-nav-btn--has-unread");
-    }
-  }
+  if (getCurrentUserId() !== uid) return true;
+  paintMessagesNavBadge(n);
   void setAppUnreadBadgeCount(n);
   return true;
 }
@@ -6557,9 +6541,6 @@ export function initMessagesSection() {
     window.visualViewport?.addEventListener("scroll", keepActiveComposerAtBottom);
   }
 
-  void loadUsersDirectory();
-  startUnreadPolling();
-  initMessagesLiveSync();
   window.dispatchEvent(new CustomEvent("messages-status-ready"));
 }
 

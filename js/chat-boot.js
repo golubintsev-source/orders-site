@@ -1,23 +1,8 @@
-/**
- * Ранний старт раздела «Чаты» (обычный script в <head>, до модулей).
- *
- * Раньше первый запрос списка чатов уходил только после того, как отработают
- * supabase-js, весь граф main.js и await profile/settings — на iPhone это
- * несколько секунд белого экрана. Здесь запросы стартуют прямо во время
- * разбора HTML, через голый fetch к PostgREST (клиент supabase-js не нужен),
- * а список сразу рисуется из снимка прошлой сессии.
- *
- * Результаты складываются в window.__chatBoot; messages.js их забирает
- * (см. takeChatBootPack), поэтому дублирующих запросов нет.
- */
+/** Start the initial chat list or dialog read before loading the app modules. */
 (() => {
   const SNAPSHOT_KEY = "orders_site_chat_list_snapshot_v1";
-  /** Должно совпадать с MESSAGES_FAST_LOAD_DAYS в messages.js. */
-  const FAST_LOAD_DAYS = 3;
-  /** Должно совпадать с CHAT_LIST_FAST_PREVIEW_LIMIT в messages.js. */
-  const FAST_PREVIEW_LIMIT = 100;
-  /** Больше — значит выборка обрезана и messages.js должен долистать сам. */
-  const UNREAD_PROBE_LIMIT = 1001;
+  /** Match DIALOG_INITIAL_MESSAGE_LIMIT in messages.js. */
+  const DIALOG_LIMIT = 30;
 
   const SUPABASE_URL = window.__SUPABASE_URL__ || "https://yizwpogwabosuguakyzt.supabase.co";
   const SUPABASE_KEY =
@@ -26,7 +11,9 @@
   const DM_COLUMNS =
     "id, sender_id, recipient_id, sender_email, recipient_email, body, created_at, read_at," +
     " delivered_at, deleted_at, attachment_storage_path";
-  const GROUP_COLUMNS = "id, name, created_by, member_ids, created_at, avatar_storage_path";
+  const DIALOG_COLUMNS =
+    "reply_to_id, edited_at, attachment_thumbnail_path, attachment_mime_type, attachment_file_name," +
+    " attachment_file_size, attachment_width, attachment_height";
 
   function getChatPeerFromUrl() {
     try {
@@ -123,17 +110,12 @@
     }
   }
 
-  /** Начало суток N-1 дней назад — как getMessagesFastLoadSinceIso в messages.js. */
-  function fastLoadSinceIso() {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - Math.max(0, FAST_LOAD_DAYS - 1));
-    return d.toISOString();
-  }
-
   function restQuery(session, table, params) {
     const url = `${SUPABASE_URL}/rest/v1/${table}?${params}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
     return fetch(url, {
+      signal: controller.signal,
       headers: {
         apikey: SUPABASE_KEY,
         authorization: `Bearer ${session.token}`,
@@ -141,51 +123,44 @@
       },
     })
       .then(async (res) => {
-        if (!res.ok) return { rows: null, error: { status: res.status, message: await res.text() } };
+        if (!res.ok) {
+          const error = await res.json().catch(() => ({ message: res.statusText }));
+          return { rows: null, error };
+        }
         return { rows: await res.json(), error: null };
       })
-      .catch((error) => ({ rows: null, error }));
+      .catch((error) => ({ rows: null, error }))
+      .finally(() => clearTimeout(timeout));
   }
 
-  function fetchRecentDms(session) {
-    const params = new URLSearchParams();
-    params.set("select", DM_COLUMNS);
-    params.set("or", `(sender_id.eq.${session.uid},recipient_id.eq.${session.uid})`);
-    params.set("created_at", `gte.${fastLoadSinceIso()}`);
-    params.set("order", "created_at.desc");
-    params.set("limit", String(FAST_PREVIEW_LIMIT));
-    // messages.js ждёт хронологический порядок.
-    return restQuery(session, "user_messages", params).then((pack) =>
+  function fetchDialog(session, peerId) {
+    const group = peerId.startsWith("group:");
+    const columns = group
+      ? "id, chat_id, sender_id, sender_email, body, created_at, deleted_at, attachment_storage_path"
+      : DM_COLUMNS;
+    const params = new URLSearchParams({
+      select: `${columns}, ${DIALOG_COLUMNS}`,
+      order: "id.desc",
+      deleted_at: "is.null",
+      limit: String(DIALOG_LIMIT),
+    });
+    if (group) {
+      params.set("chat_id", `eq.${peerId.slice("group:".length)}`);
+    } else {
+      const { uid } = session;
+      params.set("or", `(and(sender_id.eq.${uid},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${uid}))`);
+    }
+    return restQuery(session, group ? "group_messages" : "user_messages", params).then((pack) =>
       pack.rows ? { rows: pack.rows.reverse(), error: null } : pack,
     );
   }
 
-  function fetchUnreadIncoming(session) {
-    const params = new URLSearchParams();
-    params.set("select", "sender_id, sender_email, deleted_at");
-    params.set("recipient_id", `eq.${session.uid}`);
-    params.set("read_at", "is.null");
-    params.set("deleted_at", "is.null");
-    params.set("order", "id.asc");
-    params.set("limit", String(UNREAD_PROBE_LIMIT));
-    return restQuery(session, "user_messages", params).then((pack) => {
-      if (!pack.rows) return pack;
-      if (pack.rows.length >= UNREAD_PROBE_LIMIT) {
-        return { rows: null, error: { message: "unread truncated" } };
-      }
-      return pack;
-    });
+  function fetchSummary(session) {
+    return restQuery(session, "rpc/get_chat_summary", new URLSearchParams({ p_badge_only: "false" }))
+      .then(({ rows, error }) => ({ data: rows, error }));
   }
 
-  function fetchMyGroups(session) {
-    const params = new URLSearchParams();
-    params.set("select", GROUP_COLUMNS);
-    params.set("member_ids", `cs.{${session.uid}}`);
-    params.set("order", "created_at.desc");
-    return restQuery(session, "group_chats", params);
-  }
-
-  /** Догрузку messages.js (164 КБ) начинаем во время разбора HTML, а не после main.js. */
+  /** Start fetching the chat module before main.js. */
   function preloadMessagesModule() {
     for (const href of [
       "./js/messages.js",
@@ -222,14 +197,17 @@
     list.innerHTML = snap.html;
     // Сигнатуру не выставляем: первый настоящий рендер обязан пройти и сверить DOM.
     list.dataset.chatListFromSnapshot = "1";
+    const status = document.getElementById("messagesChatListMessage");
+    if (status) status.textContent = "";
   }
 
   if (!isMessagesRoute()) return;
 
-  const restoringDialog = Boolean(getChatPeerFromUrl());
+  const peerId = getChatPeerFromUrl();
+  preloadMessagesModule();
   const session = readSession();
   if (!session) {
-    if (restoringDialog) {
+    if (peerId) {
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", showDialogShellIfNeeded, { once: true });
       } else {
@@ -239,25 +217,22 @@
     return;
   }
 
-  window.__chatBoot = {
-    uid: session.uid,
-    dm: fetchRecentDms(session),
-    unread: fetchUnreadIncoming(session),
-    groups: fetchMyGroups(session),
-  };
-
-  preloadMessagesModule();
+  if (peerId) {
+    window.__chatDialogPreviewBoot = { uid: session.uid, peerId, dialog: fetchDialog(session, peerId) };
+  } else {
+    window.__chatSummaryBoot = { uid: session.uid, summary: fetchSummary(session) };
+  }
 
   if (document.readyState === "loading") {
     document.addEventListener(
       "DOMContentLoaded",
       () => {
-        if (restoringDialog) showDialogShellIfNeeded();
+        if (peerId) showDialogShellIfNeeded();
         else paintSnapshot(session.uid);
       },
       { once: true },
     );
-  } else if (restoringDialog) {
+  } else if (peerId) {
     showDialogShellIfNeeded();
   } else {
     paintSnapshot(session.uid);

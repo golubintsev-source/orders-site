@@ -10,6 +10,7 @@ import {
   planGroupDeliveryUpdates,
 } from "../js/messages-sync-utils.js";
 import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 
 const messagesSource = await readFile(new URL("../js/messages.js", import.meta.url), "utf8");
 const chatBootSource = await readFile(new URL("../js/chat-boot.js", import.meta.url), "utf8");
@@ -35,13 +36,123 @@ assert(
   /const CHAT_LIST_DM_PREVIEW_LIMIT = 100/.test(messagesSource),
   "chat list preview must fetch at most 100 recent direct messages",
 );
-assert(
-  /const FAST_PREVIEW_LIMIT = 100/.test(chatBootSource),
-  "early chat boot must use the same 100-message preview limit",
-);
+{
+  const uid = "11111111-1111-1111-1111-111111111111";
+  const peer = "22222222-2222-2222-2222-222222222222";
+
+  function bootChat(chat = "", expiresAt = Date.now() / 1000 + 60) {
+    const location = new URL(`https://orders.test/messages${chat ? `?chat=${chat}` : ""}`);
+    const window = { location, __SUPABASE_URL__: "https://test.supabase.co" };
+    const requests = [];
+    runInNewContext(chatBootSource, {
+      window, URL, URLSearchParams, AbortController, setTimeout, clearTimeout,
+      localStorage: {
+        getItem: () => JSON.stringify({ access_token: "token", expires_at: expiresAt, user: { id: uid } }),
+      },
+      document: {
+        head: { appendChild() {} },
+        createElement: () => ({}),
+        readyState: "loading",
+        addEventListener() {},
+      },
+      fetch(url) {
+        requests.push(new URL(url));
+        const isSummary = url.includes("/rpc/get_chat_summary");
+        return Promise.resolve({ ok: true, json: async () => isSummary
+          ? { dialogs: [], unread_count: 0 }
+          : [{ id: 2 }, { id: 1 }] });
+      },
+    });
+    return { window, requests };
+  }
+
+  const list = bootChat();
+  assert(list.requests.length === 1 && list.requests[0].pathname.endsWith("/rpc/get_chat_summary"),
+    "cold list starts exactly one summary request");
+  assert((await list.window.__chatSummaryBoot.summary).data.unread_count === 0, "early summary is reusable");
+
+  for (const chat of [peer, `group:${peer}`]) {
+    const { window, requests } = bootChat(chat);
+    const [request] = requests;
+    const group = chat.startsWith("group:");
+    assert(requests.length === 1 && !window.__chatSummaryBoot, "restored dialog does not start list reads");
+    assert(request.pathname.endsWith(group ? "/group_messages" : "/user_messages"), "dialog reads the correct table");
+    assert(request.searchParams.get("order") === "id.desc" && request.searchParams.get("limit") === "30" &&
+      request.searchParams.get("deleted_at") === "is.null",
+      "dialog fetches the same first page as its normal loader");
+    assert(group
+      ? request.searchParams.get("chat_id") === `eq.${peer}`
+      : request.searchParams.get("or") === `(and(sender_id.eq.${uid},recipient_id.eq.${peer}),and(sender_id.eq.${peer},recipient_id.eq.${uid}))`,
+    "early history is scoped to the restored dialog");
+    assert((await window.__chatDialogPreviewBoot.dialog).rows[0].id === 1, "early history is chronological");
+  }
+
+  assert(bootChat(peer, 1).requests.length === 0, "expired session leaves the query to the normal loader");
+}
+
+{
+  const loader = messagesSource.slice(
+    messagesSource.indexOf("async function loadChatListOnce()"),
+    messagesSource.indexOf("/** Один сетевой проход списка"),
+  );
+  let resolvePreview;
+  const preview = new Promise((resolve) => { resolvePreview = resolve; });
+  let releaseStartup;
+  const startup = new Promise((resolve) => { releaseStartup = resolve; });
+  const status = { textContent: "", classList: { remove() {} } };
+  let painted = false;
+  let enriched = false;
+  let summary = null;
+  let legacyReads = 0;
+  let summaryPainted = false;
+  const list = { dataset: {}, querySelector: () => painted ? {} : null };
+  const load = runInNewContext(`${loader}
+loadChatListOnce`, {
+    document: { getElementById: (id) => id === "messagesChatList" ? list : status },
+    window: { __appStartup: { ready: startup } },
+    getCurrentUserId: () => "me",
+    messagesView: "list",
+    loadChatListGeneration: 0,
+    takeChatSummaryBoot: () => null,
+    readChatSummary: async () => summary,
+    renderChatSummary(_, result) {
+      assert(result === summary, "the list uses the server summary directly");
+      summaryPainted = true;
+    },
+    fetchRecentUserMessagesForChatList() {
+      legacyReads += 1;
+      return preview;
+    },
+    fetchUnreadIncomingDmMeta: async () => ({ rows: [] }),
+    fetchMyGroupChats: async () => ({ chats: [{ id: "group" }] }),
+    paintChatListEntries(...args) {
+      assert(args.at(-1).groupMessagesPending && !args.at(-1).enrich, "first paint defers group details and avatars");
+      painted = true;
+    },
+    enrichChatList: async () => { enriched = true; },
+  });
+  const firstPaint = load();
+  assert(status.textContent === "Загрузка чатов…", "pending list must show loading");
+  resolvePreview({ rows: [] });
+  assert(await firstPaint && painted && !enriched, "list is ready while enrichment is still deferred");
+  releaseStartup();
+  await new Promise(setImmediate);
+  assert(enriched, "group enrichment starts after the startup screen is released");
+
+  summary = { dialogs: [{ peer_id: "peer", unread_count: 1 }], unread_count: 1 };
+  assert(await load() && summaryPainted && legacyReads === 1,
+    "an available server summary skips all legacy list reads");
+}
+
 assert(
   !/DIALOG_HISTORY_MESSAGE_LIMIT/.test(messagesSource),
   "dialog must not silently fetch a 400-message history batch",
+);
+assert(
+  /const DIALOG_INITIAL_MESSAGE_LIMIT = 30/.test(messagesSource) &&
+  /const DIALOG_HISTORY_PAGE_SIZE = 50/.test(messagesSource) &&
+  /dialogHistoryExhausted = page.rows.length < DIALOG_HISTORY_PAGE_SIZE/.test(messagesSource),
+  "initial and older pages use their own sizes when deciding whether more history exists",
 );
 assert(
   /beforeId != null\) q = q\.lt\("id", beforeId\)/.test(messagesSource),

@@ -1,5 +1,6 @@
 // Shared header status is independent of the task/chat screens and their histories.
 import { supabaseClient } from "./config.js";
+import { readChatSummary, paintMessagesNavBadge } from "./chat-summary.js";
 import { state } from "./state.js";
 import { refreshMyTasksNavBadge } from "./task-badge.js";
 import { setPushBadgeCount } from "./push-notifications.js";
@@ -23,6 +24,15 @@ export async function refreshHeaderMessages() {
   if (window.__messagesStatusReady) return;
   const uid = state.currentUser?.id;
   if (!uid) return;
+  const summary = await readChatSummary({ badgeOnly: true });
+  if (window.__messagesStatusReady || state.currentUser?.id !== uid) return;
+  const count = summary ? summary.unread_count : await readLegacyUnreadCount(uid);
+  if (window.__messagesStatusReady || state.currentUser?.id !== uid) return;
+  paintMessagesNavBadge(count);
+  await setPushBadgeCount(count);
+}
+
+async function readLegacyUnreadCount(uid) {
   const dm = await supabaseClient.from("user_messages").select("id", { count: "exact", head: true })
     .eq("recipient_id", uid).is("read_at", null).is("deleted_at", null);
   if (dm.error) throw dm.error;
@@ -46,12 +56,7 @@ export async function refreshHeaderMessages() {
     }));
     count += counts.reduce((a, b) => a + b, 0);
   }
-  if (window.__messagesStatusReady || state.currentUser?.id !== uid) return;
-  const badge = document.getElementById("messagesUnreadBadge");
-  const button = document.getElementById("messagesNavBtn");
-  if (badge) { badge.textContent = count > 99 ? "99+" : String(count); badge.hidden = count === 0; }
-  button?.classList.toggle("messages-nav-btn--has-unread", count > 0);
-  await setPushBadgeCount(count);
+  return count;
 }
 
 function refreshTaskStatus() {

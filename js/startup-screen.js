@@ -133,7 +133,10 @@
     showError(online || (navigator.onLine !== false && Date.now() - lastHttpAt < 5000));
   }
 
+  let releaseReady;
+  const ready = new Promise((resolve) => { releaseReady = resolve; });
   window.__appStartup = {
+    ready,
     get pending() { return !done; },
     expectSection(section) {
       tables = new Set(["profiles", ...(tablesBySection[section] || [])]);
@@ -177,6 +180,7 @@
       const app = document.getElementById("appContainer");
       if (app) { app.inert = false; app.removeAttribute("aria-busy"); }
       window.dispatchEvent(new Event("resize"));
+      releaseReady();
       return true;
     },
     fail,
