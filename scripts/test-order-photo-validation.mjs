@@ -9,7 +9,7 @@ const root = path.resolve(here, "..");
 
 process.env.OPENAI_API_KEY = "test-key";
 const require = createRequire(import.meta.url);
-const handler = require(path.join(root, "api", "validate-order-photo.js"));
+const handler = require(path.join(root, "server", "order-photo-validation.js"));
 
 function responseRecorder() {
   return {
@@ -80,5 +80,13 @@ const clientSource = fs.readFileSync(path.join(root, "js", "order-photo-validati
 assert.match(clientSource, /MAX_ANALYSIS_DIMENSION = 1024/);
 assert.match(clientSource, /supabaseClient\.auth\.getSession\(\)/);
 assert.match(clientSource, /Authorization: `Bearer \$\{token\}`/);
+assert.match(clientSource, /voice-assistant\?mode=photo-validation/);
+
+const voiceSource = fs.readFileSync(path.join(root, "api", "voice-assistant.js"), "utf8");
+assert.match(voiceSource, /orderPhotoValidationHandler/);
+assert.match(voiceSource, /mode === "photo-validation"/);
+
+const apiFunctionCount = fs.readdirSync(path.join(root, "api")).filter((name) => name.endsWith(".js")).length;
+assert.ok(apiFunctionCount <= 12, `Vercel function limit exceeded: ${apiFunctionCount}`);
 
 console.log("order photo validation tests passed");

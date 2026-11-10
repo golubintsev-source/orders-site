@@ -47,7 +47,7 @@ async function runValidation(file) {
   const timer = setTimeout(() => controller.abort(), 30_000);
   let response;
   try {
-    response = await fetch("/api/validate-order-photo", {
+    response = await fetch("/api/voice-assistant?mode=photo-validation", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ imageDataUrl, fileName: file.name || "photo.jpg" }),

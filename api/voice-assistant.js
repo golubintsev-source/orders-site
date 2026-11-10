@@ -9,6 +9,7 @@
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const contractorCheckHandler = require("../server/contractor-check.js");
+const orderPhotoValidationHandler = require("../server/order-photo-validation.js");
 
 const ORDER_TYPES = ["Окна", "Подоконники", "Аллюминий", "Магазин", "Сетки/мелочь"];
 const PAYMENT_STATUSES = [
@@ -1230,6 +1231,9 @@ function extractJsonObject(text) {
 module.exports = async (req, res) => {
   if (req.query?.mode === "contractor-check") {
     return contractorCheckHandler(req, res);
+  }
+  if (req.query?.mode === "photo-validation") {
+    return orderPhotoValidationHandler(req, res);
   }
 
   if (req.method !== "POST") {
