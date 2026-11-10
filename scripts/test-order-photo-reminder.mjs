@@ -35,7 +35,7 @@ assert.ok(
 assert.match(indexSource, /id="orderPhotoReminder"/);
 assert.match(indexSource, /повторная попытка сохранения запустит временную блокировку/);
 assert.match(styleSource, /\.order-photo-reminder/);
-assert.match(swSource, /orders-site-static-v147/);
+assert.match(swSource, /orders-site-static-v148/);
 
 const cooldownSource = ordersSource.slice(
   ordersSource.indexOf("let orderFormSaveInFlight = false;"),

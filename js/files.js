@@ -24,9 +24,11 @@ import {
   setMessage,
 } from "./dom.js";
 import { ensureCropperLibs } from "./lazy-cdn.js";
+import { isImageAttachment, validateOrderPhoto } from "./order-photo-validation.js";
 
 /** Выбранные к загрузке файлы; повторный выбор через «Загрузить» добавляет к списку, а не заменяет. */
 const pendingAttachments = [];
+let pendingAttachmentMergePromise = Promise.resolve();
 
 /** Blob-URL превью в списке «выбранные файлы» — отзываем при следующей отрисовке. */
 let selectedPreviewBlobUrls = [];
@@ -388,11 +390,32 @@ async function mergeNewAttachmentFiles(picked) {
         toAdd = file;
       }
     }
+    if (isImageAttachment(toAdd)) {
+      fileUploadText.textContent = `Проверяем фото: ${toAdd.name || "изображение"}…`;
+      try {
+        await validateOrderPhoto(toAdd);
+      } catch (error) {
+        const reason = error?.message || "Изображение не прошло проверку";
+        setMessage(`Фото «${toAdd.name || "без имени"}» не добавлено: ${reason}`, "#d32f2f");
+        continue;
+      }
+    }
     pendingAttachments.push(toAdd);
   }
 
   applyPendingToAttachmentsInput();
   renderSelectedFiles();
+}
+
+function queueNewAttachmentFiles(picked) {
+  const next = pendingAttachmentMergePromise.then(() => mergeNewAttachmentFiles(picked));
+  pendingAttachmentMergePromise = next.catch(() => {});
+  return next;
+}
+
+/** Дождаться обрезки и проверки фото, если пользователь сразу нажал «Сохранить». */
+export function waitForPendingAttachmentChecks() {
+  return pendingAttachmentMergePromise;
 }
 
 /**
@@ -405,7 +428,7 @@ export async function mergeNewAttachmentsOnChange() {
   if (picked.length === 0) return;
   attachmentsInput.value = "";
 
-  await mergeNewAttachmentFiles(picked);
+  await queueNewAttachmentFiles(picked);
 }
 
 /**
@@ -441,7 +464,7 @@ export async function pasteImageFromClipboardIntoAttachments() {
         type,
         lastModified: Date.now(),
       });
-      await mergeNewAttachmentFiles([file]);
+      await queueNewAttachmentFiles([file]);
       return "ok";
     }
   }
@@ -793,6 +816,7 @@ async function writeFileChangeToHistory(orderId, comment) {
 }
 
 export async function uploadFiles(orderId) {
+  await waitForPendingAttachmentChecks();
   applyPendingToAttachmentsInput();
   if (pendingAttachments.length === 0) {
     resetFileUpload();
@@ -804,6 +828,15 @@ export async function uploadFiles(orderId) {
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
+    if (isImageAttachment(file)) {
+      try {
+        await validateOrderPhoto(file);
+      } catch (error) {
+        const reason = error?.message || "Изображение не прошло проверку";
+        setMessage(`Фото «${file.name || "без имени"}» не загружено: ${reason}`, "#d32f2f");
+        continue;
+      }
+    }
     const fileToUpload = await compressImageForWebIfNeeded(file);
     const rawName = (fileToUpload.name || "").trim() || "file";
     const safeName = rawName.replace(/[^\w.\-]+/g, "_").replace(/^\.+$/, "") || "file";
@@ -912,6 +945,11 @@ export async function attachStorageFileToOrder(orderId, meta) {
   const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const filePath = `${state.currentUser.id}/${orderId}/${stamp}_${safeName}`;
   const mimeType = meta?.mimeType || blob.type || "image/jpeg";
+
+  if (mimeType.startsWith("image/")) {
+    const fileForValidation = new File([blob], rawName, { type: mimeType });
+    await validateOrderPhoto(fileForValidation);
+  }
 
   const uploadBody = await blobBodyForStorageUpload(blob);
   const { error: uploadError } = await supabaseClient.storage.from("order-files").upload(filePath, uploadBody, {

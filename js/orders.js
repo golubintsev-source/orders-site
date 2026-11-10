@@ -31,6 +31,7 @@ import {
   clearExistingOrderFilesInForm,
   renderExistingOrderFilesInForm,
   hasPendingPhotoAttachment,
+  waitForPendingAttachmentChecks,
 } from "./files.js";
 import {
   formatAmount,
@@ -3435,6 +3436,7 @@ export async function submitOrderForm(event) {
     return;
   }
 
+  await waitForPendingAttachmentChecks();
   const hasPendingPhoto = hasPendingPhotoAttachment();
   if (!state.editingOrderId && !hasPendingPhoto && photoCooldownUntil > Date.now()) {
     updatePhotoCooldownUI();

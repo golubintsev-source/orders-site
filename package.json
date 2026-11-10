@@ -27,6 +27,7 @@
     "test:section-nav-order": "node scripts/test-section-nav-order.mjs",
     "test:statistics-matrix": "node scripts/test-statistics-matrix.mjs",
     "test:order-photo-reminder": "node scripts/test-order-photo-reminder.mjs",
+    "test:order-photo-validation": "node scripts/test-order-photo-validation.mjs",
     "test:orders-address-width": "node scripts/test-orders-address-width.mjs",
     "test:route-sheet-manual-route": "node scripts/test-route-sheet-manual-route.mjs",
     "test:route-sheet-points-db": "node scripts/test-route-sheet-points-db.mjs",

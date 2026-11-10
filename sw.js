@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v147: восстановлена целая оболочка и убран пункт «Мои задачи» из списка разделов.
-const STATIC_CACHE = "orders-site-static-v147";
+// v148: проверка содержимого фотографий перед прикреплением к заказу.
+const STATIC_CACHE = "orders-site-static-v148";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
