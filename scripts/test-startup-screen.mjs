@@ -5,30 +5,18 @@ import vm from "node:vm";
 
 const source = readFileSync(new URL("../js/startup-screen.js", import.meta.url), "utf8");
 const tick = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
-function harness({ online = true, ping = async () => ({ type: "opaque", ok: false }), css = true,
-  reducedMotion = false, play = async () => {} } = {}) {
+function harness({ online = true, ping = async () => ({ type: "opaque", ok: false }), css = true } = {}) {
   let now = 0, next = 0, reloads = 0;
   const timers = new Map(), listeners = new Map(), probes = [];
   const element = (id) => ({ hidden: ["startupTitle", "startupDescription", "startupRetry"].includes(id), textContent: "",
     inert: id === "appContainer", sheet: id === "appStyles" && css ? {} : null,
     attrs: new Map(), events: new Map(),
-    hasAttribute(name) { return this.attrs.has(name); },
     addEventListener(name, fn) { this.events.set(name, fn); },
     setAttribute(name, value) { this.attrs.set(name, value); },
     removeAttribute(name) { this.attrs.delete(name); },
   });
   const elements = Object.fromEntries(["startupScreen", "startupTitle", "startupDescription", "startupPicture", "startupPhrase",
-    "startupRetry", "startupProgress", "startupMotion", "appContainer", "appStyles"].map((id) => [id, element(id)]));
-  const motion = elements.startupMotion;
-  motion.dataset = { src: "/images/factory-loading-3d.mp4" };
-  motion.classList = new Set();
-  motion.classList.remove = motion.classList.delete;
-  motion.play = play;
-  motion.load = () => {};
-  Object.defineProperty(motion, "src", {
-    get: () => motion.attrs.get("src"),
-    set: (value) => motion.setAttribute("src", value),
-  });
+    "startupRetry", "startupProgress", "appContainer", "appStyles"].map((id) => [id, element(id)]));
   const root = element("html"); root.setAttribute("data-startup", "loading");
   const schedule = (fn, ms, interval = false) => { const id = ++next; timers.set(id, { fn, at: now + ms, ms, interval }); return id; };
   const context = vm.createContext({ URL, Headers, AbortController, Event, Math, Date: { now: () => now },
@@ -38,7 +26,6 @@ function harness({ online = true, ping = async () => ({ type: "opaque", ok: fals
     document: { documentElement: root, getElementById: (id) => elements[id] },
     fetch: async (...args) => { probes.push(args); return ping(...args); },
     window: { location: { reload: () => reloads++ },
-      matchMedia: () => ({ matches: !reducedMotion }),
       addEventListener: (name, fn) => listeners.set(name, fn),
       removeEventListener: (name) => listeners.delete(name), dispatchEvent() {},
     },
@@ -75,34 +62,6 @@ test("a quote appears immediately and rotates every five seconds; readiness clea
   assert.equal(h.elements.appContainer.inert, false);
   assert.equal(h.root.attrs.has("data-startup"), false);
   assert.equal(h.timers.size, 0); assert.equal(h.probes.length, 0);
-});
-
-test("startup motion is optional and releases its source on readiness or connection failure", async () => {
-  const h = harness({ play: () => new Promise(() => {}) });
-  const motion = h.elements.startupMotion;
-  assert.equal(motion.src, motion.dataset.src);
-  assert.equal(motion.classList.has("is-playing"), false);
-  motion.events.get("playing")();
-  assert.equal(motion.classList.has("is-playing"), true);
-  assert.equal(await h.api.complete(), true);
-  assert.equal(motion.src, undefined);
-  assert.equal(motion.classList.has("is-playing"), false);
-
-  const failed = harness();
-  await failed.api.fail();
-  assert.equal(failed.elements.startupMotion.src, undefined);
-  assert.equal(failed.elements.startupPicture.src, "/img/startup/worker-data-error.webp");
-});
-
-test("reduced motion skips the video and blocked autoplay leaves the loading screen functional", async () => {
-  const reduced = harness({ reducedMotion: true });
-  assert.equal(reduced.elements.startupMotion.src, undefined);
-
-  const blocked = harness({ play: async () => { throw new Error("Autoplay blocked"); } });
-  await tick();
-  assert.equal(blocked.elements.startupMotion.src, undefined);
-  assert.equal(blocked.root.attrs.get("data-startup"), "loading");
-  assert.equal(await blocked.api.complete(), true);
 });
 
 test("a swallowed required read error never reveals the empty app; ya.ru opaque response means online", async () => {
@@ -228,7 +187,7 @@ test("real service worker precaches the complete startup screen and serves it of
   let installed;
   handlers.get("install")({ waitUntil: (promise) => { installed = promise; } });
   await installed;
-  for (const path of ["/js/startup-screen.js", "/img/startup/factory-animation-poster.webp", "/img/startup/worker-offline.webp", "/img/startup/worker-data-error.webp"]) {
+  for (const path of ["/js/startup-screen.js", "/img/startup/factory-loading.webp", "/img/startup/worker-offline.webp", "/img/startup/worker-data-error.webp"]) {
     assert.ok(cached.get(path), `${path} must exist and be precached`);
   }
   offline = true;
