@@ -20,7 +20,7 @@ const PRECACHE_URLS = [
   "/",
   "/index.html",
   "/js/startup-screen.js",
-  "/img/startup/factory-loading.webp",
+  "/img/startup/factory-animation-poster.webp",
   "/img/startup/worker-offline.webp",
   "/img/startup/worker-data-error.webp",
   "/style.css",

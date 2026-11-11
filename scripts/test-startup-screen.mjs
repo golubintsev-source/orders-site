@@ -20,7 +20,7 @@ function harness({ online = true, ping = async () => ({ type: "opaque", ok: fals
   const elements = Object.fromEntries(["startupScreen", "startupTitle", "startupDescription", "startupPicture", "startupPhrase",
     "startupRetry", "startupProgress", "startupMotion", "appContainer", "appStyles"].map((id) => [id, element(id)]));
   const motion = elements.startupMotion;
-  motion.dataset = { src: "/images/factory-motion.mp4" };
+  motion.dataset = { src: "/images/factory-loading-3d.mp4" };
   motion.classList = new Set();
   motion.classList.remove = motion.classList.delete;
   motion.play = play;
@@ -228,7 +228,7 @@ test("real service worker precaches the complete startup screen and serves it of
   let installed;
   handlers.get("install")({ waitUntil: (promise) => { installed = promise; } });
   await installed;
-  for (const path of ["/js/startup-screen.js", "/img/startup/factory-loading.webp", "/img/startup/worker-offline.webp", "/img/startup/worker-data-error.webp"]) {
+  for (const path of ["/js/startup-screen.js", "/img/startup/factory-animation-poster.webp", "/img/startup/worker-offline.webp", "/img/startup/worker-data-error.webp"]) {
     assert.ok(cached.get(path), `${path} must exist and be precached`);
   }
   offline = true;

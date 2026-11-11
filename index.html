@@ -35,7 +35,7 @@
       #startupTitle { margin-top: 8px; }
     }
   </style>
-  <link rel="preload" href="/img/startup/factory-loading.webp" as="image" fetchpriority="high">
+  <link rel="preload" href="/img/startup/factory-animation-poster.webp" as="image" fetchpriority="high">
   <link rel="preconnect" href="https://yizwpogwabosuguakyzt.supabase.co" crossorigin>
   <!-- Ставим монитор до остальных скриптов, чтобы не потерять ранние запросы и ошибки. -->
   <script defer src="./js/performance-monitor.js"></script>
@@ -89,8 +89,8 @@
   <div id="startupScreen" aria-label="Загрузка системы">
     <div class="startup-content">
       <div class="startup-art">
-        <img id="startupPicture" src="/img/startup/factory-loading.webp" width="640" height="640" fetchpriority="high" alt="Маленькие мастера в оранжевых касках собирают большое окно на фабрике">
-        <video id="startupMotion" data-src="/images/factory-motion.mp4?v=2" muted loop playsinline preload="none" aria-hidden="true"></video>
+        <img id="startupPicture" src="/img/startup/factory-animation-poster.webp" width="480" height="480" fetchpriority="high" alt="Мастера в оранжевых касках передают планшет у конвейера с большим окном">
+        <video id="startupMotion" data-src="/images/factory-loading-3d.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
       </div>
       <h1 id="startupTitle" hidden></h1>
       <p id="startupDescription" role="status" aria-live="polite" hidden></p>
