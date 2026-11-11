@@ -7,7 +7,6 @@
   const title = document.getElementById("startupTitle");
   const description = document.getElementById("startupDescription");
   const picture = document.getElementById("startupPicture");
-  const motion = document.getElementById("startupMotion");
   const phrase = document.getElementById("startupPhrase");
   const retry = document.getElementById("startupRetry");
   const progress = document.getElementById("startupProgress");
@@ -69,13 +68,6 @@
     clearTimeout(deadline);
   }
 
-  function stopMotion() {
-    if (!motion?.hasAttribute("src")) return;
-    motion.classList.remove("is-playing");
-    motion.removeAttribute("src");
-    motion.load();
-  }
-
   // Main CSS downloads without blocking the first paint. Do not reveal an unstyled app.
   const styles = document.getElementById("appStyles");
   const stylesReady = new Promise((resolve) => {
@@ -120,7 +112,6 @@
     if (done || checking || phase !== "loading") return;
     const id = ++diagnosis;
     stopTimers();
-    stopMotion();
     phase = "checking";
     title.hidden = false;
     description.hidden = false;
@@ -182,7 +173,6 @@
       diagnosis++;
       checking?.abort();
       stopTimers();
-      stopMotion();
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("error", onResourceError, true);
       root.removeAttribute("data-startup");
@@ -210,10 +200,4 @@
   window.addEventListener("offline", onOffline);
   window.addEventListener("error", onResourceError, true);
   if (navigator.onLine === false) void fail();
-  if (phase === "loading" && motion && window.matchMedia?.("(prefers-reduced-motion: no-preference)").matches) {
-    motion.addEventListener("playing", () => motion.classList.add("is-playing"), { once: true });
-    motion.addEventListener("error", stopMotion, { once: true });
-    motion.src = motion.dataset.src;
-    motion.play().catch(stopMotion);
-  }
 })();
