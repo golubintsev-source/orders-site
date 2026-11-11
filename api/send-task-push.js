@@ -1,5 +1,5 @@
 /**
- * Webhook: новая строка в order_tasks → push всем админам с активной подпиской.
+ * Webhook: новая строка в order_tasks → push исполнителям с активной подпиской.
  *
  * Env (Vercel):
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -71,8 +71,16 @@ async function supabaseRest(pathWithQuery, options = {}) {
 
 function extractTaskRecord(body) {
   if (body?.record && typeof body.record === "object") return body.record;
-  if (body?.id != null && body?.order_id != null) return body;
+  if (body?.id != null) return body;
   return null;
+}
+
+function normalizeEmail(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function escapeRegexLiteral(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function truncate(text, max) {
@@ -124,21 +132,39 @@ module.exports = async (req, res) => {
     return res.status(400).json({ message: "Invalid JSON body" });
   }
 
+  if (body?.type != null && body.type !== "INSERT") {
+    return res.status(200).json({ sent: 0, reason: "not_insert" });
+  }
+
   const record = extractTaskRecord(body);
-  if (!record?.id || record.order_id == null) {
+  if (!record?.id) {
     return res.status(400).json({ message: "Missing task record" });
   }
 
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  const executorEmails = new Set(
+    (Array.isArray(record.executor_emails) ? record.executor_emails : [])
+      .map(normalizeEmail)
+      .filter(Boolean),
+  );
+  if (!executorEmails.size) {
+    return res.status(200).json({ sent: 0, reason: "no_executors" });
+  }
 
   try {
-    const admins = await supabaseRest("profiles?role=eq.admin&select=id");
-    const adminIds = (admins || []).map((a) => a.id).filter(Boolean);
-    if (!adminIds.length) {
-      return res.status(200).json({ sent: 0, reason: "no_admins" });
+    const alternatives = Array.from(executorEmails, escapeRegexLiteral).join("|");
+    const emailPattern = `^[[:space:]]*(${alternatives})[[:space:]]*$`;
+    const profiles = await supabaseRest(
+      `profiles?email=imatch.${encodeURIComponent(emailPattern)}&select=id,email`,
+    );
+    const recipientIds = (profiles || [])
+      .filter((profile) => executorEmails.has(normalizeEmail(profile.email)))
+      .map((profile) => profile.id)
+      .filter(Boolean);
+    if (!recipientIds.length) {
+      return res.status(200).json({ sent: 0, reason: "no_recipients" });
     }
 
-    const inList = adminIds.map((id) => encodeURIComponent(id)).join(",");
+    const inList = recipientIds.map((id) => encodeURIComponent(id)).join(",");
     const subs = await supabaseRest(
       `push_subscriptions?user_id=in.(${inList})&select=id,user_id,endpoint,p256dh,auth`,
     );
@@ -153,13 +179,14 @@ module.exports = async (req, res) => {
       body: `${author}: ${bodyText || "без текста"}`,
       url: "/tasks-all",
       taskId: record.id,
-      orderId: record.order_id,
+      orderId: record.order_id ?? null,
       tag: `task-${record.id}`,
     });
 
     let sent = 0;
     const errors = [];
 
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
     await Promise.all(
       subs.map(async (sub) => {
         const pushSub = {

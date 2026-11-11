@@ -1,4 +1,4 @@
--- Подписки Web Push (уведомления о задачах для админов и о сообщениях для всех).
+-- Подписки Web Push для уведомлений о новых задачах и сообщениях.
 -- Выполнить в Supabase SQL Editor.
 
 CREATE TABLE IF NOT EXISTS push_subscriptions (
