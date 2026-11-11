@@ -19,6 +19,45 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
+{
+  const loader = messagesSource.slice(
+    messagesSource.indexOf("export async function loadMessages("),
+    messagesSource.indexOf("function loadHistoryIfFeedFits("),
+  ).replace("export async function", "async function");
+  const feed = { dataset: { peerId: "peer" }, innerHTML: "<p>Existing messages</p>" };
+  const status = { textContent: "", classList: { add() {}, remove() {} } };
+  const retries = [];
+  let reads = 0;
+  let current = true;
+  const load = runInNewContext(`${loader}\nloadMessages`, {
+    document: { getElementById: (id) => id === "messagesFeed" ? feed : status },
+    getCurrentUserId: () => "user",
+    messagesView: "dialog",
+    activePeerId: "peer",
+    loadMessagesGeneration: 0,
+    beginReadScope: () => ({ current: () => true }),
+    isCurrentDialogLoad: () => current,
+    isGroupChat: () => false,
+    DIALOG_INITIAL_MESSAGE_LIMIT: 30,
+    fetchPeerMessages: async () => {
+      reads++;
+      return { error: { code: "READ_TIMEOUT" } };
+    },
+    console: { error() {} },
+    window: { setTimeout: (callback) => retries.push(callback) },
+  });
+  assert(await load({ afterSend: true }) === false, "failed refresh reports a read error");
+  assert(feed.innerHTML === "<p>Existing messages</p>", "failed refresh preserves the feed");
+  assert(status.textContent.startsWith("Сообщение отправлено."), "successful send remains confirmed");
+  assert(retries.length === 1, "failed refresh schedules one read retry");
+  await retries.shift()();
+  assert(reads === 2 && retries.length === 0, "automatic retry stops after one attempt");
+  await load();
+  current = false;
+  await retries.shift()();
+  assert(reads === 3, "retry does not reload a dialog after navigation");
+}
+
 const z = "2026-08-26T07:06:00.123Z";
 const offset = "2026-08-26T07:06:00.123+00:00";
 const micros = "2026-08-26T07:06:00.123456+00:00";

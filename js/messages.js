@@ -3031,16 +3031,11 @@ export async function openMessagesDialog(peerId) {
   const initialLoadOk = await loadMessages({ forceBottom: true, initialRows });
   if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
   startMessagesFeedPolling();
-  if (initialLoadOk === false) {
-    window.setTimeout(() => {
-      if (activePeerId === peerAtStart && messagesView === "dialog") void pollNewMessages();
-    }, 1000);
-  }
   reportChatVisibilityToSw();
   return initialLoadOk;
 }
 
-export async function loadMessages({ forceBottom = false, initialRows = null } = {}) {
+export async function loadMessages({ forceBottom = false, initialRows = null, afterSend = false, retry = true } = {}) {
   const feed = document.getElementById("messagesFeed");
   const msg = document.getElementById("messagesPageMessage");
   if (!feed) return;
@@ -3133,14 +3128,18 @@ export async function loadMessages({ forceBottom = false, initialRows = null } =
   if (fast.error) {
     console.error("Ошибка загрузки сообщений:", fast.error);
     if (msg) {
-      msg.textContent = fast.error?.code === "TIMEOUT"
-        ? "Не удалось загрузить сообщения. Повторяем попытку…"
-        : isGroupChat()
-          ? "Ошибка загрузки сообщений группового чата."
-          : "Ошибка загрузки сообщений. Проверьте, что таблица user_messages создана в Supabase.";
+      msg.textContent = afterSend
+        ? "Сообщение отправлено. Не удалось обновить переписку."
+        : "Не удалось загрузить переписку.";
       msg.classList.add("messages-page-message--error");
     }
-    feed.innerHTML = "";
+    if (retry) {
+      window.setTimeout(() => {
+        if (scope.current() && isCurrentDialogLoad(gen, peerAtStart)) {
+          void loadMessages({ forceBottom, afterSend, retry: false });
+        }
+      }, 1000);
+    }
     return false;
   }
 
@@ -5636,7 +5635,7 @@ async function sendMessage() {
     composerReplyTo = null;
     syncComposerContextBar();
     hideSuggestions();
-    await loadMessages();
+    await loadMessages({ afterSend: true });
     return;
   }
 
@@ -5730,7 +5729,7 @@ async function sendMessage() {
   composerReplyTo = null;
   syncComposerContextBar();
   hideSuggestions();
-  await loadMessages();
+  await loadMessages({ afterSend: true });
 }
 
 function requestSendMessage() {
