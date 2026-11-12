@@ -2,6 +2,7 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { isAdmin, canManageWorkerSettings } from "./roles.js";
 import { tryParseRublesInteger, formatAmount } from "./format.js";
+import { ORDER_PHOTO_VALIDATION_KEY } from "./order-photo-validation.js";
 
 const KEY_INSTALLER_RATE = "installer_rate_per_m2";
 const KEY_PHOTO_DELAY = "order_photo_cooldown_minutes";
@@ -354,6 +355,11 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
  state.orderPhotoCooldownMinutes = Number.isInteger(delay) && delay >= 1 && delay <= 120 ? delay : 3;
  const input = document.getElementById("settingsPhotoCooldownMinutes");
  if (input) input.value = String(state.orderPhotoCooldownMinutes);
+  const photoValidationCheckbox = document.getElementById("settingsPhotoValidationEnabled");
+  if (photoValidationCheckbox && !photoValidationCheckbox.dataset.saving) {
+    photoValidationCheckbox.checked = byKey[ORDER_PHOTO_VALIDATION_KEY] !== "false";
+    photoValidationCheckbox.disabled = !isAdmin();
+  }
 
   const rateVal = byKey[KEY_INSTALLER_RATE];
   const rateNum = rateVal != null && rateVal !== "" ? parseFloat(rateVal) : null;
@@ -427,8 +433,39 @@ function applySettingsRowsToStateAndDom(effectiveRows) {
   notifyManagerSalaryParamsChanged();
 }
 
+function bindPhotoValidationSetting() {
+  const checkbox = document.getElementById("settingsPhotoValidationEnabled");
+  const status = document.getElementById("settingsPhotoValidationStatus");
+  if (!checkbox || !status || checkbox.dataset.bound) return;
+  checkbox.dataset.bound = "1";
+
+  checkbox.addEventListener("change", async () => {
+    if (!isAdmin() || checkbox.disabled) return;
+    const enabled = checkbox.checked;
+    checkbox.disabled = true;
+    checkbox.dataset.saving = "1";
+    status.textContent = "Сохраняем…";
+    try {
+      const { error } = await supabaseClient.from("app_settings").upsert({
+        key: ORDER_PHOTO_VALIDATION_KEY,
+        value: String(enabled),
+      }, { onConflict: "key" });
+      if (error) throw error;
+      status.textContent = enabled ? "Проверка фото включена" : "Проверка фото отключена";
+    } catch (error) {
+      console.error("Ошибка сохранения настройки проверки фото:", error);
+      checkbox.checked = !enabled;
+      status.textContent = "Не удалось сохранить настройку проверки фото";
+    } finally {
+      delete checkbox.dataset.saving;
+      checkbox.disabled = !isAdmin();
+    }
+  });
+}
+
 /** Загрузить настройки из БД и обновить state и поля на странице. */
 export async function loadSettings() {
+  bindPhotoValidationSetting();
  const btn = document.getElementById("settingsPhotoCooldownSave");
  if (btn && !btn.dataset.bound) {
   btn.dataset.bound = "1";
@@ -446,6 +483,7 @@ export async function loadSettings() {
   const keys = [
     KEY_INSTALLER_RATE,
     KEY_PHOTO_DELAY,
+    ORDER_PHOTO_VALIDATION_KEY,
     KEY_DRIVER_NAME,
     KEY_EDITORS,
     KEY_OTHER_WORKERS,

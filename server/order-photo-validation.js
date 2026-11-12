@@ -66,6 +66,15 @@ async function verifySupabaseUser(token) {
   return user?.id ? user : null;
 }
 
+async function isPhotoValidationEnabled(token) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?select=value&key=eq.order_photo_validation_enabled`, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error(`app_settings_${response.status}`);
+  const rows = await response.json();
+  return rows[0]?.value !== "false";
+}
+
 function extractAssistantJson(payload) {
   const raw = payload?.choices?.[0]?.message?.content;
   if (typeof raw !== "string" || !raw.trim()) throw new Error("empty_model_response");
@@ -132,18 +141,27 @@ module.exports = async (req, res) => {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ message: "Method not allowed" });
   }
-  if (!OPENAI_API_KEY) {
-    return res.status(503).json({ message: "Проверка фотографий временно не настроена. Обратитесь к администратору.", code: "not_configured" });
-  }
-
+  const token = bearerToken(req);
   let user;
   try {
-    user = await verifySupabaseUser(bearerToken(req));
+    user = await verifySupabaseUser(token);
   } catch (error) {
     console.error("Photo validation auth error:", error);
     return res.status(503).json({ message: "Не удалось проверить авторизацию. Повторите попытку." });
   }
   if (!user) return res.status(401).json({ message: "Требуется авторизация" });
+
+  try {
+    if (!(await isPhotoValidationEnabled(token))) {
+      return res.status(200).json({ allowed: true, category: "validation_disabled" });
+    }
+  } catch (error) {
+    console.error("Photo validation setting error:", error);
+    return res.status(503).json({ message: "Не удалось загрузить настройку проверки фото. Повторите попытку." });
+  }
+  if (!OPENAI_API_KEY) {
+    return res.status(503).json({ message: "Проверка фотографий временно не настроена. Обратитесь к администратору.", code: "not_configured" });
+  }
 
   let body;
   try {

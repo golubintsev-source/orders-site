@@ -391,9 +391,10 @@ async function mergeNewAttachmentFiles(picked) {
       }
     }
     if (isImageAttachment(toAdd)) {
-      fileUploadText.textContent = `Проверяем фото: ${toAdd.name || "изображение"}…`;
       try {
-        await validateOrderPhoto(toAdd);
+        await validateOrderPhoto(toAdd, () => {
+          fileUploadText.textContent = `Проверяем фото: ${toAdd.name || "изображение"}…`;
+        });
       } catch (error) {
         const reason = error?.message || "Изображение не прошло проверку";
         setMessage(`Фото «${toAdd.name || "без имени"}» не добавлено: ${reason}`, "#d32f2f");

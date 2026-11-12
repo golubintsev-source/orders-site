@@ -22,12 +22,17 @@ function responseRecorder() {
   };
 }
 
-async function callHandler({ token = "valid-jwt", category, decision }) {
+async function callHandler({ token = "valid-jwt", category, decision, settingsRows = [], settingsOk = true }) {
   const calls = [];
   global.fetch = async (url, init) => {
     calls.push({ url: String(url), init });
     if (String(url).includes("/auth/v1/user")) {
       return { ok: token === "valid-jwt", json: async () => ({ id: "user-1" }) };
+    }
+    if (String(url).includes("/rest/v1/app_settings")) {
+      assert.match(String(url), /key=eq\.order_photo_validation_enabled/);
+      assert.equal(init.headers.Authorization, `Bearer ${token}`);
+      return { ok: settingsOk, status: settingsOk ? 200 : 503, json: async () => settingsRows };
     }
     return {
       ok: true,
@@ -49,13 +54,13 @@ async function callHandler({ token = "valid-jwt", category, decision }) {
 const allowed = await callHandler({ category: "table_screenshot", decision: "allow" });
 assert.equal(allowed.res.statusCode, 200);
 assert.equal(allowed.res.payload.allowed, true);
-assert.equal(allowed.calls.length, 2);
-assert.match(allowed.calls[1].url, /api\.openai\.com\/v1\/chat\/completions/);
-const openAiBody = JSON.parse(allowed.calls[1].init.body);
+assert.equal(allowed.calls.length, 3);
+assert.match(allowed.calls[2].url, /api\.openai\.com\/v1\/chat\/completions/);
+const openAiBody = JSON.parse(allowed.calls[2].init.body);
 assert.match(openAiBody.messages[0].content, /скриншот с явно видимой таблицей/);
 assert.equal(openAiBody.messages[1].content[1].image_url.detail, "low");
 
-const blocked = await callHandler({ category: "pet", decision: "block" });
+const blocked = await callHandler({ category: "pet", decision: "block", settingsRows: [{ value: "true" }] });
 assert.equal(blocked.res.statusCode, 200);
 assert.equal(blocked.res.payload.allowed, false);
 assert.match(blocked.res.payload.reason, /животных/);
@@ -67,8 +72,23 @@ const unauthorized = await callHandler({ token: "", category: "table_screenshot"
 assert.equal(unauthorized.res.statusCode, 401);
 assert.equal(unauthorized.calls.length, 0, "без JWT нельзя вызывать ни Supabase, ни OpenAI");
 
+const disabled = await callHandler({ settingsRows: [{ value: "false" }] });
+assert.equal(disabled.res.statusCode, 200);
+assert.deepEqual(disabled.res.payload, { allowed: true, category: "validation_disabled" });
+assert.equal(disabled.calls.length, 2, "отключённая проверка не вызывает OpenAI");
+
+const originalConsoleError = console.error;
+try {
+  console.error = () => {};
+  const settingsError = await callHandler({ settingsOk: false });
+  assert.equal(settingsError.res.statusCode, 503);
+  assert.equal(settingsError.calls.length, 2, "ошибка чтения настройки не разрешает фото и не вызывает OpenAI");
+} finally {
+  console.error = originalConsoleError;
+}
+
 const filesSource = fs.readFileSync(path.join(root, "js", "files.js"), "utf8");
-assert.match(filesSource, /await validateOrderPhoto\(toAdd\)/, "выбранное фото проверяется до добавления");
+assert.match(filesSource, /await validateOrderPhoto\(toAdd,/, "выбранное фото проверяется до добавления");
 assert.match(filesSource, /await validateOrderPhoto\(file\)/, "фото повторно проверяется перед загрузкой");
 assert.match(filesSource, /await validateOrderPhoto\(fileForValidation\)/, "фото из чата проверяется перед прикреплением");
 assert.match(filesSource, /await waitForPendingAttachmentChecks\(\)/, "сохранение ждёт незавершённую проверку фото");
@@ -81,6 +101,38 @@ assert.match(clientSource, /MAX_ANALYSIS_DIMENSION = 1024/);
 assert.match(clientSource, /supabaseClient\.auth\.getSession\(\)/);
 assert.match(clientSource, /Authorization: `Bearer \$\{token\}`/);
 assert.match(clientSource, /voice-assistant\?mode=photo-validation/);
+
+let savedValue = "false";
+globalThis.photoTestSupabase = {
+  from(table) {
+    assert.equal(table, "app_settings");
+    return {
+      select(column) {
+        assert.equal(column, "value");
+        return {
+          eq(field, key) {
+            assert.equal(field, "key");
+            assert.equal(key, "order_photo_validation_enabled");
+            return { maybeSingle: async () => ({ data: { value: savedValue } }) };
+          },
+        };
+      },
+    };
+  },
+  auth: { getSession: async () => ({ data: { session: null } }) },
+};
+try {
+  const testSource = clientSource.replace('import { supabaseClient } from "./config.js";', 'const supabaseClient = globalThis.photoTestSupabase;');
+  const { validateOrderPhoto } = await import(`data:text/javascript;base64,${Buffer.from(testSource).toString("base64")}`);
+  const photo = { name: "photo.jpg", type: "image/jpeg" };
+  const onChecking = () => assert.fail("при выключенной настройке проверка не запускается");
+  assert.deepEqual(await validateOrderPhoto(photo, onChecking), { allowed: true, category: "validation_disabled" });
+  assert.deepEqual(await validateOrderPhoto({ name: "doc.pdf" }, onChecking), { allowed: true, category: "not_image" });
+  savedValue = "true";
+  await assert.rejects(validateOrderPhoto(photo), /подтвердить авторизацию для проверки фото/);
+} finally {
+  delete globalThis.photoTestSupabase;
+}
 
 const voiceSource = fs.readFileSync(path.join(root, "api", "voice-assistant.js"), "utf8");
 assert.match(voiceSource, /orderPhotoValidationHandler/);

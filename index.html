@@ -2290,7 +2290,17 @@
         <p class="settings-current-user">Текущий пользователь: <strong id="settingsCurrentUserName"></strong></p>
         <button type="button" id="settingsLogoutBtn" class="settings-logout-btn">Выйти из системы</button>
       </div>
-<div id="settingsPhotoCooldownCard" class="card" hidden><h3>Сохранение заказа без фотографии</h3><label for="settingsPhotoCooldownMinutes">Задержка повторного сохранения (минуты)</label><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><input id="settingsPhotoCooldownMinutes" type="number" min="1" max="120" step="1" value="3" style="width:100px"><button type="button" class="btn-primary" id="settingsPhotoCooldownSave">Сохранить</button></div><p id="settingsPhotoCooldownStatus" role="status"></p></div>
+      <div id="settingsPhotoCooldownCard" class="card" hidden>
+        <h3>Фотографии заказа</h3>
+        <label for="settingsPhotoCooldownMinutes">Задержка повторного сохранения без фото (минуты)</label>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <input id="settingsPhotoCooldownMinutes" type="number" min="1" max="120" step="1" value="3" style="width:100px">
+          <button type="button" class="btn-primary" id="settingsPhotoCooldownSave">Сохранить</button>
+          <label class="label-checkbox" style="margin:0"><input id="settingsPhotoValidationEnabled" type="checkbox" checked disabled> Проверять содержимое фотографий</label>
+        </div>
+        <p id="settingsPhotoCooldownStatus" role="status"></p>
+        <p id="settingsPhotoValidationStatus" role="status"></p>
+      </div>
       <div id="pushNotificationsCard" class="card push-notifications-card" hidden>
         <h3 class="push-notifications-title">Уведомления</h3>
         <p id="pushNotificationsHint" class="push-notifications-hint"></p>

@@ -1,5 +1,7 @@
 import { supabaseClient } from "./config.js";
 
+export const ORDER_PHOTO_VALIDATION_KEY = "order_photo_validation_enabled";
+
 const resultCache = new WeakMap();
 const MAX_ANALYSIS_DIMENSION = 1024;
 
@@ -37,7 +39,6 @@ async function makeAnalysisDataUrl(file) {
 }
 
 async function runValidation(file) {
-  if (!isImageAttachment(file)) return { allowed: true, category: "not_image" };
   const { data, error } = await supabaseClient.auth.getSession();
   const token = data?.session?.access_token;
   if (error || !token) throw new Error("Не удалось подтвердить авторизацию для проверки фото");
@@ -65,11 +66,23 @@ async function runValidation(file) {
   return payload;
 }
 
-export function validateOrderPhoto(file) {
-  if (!isImageAttachment(file)) return Promise.resolve({ allowed: true, category: "not_image" });
+export async function validateOrderPhoto(file, onChecking) {
+  if (!isImageAttachment(file)) return { allowed: true, category: "not_image" };
+
+  const { data, error } = await supabaseClient.from("app_settings")
+    .select("value")
+    .eq("key", ORDER_PHOTO_VALIDATION_KEY)
+    .maybeSingle();
+  if (error) throw new Error("Не удалось загрузить настройку проверки фото. Повторите попытку");
+  if (data?.value === "false") return { allowed: true, category: "validation_disabled" };
+
   let promise = resultCache.get(file);
   if (!promise) {
-    promise = runValidation(file).catch((error) => { resultCache.delete(file); throw error; });
+    onChecking?.();
+    promise = runValidation(file).then((result) => {
+      if (result.category === "validation_disabled") resultCache.delete(file);
+      return result;
+    }).catch((error) => { resultCache.delete(file); throw error; });
     resultCache.set(file, promise);
   }
   return promise;
