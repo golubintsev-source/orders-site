@@ -5,18 +5,14 @@ import { stripAuthorFromManualComment } from '../js/calculations-format.js';
 const source = fs.readFileSync(new URL('../js/calculations.js', import.meta.url), 'utf8');
 const before = { id: 42, from_place: 'Дима', to_place: 'Зарплата', amount: 20000, comment: 'з/п Сергей и Стас, Аванс; Алексей' };
 const after = { ...before, from_place: 'Вова', amount: 25000, comment: 'з/п Сергей и Стас, Доплата; Дима' };
-let currentResult, updateResult, historyError, historyThrows, written, updates, messages, resetCount;
+let currentResult, updateResult, historyError, historyThrows, written, updates;
 const context = vm.createContext({
-  document: { getElementById: () => null }, console: { error() {} },
+  console: { error() {} },
   state: { currentUser: { email: 'golubintsev26@gmail.com' } }, currentUserEmail: 'golubintsev26@gmail.com',
-  editingId: 42, editingInitialFrom: 'Дима', editingInitialTo: 'Зарплата', formatAmount: String, stripAuthorFromManualComment,
-  ensureCurrentUserEmail() {}, clearFormError() {},
-  getFormValues: () => ({ ...after }), isOfflineDataMode: () => false,
-  canEditManualCalculations: () => true, isForbiddenCalcKassaBeznal: () => false,
-  isForbiddenCalcSalaryDestination: () => false,
+  formatAmount: String, stripAuthorFromManualComment,
+  ensureCurrentUserEmail() {}, validateCalculation: () => '',
+  canEditManualCalculations: () => true,
   isSystemDeltaCalculationComment: comment => comment?.startsWith('[AUTO_ORDER_DELTA]'),
-  setMessage: (message, error = false) => messages.push({ message, error }), setFormError: assert.fail,
-  resetForm: () => { resetCount++; }, loadCalculations: async () => {}, loadCalcCommentSuggestions() {},
   supabaseClient: { from(table) {
     if (table === 'calculation_history') return { insert: async rows => {
       written.push(...rows);
@@ -32,7 +28,7 @@ const context = vm.createContext({
     };
   } },
 });
-for (const name of ['formatCalcHistoryAmount', 'formatCalcHistoryPlace', 'buildCalculationHistoryComments', 'insertCalculationHistoryComments', 'submitForm']) {
+for (const name of ['formatCalcHistoryAmount', 'formatCalcHistoryPlace', 'buildCalculationHistoryComments', 'insertCalculationHistoryComments', 'saveCalculationEdit']) {
   const fn = source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`))[0];
   vm.runInContext(fn, context);
 }
@@ -46,22 +42,23 @@ function reset() {
   currentResult = { data: before, error: null };
   updateResult = { data: after, error: null };
   historyError = null; historyThrows = false;
-  written = []; updates = []; messages = []; resetCount = 0;
+  written = []; updates = [];
 }
-const submit = () => context.submitForm({ preventDefault() {} });
+const submit = () => context.saveCalculationEdit(before, { ...after });
 reset();
-await submit();
+const saved = await submit();
 assert.equal(updates.length, 1);
 assert.equal(written.length, comments.length);
 assert.deepEqual(written.map(row => row.comment), comments);
 assert.ok(written.every(row => row.calculation_id === 42 && row.user_email === 'golubintsev26@gmail.com'));
-assert.equal(resetCount, 1);
-assert.equal(messages.at(-1).error, false);
+assert.equal(saved.updatedRow, after);
+assert.equal(saved.historyOk, true);
 for (const result of [{ data: null, error: { message: 'denied' } }, { data: null, error: null }]) {
-  reset(); updateResult = result; await submit();
+  reset(); updateResult = result;
+  const failed = await submit();
   assert.equal(written.length, 0);
-  assert.equal(messages.at(-1).error, true);
-  assert.equal(resetCount, 0);
+  assert.equal(failed.updatedRow, undefined);
+  assert.match(failed.message, /Ошибка при сохранении/);
 }
 reset(); currentResult = { data: { ...before, comment: '[AUTO_ORDER_DELTA] Монтаж' } };
 await submit(); assert.equal(updates.length, 0); assert.equal(written.length, 0);
@@ -69,10 +66,10 @@ reset(); updateResult = { data: before, error: null };
 await submit(); assert.equal(written.length, 0);
 for (const networkFailure of [false, true]) {
   reset(); historyThrows = networkFailure; historyError = { message: 'history denied' };
-  await submit();
+  const partial = await submit();
   assert.equal(updates.length, 1);
-  assert.equal(resetCount, 1);
-  assert.equal(messages.at(-1).error, true);
-  assert.match(messages.at(-1).message, /Запись обновлена, но/);
+  assert.equal(partial.updatedRow, after);
+  assert.equal(partial.historyOk, false);
+  assert.match(partial.message, /Запись обновлена, но/);
 }
 console.log('calculation edit history: field diffs, author, success, failed/zero-row update, system row, no-op and history errors passed');

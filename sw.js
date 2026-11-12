@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v148: проверка содержимого фотографий перед прикреплением к заказу.
-const STATIC_CACHE = "orders-site-static-v148";
+// v149: редактирование расчёта в окне у строки таблицы.
+const STATIC_CACHE = "orders-site-static-v149";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -24,7 +24,7 @@ const PRECACHE_URLS = [
   "/img/startup/worker-offline.webp",
   "/img/startup/worker-data-error.webp",
   "/style.css",
-  "/style.css?v=server-only-20261108",
+  "/style.css?v=calc-edit-20261112",
   "/js/performance-monitor.js",
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",

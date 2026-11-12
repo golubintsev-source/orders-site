@@ -1344,6 +1344,83 @@ h2 {
   display: none;
 }
 
+.calculation-edit-dialog {
+  position: fixed;
+  inset: 12px auto auto 12px;
+  box-sizing: border-box;
+  width: min(27rem, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  max-height: calc(100dvh - 24px);
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid #d7dce5;
+  border-radius: 12px;
+  background: #fff;
+  color: #172033;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 20%);
+}
+
+.calculation-edit-dialog::backdrop {
+  background: rgb(15 23 42 / 25%);
+}
+
+#section-calculations .calculation-edit-dialog form,
+.calculations-page .calculation-edit-dialog form {
+  gap: 12px;
+  margin: 0;
+}
+
+.calculation-edit-dialog h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.calculation-edit-places {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#section-calculations .calculation-edit-dialog input,
+#section-calculations .calculation-edit-dialog select,
+.calculations-page .calculation-edit-dialog input,
+.calculations-page .calculation-edit-dialog select {
+  font-size: 16px;
+}
+
+#section-calculations .calculation-edit-dialog .calculations-comment-input,
+.calculations-page .calculation-edit-dialog .calculations-comment-input {
+  width: 100%;
+  max-width: none;
+  min-height: 60px;
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+#section-calculations .calculation-edit-dialog .client-suggestions,
+.calculations-page .calculation-edit-dialog .client-suggestions {
+  position: static;
+  max-height: 8rem;
+  box-shadow: none;
+}
+
+.calculation-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.calculation-edit-actions button {
+  width: auto;
+  min-height: 40px;
+}
+
+.calculation-edit-actions button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
 /* Блок фильтров (даты, суммы, поиск) — отделён от добавления записи */
 .calculations-form-block--filters {
   display: flex;

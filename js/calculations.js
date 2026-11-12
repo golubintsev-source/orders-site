@@ -34,11 +34,9 @@ import { fetchAllSupabaseRows, fetchSupabaseByIdsInChunks } from "./supabase-fet
 import { beginReadScope } from "./read-requests.js";
 import { attachFieldAutocomplete } from "./clientAutocomplete.js";
 
-let editingId = null;
-let editingCreatedAt = null;
-/** Снимок «Откуда»/«Куда» при начале редактирования (для проверки роли). */
-let editingInitialFrom = "";
-let editingInitialTo = "";
+let calculationEditDialog = null;
+let calculationEdit = null;
+let calculationEditSaving = false;
 const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 /** Пустое значение в комментарии расчёта (вместо «—»). */
 const CALC_COMMENT_EMPTY = "[__]";
@@ -152,10 +150,6 @@ const CALC_SALDO_PARTICIPANTS = ["Вова", "Дима", "Касса", "Безн
 /** «Куда» = доход: Вова, Дима, Касса, Безнал; иначе сумма в колонке «Расход». */
 const CALC_INCOME_TO_PLACES = new Set(["Вова", "Дима", "Касса", "Безнал"]);
 
-/** Полный HTML опций «Откуда»/«Куда» до ограничений по роли. */
-const calcPlaceSelectHtmlBackup = new Map();
-const CALC_PLACE_SELECT_IDS = ["calcFrom", "calcTo"];
-
 function rebuildCalcCommentSuggestions(rows) {
   const next = new Map();
   for (const row of rows || []) {
@@ -199,14 +193,7 @@ async function loadCalcCommentSuggestions() {
   }
 }
 
-/**
- * «Касса» и «Безнал» в «Откуда»/«Куда» — только для admin/user.
- * Текущее значение при редактировании сохраняется в списке.
- */
-function syncCalcFromToOptions() {
-  const from = document.getElementById("calcFrom");
-  const to = document.getElementById("calcTo");
-  if (!from || !to) return;
+function syncCalcFromToOptions({ from, to }) {
   for (const option of to.options) {
     option.disabled = Boolean(from.value && option.value === from.value);
   }
@@ -215,58 +202,19 @@ function syncCalcFromToOptions() {
   }
 }
 
-export function applyCalcPlaceSelectsForRole() {
+function configureCalcPlaces(fields, row) {
   const allowed = canSelectKassaBeznal();
-  for (const id of CALC_PLACE_SELECT_IDS) {
-    const sel = document.getElementById(id);
-    if (!sel) continue;
-    if (!calcPlaceSelectHtmlBackup.has(id)) {
-      calcPlaceSelectHtmlBackup.set(id, sel.innerHTML);
-    }
-    const current = String(sel.value || "");
-    sel.innerHTML = calcPlaceSelectHtmlBackup.get(id);
-    if (!allowed) {
-      for (const opt of [...sel.options]) {
-        if (!KASSA_BEZNAL_PLACES.has(opt.value)) continue;
-        if (opt.value !== current) opt.remove();
-      }
-    }
-    if (id === "calcTo") {
-      for (const option of [...sel.options]) {
-        if (option.value === "Зарплата") option.remove();
-      }
-      if (editingId && editingInitialTo === "Зарплата") {
-        const option = document.createElement("option");
-        option.value = "Зарплата";
-        option.textContent = "Зарплата";
-        sel.appendChild(option);
-      }
-    }
-    if (current) {
-      if (id === "calcTo" && current === editingInitialTo && (current !== "Зарплата" || editingId) && !Array.from(sel.options).some(option => option.value === current)) {
-        const option = document.createElement("option");
-        option.value = current;
-        option.textContent = current;
-        sel.appendChild(option);
-      }
-      sel.value = current;
-      if (sel.value !== current) sel.value = "";
-    }
+  for (const [select, places, original] of [
+    [fields.from, CALC_FROM_OPTIONS, row?.from_place || ""],
+    [fields.to, CALC_TO_OPTIONS, row?.to_place || ""],
+  ]) {
+    const options = [...new Set(["", ...places, original])]
+      .filter((place) => allowed || !KASSA_BEZNAL_PLACES.has(place) || place === original)
+      .map((place) => new Option(place || "—", place));
+    select.replaceChildren(...options);
+    select.value = original;
   }
-  syncCalcFromToOptions();
-}
-
-function bindCalcPlaceSelectRoleGuards() {
-  for (const id of CALC_PLACE_SELECT_IDS) {
-    const sel = document.getElementById(id);
-    if (!sel || sel.dataset.moneyRoleBound) continue;
-    sel.dataset.moneyRoleBound = "1";
-    sel.addEventListener("change", () => applyCalcPlaceSelectsForRole());
-  }
-}
-
-function isForbiddenCalcSalaryDestination(value) {
-  return value === "Зарплата" && !(editingId && editingInitialTo === "Зарплата");
+  syncCalcFromToOptions(fields);
 }
 
 function isForbiddenCalcKassaBeznal(newVal, previousVal) {
@@ -1152,9 +1100,7 @@ function cancelCalculationsSearch() {
   renderCalculationsTableFromCache();
 }
 
-function formatCalcAmountInput() {
-  const amountEl = document.getElementById("calcAmount");
-  if (!amountEl) return;
+function formatCalcAmountInput(amountEl) {
   const raw = amountEl.value;
   if (!String(raw).trim()) return;
   const n = parseCalcAmountInput(raw);
@@ -1177,17 +1123,9 @@ function setMessage(text, isError) {
   }
 }
 
-function setFormError(text) {
-  const el = document.getElementById("calcFormError");
-  if (!el) return;
-  const msg = String(text || "").trim();
-  el.textContent = msg;
-  if (msg) el.removeAttribute("hidden");
-  else el.setAttribute("hidden", "");
-}
-
-function clearFormError() {
-  setFormError("");
+function setFormError(element, text = "") {
+  element.textContent = text;
+  element.hidden = !text;
 }
 
 function computeSaldoFromCalcRows(rows) {
@@ -1279,7 +1217,7 @@ function renderCalculationsTableFromCache() {
     if (canEditRow || isAdmin()) {
       actionsCell = `<td class="td-actions">
         <span class="calc-actions-grid">
-          ${canEditRow ? `<button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать">${CALC_ICON_EDIT_SVG}</button>` : ""}
+          ${canEditRow ? `<button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать" aria-haspopup="dialog">${CALC_ICON_EDIT_SVG}</button>` : ""}
           ${isAdmin() ? `<button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>` : ""}
         </span>
       </td>`;
@@ -1308,7 +1246,7 @@ function renderCalculationsTableFromCache() {
 
   if (canEditManualCalculations()) {
     tbody.querySelectorAll(".btn-edit").forEach((btn) => {
-      btn.addEventListener("click", () => startEdit(Number(btn.dataset.id)));
+      btn.addEventListener("click", () => startEdit(btn));
     });
   }
   if (isAdmin()) {
@@ -1402,241 +1340,287 @@ async function performCalculationsLoad(request, period) {
   renderCalculationsTableFromCache();
 }
 
-function getFormValues() {
-  const fromEl = document.getElementById("calcFrom");
-  const toEl = document.getElementById("calcTo");
-  const amountEl = document.getElementById("calcAmount");
-  const commentEl = document.getElementById("calcComment");
-  let amountParsed = null;
-  if (amountEl && String(amountEl.value).trim() !== "") {
-    amountParsed = parseCalcAmountInput(amountEl.value);
-  }
-  const payload = {
-    from_place: fromEl?.value?.trim() || null,
-    to_place: toEl?.value?.trim() || null,
-    amount: amountParsed === undefined ? undefined : amountParsed,
-    comment: appendActorToComment(commentEl?.value?.trim() || ""),
+function calculationFormFields(prefix) {
+  return {
+    from: document.getElementById(`${prefix}From`),
+    to: document.getElementById(`${prefix}To`),
+    amount: document.getElementById(`${prefix}Amount`),
+    comment: document.getElementById(`${prefix}Comment`),
+    error: document.getElementById(`${prefix}FormError`),
   };
-  if (editingId && editingCreatedAt) {
-    payload.created_at = editingCreatedAt;
-  }
-  return payload;
 }
 
-function setFormValues(row) {
-  const fromEl = document.getElementById("calcFrom");
-  const toEl = document.getElementById("calcTo");
-  const amountEl = document.getElementById("calcAmount");
-  const commentEl = document.getElementById("calcComment");
-  if (fromEl) fromEl.value = row.from_place || "";
-  if (toEl) {
-    // Получатель зарплаты из настроек может отсутствовать в стандартных местах.
-    if (row.to_place && !Array.from(toEl.options).some(option => option.value === row.to_place)) {
-      const option = document.createElement("option");
-      option.value = row.to_place;
-      option.textContent = row.to_place;
-      toEl.appendChild(option);
+function getFormValues(fields) {
+  const amount = fields.amount.value.trim();
+  return {
+    from_place: fields.from.value.trim() || null,
+    to_place: fields.to.value.trim() || null,
+    amount: amount ? parseCalcAmountInput(amount) : null,
+    comment: appendActorToComment(fields.comment.value.trim()),
+  };
+}
+
+function validateCalculation(payload, row) {
+  if (payload.amount === undefined) return MSG_SUM_INTEGER_ONLY;
+  if (payload.amount == null) return "Укажите сумму";
+  if (payload.from_place && payload.from_place === payload.to_place) {
+    return "Откуда и куда не могут совпадать.";
+  }
+  if (
+    isForbiddenCalcKassaBeznal(payload.from_place, row?.from_place) ||
+    isForbiddenCalcKassaBeznal(payload.to_place, row?.to_place)
+  ) {
+    return "«Касса» и «Безнал» доступны только ролям admin и user";
+  }
+  if (payload.to_place === "Зарплата" && row?.to_place !== "Зарплата") {
+    return "«Зарплата» доступна только при редактировании записи, где она уже была указана.";
+  }
+  return "";
+}
+
+function bindCalculationFields(fields) {
+  const { from, to, amount, comment, error } = fields;
+  for (const select of [from, to]) {
+    select.addEventListener("change", () => {
+      setFormError(error);
+      syncCalcFromToOptions(fields);
+    });
+  }
+  amount.addEventListener("blur", () => formatCalcAmountInput(amount));
+  amount.addEventListener("input", () => refreshRublesIntegerInputState(amount, amount.value));
+  bindAutogrowTextarea(comment);
+  const list = document.getElementById(comment.getAttribute("aria-controls"));
+  if (list) {
+    attachFieldAutocomplete({
+      input: comment,
+      list,
+      wrap: comment.closest(".calculations-comment-wrap"),
+      field: "comment",
+      getSuggestions: getCalcCommentSuggestions,
+      minChars: 1,
+      countAriaLabel: "Использований",
+    });
+  }
+}
+
+function positionCalculationEditDialog() {
+  const dialog = calculationEditDialog;
+  if (!dialog?.open || !calculationEdit) return;
+  const anchor = calculationEdit.button.isConnected
+    ? calculationEdit.button.getBoundingClientRect()
+    : calculationEdit.anchor;
+  const gutter = 12;
+  const viewport = window.visualViewport;
+  const viewportLeft = viewport?.offsetLeft ?? 0;
+  const viewportTop = viewport?.offsetTop ?? 0;
+  const viewportWidth = viewport?.width ?? document.documentElement.clientWidth;
+  const viewportHeight = viewport?.height ?? document.documentElement.clientHeight;
+  const viewportRight = viewportLeft + viewportWidth;
+  const viewportBottom = viewportTop + viewportHeight;
+  dialog.style.maxHeight = `${Math.max(0, viewportHeight - 2 * gutter)}px`;
+  dialog.style.maxWidth = `${Math.max(0, viewportWidth - 2 * gutter)}px`;
+  const width = dialog.offsetWidth;
+  const height = dialog.offsetHeight;
+  const left = Math.max(viewportLeft + gutter, Math.min(anchor.right - width, viewportRight - width - gutter));
+  const below = anchor.bottom + 8;
+  const above = anchor.top - height - 8;
+  const preferredTop = below + height <= viewportBottom - gutter ? below : above;
+  const top = Math.max(viewportTop + gutter, Math.min(preferredTop, viewportBottom - height - gutter));
+  dialog.style.left = `${left}px`;
+  dialog.style.top = `${top}px`;
+}
+
+function setupCalculationEditDialog(form) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "calculation-edit-dialog";
+  dialog.setAttribute("aria-labelledby", "calculationEditTitle");
+  dialog.innerHTML = `
+    <form class="calculations-form calculations-form-column">
+      <h2 id="calculationEditTitle" tabindex="-1" autofocus>Редактировать расчёт</h2>
+      <div class="calculation-edit-places">
+        <div class="field">
+          <label for="calcEditFrom">Откуда</label>
+          <select id="calcEditFrom"></select>
+        </div>
+        <div class="field">
+          <label for="calcEditTo">Куда</label>
+          <select id="calcEditTo"></select>
+        </div>
+        <div class="field">
+          <label for="calcEditAmount">Сумма</label>
+          <input id="calcEditAmount" class="calculations-amount-input" inputmode="numeric">
+        </div>
+      </div>
+      <div class="field calculations-comment-wrap">
+        <label for="calcEditComment">Комментарий</label>
+        <textarea id="calcEditComment" class="calculations-comment-input" rows="2" autocomplete="off" aria-autocomplete="list" aria-controls="calcEditCommentSuggestions"></textarea>
+        <ul id="calcEditCommentSuggestions" class="client-suggestions calculations-comment-suggestions" hidden role="listbox" aria-label="Ранее введённые комментарии"></ul>
+      </div>
+      <p id="calcEditFormError" class="calculations-form-error" role="alert" hidden></p>
+      <div class="calculation-edit-actions">
+        <button type="button" class="orders-search-dropdown-btn orders-search-dropdown-btn-secondary">Отменить</button>
+        <button type="submit" class="orders-search-dropdown-btn orders-search-dropdown-btn-primary">Сохранить</button>
+      </div>
+    </form>
+  `;
+  form.after(dialog);
+  calculationEditDialog = dialog;
+
+  const fields = calculationFormFields("calcEdit");
+  bindCalculationFields(fields);
+  const cancel = dialog.querySelector('button[type="button"]');
+  const save = dialog.querySelector('button[type="submit"]');
+  cancel.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("cancel", (event) => {
+    if (calculationEditSaving) event.preventDefault();
+  });
+  dialog.addEventListener("close", () => {
+    if (dialog.open) return;
+    calculationEdit?.button.focus({ preventScroll: true });
+    calculationEdit = null;
+  });
+  window.addEventListener("resize", positionCalculationEditDialog);
+  window.visualViewport?.addEventListener("resize", positionCalculationEditDialog);
+  window.visualViewport?.addEventListener("scroll", positionCalculationEditDialog);
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(positionCalculationEditDialog).observe(dialog);
+  }
+  dialog.querySelector("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!calculationEdit || calculationEditSaving) return;
+    const { row } = calculationEdit;
+    const payload = getFormValues(fields);
+    refreshRublesIntegerInputState(fields.amount, fields.amount.value);
+    const error = validateCalculation(payload, row);
+    setFormError(fields.error, error);
+    if (error) return;
+
+    calculationEditSaving = true;
+    const controls = [fields.from, fields.to, fields.amount, fields.comment, cancel, save];
+    for (const control of controls) control.disabled = true;
+    save.textContent = "Сохранение…";
+    try {
+      const result = await saveCalculationEdit(row, payload);
+      if (!result.updatedRow) {
+        setFormError(fields.error, result.message);
+        return;
+      }
+      await loadCalculations({ force: true });
+      dialog.close();
+      document.querySelector(`.btn-edit[data-id="${row.id}"]`)?.focus({ preventScroll: true });
+      if (!calculationsLoadFailed || !result.historyOk) setMessage(result.message, !result.historyOk);
+      void loadCalcCommentSuggestions();
+    } catch (error) {
+      console.error("Ошибка обновления:", error);
+      setFormError(fields.error, "Ошибка при сохранении.");
+    } finally {
+      for (const control of controls) control.disabled = false;
+      save.textContent = "Сохранить";
+      calculationEditSaving = false;
     }
-    toEl.value = row.to_place || "";
-  }
-  editingInitialFrom = row.from_place || "";
-  editingInitialTo = row.to_place || "";
-  applyCalcPlaceSelectsForRole();
-  if (amountEl) {
-    amountEl.value = row.amount != null ? formatAmountWholeRubles(row.amount) : "";
-    amountEl.classList.remove("sum-input-invalid");
-    amountEl.removeAttribute("title");
-  }
-  if (commentEl) {
-    const raw = row.comment || "";
-    commentEl.value = raw.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX)
-      ? raw
-      : stripAuthorFromManualComment(raw);
-    resizeTextarea(commentEl);
-  }
+  });
 }
 
-function setCalcSubmitMode(mode) {
-  const btn = document.getElementById("calcSubmitBtn");
-  if (!btn) return;
-  const isSave = mode === "save";
-  const label = isSave ? "Сохранить" : "Добавить";
-  btn.title = label;
-  btn.setAttribute("aria-label", label);
-  const addIcon = btn.querySelector(".calc-submit-icon-add");
-  const saveIcon = btn.querySelector(".calc-submit-icon-save");
-  if (addIcon) {
-    if (isSave) addIcon.setAttribute("hidden", "");
-    else addIcon.removeAttribute("hidden");
-  }
-  if (saveIcon) {
-    if (isSave) saveIcon.removeAttribute("hidden");
-    else saveIcon.setAttribute("hidden", "");
-  }
-}
-
-function resetForm() {
-  editingId = null;
-  editingCreatedAt = null;
-  editingInitialFrom = "";
-  editingInitialTo = "";
-  clearFormError();
-  const fromEl = document.getElementById("calcFrom");
-  const toEl = document.getElementById("calcTo");
-  const amountEl = document.getElementById("calcAmount");
-  const commentEl = document.getElementById("calcComment");
-  if (fromEl) fromEl.value = "";
-  if (toEl) toEl.value = "";
-  syncCalcFromToOptions();
-  if (amountEl) {
-    amountEl.value = "";
-    amountEl.classList.remove("sum-input-invalid");
-    amountEl.removeAttribute("title");
-  }
-  if (commentEl) {
-    commentEl.value = "";
-    resizeTextarea(commentEl);
-  }
-  applyCalcPlaceSelectsForRole();
-  setCalcSubmitMode("add");
-}
-
-function startEdit(id) {
+function startEdit(button) {
   if (!canEditManualCalculations()) return;
-  editingId = id;
-  editingCreatedAt = null;
-  setCalcSubmitMode("save");
-  supabaseClient
+  const dialog = calculationEditDialog;
+  if (!dialog || dialog.open) return;
+  const row = calculationsRowsCache.find((item) => String(item.id) === button.dataset.id);
+  if (!row || isSystemDeltaCalculationComment(row.comment)) return;
+
+  calculationEdit = { row, button, anchor: button.getBoundingClientRect() };
+  const fields = calculationFormFields("calcEdit");
+  configureCalcPlaces(fields, row);
+  fields.amount.value = row.amount == null ? "" : formatAmountWholeRubles(row.amount);
+  refreshRublesIntegerInputState(fields.amount, fields.amount.value);
+  fields.comment.value = stripAuthorFromManualComment(row.comment);
+  const suggestions = document.getElementById("calcEditCommentSuggestions");
+  suggestions.hidden = true;
+  setFormError(fields.error);
+  dialog.showModal();
+  resizeTextarea(fields.comment);
+  positionCalculationEditDialog();
+}
+
+async function saveCalculationEdit(row, payload) {
+  if (!canEditManualCalculations()) {
+    return { message: "Изменение записей недоступно для вашей роли." };
+  }
+  const { id } = row;
+  const { data: currentRow, error: currentRowError } = await supabaseClient
     .from("calculations")
-    .select("id, created_at, from_place, to_place, amount, comment")
+    .select("id, from_place, to_place, amount, comment")
     .eq("id", id)
     .is("deleted_at", null)
-    .single()
-    .then(({ data, error }) => {
-      if (error || !data) {
-        setMessage("Ошибка загрузки записи.", true);
-        return;
-      }
-      if (isSystemDeltaCalculationComment(data.comment)) {
-        setMessage("Автоматические строки расчётов редактировать нельзя.", true);
-        resetForm();
-        return;
-      }
-      editingCreatedAt = data.created_at;
-      setFormValues(data);
-    });
+    .maybeSingle();
+  if (currentRowError || !currentRow) {
+    return { message: "Не удалось проверить редактируемую запись." };
+  }
+  if (isSystemDeltaCalculationComment(currentRow.comment)) {
+    return { message: "Автоматические строки расчётов редактировать нельзя." };
+  }
+  const error = validateCalculation(payload, currentRow);
+  if (error) return { message: error };
+  const { data: updatedRow, error: updateError } = await supabaseClient
+    .from("calculations")
+    .update(payload)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("id, from_place, to_place, amount, comment")
+    .maybeSingle();
+  if (updateError || !updatedRow) {
+    console.error("Ошибка обновления:", updateError || "Запись не обновлена");
+    return { message: "Ошибка при сохранении." };
+  }
+  const history = await insertCalculationHistoryComments(
+    id,
+    buildCalculationHistoryComments(currentRow, updatedRow, "update"),
+    currentUserEmail || state.currentUser?.email,
+  );
+  return {
+    updatedRow,
+    historyOk: history.ok,
+    message: history.ok
+      ? "Запись обновлена."
+      : "Запись обновлена, но не удалось записать историю для «Все изменения».",
+  };
 }
 
-async function submitForm(e) {
-  e.preventDefault();
-  clearFormError();
-  const payload = getFormValues();
-  const amountEl = document.getElementById("calcAmount");
+async function submitForm(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const fields = calculationFormFields("calc");
+  const payload = getFormValues(fields);
+  refreshRublesIntegerInputState(fields.amount, fields.amount.value);
+  const validationError = validateCalculation(payload);
+  setFormError(fields.error, validationError);
+  if (validationError) return;
 
-  if (payload.amount === undefined) {
-    if (amountEl) {
-      amountEl.classList.add("sum-input-invalid");
-      amountEl.title = MSG_SUM_INTEGER_ONLY;
-    }
-    setMessage(MSG_SUM_INTEGER_ONLY, true);
-    return;
-  }
-  if (payload.amount == null) {
-    setMessage("Укажите сумму", true);
-    return;
-  }
-
-  if (
-    payload.from_place &&
-    payload.to_place &&
-    payload.from_place === payload.to_place
-  ) {
-    setFormError("Откуда и куда не могут совпадать.");
-    return;
-  }
-
-  if (
-    isForbiddenCalcKassaBeznal(payload.from_place, editingId ? editingInitialFrom : "") ||
-    isForbiddenCalcKassaBeznal(payload.to_place, editingId ? editingInitialTo : "")
-  ) {
-    setFormError("«Касса» и «Безнал» доступны только ролям admin и user");
-    return;
-  }
-
-  if (isForbiddenCalcSalaryDestination(payload.to_place)) {
-    setFormError("«Зарплата» доступна только при редактировании записи, где она уже была указана.");
-    return;
-  }
-
-  if (editingId) {
-    if (!canEditManualCalculations()) {
-      setMessage("Изменение записей недоступно для вашей роли.", true);
-      resetForm();
-      return;
-    }
-    const calculationId = editingId;
-    const { data: currentRow, error: currentRowError } = await supabaseClient
-      .from("calculations")
-      .select("id, from_place, to_place, amount, comment")
-      .eq("id", calculationId)
-      .is("deleted_at", null)
-      .maybeSingle();
-    if (currentRowError || !currentRow) {
-      setMessage("Не удалось проверить редактируемую запись.", true);
-      return;
-    }
-    if (isSystemDeltaCalculationComment(currentRow.comment)) {
-      setMessage("Автоматические строки расчётов редактировать нельзя.", true);
-      resetForm();
-      return;
-    }
-    const { data: updatedRow, error } = await supabaseClient
-      .from("calculations")
-      .update(payload)
-      .eq("id", calculationId)
-      .is("deleted_at", null)
-      .select("id, from_place, to_place, amount, comment")
-      .maybeSingle();
-    if (error || !updatedRow) {
-      console.error("Ошибка обновления:", error || "Запись не обновлена");
-      setMessage("Ошибка при сохранении.", true);
-      return;
-    }
-    const history = await insertCalculationHistoryComments(
-      calculationId,
-      buildCalculationHistoryComments(currentRow, updatedRow, "update"),
-      currentUserEmail || state.currentUser?.email,
-    );
-    if (history.ok) {
-      setMessage("Запись обновлена.");
+  const insertPayload = { ...payload, created_at: new Date().toISOString() };
+  const { error } = await supabaseClient.from("calculations").insert([insertPayload]);
+  if (error) {
+    console.error("Ошибка добавления:", error);
+    const code = error?.code;
+    const msg = String(error?.message || "");
+    const isUnique =
+      code === "23505" || /duplicate key|unique constraint|violates unique/i.test(msg);
+    if (isUnique && /comment/i.test(msg)) {
+      setMessage(
+        "Ошибка при добавлении: в базе ещё действует уникальность комментария. Выполните sql/calculations_dedup_drop_comment_unique.sql в Supabase (только DROP INDEX, строки не удаляет).",
+        true,
+      );
+    } else if (isUnique) {
+      setMessage("Ошибка при добавлении: такая запись уже есть.", true);
     } else {
-      setMessage("Запись обновлена, но не удалось записать историю для «Все изменения».", true);
+      setMessage("Ошибка при добавлении.", true);
     }
-    resetForm();
-  } else {
-    const insertPayload = { ...payload, created_at: new Date().toISOString() };
-    const { error } = await supabaseClient.from("calculations").insert([insertPayload]);
-    if (error) {
-      console.error("Ошибка добавления:", error);
-      const code = error?.code;
-      const msg = String(error?.message || "");
-      const isUnique =
-        code === "23505" || /duplicate key|unique constraint|violates unique/i.test(msg);
-      if (isUnique && /comment/i.test(msg)) {
-        setMessage(
-          "Ошибка при добавлении: в базе ещё действует уникальность комментария. Выполните sql/calculations_dedup_drop_comment_unique.sql в Supabase (только DROP INDEX, строки не удаляет).",
-          true
-        );
-      } else if (isUnique) {
-        setMessage("Ошибка при добавлении: такая запись уже есть.", true);
-      } else {
-        setMessage("Ошибка при добавлении.", true);
-      }
-      return;
-    }
-    setMessage("");
-    resetForm();
+    return;
   }
+  setMessage("");
+  form.reset();
+  syncCalcFromToOptions(fields);
+  refreshRublesIntegerInputState(fields.amount, fields.amount.value);
+  resizeTextarea(fields.comment);
   await loadCalculations({ force: true });
   void loadCalcCommentSuggestions();
 }
@@ -1747,7 +1731,6 @@ async function softDeleteCalculationRow(id) {
     setMessage("Не удалось пометить запись. Проверьте колонку deleted_at в таблице calculations.", true);
     return;
   }
-  if (editingId === id) resetForm();
 
   let historyWriteFailed = false;
   if (rowForHistory) {
@@ -1772,49 +1755,14 @@ async function softDeleteCalculationRow(id) {
 
 function setupCalculationsForm() {
   const form = document.getElementById("calculationsForm");
-  if (form) form.addEventListener("submit", submitForm);
-
-  const amountEl = document.getElementById("calcAmount");
-  if (amountEl) {
-    amountEl.addEventListener("blur", formatCalcAmountInput);
-    amountEl.addEventListener("input", () => refreshRublesIntegerInputState(amountEl, amountEl.value));
+  if (form) {
+    form.addEventListener("submit", submitForm);
+    const fields = calculationFormFields("calc");
+    configureCalcPlaces(fields);
+    bindCalculationFields(fields);
+    setupCalculationEditDialog(form);
+    if (fields.comment.getAttribute("aria-controls")) void loadCalcCommentSuggestions();
   }
-
-  const commentEl = document.getElementById("calcComment");
-  bindAutogrowTextarea(commentEl);
-  const commentSuggestions = document.getElementById("calcCommentSuggestions");
-  const commentWrap = commentEl?.closest(".calculations-comment-wrap");
-  if (
-    (commentEl instanceof HTMLInputElement || commentEl instanceof HTMLTextAreaElement) &&
-    commentSuggestions &&
-    commentWrap &&
-    !commentEl.dataset.autocompleteBound
-  ) {
-    commentEl.dataset.autocompleteBound = "1";
-    attachFieldAutocomplete({
-      input: commentEl,
-      list: commentSuggestions,
-      wrap: commentWrap,
-      field: "comment",
-      getSuggestions: getCalcCommentSuggestions,
-      minChars: 1,
-      countAriaLabel: "Использований",
-    });
-    void loadCalcCommentSuggestions();
-  }
-
-  const fromEl = document.getElementById("calcFrom");
-  const toEl = document.getElementById("calcTo");
-  if (fromEl && !fromEl.dataset.fromToBound) {
-    fromEl.dataset.fromToBound = "1";
-    fromEl.addEventListener("change", () => { clearFormError(); syncCalcFromToOptions(); });
-  }
-  if (toEl && !toEl.dataset.fromToBound) {
-    toEl.dataset.fromToBound = "1";
-    toEl.addEventListener("change", () => { clearFormError(); syncCalcFromToOptions(); });
-  }
-  bindCalcPlaceSelectRoleGuards();
-  applyCalcPlaceSelectsForRole();
   setupCalcColumnFilters();
 
   const searchBtn = document.getElementById("calcSearchBtn");
