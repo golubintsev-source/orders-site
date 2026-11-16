@@ -177,52 +177,43 @@ export function renderTaskExecutorsInto(listEl, hintEl, users) {
     .join("");
 }
 
-const executorsCacheByListId = new Map();
-let executorsUsersCachePromise = null;
+const executorListRequests = new WeakMap();
 
-async function loadExecutorPickerUsersCached() {
-  if (executorsCacheByListId.has("__users__")) {
-    return executorsCacheByListId.get("__users__");
-  }
-  if (!executorsUsersCachePromise) {
-    executorsUsersCachePromise = loadTaskExecutorPickerUsers(state.currentUser).then((users) => {
-      const visibleUsers = users.filter((user) => isTaskExecutorVisible(user.email));
-      executorsCacheByListId.set("__users__", visibleUsers);
-      return visibleUsers;
-    });
-  }
-  return executorsUsersCachePromise;
-}
-
-export async function ensureTaskExecutorsInList(listEl, hintEl) {
-  if (!listEl) return;
-  const cacheKey = listEl.id || "__anonymous__";
-  if (listEl.dataset.loaded === "1") return;
+export function ensureTaskExecutorsInList(listEl, hintEl, onLoaded) {
+  if (!listEl || !state.currentUser || listEl.dataset.loaded === "1") return Promise.resolve();
+  const pending = executorListRequests.get(listEl);
+  if (pending) return pending;
 
   if (hintEl) {
     hintEl.textContent = "Загрузка пользователей…";
     hintEl.hidden = false;
   }
 
-  try {
-    let users;
-    if (executorsCacheByListId.has(cacheKey)) {
-      users = executorsCacheByListId.get(cacheKey);
-    } else {
-      users = await loadExecutorPickerUsersCached();
-      executorsCacheByListId.set(cacheKey, users);
-    }
+  const request = loadTaskExecutorPickerUsers(state.currentUser).then((users) => {
+    const selected = new Map([...listEl.querySelectorAll('input[data-email]:checked')]
+      .map((input) => [normalizeTaskEmail(input.dataset.email), input.closest("label")]));
     renderTaskExecutorsInto(listEl, hintEl, users);
-    listEl.dataset.loaded = "1";
-  } catch (err) {
-    console.error("Ошибка загрузки исполнителей:", err);
-    listEl.innerHTML = "";
-    listEl.dataset.loaded = "";
-    if (hintEl) {
-      hintEl.textContent = "Не удалось загрузить список пользователей.";
-      hintEl.hidden = false;
+    for (const input of listEl.querySelectorAll("input[data-email]")) {
+      input.checked = selected.delete(normalizeTaskEmail(input.dataset.email));
     }
-  }
+    for (const label of selected.values()) {
+      if (label) listEl.append(label);
+    }
+    listEl.dataset.loaded = "1";
+    onLoaded?.();
+  }, (error) => {
+    console.error("Ошибка загрузки исполнителей:", error);
+    if (!hintEl) return;
+    hintEl.textContent = "Не удалось загрузить список исполнителей. ";
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = "Повторить загрузку";
+    retry.addEventListener("click", () => { void ensureTaskExecutorsInList(listEl, hintEl, onLoaded); });
+    hintEl.append(retry);
+    hintEl.hidden = false;
+  }).finally(() => executorListRequests.delete(listEl));
+  executorListRequests.set(listEl, request);
+  return request;
 }
 
 /** @returns {Promise<{ error: Error | null }>} */

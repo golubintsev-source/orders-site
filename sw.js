@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v149: редактирование расчёта в окне у строки таблицы.
-const STATIC_CACHE = "orders-site-static-v149";
+// v150: повторная загрузка списка исполнителей задач.
+const STATIC_CACHE = "orders-site-static-v150";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

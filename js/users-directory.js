@@ -8,30 +8,34 @@ export async function loadUsersDirectory() {
   if (usersCache) return usersCache;
   if (usersCachePromise) return usersCachePromise;
 
-  usersCachePromise = (async () => {
+  const request = (async () => {
     const { data, error } = await supabaseClient
       .from("profiles")
       .select("id, email, role")
       .not("email", "is", null)
       .order("email");
 
-    if (error) {
-      console.error("Ошибка загрузки списка пользователей:", error);
-      usersCache = [];
-      return usersCache;
-    }
+    if (error) throw error;
 
-    usersCache = (data || [])
+    const users = (data || [])
       .map((row) => ({
         id: row.id,
         email: (row.email || "").trim(),
         role: row.role || "",
       }))
       .filter((u) => u.id && u.email);
-    return usersCache;
+    if (!users.length) throw new Error("Справочник пользователей вернул пустой список.");
+    return users;
   })();
 
-  return usersCachePromise;
+  usersCachePromise = request;
+  try {
+    const users = await request;
+    if (usersCachePromise === request) usersCache = users;
+    return users;
+  } finally {
+    if (usersCachePromise === request) usersCachePromise = null;
+  }
 }
 
 export function clearUsersDirectoryCache() {

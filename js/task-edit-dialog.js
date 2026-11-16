@@ -174,7 +174,7 @@ export async function openTaskEditDialog(taskId, onSaved) {
     dialog.showModal();
     disposeTextResize = bindAutogrowTextarea(text);
     disposeReplyResize = bindAutogrowTextarea(field("reply"));
-    await ensureTaskExecutorsInList(executors, field("hint"));
+    await ensureTaskExecutorsInList(executors, field("hint"), lockReadOnlyControls);
     for (const email of visibleTaskExecutorEmails(task.executor_emails)) {
       let input = [...executors.querySelectorAll("input[data-email]")]
         .find((el) => el.dataset.email.toLowerCase() === email.toLowerCase());
