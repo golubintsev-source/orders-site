@@ -218,7 +218,9 @@
   }
 
   if (peerId) {
-    window.__chatDialogPreviewBoot = { uid: session.uid, peerId, dialog: fetchDialog(session, peerId) };
+    const timing = { source: "route", requestedAt: performance.now(), receivedAt: null };
+    const dialog = fetchDialog(session, peerId).finally(() => { timing.receivedAt = performance.now(); });
+    window.__chatDialogPreviewBoot = { uid: session.uid, peerId, dialog, timing };
   } else {
     window.__chatSummaryBoot = { uid: session.uid, summary: fetchSummary(session) };
   }

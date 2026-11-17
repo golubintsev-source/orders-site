@@ -80,6 +80,7 @@ const CHAT_LIST_SNAPSHOT_MAX_ITEMS = 20;
 /** Render a small first page; older history is fetched as the user scrolls up. */
 const DIALOG_INITIAL_MESSAGE_LIMIT = 30;
 const DIALOG_HISTORY_PAGE_SIZE = 50;
+const DIALOG_PREFETCH_FRESH_MS = 5000;
 /** Префикс peer id для группового чата. */
 const GROUP_PEER_PREFIX = "group:";
 const ATTACHMENT_SELECT_COLS =
@@ -115,6 +116,8 @@ let dialogHistoryExhausted = true;
 let dialogHistoryOldestId = null;
 let dialogHistoryPeerId = null;
 let chatListLoadPromise = null;
+let dialogPrefetch = null;
+let dialogPrefetchStarted = false;
 let unreadRefreshPromise = null;
 let deliveryAckPromise = null;
 let lastDeliveryAckAt = 0;
@@ -2696,6 +2699,58 @@ function showChatListLoadError(list, msg, error) {
   delete list.dataset.chatListFull;
 }
 
+function cancelDialogPrefetch() {
+  dialogPrefetch?.controller.abort();
+  dialogPrefetch = null;
+}
+
+function trackDialogHistory(source, read) {
+  const timing = { source, requestedAt: performance.now(), receivedAt: null };
+  const rows = read().finally(() => { timing.receivedAt = performance.now(); });
+  return { timing, rows };
+}
+
+function scheduleDialogPrefetch(peerId, isCurrent) {
+  if (!peerId || dialogPrefetchStarted) return;
+  void Promise.resolve(window.__appStartup?.ready).then(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (dialogPrefetchStarted || !isCurrent() || !isMessagesSectionActive() ||
+          !isDocumentVisible() || navigator.connection?.saveData) return;
+      dialogPrefetchStarted = true;
+      const controller = new AbortController();
+      const uid = getCurrentUserId();
+      const pack = trackDialogHistory("prefetch", () => {
+        const options = { signal: controller.signal };
+        return isGroupChat(peerId)
+          ? fetchGroupMessages(parseGroupId(peerId), options)
+          : fetchPeerMessages(peerId, options);
+      });
+      const entry = { ...pack, uid, peerId, controller };
+      entry.rows = pack.rows.catch((error) => ({ rows: [], error }));
+      dialogPrefetch = entry;
+      void entry.rows.then(({ error }) => {
+        if (dialogPrefetch !== entry) return;
+        if (error) cancelDialogPrefetch();
+        else window.setTimeout(() => {
+          if (dialogPrefetch === entry) cancelDialogPrefetch();
+        }, DIALOG_PREFETCH_FRESH_MS);
+      });
+    }));
+  });
+}
+
+function takeDialogPrefetch(peerId) {
+  const entry = dialogPrefetch;
+  if (!entry) return null;
+  if (entry.uid !== getCurrentUserId() || entry.peerId !== peerId ||
+      (entry.timing.receivedAt != null && performance.now() - entry.timing.receivedAt >= DIALOG_PREFETCH_FRESH_MS)) {
+    cancelDialogPrefetch();
+    return null;
+  }
+  dialogPrefetch = null;
+  return entry;
+}
+
 function renderChatSummary(list, summary, isCurrent) {
   const groups = summary.dialogs.filter((row) => row.kind === "group").map((row) => mapGroupChatRow(row.group_chat));
   groupChatsById = new Map(groups.map((chat) => [chat.id, chat]));
@@ -2717,6 +2772,7 @@ function renderChatSummary(list, summary, isCurrent) {
     };
   });
   renderChatListEntries(list, entries, null, { announce: true, enrich: false });
+  scheduleDialogPrefetch(entries.find((entry) => entry.last)?.peerId, isCurrent);
   paintMessagesNavBadge(summary.unread_count);
   void setAppUnreadBadgeCount(summary.unread_count);
 
@@ -2986,8 +3042,13 @@ export function showMessagesChatList() {
   return loadChatList();
 }
 
-export async function openMessagesDialog(peerId) {
+export async function openMessagesDialog(peerId, { restored = false } = {}) {
   if (!peerId) return;
+  const routeStart = restored && window.__appStartup?.pending
+    ? performance.getEntriesByType("navigation")[0]?.startTime
+    : null;
+  const openedAt = routeStart ?? performance.now();
+  const prefetched = takeDialogPrefetch(peerId);
   loadChatListGeneration += 1;
   chatListLoadPromise = null;
   invalidateMessagesPoll();
@@ -3012,30 +3073,30 @@ export async function openMessagesDialog(peerId) {
   void closeNotificationsForConversation(peerId);
   reportChatVisibilityToSw();
   const peerAtStart = peerId;
+  const boot = window.__chatDialogPreviewBoot;
+  delete window.__chatDialogPreviewBoot;
+  const early = boot?.peerId === peerId && String(boot.uid) === String(getCurrentUserId()) ? boot : null;
+  const initialHistory = early ? { rows: early.dialog, timing: early.timing } : prefetched;
+  syncComposerForActivePeer();
+
+  const firstPage = loadMessages({ forceBottom: true, initialHistory, openedAt });
   const directoryPromise = loadUsersDirectory();
   const groupMetaPromise =
     isGroupChat() && groupChatsById.size === 0 ? fetchMyGroupChats() : Promise.resolve(null);
-  syncComposerForActivePeer();
-
-  // Сообщения — критический путь. Справочник имён и метаданные группы не должны
-  // задерживать первый пузырь; прочитанность отмечается уже после первой отрисовки.
   void Promise.all([directoryPromise, groupMetaPromise]).then(() => {
     if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
     updateDialogHeader();
     syncComposerForActivePeer();
     if (isGroupChat()) applyGroupOutgoingReceiptsToFeed();
   }).catch((error) => console.warn("Фоновая загрузка данных диалога:", error));
-  const boot = window.__chatDialogPreviewBoot;
-  delete window.__chatDialogPreviewBoot;
-  const initialRows = boot?.peerId === peerId && String(boot.uid) === String(getCurrentUserId()) ? boot.dialog : null;
-  const initialLoadOk = await loadMessages({ forceBottom: true, initialRows });
+  const initialLoadOk = await firstPage;
   if (activePeerId !== peerAtStart || messagesView !== "dialog") return;
   startMessagesFeedPolling();
   reportChatVisibilityToSw();
   return initialLoadOk;
 }
 
-export async function loadMessages({ forceBottom = false, initialRows = null, afterSend = false, retry = true } = {}) {
+export async function loadMessages({ forceBottom = false, initialHistory = null, openedAt = null, afterSend = false, retry = true } = {}) {
   const feed = document.getElementById("messagesFeed");
   const msg = document.getElementById("messagesPageMessage");
   if (!feed) return;
@@ -3115,13 +3176,22 @@ export async function loadMessages({ forceBottom = false, initialRows = null, af
 
   // Фаза 1: последние сообщения независимо от даты. Так старый диалог не показывает
   // ложное «нет сообщений» до фоновой догрузки, а LIMIT сохраняет быстрый ответ.
+  let timing = initialHistory?.timing;
   let fast;
+  const cancelPrefetch = () => initialHistory?.controller?.abort();
+  scope.signal.addEventListener("abort", cancelPrefetch, { once: true });
   try {
-    fast = initialRows ? await initialRows : null;
+    if (initialHistory) fast = await initialHistory.rows;
     if (!scope.current() || !isCurrentDialogLoad(gen, peerAtStart)) return;
-    if (!fast || fast.error) fast = await fetchDialogRows({ since: null, limit: DIALOG_INITIAL_MESSAGE_LIMIT });
+    if (!fast || fast.error) {
+      const request = trackDialogHistory("open", () => fetchDialogRows({ limit: DIALOG_INITIAL_MESSAGE_LIMIT }));
+      timing = request.timing;
+      fast = await request.rows;
+    }
   } catch (error) {
     fast = { rows: [], error };
+  } finally {
+    scope.signal.removeEventListener("abort", cancelPrefetch);
   }
   if (!scope.current() || !isCurrentDialogLoad(gen, peerAtStart)) return;
 
@@ -3136,7 +3206,7 @@ export async function loadMessages({ forceBottom = false, initialRows = null, af
     if (retry) {
       window.setTimeout(() => {
         if (scope.current() && isCurrentDialogLoad(gen, peerAtStart)) {
-          void loadMessages({ forceBottom, afterSend, retry: false });
+          void loadMessages({ forceBottom, openedAt, afterSend, retry: false });
         }
       }, 1000);
     }
@@ -3144,6 +3214,17 @@ export async function loadMessages({ forceBottom = false, initialRows = null, af
   }
 
   await renderDialogRows(fast.rows, { markRead: true });
+  if (openedAt != null && timing && window.__ordersPerf?.recordChatOpen) {
+    void Promise.resolve(window.__appStartup?.ready).then(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (!scope.current() || !isCurrentDialogLoad(gen, peerAtStart) || !isDocumentVisible()) return;
+        window.__ordersPerf.recordChatOpen({
+          kind: isGroupChat(peerAtStart) ? "group" : "personal",
+          openedAt, ...timing, paintedAt: performance.now(), empty: fast.rows.length === 0,
+        });
+      }));
+    });
+  }
   dialogHistoryPeerId = String(peerAtStart);
   dialogHistoryOldestId = fast.rows[0]?.id ?? null;
   dialogHistoryExhausted = fast.rows.length < DIALOG_INITIAL_MESSAGE_LIMIT;
@@ -3213,7 +3294,7 @@ async function loadOlderMessagesPage() {
 export function onMessagesSectionEnter(opts = {}) {
   initMessagesSection();
   const peerFromUrl = opts.restoreFromUrl ? getChatPeerFromUrl() : null;
-  const ready = peerFromUrl ? openMessagesDialog(peerFromUrl) : showMessagesChatList();
+  const ready = peerFromUrl ? openMessagesDialog(peerFromUrl, { restored: true }) : showMessagesChatList();
   void ready.then(async () => {
     await window.__appStartup?.ready;
     startUnreadPolling({ refreshNow: false });
@@ -3687,6 +3768,7 @@ function stopChatListPolling() {
 }
 
 export function stopMessagesPolling() {
+  cancelDialogPrefetch();
   loadChatListGeneration += 1;
   chatListLoadPromise = null;
   invalidateMessagesPoll();
@@ -3873,6 +3955,7 @@ function handleRealtimeUserMessage(payload) {
   const involvesMe =
     String(row.sender_id) === String(uid) || String(row.recipient_id) === String(uid);
   if (!involvesMe) return;
+  if (dialogPrefetch && messageBelongsToPeer(row, dialogPrefetch.peerId, uid)) cancelDialogPrefetch();
 
   const eventType = realtimeEventType(payload);
   if (eventType === "UPDATE") {
@@ -3917,6 +4000,7 @@ function handleRealtimeGroupMessage(payload) {
   if (!row?.chat_id) return;
   const chatId = String(row.chat_id);
   const peerId = toGroupPeerId(chatId);
+  if (dialogPrefetch?.peerId === peerId) cancelDialogPrefetch();
   const eventType = realtimeEventType(payload);
 
   if (eventType === "UPDATE") {

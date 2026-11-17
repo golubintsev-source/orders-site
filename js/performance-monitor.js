@@ -30,6 +30,7 @@
     resources: [],
     longTasks: [],
     sections: [],
+    chatOpens: [],
     errors: [],
   };
 
@@ -333,6 +334,17 @@
       schedulePersist();
     },
     markSectionStart,
+    recordChatOpen({ kind, source, openedAt, requestedAt, receivedAt, paintedAt, empty }) {
+      pushLimited(session.chatOpens, {
+        kind, source, empty,
+        openedMs: round(openedAt - startedAt),
+        requestedMs: round(requestedAt - startedAt),
+        receivedMs: round(receivedAt - startedAt),
+        paintedMs: round(paintedAt - startedAt),
+        openToPaintMs: round(paintedAt - openedAt),
+      }, 30);
+      schedulePersist();
+    },
     persist: persistNow,
   };
 

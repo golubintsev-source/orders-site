@@ -35,7 +35,8 @@ function assert(cond, msg) {
     messagesView: "dialog",
     activePeerId: "peer",
     loadMessagesGeneration: 0,
-    beginReadScope: () => ({ current: () => true }),
+    beginReadScope: () => ({ current: () => true, signal: new AbortController().signal }),
+    trackDialogHistory: (_, read) => ({ rows: read() }),
     isCurrentDialogLoad: () => current,
     isGroupChat: () => false,
     DIALOG_INITIAL_MESSAGE_LIMIT: 30,
@@ -56,6 +57,50 @@ function assert(cond, msg) {
   current = false;
   await retries.shift()();
   assert(reads === 3, "retry does not reload a dialog after navigation");
+}
+
+{
+  const helpers = messagesSource.slice(
+    messagesSource.indexOf("function cancelDialogPrefetch()"),
+    messagesSource.indexOf("function renderChatSummary("),
+  );
+  const frames = [];
+  const timers = [];
+  const requests = [];
+  let now = 10;
+  let finishRead;
+  const prefetch = runInNewContext(`${helpers}
+    let dialogPrefetch = null, dialogPrefetchStarted = false;
+    ({ scheduleDialogPrefetch, takeDialogPrefetch })`, {
+    AbortController,
+    DIALOG_PREFETCH_FRESH_MS: 5000,
+    getCurrentUserId: () => "me",
+    isMessagesSectionActive: () => true,
+    isDocumentVisible: () => true,
+    isGroupChat: (peer) => peer.startsWith("group:"),
+    parseGroupId: (peer) => peer.slice(6),
+    fetchGroupMessages(id, { signal }) {
+      requests.push({ id, signal });
+      return new Promise((resolve) => { finishRead = resolve; });
+    },
+    navigator: {},
+    performance: { now: () => now },
+    requestAnimationFrame: (callback) => frames.push(callback),
+    window: { setTimeout: (callback) => timers.push(callback) },
+  });
+  prefetch.scheduleDialogPrefetch("group:one", () => true);
+  prefetch.scheduleDialogPrefetch("group:two", () => true);
+  assert(requests.length === 0, "prefetch does not compete with the list's first paint");
+  await Promise.resolve();
+  while (frames.length) frames.shift()();
+  assert(requests.length === 1 && requests[0].id === "one", "only one group is prefetched");
+  const entry = prefetch.takeDialogPrefetch("group:one");
+  assert(entry?.timing.source === "prefetch" && !requests[0].signal.aborted, "opening the same chat adopts the in-flight read");
+  assert(prefetch.takeDialogPrefetch("group:one") == null, "a prefetched response can be consumed only once");
+  now = 50;
+  finishRead({ rows: [{ id: 9 }] });
+  assert((await entry.rows).rows[0].id === 9 && entry.timing.receivedAt === 50, "the adopted response preserves timing");
+  assert(timers.length === 0, "adoption does not leave a cache expiry timer behind");
 }
 
 const z = "2026-08-26T07:06:00.123Z";
@@ -84,7 +129,7 @@ assert(
     const window = { location, __SUPABASE_URL__: "https://test.supabase.co" };
     const requests = [];
     runInNewContext(chatBootSource, {
-      window, URL, URLSearchParams, AbortController, setTimeout, clearTimeout,
+      window, URL, URLSearchParams, AbortController, setTimeout, clearTimeout, performance,
       localStorage: {
         getItem: () => JSON.stringify({ access_token: "token", expires_at: expiresAt, user: { id: uid } }),
       },
@@ -123,7 +168,9 @@ assert(
       ? request.searchParams.get("chat_id") === `eq.${peer}`
       : request.searchParams.get("or") === `(and(sender_id.eq.${uid},recipient_id.eq.${peer}),and(sender_id.eq.${peer},recipient_id.eq.${uid}))`,
     "early history is scoped to the restored dialog");
-    assert((await window.__chatDialogPreviewBoot.dialog).rows[0].id === 1, "early history is chronological");
+    const { dialog, timing } = window.__chatDialogPreviewBoot;
+    assert((await dialog).rows[0].id === 1, "early history is chronological");
+    assert(timing.source === "route" && timing.receivedAt >= timing.requestedAt, "early history records its timing");
   }
 
   assert(bootChat(peer, 1).requests.length === 0, "expired session leaves the query to the normal loader");
