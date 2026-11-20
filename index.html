@@ -48,7 +48,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ФАБРИКА ОКОН">
   <link rel="apple-touch-icon" href="/img/apple-touch-icon.png?v=installer-20261101">
-  <link id="appStyles" rel="stylesheet" href="./style.css?v=order-income-20261121" media="print">
+  <link id="appStyles" rel="stylesheet" href="./style.css?v=order-income-layout-20261121" media="print">
   <link rel="modulepreload" href="./js/boot-route.js">
   <link rel="modulepreload" href="./js/main.js?v=47">
   <link rel="modulepreload" href="./js/config.js">
@@ -347,10 +347,14 @@
             </div>
           </div>
 
-          <div class="field compact-fields-row">
+          <div class="field compact-fields-row" id="orderPaymentAmountsRow">
             <div class="field">
               <label>Предоплата</label>
               <input type="text" inputmode="numeric" id="prepayment" title="Рассчитывается по поступлениям" readonly />
+            </div>
+            <div class="field" id="orderFormAreaRow">
+              <label>Остаток</label>
+              <input type="text" inputmode="numeric" id="remaining_amount" title="Рассчитывается по поступлениям" readonly />
             </div>
             <div class="field" hidden>
               <label>Кому предоплата</label>
@@ -361,13 +365,6 @@
                 <option value="Безнал">Безнал</option>
                 <option value="Касса">Касса</option>
               </select>
-            </div>
-          </div>
-
-          <div class="field compact-fields-row" id="orderFormAreaRow">
-            <div class="field">
-              <label>Остаток</label>
-              <input type="text" inputmode="numeric" id="remaining_amount" title="Рассчитывается по поступлениям" readonly />
             </div>
             <div class="field" hidden>
               <label>Кому остаток</label>
@@ -604,15 +601,19 @@
             <h3 class="order-calculations-title">Добавить доход</h3>
             <p class="order-calculations-inactive-note">Блок станет доступен после создания заказа.</p>
             <div id="orderIncomeForm" class="calculations-form" role="group" aria-label="Добавить доход по заказу">
-              <div class="calculations-form-row order-calculation-fields">
-                <div class="field"><label for="orderIncomeTo">Куда</label><select id="orderIncomeTo" disabled><option value="">—</option><option value="Дима">Дима</option><option value="Вова">Вова</option><option value="Безнал">Безнал</option><option value="Касса">Касса</option></select></div>
-                <div class="field"><label for="orderIncomeAmount">Сумма</label><input type="text" id="orderIncomeAmount" inputmode="numeric" title="Только целые рубли, без копеек" disabled /></div>
+              <div class="calculations-form-column">
+                <div class="calculations-form-row calculations-form-row--first order-calculation-fields order-income-fields">
+                  <div class="field"><label for="orderIncomeTo">Куда</label><select id="orderIncomeTo" disabled><option value="">—</option><option value="Дима">Дима</option><option value="Вова">Вова</option><option value="Безнал">Безнал</option><option value="Касса">Касса</option></select></div>
+                  <div class="field"><label for="orderIncomeAmount">Сумма</label><input type="text" id="orderIncomeAmount" inputmode="numeric" title="Только целые рубли, без копеек" disabled /></div>
+                </div>
+                <div class="calculations-form-row calculations-form-row--comment-submit">
+                  <div class="calculations-comment-wrap field"><textarea id="orderIncomeComment" rows="1" class="calculations-comment-input" placeholder="Комментарий" aria-label="Комментарий" disabled></textarea></div>
+                  <button type="button" id="orderIncomeSubmitBtn" class="calculations-submit-btn" title="Добавить доход" aria-label="Добавить доход" disabled>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </button>
+                </div>
+                <p id="orderIncomeFormMessage" class="order-calculations-message" role="status" aria-live="polite"></p>
               </div>
-              <div class="calculations-form-row calculations-form-row--comment-submit">
-                <div class="calculations-comment-wrap field"><textarea id="orderIncomeComment" rows="1" class="calculations-comment-input" placeholder="Комментарий" aria-label="Комментарий" disabled></textarea></div>
-                <button type="button" id="orderIncomeSubmitBtn" class="calculations-submit-btn" title="Добавить доход" aria-label="Добавить доход" disabled>+</button>
-              </div>
-              <p id="orderIncomeFormMessage" class="order-calculations-message" role="status" aria-live="polite"></p>
             </div>
           </section>
 
