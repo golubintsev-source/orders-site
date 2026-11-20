@@ -1197,6 +1197,9 @@ function renderCalculationsTableFromCache() {
     const isExcessDeltaRow =
       typeof comment === "string" && comment.startsWith(EXCESS_DELTA_CALC_COMMENT_PREFIX);
     const isSystemDeltaRow = isOrderDeltaRow || isExcessDeltaRow;
+    // Удаление дохода из расчётов без пересчёта заказа оставило бы неверные
+    // «Предоплату», «Остаток» и «Оплачено».
+    const isOrderIncomeRow = /^\[AUTO_ORDER_DELTA\]\s+Доход;/u.test(comment);
     const displayComment = getCalcDisplayCommentForRow(row);
     const displayAuthor = getCalcDisplayAuthor(comment);
     const escapedComment = escapeHtml(displayComment);
@@ -1214,11 +1217,11 @@ function renderCalculationsTableFromCache() {
       : `<td class="td-money"></td>`;
     const canEditRow = canEditManualCalculations() && !isSystemDeltaRow;
     let actionsCell = `<td class="td-actions td-actions--readonly" aria-hidden="true"><span class="calc-actions-grid"></span></td>`;
-    if (canEditRow || isAdmin()) {
+    if (canEditRow || (isAdmin() && !isOrderIncomeRow)) {
       actionsCell = `<td class="td-actions">
         <span class="calc-actions-grid">
           ${canEditRow ? `<button type="button" class="btn-icon btn-edit" data-id="${row.id}" title="Редактировать" aria-haspopup="dialog">${CALC_ICON_EDIT_SVG}</button>` : ""}
-          ${isAdmin() ? `<button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>` : ""}
+          ${isAdmin() && !isOrderIncomeRow ? `<button type="button" class="btn-icon btn-delete btn-delete-calc" data-id="${row.id}" title="Скрыть из списка (в базе останется пометка удаления)">${CALC_ICON_DELETE_SVG}</button>` : ""}
         </span>
       </td>`;
     }
@@ -1702,6 +1705,11 @@ async function insertCalculationHistoryComments(calculationId, comments, userEma
 /** Запись не удаляется из БД — только выставляется deleted_at. */
 async function softDeleteCalculationRow(id) {
   if (!isAdmin()) return;
+  const incomeRow = calculationsRowsCache.find((row) => Number(row.id) === Number(id));
+  if (/^\[AUTO_ORDER_DELTA\]\s+Доход;/u.test(String(incomeRow?.comment || ""))) {
+    setMessage("Доход по заказу нельзя скрыть без пересчёта оплаты", true);
+    return;
+  }
   if (
     !confirm(
       "Скрыть эту запись из списка? В базе останется пометка удаления, строка не удаляется физически."
