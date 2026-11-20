@@ -79,8 +79,9 @@ BEGIN
       WHEN to_place = 'Клиент' AND from_place IN ('Дима', 'Вова', 'Безнал', 'Касса') THEN -amount
       ELSE 0 END), 0)
     INTO v_net FROM public.calculations WHERE order_id = p_order_id AND deleted_at IS NULL;
-  -- Для старых заказов часть поступлений ещё не проведена в общей таблице.
-  -- До их согласованного переноса сохраняем сумму из полей заказа как нижнюю границу.
+  -- По старым заказам расхождения с «Расчётами» допустимы: старые строки
+  -- не добавляем. Сумму из полей учитываем для защиты от переплаты при
+  -- внесении только нового дохода пользователем.
   v_before := greatest(0, v_net, COALESCE(v_order.prepayment, 0) +
     CASE WHEN NULLIF(trim(COALESCE(v_order.remaining_to, '')), '') IS NOT NULL
       THEN COALESCE(v_order.remaining_amount, 0) ELSE 0 END);
