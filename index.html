@@ -48,7 +48,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ФАБРИКА ОКОН">
   <link rel="apple-touch-icon" href="/img/apple-touch-icon.png?v=installer-20261101">
-  <link id="appStyles" rel="stylesheet" href="./style.css?v=calc-edit-20261112" media="print">
+  <link id="appStyles" rel="stylesheet" href="./style.css?v=order-income-20261121" media="print">
   <link rel="modulepreload" href="./js/boot-route.js">
   <link rel="modulepreload" href="./js/main.js?v=47">
   <link rel="modulepreload" href="./js/config.js">
@@ -350,9 +350,9 @@
           <div class="field compact-fields-row">
             <div class="field">
               <label>Предоплата</label>
-              <input type="text" inputmode="numeric" id="prepayment" title="Только целые рубли, без копеек" />
+              <input type="text" inputmode="numeric" id="prepayment" title="Рассчитывается по поступлениям" readonly />
             </div>
-            <div class="field">
+            <div class="field" hidden>
               <label>Кому предоплата</label>
               <select id="prepayment_to">
                 <option value="">—</option>
@@ -367,9 +367,9 @@
           <div class="field compact-fields-row" id="orderFormAreaRow">
             <div class="field">
               <label>Остаток</label>
-              <input type="text" inputmode="numeric" id="remaining_amount" title="Только целые рубли, без копеек" />
+              <input type="text" inputmode="numeric" id="remaining_amount" title="Рассчитывается по поступлениям" readonly />
             </div>
-            <div class="field">
+            <div class="field" hidden>
               <label>Кому остаток</label>
               <select id="remaining_to">
                 <option value="">—</option>
@@ -600,7 +600,23 @@
         </div>
       </form>
 
-          <section id="orderCalculationsBlock" class="field full order-calculations-block is-inactive" aria-label="Расчёты по заказу" aria-disabled="true">
+          <section id="orderIncomeBlock" class="field full order-calculations-block order-income-block is-inactive" aria-label="Добавить доход" aria-disabled="true">
+            <h3 class="order-calculations-title">Добавить доход</h3>
+            <p class="order-calculations-inactive-note">Блок станет доступен после создания заказа.</p>
+            <div id="orderIncomeForm" class="calculations-form" role="group" aria-label="Добавить доход по заказу">
+              <div class="calculations-form-row order-calculation-fields">
+                <div class="field"><label for="orderIncomeTo">Куда</label><select id="orderIncomeTo" disabled><option value="">—</option><option value="Дима">Дима</option><option value="Вова">Вова</option><option value="Безнал">Безнал</option><option value="Касса">Касса</option></select></div>
+                <div class="field"><label for="orderIncomeAmount">Сумма</label><input type="text" id="orderIncomeAmount" inputmode="numeric" title="Только целые рубли, без копеек" disabled /></div>
+              </div>
+              <div class="calculations-form-row calculations-form-row--comment-submit">
+                <div class="calculations-comment-wrap field"><textarea id="orderIncomeComment" rows="1" class="calculations-comment-input" placeholder="Комментарий" aria-label="Комментарий" disabled></textarea></div>
+                <button type="button" id="orderIncomeSubmitBtn" class="calculations-submit-btn" title="Добавить доход" aria-label="Добавить доход" disabled>+</button>
+              </div>
+              <p id="orderIncomeFormMessage" class="order-calculations-message" role="status" aria-live="polite"></p>
+            </div>
+          </section>
+
+          <section id="orderCalculationsBlock" class="field full order-calculations-block is-inactive" aria-label="Добавить расходы" aria-disabled="true">
             <h3 class="order-calculations-title">Добавить расходы</h3>
             <p class="order-calculations-inactive-note">Блок станет доступен после создания заказа.</p>
             <div id="orderCalculationForm" class="calculations-form" role="group" aria-label="Добавить расчёт по заказу">
@@ -648,6 +664,9 @@
               </div>
             </div>
 
+          </section>
+          <section id="orderCalculationsList" class="field full order-calculations-list" aria-label="Расчёты по заказу">
+            <h3 class="order-calculations-title">Расчёты по заказу</h3>
             <div class="table-wrap order-calculations-table-wrap">
               <table id="orderCalculationsTable">
                 <thead><tr>

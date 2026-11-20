@@ -406,117 +406,8 @@ function buildOrderDeltaCalculationInsertRows({
     });
   };
 
-  /**
-   * Предоплата / Кому предоплата — та же схема, что для «Остаток» / «Кому остаток»:
-   * пустой select и «—» = «-»; ветки 1–5 как для остатка.
-   */
-  const prepToBefore = normRecipientSelect(wasEditing ? initialParticipants?.prepayment_to : "");
-  const prepToAfter = normRecipientSelect(orderData?.prepayment_to);
-  const prepToBeforeEmpty = prepToBefore === "";
-  const prepToAfterEmpty = prepToAfter === "";
-  const prepOld = old.prepayment;
-  const prepNew = next.prepayment;
-  const prepSame = Math.abs(prepOld - prepNew) < 0.000001;
-  const prepToSame = prepToBefore === prepToAfter;
-
-  if (!(prepToBeforeEmpty && prepToAfterEmpty) && !(prepSame && prepToSame)) {
-    if (prepToBeforeEmpty && !prepToAfterEmpty) {
-      pushAmountRecipientCalcRow("Предоплата", {
-        from_place: "Клиент",
-        to_place: prepToAfter,
-        amount: prepNew,
-        delta_key: "prepayment",
-        detail: `кому ${CALC_COMMENT_EMPTY} → ${prepToAfter}; сумма ${formatAmount(prepNew)}`,
-      });
-    } else if (!prepToBeforeEmpty && prepToAfterEmpty) {
-      pushAmountRecipientCalcRow("Предоплата", {
-        from_place: prepToBefore,
-        to_place: "Клиент",
-        amount: prepOld,
-        delta_key: "prepayment",
-        detail: `${prepToBefore} → клиент; сумма ${formatAmount(prepOld)}`,
-      });
-    } else if (!prepToBeforeEmpty && !prepToAfterEmpty && prepToSame) {
-      pushAmountRecipientCalcRow("Предоплата", {
-        from_place: "Клиент",
-        to_place: prepToAfter,
-        amount: prepNew - prepOld,
-        delta_key: "prepayment",
-        detail: `${prepToAfter}; ${formatAmount(prepOld)} → ${formatAmount(prepNew)}`,
-      });
-    } else if (!prepToBeforeEmpty && !prepToAfterEmpty && !prepToSame) {
-      pushAmountRecipientCalcRow("Предоплата", {
-        from_place: prepToBefore,
-        to_place: "Клиент",
-        amount: prepOld,
-        delta_key: "prepayment_to",
-        detail: `смена получателя; ${prepToBefore} → клиент; ${formatAmount(prepOld)}`,
-      });
-      pushAmountRecipientCalcRow("Предоплата", {
-        from_place: "Клиент",
-        to_place: prepToAfter,
-        amount: prepNew,
-        delta_key: "prepayment_to",
-        detail: `смена получателя; клиент → ${prepToAfter}; ${formatAmount(prepNew)}`,
-      });
-    }
-  }
-
-  const remToBefore = normRecipientSelect(wasEditing ? initialParticipants?.remaining_to : "");
-  const remToAfter = normRecipientSelect(orderData?.remaining_to);
-  const remToBeforeEmpty = remToBefore === "";
-  const remToAfterEmpty = remToAfter === "";
-
-  const remOld = old.remaining_amount;
-  const remNew = next.remaining_amount;
-  const remSame = Math.abs(remOld - remNew) < 0.000001;
-  const remToSame = remToBefore === remToAfter;
-
-  /**
-   * Остаток / Кому остаток — пустой select и «—» = «-»; ветки 1–5.
-   */
-  if (!(remToBeforeEmpty && remToAfterEmpty) && !(remSame && remToSame)) {
-    if (remToBeforeEmpty && !remToAfterEmpty) {
-      pushAmountRecipientCalcRow("Остаток", {
-        from_place: "Клиент",
-        to_place: remToAfter,
-        amount: remNew,
-        delta_key: "remaining_amount",
-        detail: `кому ${CALC_COMMENT_EMPTY} → ${remToAfter}; сумма ${formatAmount(remNew)}`,
-      });
-    } else if (!remToBeforeEmpty && remToAfterEmpty) {
-      pushAmountRecipientCalcRow("Остаток", {
-        from_place: remToBefore,
-        to_place: "Клиент",
-        amount: remOld,
-        delta_key: "remaining_amount",
-        detail: `${remToBefore} → клиент; сумма ${formatAmount(remOld)}`,
-      });
-    } else if (!remToBeforeEmpty && !remToAfterEmpty && remToSame) {
-      pushAmountRecipientCalcRow("Остаток", {
-        from_place: "Клиент",
-        to_place: remToAfter,
-        amount: remNew - remOld,
-        delta_key: "remaining_amount",
-        detail: `${remToAfter}; ${formatAmount(remOld)} → ${formatAmount(remNew)}`,
-      });
-    } else if (!remToBeforeEmpty && !remToAfterEmpty && !remToSame) {
-      pushAmountRecipientCalcRow("Остаток", {
-        from_place: remToBefore,
-        to_place: "Клиент",
-        amount: remOld,
-        delta_key: "remaining_to",
-        detail: `смена получателя; ${remToBefore} → клиент; ${formatAmount(remOld)}`,
-      });
-      pushAmountRecipientCalcRow("Остаток", {
-        from_place: "Клиент",
-        to_place: remToAfter,
-        amount: remNew,
-        delta_key: "remaining_to",
-        detail: `смена получателя; клиент → ${remToAfter}; ${formatAmount(remNew)}`,
-      });
-    }
-  }
+  // Доходы записывает отдельная атомарная операция add_order_income.
+  // Повторное сохранение заказа не создаёт проводки по вычисленным полям.
 
   /**
    * з/п монтаж / Оплатил — та же схема ветвлений, что для «Остаток» / «Кому остаток»,
@@ -2364,7 +2255,7 @@ export function getFormData() {
   };
 }
 
-/** Автозаполнение Остаток = Стоимость - Предоплата, если Стоимость заполнена */
+/** На новой заявке и при смене стоимости показывает ещё не полученную сумму. */
 export function updateRemainingFromCostAndPrepayment() {
   const amountEl = document.getElementById("amount");
   const prepaymentEl = document.getElementById("prepayment");
@@ -2375,9 +2266,18 @@ export function updateRemainingFromCostAndPrepayment() {
   if (amountR.invalidFormat || prepayR.invalidFormat) return;
   const amount = amountR.value;
   if (amount == null) return;
-  const prepayment = prepayR.value ?? 0;
-  const remaining = amount - prepayment;
+  if (state.editingOrderId && amount === Number(state.initialOrderSums?.amount)) return;
+  const received = state.editingOrderId
+    ? Number(state.initialOrderSums?.prepayment || 0) +
+      (state.initialOrderParticipants?.remaining_to ? Number(state.initialOrderSums?.remaining_amount || 0) : 0)
+    : 0;
+  if (state.editingOrderId) prepaymentEl.value = formatOrderFormNumberValue(received, ORDER_FORM_NUMERIC_FIELD_DECIMALS.prepayment);
+  const remaining = amount - received;
   remainingEl.value = formatOrderFormNumberValue(remaining, ORDER_FORM_NUMERIC_FIELD_DECIMALS.remaining_amount);
+  if (state.editingOrderId && remaining > 0 && document.getElementById("remaining_to")?.value) {
+    document.getElementById("remaining_to").value = "";
+  }
+  updatePaidField();
 }
 
 /** Оплачено = "да", если заполнено "Кому остаток" (select) ИЛИ Остаток = 0. */
@@ -2825,6 +2725,34 @@ export function applyOrderFormReadOnly(readOnly) {
   updatePaidField();
 }
 
+// Отдельное поступление сохраняется атомарно; обновляем снимок формы, чтобы
+// следующее сохранение заказа не пыталось повторно провести уже полученные деньги.
+document.addEventListener("order-income-added", (event) => {
+  const updated = event.detail;
+  if (!updated || Number(state.editingOrderId) !== Number(updated.id)) return;
+  state.initialOrderSums = {
+    ...state.initialOrderSums,
+    prepayment: Number(updated.prepayment),
+    remaining_amount: Number(updated.remaining_amount),
+  };
+  state.initialOrderParticipants = {
+    ...state.initialOrderParticipants,
+    prepayment_to: updated.prepayment_to || "",
+    remaining_to: updated.remaining_to || "",
+  };
+  ensureSelectValue(document.getElementById("prepayment_to"), updated.prepayment_to || "");
+  ensureSelectValue(document.getElementById("remaining_to"), updated.remaining_to || "");
+  if (state.initialOrderSnapshot) {
+    Object.assign(state.initialOrderSnapshot, {
+      prepayment: Number(updated.prepayment),
+      remaining_amount: Number(updated.remaining_amount),
+      prepayment_to: updated.prepayment_to || null,
+      remaining_to: updated.remaining_to || null,
+    });
+  }
+  updatePaidField();
+});
+
 function captureOrderFormReturnSection() {
   const cur = getCurrentSectionId();
   if (cur && cur !== "new") {
@@ -3023,6 +2951,9 @@ export async function viewOrder(orderId) {
   const orderCalculations = await import("./order-calculations.js");
   orderCalculations.hideOrderCalculations();
   applyOrderFormReadOnly(true);
+  void orderCalculations.showOrderCalculations(data, { viewOnly: true }).catch((error) => {
+    console.error("Ошибка загрузки расчётов заказа:", error);
+  });
   setMessage("", "");
 
   if (submitBtn) {
@@ -3365,7 +3296,7 @@ export async function submitOrderForm(event) {
   }
 
   // Правило: нельзя ставить "Заказ закрыт", если "Оплачено" = "нет"
-  // "Оплачено" вычисляется от поля "Кому остаток" через updatePaidField().
+  // «Оплачено» вычисляется по поступлениям и сохранённому получателю последнего платежа.
   updatePaidField();
   const paidVal = document.getElementById("paid")?.value;
   if (statusVal === "Заказ закрыт" && paidVal === "нет") {
@@ -3431,6 +3362,15 @@ export async function submitOrderForm(event) {
   // Правило: Предоплата не может быть больше стоимости.
   const amountNum = tryParseRublesInteger(document.getElementById("amount")?.value).value;
   const prepaymentNum = tryParseRublesInteger(document.getElementById("prepayment")?.value).value;
+  if (amountNum != null && state.editingOrderId) {
+    const old = state.initialOrderSums || {};
+    const received = Number(old.prepayment || 0) +
+      (state.initialOrderParticipants?.remaining_to ? Number(old.remaining_amount || 0) : 0);
+    if (amountNum < received) {
+      setMessage("Стоимость не может быть меньше уже полученных доходов", "#d32f2f");
+      return;
+    }
+  }
   if (amountNum != null && prepaymentNum != null && prepaymentNum > amountNum) {
     setMessage("Предоплата не может быть больше суммы заказа", "#d32f2f");
     return;

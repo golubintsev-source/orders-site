@@ -7,10 +7,16 @@ import { shortLoginByEmail, displayNameByEmail } from "./user-names.js";
 import { canEditManualCalculations, canSelectKassaBeznal, KASSA_BEZNAL_PLACES } from "./roles.js";
 import { getEditors } from "./settings.js";
 import { bindAutogrowTextarea, resizeTextarea } from "./autogrow-textarea.js";
+import { calculateOrderIncomeFields, recordedOrderIncome } from "./order-income-math.js";
+import { createAtomicOrderRequestId } from "./order-atomic-save.js";
 
 let activeOrder = null;
 let bound = false;
 let saving = false;
+let incomeSaving = false;
+let incomeRequestId = null;
+let incomeRequestSignature = null;
+let currentIncomeTotal = 0;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -22,6 +28,13 @@ function setMessage(text, error = false) {
   const el = document.getElementById("orderCalcFormMessage");
   if (!el) return;
   el.textContent = text || "";
+  el.style.color = error ? "#d32f2f" : "#166534";
+}
+
+function setIncomeMessage(message, error = false) {
+  const el = document.getElementById("orderIncomeFormMessage");
+  if (!el) return;
+  el.textContent = message || "";
   el.style.color = error ? "#d32f2f" : "#166534";
 }
 
@@ -43,14 +56,16 @@ function getIncomeExpense(row) {
 }
 
 function setBlockActive(active) {
-  const block = document.getElementById("orderCalculationsBlock");
-  if (!block) return;
-  block.hidden = false;
-  block.classList.toggle("is-inactive", !active);
-  block.setAttribute("aria-disabled", String(!active));
-  block.querySelectorAll("input, select, textarea, button").forEach((control) => {
-    control.disabled = !active;
-  });
+  for (const id of ["orderCalculationsBlock", "orderIncomeBlock"]) {
+    const block = document.getElementById(id);
+    if (!block) continue;
+    block.hidden = false;
+    block.classList.toggle("is-inactive", !active);
+    block.setAttribute("aria-disabled", String(!active));
+    block.querySelectorAll("input, select, textarea, button").forEach((control) => {
+      control.disabled = !active;
+    });
+  }
 }
 
 function syncAmountFromInstallerPayment() {
@@ -115,7 +130,89 @@ export async function loadOrderCalculations() {
     if (tbody) tbody.innerHTML = '<tr><td colspan="7">Не удалось загрузить расчёты заказа.</td></tr>';
     return;
   }
+  const incomeRows = (data || []).filter((row) => row.from_place === "Клиент" &&
+    ["Дима", "Вова", "Безнал", "Касса"].includes(row.to_place));
+  const refunds = (data || []).filter((row) => row.to_place === "Клиент" &&
+    ["Дима", "Вова", "Безнал", "Касса"].includes(row.from_place));
+  const net = incomeRows.reduce((sum, row) => sum + Number(row.amount || 0), 0) -
+    refunds.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  currentIncomeTotal = recordedOrderIncome(activeOrder, net);
   renderRows(data || []);
+}
+
+function updateIncomeOptions() {
+  const select = document.getElementById("orderIncomeTo");
+  if (!select) return;
+  for (const option of select.options) {
+    option.disabled = !canSelectKassaBeznal() && KASSA_BEZNAL_PLACES.has(option.value);
+  }
+  select.value = displayNameByEmail(state.currentUser?.email) === "Дима" ? "Дима" : "";
+}
+
+async function submitIncome() {
+  if (incomeSaving || !activeOrder?.id) return;
+  const to = String(document.getElementById("orderIncomeTo")?.value || "").trim();
+  const amount = tryParseRublesInteger(document.getElementById("orderIncomeAmount")?.value || "");
+  const comment = String(document.getElementById("orderIncomeComment")?.value || "").trim();
+  if (!["Дима", "Вова", "Безнал", "Касса"].includes(to) ||
+    (!canSelectKassaBeznal() && KASSA_BEZNAL_PLACES.has(to))) {
+    setIncomeMessage("Выберите доступное направление дохода", true); return;
+  }
+  if (amount.invalidFormat || !Number.isSafeInteger(amount.value) || amount.value <= 0) {
+    setIncomeMessage("Укажите положительную сумму в целых рублях", true); return;
+  }
+  const cost = tryParseRublesInteger(document.getElementById("amount")?.value || "");
+  if (cost.value !== Number(activeOrder.amount)) {
+    setIncomeMessage("Сначала сохраните изменение стоимости заказа", true); return;
+  }
+  try {
+    calculateOrderIncomeFields(cost.value, currentIncomeTotal, amount.value, currentIncomeTotal > 0);
+  } catch (error) { setIncomeMessage(error.message, true); return; }
+
+  // Повтор после сетевого таймаута использует тот же ключ, чтобы не удвоить поступление.
+  const signature = JSON.stringify([activeOrder.id, to, amount.value, comment]);
+  if (signature !== incomeRequestSignature) {
+    incomeRequestSignature = signature;
+    incomeRequestId = createAtomicOrderRequestId();
+  }
+  incomeSaving = true;
+  const button = document.getElementById("orderIncomeSubmitBtn");
+  if (button) button.disabled = true;
+  setIncomeMessage("Сохранение…");
+  try {
+    const { data, error } = await supabaseClient.rpc("add_order_income", {
+      p_request_id: incomeRequestId,
+      p_order_id: activeOrder.id,
+      p_to_place: to,
+      p_amount: amount.value,
+      p_comment: comment,
+    });
+    if (error) throw error;
+    const updated = Array.isArray(data) ? data[0] : data;
+    if (updated) {
+      activeOrder = { ...activeOrder, ...updated };
+      for (const key of ["prepayment", "remaining_amount"]) {
+        const el = document.getElementById(key);
+        if (el) el.value = formatAmount(updated[key]);
+      }
+      const paid = document.getElementById("paid");
+      if (paid) paid.value = updated.paid ? "да" : "нет";
+      document.dispatchEvent(new CustomEvent("order-income-added", { detail: updated }));
+    }
+    incomeRequestId = null;
+    incomeRequestSignature = null;
+    document.getElementById("orderIncomeAmount").value = "";
+    const commentEl = document.getElementById("orderIncomeComment");
+    if (commentEl) { commentEl.value = ""; resizeTextarea(commentEl); }
+    setIncomeMessage("Доход добавлен");
+    await loadOrderCalculations();
+  } catch (error) {
+    console.error("Не удалось добавить доход:", error);
+    setIncomeMessage(error.message || "Не удалось добавить доход. Повторите попытку", true);
+  } finally {
+    incomeSaving = false;
+    if (button) button.disabled = false;
+  }
 }
 
 export function buildOrderCalculationComment(to, recipient, comment, author) {
@@ -178,6 +275,7 @@ export function initOrderCalculations() {
   if (bound) return;
   bound = true;
   document.getElementById("orderCalcSubmitBtn")?.addEventListener("click", () => { void submit(); });
+  document.getElementById("orderIncomeSubmitBtn")?.addEventListener("click", () => { void submitIncome(); });
   document.getElementById("orderCalcTo")?.addEventListener("change", () => {
     renderRecipientOptions();
     syncAmountFromInstallerPayment();
@@ -185,15 +283,23 @@ export function initOrderCalculations() {
   document.getElementById("installer_payment_amount")?.addEventListener("input", syncAmountFromInstallerPayment);
   document.addEventListener("installer-payment-amount-updated", syncAmountFromInstallerPayment);
   bindAutogrowTextarea(document.getElementById("orderCalcComment"));
+  bindAutogrowTextarea(document.getElementById("orderIncomeComment"));
 }
 
-export async function showOrderCalculations(order) {
+export async function showOrderCalculations(order, { viewOnly = false } = {}) {
   activeOrder = order || null;
   const block = document.getElementById("orderCalculationsBlock");
   if (!block || !activeOrder?.id) return;
   setBlockActive(true);
+  const incomeForm = document.getElementById("orderIncomeForm");
+  if (incomeForm) incomeForm.hidden = viewOnly;
+  updateIncomeOptions();
+  document.getElementById("orderIncomeAmount").value = "";
+  const incomeComment = document.getElementById("orderIncomeComment");
+  if (incomeComment) { incomeComment.value = ""; resizeTextarea(incomeComment); }
+  setIncomeMessage("");
   const form = document.getElementById("orderCalculationForm");
-  if (form) form.hidden = !canEditManualCalculations();
+  if (form) form.hidden = viewOnly || !canEditManualCalculations();
   const from = document.getElementById("orderCalcFrom");
   if (from) {
     for (const option of from.options) {
@@ -219,12 +325,18 @@ export async function showOrderCalculations(order) {
 
 export function hideOrderCalculations() {
   activeOrder = null;
+  currentIncomeTotal = 0;
+  incomeRequestId = null;
+  incomeRequestSignature = null;
   const block = document.getElementById("orderCalculationsBlock");
   setBlockActive(false);
   const form = document.getElementById("orderCalculationForm");
   if (form) form.hidden = false;
+  const incomeForm = document.getElementById("orderIncomeForm");
+  if (incomeForm) incomeForm.hidden = false;
   const tbody = document.querySelector("#orderCalculationsTable tbody");
   if (tbody) tbody.innerHTML = '<tr><td colspan="7">Расчёты можно добавить после создания заказа.</td></tr>';
   syncAmountFromInstallerPayment();
   setMessage("");
+  setIncomeMessage("");
 }
