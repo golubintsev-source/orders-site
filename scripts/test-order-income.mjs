@@ -4,7 +4,7 @@ import { calculateOrderIncomeFields, recordedOrderIncome } from '../js/order-inc
 
 assert.deepEqual(calculateOrderIncomeFields(100, 0, 30, false), { prepayment: 30, remaining_amount: 70, paid: false });
 assert.deepEqual(calculateOrderIncomeFields(100, 30, 20, true), { prepayment: 50, remaining_amount: 50, paid: false });
-assert.deepEqual(calculateOrderIncomeFields(100, 0, 100, false), { prepayment: 100, remaining_amount: 0, paid: true });
+assert.deepEqual(calculateOrderIncomeFields(100, 0, 100, false), { prepayment: 0, remaining_amount: 100, paid: true });
 assert.deepEqual(calculateOrderIncomeFields(100, 30, 70, true), { prepayment: 30, remaining_amount: 70, paid: true });
 assert.throws(() => calculateOrderIncomeFields(100, 80, 21, true), /превышать стоимость/);
 assert.equal(recordedOrderIncome({ prepayment: 30, remaining_amount: 70, remaining_to: 'Дима' }, 20), 100);

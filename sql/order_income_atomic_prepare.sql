@@ -113,8 +113,9 @@ BEGIN
       remaining_amount = v_order.amount - v_total, remaining_to = NULL
     WHERE id = p_order_id;
   ELSIF v_before = 0 THEN
-    UPDATE public.orders SET prepayment = v_total, prepayment_to = p_to_place,
-      remaining_amount = 0, remaining_to = NULL
+    -- Единственное поступление на всю стоимость относится к «Остатку».
+    UPDATE public.orders SET prepayment = 0, prepayment_to = NULL,
+      remaining_amount = p_amount, remaining_to = p_to_place
     WHERE id = p_order_id;
   ELSE
     UPDATE public.orders SET prepayment = v_order.amount - p_amount,

@@ -13,6 +13,6 @@ export function calculateOrderIncomeFields(cost, paidBefore, payment, hadPayment
   const total = paidBefore + payment;
   if (!Number.isSafeInteger(total) || total > cost) throw new Error("Доходы по заказу не могут превышать стоимость");
   if (total < cost) return { prepayment: total, remaining_amount: cost - total, paid: false };
-  if (!hadPayments && paidBefore === 0) return { prepayment: cost, remaining_amount: 0, paid: true };
+  if (!hadPayments && paidBefore === 0) return { prepayment: 0, remaining_amount: payment, paid: true };
   return { prepayment: cost - payment, remaining_amount: payment, paid: true };
 }
