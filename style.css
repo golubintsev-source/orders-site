@@ -1810,7 +1810,7 @@ h2 {
 }
 
 .order-calculations-block .calculations-form {
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .order-calculations-inactive-note {
@@ -1928,6 +1928,11 @@ h2 {
   min-height: 18px;
   margin: 0;
   font-size: 13px;
+}
+
+/* Пустая строка статуса не должна оставлять место под формой. */
+.order-calculations-message:empty {
+  display: none;
 }
 
 .order-calculations-table-wrap {
