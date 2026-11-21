@@ -128,7 +128,9 @@ BEGIN
       OR to_jsonb(v_current_order) -> 'installer_payment_by' IS DISTINCT FROM p_expected_money -> 'installer_payment_by'
     ) THEN
       RAISE EXCEPTION 'Order money fields were changed by another user; reload the order'
-        USING ERRCODE = '40001';
+        -- 40001 нельзя использовать для прикладного конфликта: PostgREST
+        -- автоматически повторяет всю транзакцию и держит запрос до тайм-аута.
+        USING ERRCODE = 'P0001';
     END IF;
 
     UPDATE public.orders SET
