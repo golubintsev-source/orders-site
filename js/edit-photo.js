@@ -12,6 +12,7 @@ function clearResult() {
   resultUrl = null;
   byId("editPhotoResult").hidden = true;
   byId("editPhotoGenerated").removeAttribute("src");
+  byId("editPhotoCost").textContent = "";
   byId("editPhotoDownload").removeAttribute("href");
 }
 
@@ -107,6 +108,9 @@ async function generatePhoto() {
     if (!/^data:image\/jpeg;base64,/.test(payload.image || "")) throw new Error("invalid_image_response");
     resultUrl = payload.image;
     byId("editPhotoGenerated").src = resultUrl;
+    byId("editPhotoCost").textContent = Number.isFinite(payload.costRub)
+      ? `Стоимость создания: ≈ ${new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(payload.costRub)} ₽`
+      : "Стоимость создания: не удалось рассчитать";
     byId("editPhotoDownload").href = resultUrl;
     byId("editPhotoResult").hidden = false;
   } catch (error) {

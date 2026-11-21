@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v151: страница редактирования фото.
-const STATIC_CACHE = "orders-site-static-v151";
+// v152: стоимость генерации фото.
+const STATIC_CACHE = "orders-site-static-v152";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -24,7 +24,7 @@ const PRECACHE_URLS = [
   "/img/startup/worker-offline.webp",
   "/img/startup/worker-data-error.webp",
   "/style.css",
-  "/style.css?v=edit-photo-20261121",
+  "/style.css?v=edit-photo-cost-20261121",
   "/js/performance-monitor.js",
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",
