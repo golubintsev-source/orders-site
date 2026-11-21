@@ -53,6 +53,9 @@
     "api/voice-tts.js": {
       "maxDuration": 30
     },
+    "api/edit-photo.js": {
+      "maxDuration": 120
+    },
     "api/address-suggest.js": {
       "maxDuration": 10
     }
@@ -68,6 +71,7 @@
     { "source": "/manager-salary", "destination": "/index.html" },
     { "source": "/route-sheet", "destination": "/index.html" },
     { "source": "/settings", "destination": "/index.html" },
+    { "source": "/edit-photo", "destination": "/index.html" },
     { "source": "/speed-test", "destination": "/index.html" },
     { "source": "/statistics", "destination": "/index.html" },
     { "source": "/statistics-balance", "destination": "/index.html" },

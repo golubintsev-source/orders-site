@@ -12354,3 +12354,21 @@ html.keyboard-open .voice-composer {
   font-weight: 400;
   white-space: nowrap;
 }
+/* Редактирование фото */
+.edit-photo-card { max-width: 760px; margin: 12px auto 32px; padding: 22px; }
+.edit-photo-card h2 { margin: 0 0 18px; }
+.edit-photo-card h3 { margin: 0 0 12px; }
+.edit-photo-original, .edit-photo-result { margin-top: 20px; }
+.edit-photo-original img, .edit-photo-result img { display: block; max-width: 100%; max-height: 65vh; width: auto; height: auto; object-fit: contain; border-radius: 10px; margin-bottom: 12px; }
+.edit-photo-original label { display: block; margin: 22px 0 8px; font-weight: 600; }
+.edit-photo-original textarea { display: block; box-sizing: border-box; width: 100%; min-height: 88px; padding: 10px 12px; border: 1px solid #bbb; border-radius: 8px; font: inherit; resize: vertical; margin-bottom: 14px; }
+.edit-photo-secondary { border: 1px solid #aaa; background: transparent; color: inherit; border-radius: 8px; padding: 10px 16px; font: inherit; cursor: pointer; }
+.edit-photo-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.edit-photo-actions a { text-decoration: none; display: inline-block; }
+.edit-photo-error { color: #b42318; margin: 16px 0 0; }
+.edit-photo-progress { margin-top: 20px; }
+.edit-photo-progress p { margin: 0 0 10px; }
+.edit-photo-progress-track { height: 8px; background: #e7eaee; border-radius: 8px; overflow: hidden; }
+.edit-photo-progress-track span { display: block; height: 100%; width: 35%; border-radius: inherit; background: #f39824; animation: edit-photo-loading 1.7s ease-in-out infinite alternate; }
+@keyframes edit-photo-loading { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+@media (max-width: 600px) { .edit-photo-card { margin: 8px 0 24px; padding: 16px; } }

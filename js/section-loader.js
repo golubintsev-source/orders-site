@@ -126,6 +126,10 @@ const lifecycle = createSectionLifecycle({
       }
     } };
   },
+  "edit-photo": async () => {
+    const m = await import("./edit-photo.js");
+    return { init: m.initEditPhotoSection };
+  },
   "speed-test": async () => {
     const m = await import("./speed-test.js");
     return { load: m.onSpeedTestSectionEnter };

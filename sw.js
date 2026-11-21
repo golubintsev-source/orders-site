@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v150: повторная загрузка списка исполнителей задач.
-const STATIC_CACHE = "orders-site-static-v150";
+// v151: страница редактирования фото.
+const STATIC_CACHE = "orders-site-static-v151";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -24,12 +24,12 @@ const PRECACHE_URLS = [
   "/img/startup/worker-offline.webp",
   "/img/startup/worker-data-error.webp",
   "/style.css",
-  "/style.css?v=calc-edit-20261112",
+  "/style.css?v=edit-photo-20261121",
   "/js/performance-monitor.js",
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",
   "/js/boot-route.js",
-  "/js/main.js?v=47",
+  "/js/main.js?v=48",
   "/js/config.js",
   "/js/read-requests.js",
   "/js/state.js",
@@ -162,6 +162,7 @@ const APP_SHELL_PATHS = new Set([
   "/manager-salary",
   "/route-sheet",
   "/settings",
+  "/edit-photo",
   "/speed-test",
   "/statistics",
   "/statistics-balance",

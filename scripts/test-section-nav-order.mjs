@@ -14,7 +14,7 @@ test("section dropdown follows the requested order and labels", async () => {
   const actual = [...panel.matchAll(/data-section="([^"]+)"/g)].map((match) => match[1]);
   const expected = [
     "all", "new", "calculations", "all-salaries", "excess", "debts", "manager-salary", "route-sheet", "contractor-checks", "balance",
-    "statistics-balance", "changes-all", "statistics", "speed-test", "voice", "settings",
+    "statistics-balance", "changes-all", "statistics", "speed-test", "voice", "edit-photo", "settings",
   ];
 
   assert.deepEqual(actual, expected);
