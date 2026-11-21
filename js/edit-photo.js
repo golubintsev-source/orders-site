@@ -97,7 +97,7 @@ async function generatePhoto() {
       supabaseClient.auth.getSession(), fileToJpegDataUrl(originalFile),
     ]);
     if (error || !data?.session?.access_token) throw new Error("unauthorized");
-    const response = await fetch("/api/edit-photo", {
+    const response = await fetch("/api/voice-assistant?mode=image-edit", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` },
       body: JSON.stringify({ image, prompt }),

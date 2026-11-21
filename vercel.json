@@ -48,13 +48,10 @@
       "maxDuration": 10
     },
     "api/voice-assistant.js": {
-      "maxDuration": 60
+      "maxDuration": 120
     },
     "api/voice-tts.js": {
       "maxDuration": 30
-    },
-    "api/edit-photo.js": {
-      "maxDuration": 120
     },
     "api/address-suggest.js": {
       "maxDuration": 10
