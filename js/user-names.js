@@ -21,7 +21,7 @@ const EMAIL_AVATAR_LOGOS = {
   "lary_7812@mail.ru": "img/avatars/avatar-kristina.png",
   "golubintsev@gmail.com": "img/avatars/avatar-alexey.png",
   "golubintsev26@gmail.com": "img/avatars/avatar-dima.png",
-  "finance-director@system.local": "img/avatars/avatar-finance-director.png",
+  "finance-director@system.local": "img/avatars/avatar-finance-director.png?v=2",
 };
 
 const NAME_AVATAR_LOGOS = {

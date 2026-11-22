@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v153: системный участник «Финансовый директор».
-const STATIC_CACHE = "orders-site-static-v153";
+// v154: крупный аватар финансового директора.
+const STATIC_CACHE = "orders-site-static-v154";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -50,7 +50,7 @@ const PRECACHE_URLS = [
   "/js/task-composer-markup.js",
   "/js/task-order-field-editor.js",
   "/js/user-names.js",
-  "/img/avatars/avatar-finance-director.png",
+  "/img/avatars/avatar-finance-director.png?v=2",
   "/js/statistics-matrix.js",
   "/js/user-place.js",
   "/js/secret-login.js",
