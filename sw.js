@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v154: крупный аватар финансового директора.
-const STATIC_CACHE = "orders-site-static-v154";
+// v155: новые фразы экрана загрузки.
+const STATIC_CACHE = "orders-site-static-v155";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
