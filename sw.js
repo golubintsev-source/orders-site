@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v160: короткая россыпь монет вместо двух нот.
-const STATIC_CACHE = "orders-site-static-v160";
+// v161: звук монет из пользовательского MP3.
+const STATIC_CACHE = "orders-site-static-v161";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
