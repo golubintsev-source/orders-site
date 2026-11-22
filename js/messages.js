@@ -63,6 +63,7 @@ const DELIVERY_ACK_MIN_INTERVAL_MS = 60_000;
 const FEED_POLL_MS = 15_000;
 const FEED_POLL_REALTIME_MS = 120_000;
 const CHAT_LIST_POLL_MS = 30_000;
+const FINANCE_DIRECTOR_ID = "f1a4c3d2-0b55-4fac-8d20-8c3be97e0f01";
 const CHAT_LIST_POLL_REALTIME_MS = 180_000;
 const POLL_BACKOFF_MAX_MS = 180_000;
 const CHAT_VISIBILITY_HEARTBEAT_MS = 25_000;
@@ -2881,6 +2882,8 @@ function setMessagesView(view) {
 
 function syncComposerForActivePeer() {
   const input = document.getElementById("messagesComposerInput");
+  const bot = String(activePeerId) === FINANCE_DIRECTOR_ID;
+  document.getElementById("messagesDialogView")?.classList.toggle("messages-dialog-view--system", bot);
   composerRecipients.clear();
   clearPendingChatPhoto();
   closeAttachPhotoMenu();
@@ -2935,6 +2938,15 @@ function updateDialogHeader() {
   }
 
   if (editBtn) editBtn.hidden = true;
+
+  if (String(activePeerId) === FINANCE_DIRECTOR_ID) {
+    title.textContent = "Финансовый директор";
+    if (subtitle) {
+      subtitle.textContent = "Автоматические сообщения по расчётам";
+      subtitle.hidden = false;
+    }
+    return;
+  }
 
   const users = usersCache || [];
   const peer = users.find((u) => String(u.id) === String(activePeerId));

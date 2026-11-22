@@ -6,6 +6,7 @@ const EMAIL_DISPLAY_NAMES = {
   "lary_7812@mail.ru": "Кристина",
   "golubintsev@gmail.com": "Алексей",
   "golubintsev26@gmail.com": "Дима",
+  "finance-director@system.local": "Финансовый директор",
   "lexa@mail.ru": "Алексей",
   "animashka89": "Маша",
   "animashka89@gmail.com": "Маша",
@@ -20,6 +21,7 @@ const EMAIL_AVATAR_LOGOS = {
   "lary_7812@mail.ru": "img/avatars/avatar-kristina.png",
   "golubintsev@gmail.com": "img/avatars/avatar-alexey.png",
   "golubintsev26@gmail.com": "img/avatars/avatar-dima.png",
+  "finance-director@system.local": "img/avatars/avatar-finance-director.png",
 };
 
 const NAME_AVATAR_LOGOS = {

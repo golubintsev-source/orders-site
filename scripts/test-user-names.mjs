@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { displayNameByEmail, displayNameGenitiveByEmail, isKnownUserDisplayName, shortLoginByEmail } from "../js/user-names.js";
+import { avatarLogoUrl, displayNameByEmail, displayNameGenitiveByEmail, isKnownUserDisplayName, shortLoginByEmail } from "../js/user-names.js";
 import { createRequire } from "node:module";
 
 const { displayNameByEmail: displayNameByEmailApi } = createRequire(import.meta.url)(
@@ -20,6 +20,9 @@ assert.equal(displayNameByEmailApi("animashka89@mail.ru"), "Маша");
 
 assert.equal(displayNameByEmail("lexa@mail.ru"), "Алексей");
 assert.equal(displayNameByEmail("golubintsev26@gmail.com"), "Дима");
+assert.equal(displayNameByEmail("finance-director@system.local"), "Финансовый директор");
+assert.equal(displayNameByEmailApi("finance-director@system.local"), "Финансовый директор");
+assert.equal(avatarLogoUrl({ email: "finance-director@system.local" }), "img/avatars/avatar-finance-director.png");
 assert.equal(displayNameGenitiveByEmail("golubintsev26@gmail.com"), "Димы");
 assert.equal(displayNameGenitiveByEmail("fabrikaokon2019@mail.ru"), "Андрея");
 assert.equal(displayNameGenitiveByEmail("alenushka191179@gmail.com"), "Лены");

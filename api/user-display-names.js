@@ -6,6 +6,7 @@ const EMAIL_DISPLAY_NAMES = {
   "lary_7812@mail.ru": "Кристина",
   "golubintsev@gmail.com": "Алексей",
   "golubintsev26@gmail.com": "Дима",
+  "finance-director@system.local": "Финансовый директор",
   "lexa@mail.ru": "Алексей",
   "animashka89": "Маша",
   "animashka89@gmail.com": "Маша",

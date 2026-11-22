@@ -9864,6 +9864,12 @@ th {
   white-space: nowrap;
 }
 
+.messages-dialog-view--system .messages-composer,
+.messages-dialog-view--system .messages-composer-context,
+.messages-dialog-view--system .messages-pending-attachment {
+  display: none !important;
+}
+
 .messages-feed {
   flex: 1 1 auto;
   overflow-y: auto;
