@@ -376,6 +376,12 @@ export function switchSection(sectionId, opts = {}) {
   if (sectionId === "messages") opts = { ...opts, loadKey: window.location.search };
   const ready = enterSection(sectionId, opts);
   void ready.catch((error) => console.error("Не удалось открыть раздел:", sectionId, error));
+  if (sectionId === "all" && ["golubintsev26@gmail.com", "golubintsev@gmail.com", "lexa@mail.ru"]
+    .includes(String(state.currentUser?.email || "").toLowerCase())) {
+    void ready.then(() => import("./finance-director-jokes.js"))
+      .then((m) => m.checkFinanceDirectorJoke())
+      .catch((error) => console.warn("Не удалось проверить шутку финансового директора:", error));
+  }
 
   updateBackToOrdersBtnVisibility(sectionId);
   if (sectionId === "all") {

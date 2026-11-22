@@ -143,12 +143,6 @@ async function init() {
   }
   const user = await checkAuth();
   if (!user) return;
-  // Проверка выполняется в базе атомарно: несколько одновременно открытых вкладок
-  // не отправят одну и ту же шутку повторно.
-  if (["golubintsev26@gmail.com", "golubintsev@gmail.com", "lexa@mail.ru"]
-    .includes(String(user.email || "").toLowerCase())) {
-    void import("./finance-director-jokes.js").then((m) => m.checkFinanceDirectorJoke()).catch(console.error);
-  }
   updateSettingsCurrentUserName(user.email);
   void flushPendingAccessLogs(user);
   initUserPlaceTracking(user.id, {
