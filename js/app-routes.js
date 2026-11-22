@@ -78,6 +78,8 @@ export function buildPagePathForSection(sectionId) {
     return `${base}#${sectionId}`;
   }
 
+  if (sectionId === "all") return `/orders${search || ""}`;
+
   const normalized = normalizePathname(pathname);
   const pathSection = PATH_TO_SECTION.get(normalized);
   if (pathSection === sectionId) return base;
@@ -89,7 +91,7 @@ export function buildPagePathForSection(sectionId) {
 export function normalizeAccessLogPath(pagePath) {
   const s = String(pagePath || "");
   const hashIdx = s.indexOf("#");
-  if (hashIdx < 0) return s;
+  if (hashIdx < 0) return s.replace(/^\/(?:all)?(?=\?|$)/, "/orders");
   const base = s.slice(0, hashIdx);
   const sectionId = s.slice(hashIdx + 1);
   if (!ROUTE_SECTION_IDS.has(sectionId)) return s;

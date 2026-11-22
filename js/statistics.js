@@ -132,11 +132,12 @@ function paintStatisticsTable(rows) {
   for (const row of rows) {
     const tr = document.createElement("tr");
     tr.className = "statistics-row";
-    const pageLabel = row.page_title ? `${row.page_path} (${row.page_title})` : row.page_path;
+    const displayPath = row.page_path === "/" || row.page_path === "/all" ? "/orders" : row.page_path;
+    const pageLabel = row.page_title ? `${displayPath} (${row.page_title})` : displayPath;
     tr.innerHTML = `
       <td>${escapeHtml(formatTaskDateRu(row.created_at))}</td>
       <td title="${escapeHtml(row.user_email || "")}">${escapeHtml(row.user_email || "—")}</td>
-      <td class="statistics-page-cell" title="${escapeHtml(pageLabel || "")}">${escapeHtml(row.page_path || "—")}</td>
+      <td class="statistics-page-cell" title="${escapeHtml(pageLabel || "")}">${escapeHtml(displayPath || "—")}</td>
       <td>${escapeHtml(formatDevice(row))}</td>
       <td>${escapeHtml(formatOs(row))}</td>
       <td>${escapeHtml(row.city || "—")}</td>

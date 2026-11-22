@@ -5,6 +5,7 @@ export const STATISTICS_MATRIX_USERS = ["Дима", "Лена", "Кристин�
 const PAGE_LABELS = new Map([
   ["/", "Заказы"],
   ["/all", "Заказы"],
+  ["/orders", "Заказы"],
   ["/new", "Новый заказ"],
   ["/calculations", "Расчеты"],
   ["/excess", "Излишки"],
