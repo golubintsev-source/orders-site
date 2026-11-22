@@ -3,6 +3,7 @@ import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
 import { formatOrderIdTypeChip, formatTaskDateRu } from "./format.js";
 import { avatarLogoUrl, displayNameByEmail } from "./user-names.js";
+import { playFinanceChime } from "./finance-chime.js";
 let orderPickerModule = null;
 let orderPickerLoadPromise = null;
 async function ensureChatOrders() {
@@ -3056,6 +3057,9 @@ export function showMessagesChatList() {
 
 export async function openMessagesDialog(peerId, { restored = false } = {}) {
   if (!peerId) return;
+  if (!restored && String(peerId) === FINANCE_DIRECTOR_ID && String(activePeerId) !== FINANCE_DIRECTOR_ID) {
+    playFinanceChime();
+  }
   const routeStart = restored && window.__appStartup?.pending
     ? performance.getEntriesByType("navigation")[0]?.startTime
     : null;

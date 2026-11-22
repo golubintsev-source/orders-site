@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v158: явный путь /orders в журнале посещений.
-const STATIC_CACHE = "orders-site-static-v158";
+// v159: звон монет при открытии чата финансового директора.
+const STATIC_CACHE = "orders-site-static-v159";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
