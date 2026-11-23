@@ -2810,6 +2810,27 @@ export async function leaveOrderFormAfterSave(savedOrderId) {
   await applyPostOrderFormNavigation(returnSectionId, { savedOrderId });
 }
 
+async function finishOrderSaveNavigation(savedOrderId, wasEditing, uploadWarning = null) {
+  if (wasEditing) {
+    await leaveOrderFormAfterSave(savedOrderId);
+    return;
+  }
+
+  // Заказ уже создан: сразу привязать форму и URL к его ID, чтобы повторное
+  // нажатие или перезагрузка не создавали ещё один заказ.
+  state.editingOrderId = savedOrderId;
+  clearOrderFormNewOrderIdempotencyKey();
+  syncOrderEditIdInUrl(savedOrderId);
+  scheduleSaveUserPlace();
+  await editOrder(savedOrderId, {
+    skipUrlSync: true,
+    isCurrent: () => state.editingOrderId === savedOrderId,
+  });
+  if (state.editingOrderId === savedOrderId && !orderFormSaveInFlight) {
+    setMessage(uploadWarning || `Заявка #${savedOrderId} сохранена`, uploadWarning ? "#b45309" : "");
+  }
+}
+
 export function leaveOrderFormOnCancel() {
   const returnSectionId = state.orderFormReturnSectionId;
   void applyPostOrderFormNavigation(returnSectionId, { reloadOrders: false });
@@ -3478,6 +3499,7 @@ export async function submitOrderForm(event) {
   // не должны оставлять форму навсегда в состоянии «Сохраняю…».
   saveFinishedOk = true;
   setMessage(wasEditing ? `Заявка #${savedOrderId} обновлена` : `Заявка #${savedOrderId} сохранена`, "");
+  let uploadWarning = null;
   try {
     await Promise.race([
       uploadFiles(savedOrderId),
@@ -3485,12 +3507,19 @@ export async function submitOrderForm(event) {
     ]);
   } catch (uploadError) {
     console.error("Ошибка загрузки вложений после сохранения заказа:", uploadError);
-    setMessage(`Заказ #${savedOrderId} сохранён, но вложения могли не загрузиться: ${uploadError.message || uploadError}`, "#b45309");
+    uploadWarning = `Заказ #${savedOrderId} сохранён, но вложения могли не загрузиться: ${uploadError.message || uploadError}`;
+    setMessage(uploadWarning, "#b45309");
   }
-  // Переход на список запускается отдельно: он может ждать длительную загрузку таблицы.
-  void leaveOrderFormAfterSave(savedOrderId).catch((navigationError) => {
+  // Созданный заказ остаётся на этой форме; после изменения существующего
+  // заказа сохраняется прежний переход к списку.
+  void finishOrderSaveNavigation(savedOrderId, wasEditing, uploadWarning).catch((navigationError) => {
     console.error("Ошибка перехода после сохранения заказа:", navigationError);
-    setMessage(`Заказ #${savedOrderId} сохранён. Не удалось открыть список заказов.`, "#b45309");
+    setMessage(
+      wasEditing
+        ? `Заказ #${savedOrderId} сохранён. Не удалось открыть список заказов.`
+        : `Заказ #${savedOrderId} сохранён. Не удалось открыть его для редактирования; обновите страницу.`,
+      "#b45309",
+    );
   });
   return;
   } catch (saveError) {

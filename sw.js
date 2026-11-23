@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v162: скрытие напоминания при наличии вложений в форме заказа.
-const STATIC_CACHE = "orders-site-static-v162";
+// v163: после создания остаёмся на форме сохранённого заказа.
+const STATIC_CACHE = "orders-site-static-v163";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 import {
   ATOMIC_ORDER_ID_PLACEHOLDER,
   buildAtomicOrderRequestSignature,
@@ -104,5 +106,41 @@ await assert.rejects(
   ),
   (error) => error?.code === "ORDER_SAVE_TIMEOUT",
 );
+
+const ordersSource = await readFile(new URL("../js/orders.js", import.meta.url), "utf8");
+const navigationSource = ordersSource.slice(
+  ordersSource.indexOf("async function finishOrderSaveNavigation("),
+  ordersSource.indexOf("export function leaveOrderFormOnCancel()"),
+);
+const navigationCalls = [];
+const formState = { editingOrderId: null };
+let saveBusy = true;
+const finishOrderSaveNavigation = runInNewContext(`${navigationSource}\nfinishOrderSaveNavigation`, {
+  state: formState,
+  clearOrderFormNewOrderIdempotencyKey: () => navigationCalls.push("clear-key"),
+  syncOrderEditIdInUrl: (id) => navigationCalls.push(["url", id]),
+  scheduleSaveUserPlace: () => navigationCalls.push("place"),
+  editOrder: async (id, options) => {
+    assert.equal(id, 1758);
+    assert.equal(options.skipUrlSync, true);
+    assert.equal(options.isCurrent(), true);
+    navigationCalls.push("edit");
+    saveBusy = false;
+  },
+  leaveOrderFormAfterSave: async (id) => navigationCalls.push(["list", id]),
+  setMessage: (message) => navigationCalls.push(["message", message]),
+  get orderFormSaveInFlight() { return saveBusy; },
+});
+await finishOrderSaveNavigation(1758, false);
+assert.equal(formState.editingOrderId, 1758);
+assert.deepEqual(navigationCalls, [
+  "clear-key", ["url", 1758], "place", "edit", ["message", "Заявка #1758 сохранена"],
+]);
+navigationCalls.length = 0;
+await finishOrderSaveNavigation(1758, true);
+assert.deepEqual(navigationCalls, [["list", 1758]], "Редактирование сохраняет прежний переход");
+navigationCalls.length = 0;
+await finishOrderSaveNavigation(1758, false, "Ошибка загрузки файла");
+assert.deepEqual(navigationCalls.at(-1), ["message", "Ошибка загрузки файла"]);
 
 console.log("order atomic save tests: ok");
