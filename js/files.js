@@ -50,6 +50,10 @@ export function hasPendingPhotoAttachment() {
   });
 }
 
+export function hasPendingOrderAttachment() {
+  return pendingAttachments.length > 0;
+}
+
 /**
  * Загрузить библиотеки обрезки и открыть модалку (как при выборе фото к заявке).
  * @returns {Promise<File | null>} null — отмена
@@ -406,6 +410,10 @@ async function mergeNewAttachmentFiles(picked) {
 
   applyPendingToAttachmentsInput();
   renderSelectedFiles();
+  if (pendingAttachments.length) {
+    const reminder = document.getElementById("orderPhotoReminder");
+    if (reminder) reminder.hidden = true;
+  }
 }
 
 function queueNewAttachmentFiles(picked) {

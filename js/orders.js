@@ -31,6 +31,7 @@ import {
   clearExistingOrderFilesInForm,
   renderExistingOrderFilesInForm,
   hasPendingPhotoAttachment,
+  hasPendingOrderAttachment,
   waitForPendingAttachmentChecks,
 } from "./files.js";
 import {
@@ -2666,6 +2667,8 @@ export async function fillForm(order) {
     console.error("Список файлов заявки:", err);
     clearExistingOrderFilesInForm();
   });
+  const photoReminder = document.getElementById("orderPhotoReminder");
+  if (photoReminder) photoReminder.hidden = true;
   await checkInstallerPaymentDone(order.id);
   applyOrderFormFieldsVisibilityForRole();
   bindMoneyRecipientSelectRoleGuards();
@@ -2882,6 +2885,8 @@ export function resetFormMode() {
   if (phoneEl) phoneEl.dispatchEvent(new Event("input", { bubbles: true }));
   resetFileUpload();
   clearExistingOrderFilesInForm();
+  const photoReminder = document.getElementById("orderPhotoReminder");
+  if (photoReminder) photoReminder.hidden = true;
 
   setMessage("Режим: новая заявка", "");
 
@@ -3137,6 +3142,10 @@ function restorePhotoCooldown() {
 function showNewOrderPhotoReminder() {
   const reminder = document.getElementById("orderPhotoReminder");
   if (!reminder) return;
+  if (state.editingOrderId || state.viewingOrderId || hasPendingOrderAttachment()) {
+    reminder.hidden = true;
+    return;
+  }
   reminder.hidden = false;
   reminder.classList.remove("order-photo-reminder--attention");
   // Повторный запуск анимации помогает заметить уже показанный блок.

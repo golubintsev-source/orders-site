@@ -35,7 +35,31 @@ assert.ok(
 assert.match(indexSource, /id="orderPhotoReminder"/);
 assert.match(indexSource, /повторная попытка сохранения запустит временную блокировку/);
 assert.match(styleSource, /\.order-photo-reminder/);
-assert.match(swSource, /orders-site-static-v148/);
+assert.match(swSource, /orders-site-static-v162/);
+
+const showReminderSource = ordersSource.slice(
+  ordersSource.indexOf("function showNewOrderPhotoReminder()"),
+  ordersSource.indexOf("/**\n * Идемпотентный ключ", ordersSource.indexOf("function showNewOrderPhotoReminder()")),
+);
+for (const scenario of [
+  { editingOrderId: 1758, viewingOrderId: null, hasAttachment: true, visible: false },
+  { editingOrderId: null, viewingOrderId: null, hasAttachment: true, visible: false },
+  { editingOrderId: null, viewingOrderId: null, hasAttachment: false, visible: true },
+]) {
+  const reminder = {
+    hidden: false,
+    classList: { remove() {}, add() {} },
+    get offsetWidth() { return 1; },
+    scrollIntoView() {},
+  };
+  const show = runInNewContext(`${showReminderSource}\nshowNewOrderPhotoReminder`, {
+    document: { getElementById: () => reminder },
+    state: scenario,
+    hasPendingOrderAttachment: () => scenario.hasAttachment,
+  });
+  show();
+  assert.equal(!reminder.hidden, scenario.visible, `Видимость напоминания: ${JSON.stringify(scenario)}`);
+}
 
 const cooldownSource = ordersSource.slice(
   ordersSource.indexOf("let orderFormSaveInFlight = false;"),
