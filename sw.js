@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v166: фразы на экране загрузки меняются раз в десять секунд.
-const STATIC_CACHE = "orders-site-static-v166";
+// v167: номер заказа перенесён ссылкой в комментарий на странице «Расчёты».
+const STATIC_CACHE = "orders-site-static-v167";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

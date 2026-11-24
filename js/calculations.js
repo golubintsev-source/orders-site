@@ -107,7 +107,6 @@ const calcColumnFilters = {
   expenseFrom: null,
   expenseTo: null,
   comment: "",
-  order: "",
 };
 
 /** State of the calculations table for browser-history restoration. */
@@ -494,6 +493,7 @@ function setupCalcCommentPopover() {
   if (!table || table.dataset.commentPopoverBound) return;
   table.dataset.commentPopoverBound = "1";
   table.addEventListener("click", (e) => {
+    if (e.target.closest?.("a.calc-order-link")) return;
     const td = e.target.closest("td.td-calc-comment");
     if (!td || !table.contains(td)) return;
     e.preventDefault();
@@ -501,6 +501,7 @@ function setupCalcCommentPopover() {
     showCalcCommentPopover(td);
   });
   table.addEventListener("keydown", (e) => {
+    if (e.target.closest?.("a.calc-order-link")) return;
     if (e.key !== "Enter" && e.key !== " ") return;
     const td = e.target.closest?.("td.td-calc-comment");
     if (!td || !table.contains(td)) return;
@@ -657,6 +658,12 @@ function getCalculationOrderLabel(row) {
     || String(orderId);
 }
 
+function getCalcCommentTextForRow(row) {
+  const orderLabel = getCalculationOrderLabel(row);
+  const displayComment = getCalcDisplayCommentForRow(row);
+  return [orderLabel, displayComment].filter(Boolean).join("; ");
+}
+
 async function fetchCalcOrderAddressesForRows(rows, signal) {
   const orderIds = [];
   for (const row of rows || []) {
@@ -719,12 +726,6 @@ function filterVisibleCalculationRows(rows) {
     if (calcColumnFilters.author && author !== calcColumnFilters.author) return false;
     if (calcColumnFilters.from && String(row?.from_place || "") !== calcColumnFilters.from) return false;
     if (calcColumnFilters.to && String(row?.to_place || "") !== calcColumnFilters.to) return false;
-    if (
-      calcColumnFilters.order &&
-      normalizeCalcFilterText(getCalculationOrderLabel(row)) !==
-        normalizeCalcFilterText(calcColumnFilters.order)
-    ) return false;
-
     const amount = Number(row?.amount);
     const isIncome = CALC_INCOME_TO_PLACES.has(row?.to_place) && !isSalaryPaymentRow(row);
     if (calcColumnFilters.incomeFrom != null || calcColumnFilters.incomeTo != null) {
@@ -741,7 +742,7 @@ function filterVisibleCalculationRows(rows) {
     const commentNeedle = normalizeCalcFilterText(calcColumnFilters.comment);
     if (
       commentNeedle &&
-      !normalizeCalcFilterText(getCalcDisplayCommentForRow(row)).includes(commentNeedle)
+      !normalizeCalcFilterText(getCalcCommentTextForRow(row)).includes(commentNeedle)
     ) {
       return false;
     }
@@ -767,7 +768,6 @@ function uniqueCalcFilterValues(type) {
     if (type === "author") return getCalcDisplayAuthor(row?.comment);
     if (type === "from") return String(row?.from_place || "").trim();
     if (type === "to") return String(row?.to_place || "").trim();
-    if (type === "order") return getCalculationOrderLabel(row);
     return "";
   });
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru"));
@@ -790,7 +790,7 @@ function calcFilterHeadingSummary(type) {
     if (to) return `по ${to}`;
     return "";
   }
-  if (["author", "from", "to", "order"].includes(type)) return calcColumnFilters[type] || "";
+  if (["author", "from", "to"].includes(type)) return calcColumnFilters[type] || "";
   if (type === "comment") return calcColumnFilters.comment || "";
   const from = calcColumnFilters[`${type}From`];
   const to = calcColumnFilters[`${type}To`];
@@ -827,7 +827,7 @@ function calcFilterPopoverFields(type) {
       <label class="calc-column-filter-field"><span>От</span><input id="calcFilterTimeFrom" type="datetime-local" value="${escapeHtmlAttr(calcColumnFilters.timeFrom)}"></label>
       <label class="calc-column-filter-field"><span>До</span><input id="calcFilterTimeTo" type="datetime-local" value="${escapeHtmlAttr(calcColumnFilters.timeTo)}"></label>`;
   }
-  if (["author", "from", "to", "order"].includes(type)) {
+  if (["author", "from", "to"].includes(type)) {
     const current = calcColumnFilters[type];
     const options = uniqueCalcFilterValues(type)
       .map((value) => `<option value="${escapeHtmlAttr(value)}"${value === current ? " selected" : ""}>${escapeHtml(value)}</option>`)
@@ -867,7 +867,7 @@ async function applyCalcColumnFilter(type) {
     }
     calcColumnFilters.timeFrom = from;
     calcColumnFilters.timeTo = to;
-  } else if (["author", "from", "to", "order"].includes(type)) {
+  } else if (["author", "from", "to"].includes(type)) {
     calcColumnFilters[type] = popover.querySelector("#calcFilterSelect")?.value || "";
   } else if (type === "income" || type === "expense") {
     const fromRaw = popover.querySelector("#calcFilterAmountFrom")?.value || "";
@@ -897,7 +897,7 @@ async function resetCalcColumnFilter(type) {
   if (type === "time") {
     calcColumnFilters.timeFrom = "";
     calcColumnFilters.timeTo = "";
-  } else if (["author", "from", "to", "comment", "order"].includes(type)) {
+  } else if (["author", "from", "to", "comment"].includes(type)) {
     calcColumnFilters[type] = "";
   } else {
     calcColumnFilters[`${type}From`] = null;
@@ -1167,7 +1167,7 @@ function renderCalculationsTableFromCache() {
   updateCalcFilterHeadingStates();
 
   if (calculationsLoadFailed) {
-    tbody.innerHTML = '<tr><td colspan="9">Не удалось загрузить расчёты.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8">Не удалось загрузить расчёты.</td></tr>';
     const saldoBody = document.querySelector("#calculationsSaldoTable tbody");
     if (saldoBody) saldoBody.innerHTML = "";
     return;
@@ -1177,7 +1177,7 @@ function renderCalculationsTableFromCache() {
 
   if (calculationsRowsCache.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td colspan=\"9\">Записей пока нет.</td>";
+    tr.innerHTML = "<td colspan=\"8\">Записей пока нет.</td>";
     tbody.appendChild(tr);
     renderCalculationsSaldoTable([]);
     return;
@@ -1185,7 +1185,7 @@ function renderCalculationsTableFromCache() {
 
   if (rows.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td colspan=\"9\">Ничего не найдено.</td>";
+    tr.innerHTML = "<td colspan=\"8\">Ничего не найдено.</td>";
     tbody.appendChild(tr);
     renderCalculationsSaldoTable([]);
     return;
@@ -1202,12 +1202,16 @@ function renderCalculationsTableFromCache() {
     const isOrderIncomeRow = /^\[AUTO_ORDER_DELTA\]\s+Доход;/u.test(comment);
     const displayComment = getCalcDisplayCommentForRow(row);
     const displayAuthor = getCalcDisplayAuthor(comment);
-    const escapedComment = escapeHtml(displayComment);
     const orderId = getCalculationOrderId(row);
     const orderLabel = getCalculationOrderLabel(row);
-    const orderCell = orderId != null && orderId > 0 && orderLabel
-      ? `<td class="td-calc-order"><a href="${escapeHtmlAttr(buildOrderEditUrl(orderId))}" title="Редактировать заказ ${escapeHtmlAttr(orderLabel)}">${escapeHtml(orderLabel)}</a></td>`
-      : `<td class="td-calc-order">${orderLabel ? escapeHtml(orderLabel) : ""}</td>`;
+    const orderPrefix = orderLabel
+      ? orderId != null && orderId > 0
+        ? `<a class="calc-order-link" href="${escapeHtmlAttr(buildOrderEditUrl(orderId))}" title="Редактировать заказ ${escapeHtmlAttr(orderLabel)}">${escapeHtml(orderLabel)}</a>`
+        : `<span class="calc-order-label">${escapeHtml(orderLabel)}</span>`
+      : "";
+    const commentSeparator = orderPrefix && displayComment ? "; " : "";
+    const commentText = [orderLabel, displayComment].filter(Boolean).join("; ");
+    const commentContent = `${orderPrefix}${commentSeparator}${escapeHtml(displayComment)}`;
     const { income, expense } = getCalcIncomeExpenseDisplay(row);
     const incomeCell = income
       ? `<td class="td-money"><span class="status-value">${escapeHtml(income)}</span></td>`
@@ -1235,10 +1239,9 @@ function renderCalculationsTableFromCache() {
     if (isSalaryPaymentRow(row)) tr.classList.add("calc-row-salary-payment");
     tr.innerHTML = `
       <td><span class="status-value">${escapeHtml(formatCalcTimeRu(row.created_at))}</span></td>
-      ${orderCell}
       ${incomeCell}
       ${expenseCell}
-      <td class="td-calc-comment" data-comment-full="${escapeHtmlAttr(displayComment)}" tabindex="0" role="button" aria-label="Показать полный комментарий"><span class="calc-table-cell-text">${escapedComment}</span></td>
+      <td class="td-calc-comment" data-comment-full="${escapeHtmlAttr(commentText)}" tabindex="0" role="button" aria-label="Показать полный комментарий"><span class="calc-table-cell-text">${commentContent}</span></td>
       <td>${escapeHtml(row.from_place)}</td>
       <td>${escapeHtml(row.to_place)}</td>
       <td class="td-calc-author">${displayAuthor ? `<span class="status-value">${escapeHtml(displayAuthor)}</span>` : ""}</td>

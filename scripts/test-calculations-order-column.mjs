@@ -60,8 +60,9 @@ assert.equal(
   "з/п Сергей, Стас, доплата",
 );
 
-assert.match(calculations, /buildOrderEditUrl\(orderId\)/);
-assert.match(calculations, /class="td-calc-order"/);
+assert.match(calculations, /class="calc-order-link"[\s\S]*buildOrderEditUrl\(orderId\)/);
+assert.doesNotMatch(calculations, /class="td-calc-order"/);
+assert.match(calculations, /const commentContent =/);
 assert.match(calculations, /comment, order_id, deleted_at/);
 assert.match(calculations, /select\("id, address, order_type, installer_name"\)/);
 assert.match(calculations, /getCalcDisplayCommentForRow\(row\)/);
