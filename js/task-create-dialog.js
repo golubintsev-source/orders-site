@@ -73,6 +73,9 @@ function syncCreateDisabled() {
   if (highlightInput) highlightInput.disabled = Boolean(busy) || !pendingSourceOrderField;
   if (orderFieldValue) orderFieldValue.disabled = Boolean(busy) || !pendingOrderFieldState?.editable;
   if (orderFieldTextValue) orderFieldTextValue.disabled = Boolean(busy) || !pendingOrderFieldState?.editable;
+  if (submitBtn) {
+    submitBtn.textContent = saving ? "Сохранение…" : "Создать";
+  }
   dialog?.querySelectorAll('#taskCreateDialogExecutors input').forEach(el => { el.disabled = Boolean(busy); });
 }
 

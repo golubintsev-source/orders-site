@@ -4101,7 +4101,7 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
     orderData,
   });
   try {
-    savedOrderId = await saveOrderAtomic(supabaseClient, {
+    savedOrderId = await saveOrderAtomicWithRetry(supabaseClient, {
       requestId: createAtomicOrderRequestId(),
       orderId: idNum,
       orderData,
@@ -4121,6 +4121,13 @@ export async function updateOrderFromVoicePayload(orderId, patch) {
     };
   }
 
+  // Не заставляем вызывающий интерфейс ждать повторной загрузки всего списка.
+  // Это особенно заметно в PWA на iPhone: поле уже сохранено сервером, а форма
+  // создания задачи оставалась заблокированной до окончания большого SELECT.
+  Object.assign(existing, orderData, { id: savedOrderId });
+  if (getCurrentSectionId() === "all") applyFiltersAndRender();
+  updateSectionNavRicherStat();
+  refreshOrdersDependentSections();
   state.ordersFullyLoaded = false;
   return {
     ok: true,

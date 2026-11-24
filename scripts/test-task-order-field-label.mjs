@@ -42,3 +42,22 @@ assert.doesNotMatch(replyHtml, /textarea|task-reply-save/);
 const ordinaryAuthorRow = context.renderMyAuthorTasksRow({ executor_reply: 'Ответ' });
 assert.doesNotMatch(ordinaryAuthorRow, /task-reply-readonly/);
 console.log('author reply column: plain read-only text, escaped content and optional table column passed');
+
+const fieldEditorSource = fs.readFileSync(new URL('../js/task-order-field-editor.js', import.meta.url), 'utf8');
+assert.doesNotMatch(
+  fieldEditorSource,
+  /await\s+orders\.loadOrders\(\)/,
+  'Создание задачи не должно ждать повторной загрузки всех заказов после сохранения поля',
+);
+
+const createDialogSource = fs.readFileSync(new URL('../js/task-create-dialog.js', import.meta.url), 'utf8');
+assert.match(createDialogSource, /submitBtn\.textContent\s*=\s*saving\s*\?\s*"Сохранение…"\s*:\s*"Создать"/);
+
+const ordersSource = fs.readFileSync(new URL('../js/orders.js', import.meta.url), 'utf8');
+const voiceUpdateSource = ordersSource.slice(ordersSource.indexOf('export async function updateOrderFromVoicePayload'));
+assert.match(
+  voiceUpdateSource,
+  /saveOrderAtomicWithRetry\(supabaseClient/,
+  'Сохранение поля заказа должно завершаться таймаутом и безопасной повторной попыткой',
+);
+console.log('task order field save: no full-list wait, visible busy state and bounded atomic retry passed');

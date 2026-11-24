@@ -54,7 +54,6 @@ export async function saveTaskOrderField(orderId, sourceOrderField, rawValue, in
     [field]: normalizeInputValue(field, rawValue),
   });
   if (!result?.ok) throw new Error(result?.message || "Не удалось изменить поле заказа.");
-  await orders.loadOrders();
   return true;
 }
 
