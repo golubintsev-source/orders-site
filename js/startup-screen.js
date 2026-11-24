@@ -10,6 +10,7 @@
   const phrase = document.getElementById("startupPhrase");
   const retry = document.getElementById("startupRetry");
   const progress = document.getElementById("startupProgress");
+  const PHRASE_INTERVAL_MS = 10_000;
   const phrases = [
     "Открываем окна. Сквозняк в комплект не входит.",
     "Семь раз загрузим, один раз покажем.",
@@ -90,7 +91,7 @@
   const phraseInterval = setInterval(() => {
     phraseIndex = (phraseIndex + 1) % phrases.length;
     phrase.textContent = phrases[phraseIndex];
-  }, 5000);
+  }, PHRASE_INTERVAL_MS);
   const deadline = setTimeout(() => void fail(), 30000);
 
   function stopTimers() {

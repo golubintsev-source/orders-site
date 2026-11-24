@@ -49,13 +49,13 @@ function harness({ online = true, ping = async () => ({ type: "opaque", ok: fals
 const read = (h, path, response = { ok: true }, init) => h.api.trackRead(`https://db.example/rest/v1/${path}`, init,
   async () => { if (response instanceof Error) throw response; return response; });
 
-test("a quote appears immediately and rotates every five seconds; readiness clears all timers", async () => {
+test("a quote appears immediately and rotates every ten seconds; readiness clears all timers", async () => {
   const h = harness();
   const first = h.elements.startupPhrase.textContent;
   assert.ok(first); assert.equal(h.elements.startupPhrase.hidden, false);
   assert.equal(h.elements.startupTitle.hidden, true);
   assert.equal(h.elements.startupDescription.hidden, true);
-  await h.advance(4999); assert.equal(h.elements.startupPhrase.textContent, first);
+  await h.advance(9999); assert.equal(h.elements.startupPhrase.textContent, first);
   await h.advance(1); assert.notEqual(h.elements.startupPhrase.textContent, first);
   assert.equal(await h.api.complete(), true);
   assert.equal(h.elements.startupScreen.hidden, true);
