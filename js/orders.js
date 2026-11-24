@@ -2847,6 +2847,7 @@ export function isOrderFormSessionActive() {
 }
 
 export function resetFormMode() {
+  setOrderFormLoading(false);
   void import("./order-calculations.js").then((m) => m.hideOrderCalculations());
   state.viewingOrderId = null;
   hideOrderViewQr();
@@ -2939,6 +2940,14 @@ async function loadOrderRowForForm(orderId) {
   return error || !data ? { error: error || new Error("not found") } : data;
 }
 
+function setOrderFormLoading(loading, text = "Загружаю заказ…") {
+  const overlay = document.getElementById("orderFormLoading");
+  const label = document.getElementById("orderFormLoadingText");
+  if (label) label.textContent = text;
+  if (overlay) overlay.hidden = !loading;
+  document.getElementById("orderForm")?.setAttribute("aria-busy", loading ? "true" : "false");
+}
+
 /** Просмотр заказа: та же форма, что при редактировании, без изменения данных. */
 export async function viewOrder(orderId) {
   state.editingOrderId = null;
@@ -3014,43 +3023,71 @@ export async function editOrder(orderId, { skipUrlSync = false, navigationAnchor
     return;
   }
 
-  await import("./orders-runtime.js").then((m) => m.ensureOrderFormReady());
   if (!isCurrent()) return;
-  orderFormAtomicRequest = null;
-
+  captureOrderFormReturnSection();
   state.viewingOrderId = null;
+  state.editingOrderId = orderId;
   hideOrderViewQr();
   if (!skipUrlSync) syncOrderIdInUrl(null);
+  setOrderFormLoading(true, `Загружаю заказ № ${formatOrderIdTypeChip(orderId)}…`);
+  setMessage("", "");
+  switchSection("new", { skipAccessLog: true, skipUrlSync, navigationAnchor });
+  syncOrderEditIdInUrl(orderId);
+  window.scrollTo(0, 0);
+
+  const requestIsCurrent = () => getCurrentSectionId() === "new" && Number(state.editingOrderId) === Number(orderId);
+  try {
+    await import("./orders-runtime.js").then((m) => m.ensureOrderFormReady());
+  } catch (error) {
+    if (!requestIsCurrent()) return;
+    console.error("Ошибка подготовки формы заявки:", error);
+    state.editingOrderId = null;
+    setOrderFormLoading(false);
+    setMessage("Не удалось подготовить форму. Проверьте соединение и попробуйте снова.", "#d32f2f");
+    return;
+  }
+  if (!requestIsCurrent()) return;
+  orderFormAtomicRequest = null;
+
   applyOrderFormReadOnly(false);
 
   let data = null;
   try {
     data = await loadOrderRowForForm(orderId);
   } catch (e) {
+    if (!requestIsCurrent()) return;
     console.error("Ошибка загрузки заявки:", e);
+    state.editingOrderId = null;
+    setOrderFormLoading(false);
     setMessage("Ошибка загрузки заявки", "#d32f2f");
     return;
   }
-  if (!isCurrent()) return;
+  if (!requestIsCurrent()) return;
   if (data?.error) {
     console.error("Ошибка загрузки заявки:", data.error);
+    state.editingOrderId = null;
+    setOrderFormLoading(false);
     setMessage("Ошибка загрузки заявки", "#d32f2f");
     return;
   }
 
   if (isOrderHiddenForCurrentRole(data)) {
+    state.editingOrderId = null;
+    setOrderFormLoading(false);
     setMessage("Нет доступа к этому типу заказа", "#d32f2f");
     return;
   }
 
   if (isUserLite() && isOrderEditLockedForUserLite(data)) {
+    state.editingOrderId = null;
+    setOrderFormLoading(false);
     setMessage("Редактирование этого заказа для вашей роли отключено", "#d32f2f");
     return;
   }
 
   await fillForm(data);
   const orderCalculations = await import("./order-calculations.js");
-  if (!isCurrent()) return;
+  if (!requestIsCurrent()) return;
   state.editingOrderId = orderId;
   state.editingOrderDescription = data.description || null;
   void orderCalculations.showOrderCalculations(data).catch((error) => {
@@ -3075,12 +3112,9 @@ export async function editOrder(orderId, { skipUrlSync = false, navigationAnchor
   if (cancelEditBtn) cancelEditBtn.style.display = "inline-block";
   if (cancelEditBtnTop) cancelEditBtnTop.style.display = "inline-block";
 
-  captureOrderFormReturnSection();
-  switchSection("new", { skipAccessLog: true, skipUrlSync, navigationAnchor });
-  syncOrderEditIdInUrl(orderId);
   logOrderPageAccess({ orderId, mode: "edit" });
 
-  window.scrollTo(0, 0);
+  setOrderFormLoading(false);
   scheduleSaveUserPlace();
 }
 

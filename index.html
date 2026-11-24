@@ -232,6 +232,11 @@
     <section id="section-new" class="content-section">
       <div class="card">
 
+      <div id="orderFormLoading" class="order-form-loading" hidden role="status" aria-live="polite">
+        <span class="order-form-loading-spinner" aria-hidden="true"></span>
+        <span id="orderFormLoadingText">Загружаю заказ…</span>
+      </div>
+
       <form id="orderForm">
         <div class="actions actions-top">
           <button type="submit" id="submitBtnTop" class="btn-form-save">Сохранить заказ</button>

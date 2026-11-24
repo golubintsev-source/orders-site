@@ -43,14 +43,24 @@ export function ensureOrdersUI() {
 }
 
 export async function ensureOrderFormReady() {
-  const [orders, tasks, , orderCalculations] = await Promise.all([
-    ensureOrdersUI(), import("./tasks.js"), ensureOrderSettings(), import("./order-calculations.js"),
+  const [orders, tasks, orderCalculations] = await Promise.all([
+    ensureOrdersUI(), import("./tasks.js"), import("./order-calculations.js"),
   ]);
   orders.populateOrderFormInstallerSelect();
   orders.applyMoneyRecipientSelectsForRole();
   tasks.initOrderTasksSection();
   orderCalculations.initOrderCalculations();
-  await tasks.ensureOrderPageTaskExecutorsLoaded();
+  // Эти данные не нужны для показа и заполнения формы заказа. На медленном
+  // соединении ожидание обоих запросов выглядело как зависшее нажатие меню.
+  void tasks.ensureOrderPageTaskExecutorsLoaded().catch((error) => {
+    console.error("Ошибка фоновой загрузки исполнителей задач:", error);
+  });
+  void ensureOrderSettings().then(() => {
+    orders.populateOrderFormInstallerSelect();
+    orders.applyMoneyRecipientSelectsForRole();
+  }).catch((error) => {
+    console.error("Ошибка фоновой загрузки настроек заказа:", error);
+  });
   return orders;
 }
 

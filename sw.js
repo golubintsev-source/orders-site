@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v163: после создания остаёмся на форме сохранённого заказа.
-const STATIC_CACHE = "orders-site-static-v163";
+// v164: форма редактирования открывается сразу и показывает загрузку заказа.
+const STATIC_CACHE = "orders-site-static-v164";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

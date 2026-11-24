@@ -238,3 +238,24 @@ assert.ok(messagesSection);
 assert.ok(!messagesSection.includes('id="taskCreateDialog"'), 'new HTML must not place the shared dialog inside Chats');
 console.log('task dialog regression: hidden-section relocation, cached shell compatibility and modal close passed');
 
+const ordersSource = fs.readFileSync(new URL('../js/orders.js', import.meta.url), 'utf8');
+const editOrderSource = ordersSource.slice(
+  ordersSource.indexOf('export async function editOrder('),
+  ordersSource.indexOf('export async function deleteOrder('),
+);
+assert.match(html, /id="orderFormLoading"[^>]*hidden[^>]*role="status"/);
+assert.match(css, /\.order-form-loading\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*30;/s);
+assert.ok(
+  editOrderSource.indexOf('setOrderFormLoading(true') < editOrderSource.indexOf('await import("./orders-runtime.js")'),
+  'loading feedback must appear before waiting for lazy modules and network data',
+);
+assert.ok(
+  editOrderSource.indexOf('switchSection("new"') < editOrderSource.indexOf('loadOrderRowForForm(orderId)'),
+  'edit screen must open before the order request finishes',
+);
+const runtimeSource = fs.readFileSync(new URL('../js/orders-runtime.js', import.meta.url), 'utf8');
+const formReadySource = runtimeSource.slice(runtimeSource.indexOf('export async function ensureOrderFormReady'));
+assert.doesNotMatch(formReadySource, /await\s+tasks\.ensureOrderPageTaskExecutorsLoaded/);
+assert.doesNotMatch(formReadySource.split(']);', 1)[0], /ensureOrderSettings\(\)/);
+console.log('order edit loading: immediate feedback and non-blocking auxiliary data passed');
+
