@@ -13,6 +13,7 @@ assert.equal(recordedOrderIncome({ prepayment: 30, remaining_amount: 70, remaini
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const orders = await readFile(new URL('../js/orders.js', import.meta.url), 'utf8');
 const income = await readFile(new URL('../js/order-calculations.js', import.meta.url), 'utf8');
+const incomeSql = await readFile(new URL('../sql/order_income_atomic_prepare.sql', import.meta.url), 'utf8');
 assert.ok(html.indexOf('id="orderIncomeBlock"') < html.indexOf('id="orderCalculationsBlock"'));
 assert.ok(html.indexOf('id="orderCalculationsBlock"') < html.indexOf('id="orderCalculationsList"'));
 assert.match(html, /id="prepayment"[^>]*readonly/);
@@ -20,4 +21,7 @@ assert.match(html, /id="remaining_amount"[^>]*readonly/);
 assert.match(income, /rpc\("add_order_income"/);
 assert.match(orders, /showOrderCalculations\(data, \{ viewOnly: true \}\)/);
 assert.doesNotMatch(orders.slice(orders.indexOf('function buildOrderDeltaCalculationInsertRows('), orders.indexOf('function buildOrderDeltaCalculationInsertRows(') + 4000), /pushAmountRecipientCalcRow\("Предоплата"|pushAmountRecipientCalcRow\("Остаток"/);
+assert.match(incomeSql, /v_remaining := greatest\(v_order\.amount - v_total, 0\)/);
+assert.match(incomeSql, /Остаток: '\s*\|\|\s*v_remaining::text/);
+assert.match(incomeSql, /Тракторозаводский\|Краснооктябрьский[\s\S]*Красноармейский/);
 console.log('order income: staged calculations, old baseline, layout and shared ledger passed');

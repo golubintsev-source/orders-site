@@ -33,6 +33,8 @@ DECLARE
   v_result jsonb;
   v_existing public.order_income_requests%ROWTYPE;
   v_author text;
+  v_address text;
+  v_remaining numeric;
 BEGIN
   IF auth.uid() IS NULL OR p_request_id IS NULL OR p_order_id IS NULL THEN
     RAISE EXCEPTION 'Требуется авторизация и номер заказа' USING ERRCODE = '42501';
@@ -89,6 +91,13 @@ BEGIN
   IF v_total > v_order.amount THEN
     RAISE EXCEPTION 'Доходы по заказу превысят стоимость' USING ERRCODE = '22023';
   END IF;
+  v_remaining := greatest(v_order.amount - v_total, 0);
+  SELECT string_agg(btrim(part), ', ' ORDER BY ord)
+    INTO v_address
+  FROM regexp_split_to_table(COALESCE(v_order.address, ''), '[[:space:]]*,[[:space:]]*')
+    WITH ORDINALITY AS address_part(part, ord)
+  WHERE btrim(part) <> ''
+    AND btrim(part) !~* '^(г\.?[[:space:]]*Волгоград|Волгоградская[[:space:]]+(обл\.?|область)|(Тракторозаводский|Краснооктябрьский|Дзержинский|Центральный|Ворошиловский|Советский|Кировский|Красноармейский)[[:space:]]+(р-н\.?|район))$';
   v_author := CASE lower(COALESCE(auth.jwt() ->> 'email', ''))
     WHEN 'golubintsev26@gmail.com' THEN 'Дима'
     WHEN 'aver1978aver@gmail.com' THEN 'Вова'
@@ -102,8 +111,9 @@ BEGIN
     VALUES (p_order_id, 'Клиент', p_to_place, p_amount,
       '[AUTO_ORDER_DELTA] Доход; ' || p_order_id::text || '; ' ||
       COALESCE(NULLIF(v_order.client, ''), '[__]') || '; ' ||
-      COALESCE(NULLIF(v_order.address, ''), '[__]') || '; ' ||
-      COALESCE(NULLIF(trim(p_comment), ''), 'Поступление') || '; ' ||
+      COALESCE(NULLIF(v_address, ''), NULLIF(v_order.address, ''), '[__]') || '; ' ||
+      COALESCE(NULLIF(trim(p_comment), ''), 'Поступление') || '; Остаток: ' ||
+      v_remaining::text || '; ' ||
       to_char(clock_timestamp() AT TIME ZONE 'Europe/Moscow', 'HH24:MI') || '; ' || v_author)
     RETURNING id INTO v_calculation_id;
 

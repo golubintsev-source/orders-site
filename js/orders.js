@@ -61,6 +61,7 @@ import {
   isUserShop,
 } from "./roles.js";
 import { shortLoginByEmail } from "./user-names.js";
+import { compactVolgogradAddress } from "./calculations-format.js";
 import { getEditors } from "./settings.js";
 import { ORDER_TABLE_FIELD_KEYS } from "./order-cell-highlights.js";
 import { orderHasActiveTask, applyOrderTaskHighlightsInDom } from "./order-task-links.js";
@@ -376,7 +377,7 @@ function buildOrderDeltaCalculationInsertRows({
   const actorShort = shortLoginByEmail(state.currentUser?.email);
   const orderNumberStr = formatOrderIdTypeChip(orderId, orderData?.order_type) || `#${orderId}`;
   const clientStr = (orderData?.client && String(orderData.client).trim()) || CALC_COMMENT_EMPTY;
-  const addressStr = (orderData?.address && String(orderData.address).trim()) || CALC_COMMENT_EMPTY;
+  const addressStr = compactVolgogradAddress(orderData?.address) || CALC_COMMENT_EMPTY;
   const old = {
     prepayment: wasEditing ? toComparableNumber(initialSums?.prepayment) : 0,
     remaining_amount: wasEditing ? toComparableNumber(initialSums?.remaining_amount) : 0,
@@ -387,6 +388,11 @@ function buildOrderDeltaCalculationInsertRows({
     remaining_amount: toComparableNumber(orderData?.remaining_amount),
     installer_payment_amount: toComparableNumber(orderData?.installer_payment_amount),
   };
+  const orderAmount = Math.max(0, toComparableNumber(orderData?.amount));
+  const remainingRecipient = String(orderData?.remaining_to ?? "").trim();
+  const hasPaidRemainder = remainingRecipient !== "" && remainingRecipient !== "—";
+  const receivedAmount = next.prepayment + (hasPaidRemainder ? next.remaining_amount : 0);
+  const outstandingAmount = Math.max(0, orderAmount - receivedAmount);
 
   const rows = [];
 
@@ -402,7 +408,7 @@ function buildOrderDeltaCalculationInsertRows({
       from_place: from_place || "—",
       to_place: to_place || "—",
       amount,
-      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${kindLabel}; ${orderNumberStr}; ${clientStr}; ${addressStr}; ${detail}; ${timeHHmm}; ${actorShort}`,
+      comment: `${ORDER_DELTA_CALC_COMMENT_PREFIX} ${kindLabel}; ${orderNumberStr}; ${clientStr}; ${addressStr}; ${detail}; Остаток: ${outstandingAmount}; ${timeHHmm}; ${actorShort}`,
       order_id: orderId,
       delta_key,
     });

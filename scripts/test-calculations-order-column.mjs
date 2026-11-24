@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import {
   formatCalcDisplayComment,
   formatInstallationCalculationDisplayComment,
+  compactVolgogradAddress,
   parseOrderDeltaCommentOrderChip,
   parseOrderDeltaCommentOrderId,
 } from "../js/calculations-format.js";
@@ -19,6 +20,22 @@ assert.equal(
   formatCalcDisplayComment(legacy),
   "Остаток; Иван; Ленина 1; сумма 5000",
   "старый номер заказа не должен оставаться в комментарии",
+);
+
+assert.equal(
+  compactVolgogradAddress("Волгоградская обл, г Волгоград, Центральный р-н, ул Ленина, д 1"),
+  "ул Ленина, д 1",
+);
+assert.equal(
+  compactVolgogradAddress("Волгоградская обл, Городищенский р-н, рп Городище, ул Мира, д 2"),
+  "Городищенский р-н, рп Городище, ул Мира, д 2",
+  "районы области должны сохраняться",
+);
+const income = "[AUTO_ORDER_DELTA] Доход; 0123_О; Иван; Волгоградская обл, г Волгоград, Центральный р-н, ул Ленина, д 1; Поступление; Остаток: 7000; 12:30; Алексей";
+assert.equal(
+  formatCalcDisplayComment(income),
+  "Иван; ул Ленина, д 1; Поступление; Остаток: 7000",
+  "в комментарии дохода не нужны слово «Доход» и служебные части адреса",
 );
 
 const current = "[AUTO_ORDER_DELTA] Остаток; офл.0123_О; Иван; Ленина 1; сумма 5000; 12:30; Алексей";
@@ -49,6 +66,7 @@ assert.match(calculations, /comment, order_id, deleted_at/);
 assert.match(calculations, /select\("id, address, order_type, installer_name"\)/);
 assert.match(calculations, /getCalcDisplayCommentForRow\(row\)/);
 assert.match(orders, /comment: .*kindLabel.*orderNumberStr.*clientStr.*addressStr/);
+assert.match(orders, /Остаток: \$\{outstandingAmount\}/);
 assert.match(orders, /order_id: r\.order_id/);
 assert.match(migration, /ADD COLUMN IF NOT EXISTS order_id bigint/i);
 assert.match(migration, /FOREIGN KEY \(order_id\)/i);

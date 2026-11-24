@@ -3,6 +3,20 @@ const ORDER_DELTA_CALC_COMMENT_PREFIX = "[AUTO_ORDER_DELTA]";
 const EXCESS_DELTA_CALC_COMMENT_PREFIX = "[AUTO_EXCESS_DELTA]";
 const CALC_COMMENT_EMPTY = "[__]";
 
+const VOLGOGRAD_ADDRESS_PART_RE = /^(?:г\.?\s*Волгоград|Волгоградская\s+(?:обл\.?|область)|(?:Тракторозаводский|Краснооктябрьский|Дзержинский|Центральный|Ворошиловский|Советский|Кировский|Красноармейский)\s+(?:р-н\.?|район))$/iu;
+
+/** Убирает из адреса служебные части, не помогающие найти объект в Волгограде. */
+export function compactVolgogradAddress(address) {
+  const source = String(address ?? "").trim();
+  if (!source || isCalcCommentEmptyPart(source)) return source;
+  const compact = source
+    .split(/\s*,\s*/u)
+    .map((part) => part.trim())
+    .filter((part) => part && !VOLGOGRAD_ADDRESS_PART_RE.test(part))
+    .join(", ");
+  return compact || source;
+}
+
 function parseOrderIdFromChip(chip) {
   if (!chip) return null;
   const s = String(chip).trim();
@@ -129,7 +143,7 @@ function formatCalcCommentEmptyPlaceholders(text) {
 }
 
 function insertAddressAfterClientInDeltaComment(body, address) {
-  const addr = String(address ?? "").trim();
+  const addr = compactVolgogradAddress(address);
   if (!addr || isCalcCommentEmptyPart(addr)) return body;
   const parts = body.split("; ").map((p) => p.trim());
   if (parts.length < 3) return body;
@@ -152,6 +166,11 @@ export function formatCalcDisplayComment(comment, calcOrderAddressById = new Map
   const body = c.slice(prefix.length).trim();
   let display = stripOrderDeltaTrailingTime(body);
   if (isOrderDeltaRow) {
+    const addressParts = display.split("; ").map((p) => p.trim());
+    if (addressParts.length >= 4) {
+      addressParts[3] = compactVolgogradAddress(addressParts[3]);
+      display = addressParts.join("; ");
+    }
     const orderId = parseOrderDeltaCommentOrderId(c);
     if (orderId != null && calcOrderAddressById.has(orderId)) {
       display = insertAddressAfterClientInDeltaComment(display, calcOrderAddressById.get(orderId));
@@ -161,6 +180,10 @@ export function formatCalcDisplayComment(comment, calcOrderAddressById = new Map
     if (parseOrderDeltaCommentOrderChip(c)) {
       const parts = display.split("; ").map((p) => p.trim());
       display = [parts[0], ...parts.slice(2)].join("; ");
+    }
+    const parts = display.split("; ").map((p) => p.trim());
+    if (parts[0] === "Доход") {
+      display = parts.slice(1).join("; ");
     }
   }
   return formatCalcCommentEmptyPlaceholders(stripAuthorFromOrderDeltaBody(display));
