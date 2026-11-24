@@ -16,6 +16,17 @@ export function isKassaBeznalRecipientValue(v) {
   return KASSA_BEZNAL_RECIPIENTS.has(trimRecipient(v));
 }
 
+/** «Кому предоплата» обязательно только когда сумма предоплаты не равна нулю. */
+export function prepaymentRequiresRecipient(rawAmount) {
+  const normalized = String(rawAmount ?? "")
+    .trim()
+    .replace(/[\s\u00A0\u202F]/g, "")
+    .replace(",", ".");
+  if (!normalized) return false;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount !== 0;
+}
+
 /**
  * Для ролей без права выбирать «Касса»/«Безнал» уже записанное значение
  * в «Кому предоплата» / «Кому остаток» нельзя менять — select неактивен.

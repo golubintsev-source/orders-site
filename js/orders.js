@@ -66,6 +66,7 @@ import { ORDER_TABLE_FIELD_KEYS } from "./order-cell-highlights.js";
 import { orderHasActiveTask, applyOrderTaskHighlightsInDom } from "./order-task-links.js";
 import {
   overlayHistorySnapshotWithParticipants,
+  prepaymentRequiresRecipient,
   recoverLostMoneyRecipientsInOrderData,
   shouldLockKassaBeznalRecipientSelect,
 } from "./order-money-recipients.js";
@@ -2317,7 +2318,10 @@ export function updateConditionalRequiredHighlight() {
   const deliveryDateEl = document.getElementById("delivery_date");
   const deliveryEl = document.getElementById("delivery");
   if (deliveryEl) deliveryEl.classList.toggle("conditional-invalid", !!deliveryDateComplete && !deliveryVal);
-  if (prepaymentToEl) prepaymentToEl.classList.toggle("conditional-invalid", !!prepaymentVal && !prepaymentToVal);
+  if (prepaymentToEl) prepaymentToEl.classList.toggle(
+    "conditional-invalid",
+    prepaymentRequiresRecipient(prepaymentVal) && !prepaymentToVal,
+  );
   if (deliveryDateEl) deliveryDateEl.classList.toggle("conditional-invalid", !!deliveryVal && !deliveryDateComplete);
 }
 
@@ -3399,7 +3403,7 @@ export async function submitOrderForm(event) {
     return;
   }
   const conditionalMissing = [];
-  if (prepaymentVal && !prepaymentToVal) conditionalMissing.push("Кому предоплата");
+  if (prepaymentRequiresRecipient(prepaymentVal) && !prepaymentToVal) conditionalMissing.push("Кому предоплата");
   const deliveryVal = (document.getElementById("delivery")?.value || "").trim();
   const deliveryDateVal = (document.getElementById("delivery_date")?.value || "").trim();
   if (deliveryVal && !parseOrderFormDdMmYyyyToIso(deliveryDateVal)) conditionalMissing.push("Дата отправки");

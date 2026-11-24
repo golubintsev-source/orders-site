@@ -3,10 +3,18 @@ import {
   recipientSelectLostStoredValue,
   recoverLostRecipientFormValue,
   overlayHistorySnapshotWithParticipants,
+  prepaymentRequiresRecipient,
   recoverLostMoneyRecipientsInOrderData,
   shouldLockKassaBeznalRecipientSelect,
   preserveLockedKassaBeznalRecipient,
 } from "../js/order-money-recipients.js";
+
+assert.equal(prepaymentRequiresRecipient("0"), false);
+assert.equal(prepaymentRequiresRecipient("0,00"), false);
+assert.equal(prepaymentRequiresRecipient("  0  "), false);
+assert.equal(prepaymentRequiresRecipient(""), false);
+assert.equal(prepaymentRequiresRecipient("55 214"), true);
+assert.equal(prepaymentRequiresRecipient("100,50"), true);
 
 const liteOptionsWithoutBeznal = ["", "Дима", "Вова"];
 const fullOptions = ["", "Дима", "Вова", "Безнал", "Касса"];
