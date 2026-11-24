@@ -122,6 +122,10 @@ export function getSalaryEmployeeName(comment) {
     /^з\/п\s+(?:монтаж|откосы)\s+—\s*(.+?)\s*—(?:,|$)/iu,
   );
   if (orderPayment) return orderPayment[1].trim();
+  const plainOrderPayment = stripManualCalculationAuthor(comment).match(
+    /^з\/п\s+(?:монтаж|откосы)\s+(.+?)(?:;|$)/iu,
+  );
+  if (plainOrderPayment) return plainOrderPayment[1].trim();
   const bracketed = stripManualCalculationAuthor(comment).match(/^з\/п\s+\[([^\]]+)\](?:,|$)/iu);
   if (bracketed) return bracketed[1].trim();
   const structured = stripManualCalculationAuthor(comment).match(/^з\/п\s+([^,]+)(?:,|$)/iu);

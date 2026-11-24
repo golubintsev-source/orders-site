@@ -59,6 +59,10 @@ assert.equal(
   formatCalcDisplayComment("з/п [Сергей, Стас], доплата; Алексей"),
   "з/п Сергей, Стас, доплата",
 );
+assert.equal(
+  formatCalcDisplayComment("з/п монтаж —Алексей Берестнев—; Дима"),
+  "з/п монтаж Алексей Берестнев",
+);
 
 assert.match(calculations, /class="calc-order-link"[\s\S]*buildOrderEditUrl\(orderId\)/);
 assert.doesNotMatch(calculations, /class="td-calc-order"/);

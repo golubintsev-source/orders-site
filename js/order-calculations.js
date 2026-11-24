@@ -221,10 +221,12 @@ export function buildOrderCalculationComment(to, recipient, comment, author) {
   const text = String(comment || "").trim();
   const authorName = String(author || "").trim();
   let base;
-  if (destination === "Монтаж") base = `з/п монтаж —${name}—`;
-  else if (destination === "Откосы") base = `з/п откосы —${name}—`;
+  let detailSeparator = ", ";
+  if (destination === "Монтаж") base = `з/п монтаж ${name}`;
+  else if (destination === "Откосы") base = `з/п откосы ${name}`;
   else base = destination;
-  return `${base}${text ? `, ${text}` : ""}; ${authorName}`;
+  if (destination === "Монтаж" || destination === "Откосы") detailSeparator = "; ";
+  return `${base}${text ? `${detailSeparator}${text}` : ""}; ${authorName}`;
 }
 
 function buildPayload() {

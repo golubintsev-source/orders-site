@@ -159,7 +159,9 @@ export function formatCalcDisplayComment(comment, calcOrderAddressById = new Map
   const isOrderDeltaRow = typeof c === "string" && c.startsWith(ORDER_DELTA_CALC_COMMENT_PREFIX);
   const isExcessDeltaRow = typeof c === "string" && c.startsWith(EXCESS_DELTA_CALC_COMMENT_PREFIX);
   if (!isOrderDeltaRow && !isExcessDeltaRow) {
-    const manual = stripAuthorFromManualComment(c).replace(/^з\/п\s+\[([^\]]+)\]/iu, "з/п $1");
+    const manual = stripAuthorFromManualComment(c)
+      .replace(/^з\/п\s+\[([^\]]+)\]/iu, "з/п $1")
+      .replace(/^(з\/п\s+(?:монтаж|откосы))\s+(?:—|-)+\s*(.+?)\s*(?:—|-)+(?=,|$)/iu, "$1 $2");
     return formatCalcCommentEmptyPlaceholders(manual);
   }
   const prefix = isOrderDeltaRow ? ORDER_DELTA_CALC_COMMENT_PREFIX : EXCESS_DELTA_CALC_COMMENT_PREFIX;

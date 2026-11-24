@@ -56,8 +56,8 @@ const commentBuilder = moduleSource
   .replace("export ", "");
 const context = vm.createContext({});
 vm.runInContext(commentBuilder, context);
-assert.equal(context.buildOrderCalculationComment("Монтаж", "Иван, Пётр", "", "Алексей"), "з/п монтаж —Иван, Пётр—; Алексей");
-assert.equal(context.buildOrderCalculationComment("Откосы", "Сергей", "Доплата", "Алексей"), "з/п откосы —Сергей—, Доплата; Алексей");
+assert.equal(context.buildOrderCalculationComment("Монтаж", "Иван, Пётр", "", "Алексей"), "з/п монтаж Иван, Пётр; Алексей");
+assert.equal(context.buildOrderCalculationComment("Откосы", "Сергей", "Доплата", "Алексей"), "з/п откосы Сергей; Доплата; Алексей");
 assert.equal(context.buildOrderCalculationComment("Комиссия", "Комиссия", "", "Алексей"), "Комиссия; Алексей");
 assert.equal(context.buildOrderCalculationComment("Другое", "Другое", "Расход", "Алексей"), "Другое, Расход; Алексей");
 
