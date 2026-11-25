@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v168: в комментариях зарплаты убраны тире вокруг имени исполнителя.
-const STATIC_CACHE = "orders-site-static-v168";
+// v169: суммы дохода и расхода заказа форматируются пробелами при вводе.
+const STATIC_CACHE = "orders-site-static-v169";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

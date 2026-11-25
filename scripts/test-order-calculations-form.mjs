@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import {
+  formatRublesIntegerInputWhileTyping,
+  formatRublesIntegerTypingValue,
+} from "../js/format.js";
 
 const root = new URL("../", import.meta.url);
 const html = await readFile(new URL("index.html", root), "utf8");
@@ -46,6 +50,8 @@ assert.match(moduleSource, /hideOrderCalculations[\s\S]*?setBlockActive\(false\)
 assert.match(moduleSource, /hideOrderCalculations[\s\S]*?syncAmountFromInstallerPayment\(\)/);
 assert.match(moduleSource, /syncAmountFromInstallerPayment/);
 assert.match(moduleSource, /installer-payment-amount-updated/);
+assert.match(moduleSource, /bindGroupedAmountInput\("orderIncomeAmount"\)/);
+assert.match(moduleSource, /bindGroupedAmountInput\("orderCalcAmount"\)/);
 assert.match(ordersSource, /new CustomEvent\("installer-payment-amount-updated"\)/);
 assert.match(styles, /#section-new \.order-calculations-block \.calculations-comment-input\s*\{[\s\S]*?min-height: var\(--calc-submit-row-height, 40px\)/);
 assert.match(styles, /\.order-calculations-block \.calculations-form-row--comment-submit \.calculations-comment-wrap\s*\{[\s\S]*?flex: 1 1 auto/);
@@ -60,5 +66,17 @@ assert.equal(context.buildOrderCalculationComment("Монтаж", "Иван, П�
 assert.equal(context.buildOrderCalculationComment("Откосы", "Сергей", "Доплата", "Алексей"), "з/п откосы Сергей; Доплата; Алексей");
 assert.equal(context.buildOrderCalculationComment("Комиссия", "Комиссия", "", "Алексей"), "Комиссия; Алексей");
 assert.equal(context.buildOrderCalculationComment("Другое", "Другое", "Расход", "Алексей"), "Другое, Расход; Алексей");
+
+assert.equal(formatRublesIntegerTypingValue("15500000"), "15 500 000");
+assert.equal(formatRublesIntegerTypingValue("15\u00a0500 000"), "15 500 000");
+assert.equal(formatRublesIntegerTypingValue("15,5"), "15,5", "недопустимое значение форматирование не маскирует");
+const amountInput = {
+  value: "15500000",
+  selectionStart: 8,
+  setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; },
+};
+formatRublesIntegerInputWhileTyping(amountInput);
+assert.equal(amountInput.value, "15 500 000");
+assert.equal(amountInput.selectionStart, 10);
 
 console.log("order calculations form: independent placement, inactive state, fields, recipients, defaults and autogrow passed");

@@ -1,6 +1,12 @@
 import { supabaseClient } from "./config.js";
 import { state } from "./state.js";
-import { formatAmount, tryParseRublesInteger } from "./format.js";
+import {
+  formatAmount,
+  formatRublesIntegerInputWhileTyping,
+  formatRublesIntegerTypingValue,
+  refreshRublesIntegerInputState,
+  tryParseRublesInteger,
+} from "./format.js";
 import { getCalcDisplayAuthor, formatCalcDisplayComment, formatInstallationCalculationDisplayComment } from "./calculations-format.js";
 import { defaultSalaryPaymentFrom, SALARY_PAYMENT_FROM_PLACES } from "./salary-payment.js";
 import { shortLoginByEmail, displayNameByEmail } from "./user-names.js";
@@ -72,7 +78,16 @@ function syncAmountFromInstallerPayment() {
   if (document.getElementById("orderCalcTo")?.value !== "Монтаж") return;
   const source = document.getElementById("installer_payment_amount");
   const target = document.getElementById("orderCalcAmount");
-  if (target) target.value = String(source?.value || "").trim();
+  if (target) target.value = formatRublesIntegerTypingValue(String(source?.value || "").trim());
+}
+
+function bindGroupedAmountInput(id) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  input.addEventListener("input", () => {
+    formatRublesIntegerInputWhileTyping(input);
+    refreshRublesIntegerInputState(input, input.value);
+  });
 }
 
 function renderRecipientOptions() {
@@ -284,6 +299,8 @@ export function initOrderCalculations() {
   });
   document.getElementById("installer_payment_amount")?.addEventListener("input", syncAmountFromInstallerPayment);
   document.addEventListener("installer-payment-amount-updated", syncAmountFromInstallerPayment);
+  bindGroupedAmountInput("orderIncomeAmount");
+  bindGroupedAmountInput("orderCalcAmount");
   bindAutogrowTextarea(document.getElementById("orderCalcComment"));
   bindAutogrowTextarea(document.getElementById("orderIncomeComment"));
 }

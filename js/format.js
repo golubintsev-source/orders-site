@@ -41,6 +41,41 @@ export function refreshRublesIntegerInputState(el, raw, { allowSign = false } = 
   }
 }
 
+/** Форматирует допустимую целую сумму пробелами по три цифры. */
+export function formatRublesIntegerTypingValue(raw) {
+  const source = String(raw ?? "");
+  const compact = source.replace(/[\s\u00A0\u202F]/g, "");
+  if (!/^\d*$/.test(compact)) return source;
+  return compact.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+/** Живое форматирование суммы с сохранением позиции курсора. */
+export function formatRublesIntegerInputWhileTyping(el) {
+  if (!el) return;
+  const source = String(el.value ?? "");
+  const caret = el.selectionStart ?? source.length;
+  const digitsBeforeCaret = (source.slice(0, caret).match(/\d/g) || []).length;
+  const formatted = formatRublesIntegerTypingValue(source);
+  if (formatted === source) return;
+
+  el.value = formatted;
+  if (typeof el.setSelectionRange !== "function") return;
+  if (digitsBeforeCaret === 0) {
+    el.setSelectionRange(0, 0);
+    return;
+  }
+  let digitsSeen = 0;
+  let nextCaret = formatted.length;
+  for (let index = 0; index < formatted.length; index += 1) {
+    if (/\d/.test(formatted[index])) digitsSeen += 1;
+    if (digitsSeen === digitsBeforeCaret) {
+      nextCaret = index + 1;
+      break;
+    }
+  }
+  el.setSelectionRange(nextCaret, nextCaret);
+}
+
 /**
  * Форматирует число с пробелами между тысячами и миллионами (1 234 567,89).
  * Для отображения сумм в таблицах и интерфейсе.
