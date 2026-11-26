@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v171: восстановлен полный мобильный CSS после обрезки файла при публикации.
-const STATIC_CACHE = "orders-site-static-v171";
+// v172: налоговые расчёты сохраняют комментарий с префиксом «Налоги».
+const STATIC_CACHE = "orders-site-static-v172";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

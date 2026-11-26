@@ -1378,12 +1378,13 @@ function syncCalcTaxTypeField(fields, { reset = true } = {}) {
 
 function splitCalcTaxComment(comment) {
   const text = String(comment || "").trim();
-  const separator = text.indexOf(";");
-  const first = (separator >= 0 ? text.slice(0, separator) : text).trim();
-  if (!CALC_TAX_TYPE_SET.has(first)) return { taxType: "", comment: text };
+  const parts = text.split(";").map((part) => part.trim());
+  const taxTypeIndex = parts[0] === "Налоги" ? 1 : 0;
+  const taxType = parts[taxTypeIndex] || "";
+  if (!CALC_TAX_TYPE_SET.has(taxType)) return { taxType: "", comment: text };
   return {
-    taxType: first,
-    comment: separator >= 0 ? text.slice(separator + 1).trim() : "",
+    taxType,
+    comment: parts.slice(taxTypeIndex + 1).join("; "),
   };
 }
 
@@ -1391,7 +1392,9 @@ function getFormValues(fields) {
   const amount = fields.amount.value.trim();
   const taxType = fields.to.value === "Налоги" ? String(fields.taxType?.value || "").trim() : "";
   const manualComment = fields.comment.value.trim();
-  const comment = taxType ? `${taxType}${manualComment ? `; ${manualComment}` : ""}` : manualComment;
+  const comment = taxType
+    ? `Налоги; ${taxType}${manualComment ? `; ${manualComment}` : ""}`
+    : manualComment;
   return {
     from_place: fields.from.value.trim() || null,
     to_place: fields.to.value.trim() || null,

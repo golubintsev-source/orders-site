@@ -20,6 +20,8 @@ for (const file of ["index.html", "calculations.html"]) {
 
 assert.match(calculations, /fields\.to\.value === "Налоги"/);
 assert.match(calculations, /return "Выберите тип налога"/);
+assert.match(calculations, /`Налоги; \$\{taxType\}/);
+assert.match(calculations, /parts\[0\] === "Налоги" \? 1 : 0/);
 assert.match(calculations, /function calculationDbPayload/);
 assert.match(calculations, /syncCalcTaxTypeField\(fields/);
 assert.match(style, /\.calculations-tax-type-row\[hidden\][\s\S]*display:\s*none/);
