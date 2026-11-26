@@ -1,12 +1,46 @@
--- Одно случайное сообщение каждому при первом открытии «Заказов» за московский день.
+-- Одно случайное сообщение каждому при открытии «Заказов», но не чаще раза в 72 часа.
 BEGIN;
 
 CREATE TABLE public.finance_director_daily_jokes (
   recipient_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   local_day date NOT NULL,
+  sent_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (recipient_id, local_day)
 );
 ALTER TABLE public.finance_director_daily_jokes ENABLE ROW LEVEL SECURITY;
+
+CREATE INDEX finance_director_daily_jokes_recipient_sent_at_idx
+  ON public.finance_director_daily_jokes (recipient_id, sent_at DESC);
+
+CREATE OR REPLACE FUNCTION public.enforce_finance_director_joke_interval()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  -- Один пользователь может одновременно открыть несколько вкладок.
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(NEW.recipient_id::text, 0)
+  );
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.finance_director_daily_jokes j
+    WHERE j.recipient_id = NEW.recipient_id
+      AND j.sent_at > pg_catalog.clock_timestamp() - interval '72 hours'
+  ) THEN
+    RETURN NULL;
+  END IF;
+
+  NEW.sent_at := pg_catalog.clock_timestamp();
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER finance_director_joke_interval
+BEFORE INSERT ON public.finance_director_daily_jokes
+FOR EACH ROW EXECUTE FUNCTION public.enforce_finance_director_joke_interval();
 
 -- Уже состоявшиеся сегодняшние входы в «Заказы» считаем первым посещением дня.
 INSERT INTO public.finance_director_daily_jokes (recipient_id, local_day)
@@ -69,7 +103,7 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Уникальный ключ исключает повторную отправку при одновременных вкладках.
+  -- Триггер выдерживает 72 часа и исключает повтор при одновременных вкладках.
   INSERT INTO public.finance_director_daily_jokes (recipient_id, local_day)
   VALUES (v_user, v_day)
   ON CONFLICT DO NOTHING RETURNING recipient_id INTO v_inserted;

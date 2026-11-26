@@ -43,7 +43,8 @@
     "test:calculations-comment-autocomplete": "node scripts/test-calculations-comment-autocomplete.mjs",
     "test:calculations-column-filters": "node scripts/test-calculations-column-filters.mjs",
     "test:calculations-order-column": "node scripts/test-calculations-order-column.mjs",
-    "test:order-calculations-form": "node scripts/test-order-calculations-form.mjs"
+    "test:order-calculations-form": "node scripts/test-order-calculations-form.mjs",
+    "test:finance-director-joke-interval": "node scripts/test-finance-director-joke-interval.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
