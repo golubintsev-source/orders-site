@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v169: суммы дохода и расхода заказа форматируются пробелами при вводе.
-const STATIC_CACHE = "orders-site-static-v170";
+// v171: восстановлен полный мобильный CSS после обрезки файла при публикации.
+const STATIC_CACHE = "orders-site-static-v171";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
@@ -25,6 +25,7 @@ const PRECACHE_URLS = [
   "/img/startup/worker-data-error.webp",
   "/style.css",
   "/style.css?v=edit-photo-cost-20261121",
+  "/style.css?v=calc-edit-20261112",
   "/js/performance-monitor.js",
   "/js/chat-boot.js",
   "/js/vendor/supabase.js",

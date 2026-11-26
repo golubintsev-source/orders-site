@@ -5,6 +5,8 @@ const root = new URL("../", import.meta.url);
 const calculations = await readFile(new URL("js/calculations.js", root), "utf8");
 const style = await readFile(new URL("style.css", root), "utf8");
 
+assert.ok(style.length > 250_000, "общий CSS не должен быть обрезан при публикации");
+
 for (const file of ["index.html", "calculations.html"]) {
   const html = await readFile(new URL(file, root), "utf8");
   assert.match(html, /<option value="Налоги">Налоги<\/option>/);
