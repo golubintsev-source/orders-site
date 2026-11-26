@@ -56,7 +56,7 @@ const button = Object.assign(element(), {
   getBoundingClientRect: () => ({ right: 385, top: 345, bottom: 375 }),
 });
 const addComment = { value: "Черновик новой записи" };
-const fields = Object.fromEntries(["from", "to", "amount", "comment", "error"].map(key => [key, element()]));
+const fields = Object.fromEntries(["from", "to", "amount", "taxType", "taxTypeWrap", "comment", "error"].map(key => [key, element()]));
 const row = { id: 42, from_place: "Дима", to_place: "Зарплата", amount: 70000, comment: "з/п Иван Сотников, Возврат долга; Дима" };
 const writes = [];
 const refreshes = [];
@@ -72,6 +72,7 @@ const context = vm.createContext({
   calculationEditDialog: null,
   calculationEdit: null,
   calculationEditSaving: false,
+  CALC_TAX_TYPES: ["НДФЛ", "Страховые взносы", "Травматизм", "НДС", "Налог на прибыль"],
   calculationsLoadFailed: false,
   calculationsRowsCache: [row],
   canEditManualCalculations: () => true,
@@ -88,6 +89,8 @@ const context = vm.createContext({
   formatAmountWholeRubles: String,
   refreshRublesIntegerInputState() {},
   stripAuthorFromManualComment: comment => comment.split(";")[0],
+  splitCalcTaxComment: comment => ({ taxType: "", comment }),
+  syncCalcTaxTypeField() {},
   resizeTextarea() {},
   setFormError: (el, text = "") => { el.textContent = text; },
   getFormValues: ({ amount }) => ({ amount: Number(amount.value) }),

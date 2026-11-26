@@ -66,9 +66,18 @@ const CALC_TO_OPTIONS = new Set([
   "Касса",
   "Покупка",
   "Списание",
+  "Налоги",
   "Безнал",
   "Другое",
 ]);
+const CALC_TAX_TYPES = [
+  "НДФЛ",
+  "Страховые взносы",
+  "Травматизм",
+  "НДС",
+  "Налог на прибыль",
+];
+const CALC_TAX_TYPE_SET = new Set(CALC_TAX_TYPES);
 const DEFAULT_VOICE_EXPENSE_TO = "Покупка";
 
 /** Полные строки с сервера; фильтр поиска применяется при отрисовке. */
@@ -1352,23 +1361,57 @@ function calculationFormFields(prefix) {
     to: document.getElementById(`${prefix}To`),
     amount: document.getElementById(`${prefix}Amount`),
     comment: document.getElementById(`${prefix}Comment`),
+    taxTypeWrap: document.getElementById(`${prefix}TaxTypeWrap`),
+    taxType: document.getElementById(`${prefix}TaxType`),
     error: document.getElementById(`${prefix}FormError`),
+  };
+}
+
+function syncCalcTaxTypeField(fields, { reset = true } = {}) {
+  if (!fields.taxTypeWrap || !fields.taxType) return;
+  const visible = fields.to.value === "Налоги";
+  fields.taxTypeWrap.hidden = !visible;
+  fields.taxType.disabled = !visible;
+  fields.taxType.required = visible;
+  if (!visible && reset) fields.taxType.value = "";
+}
+
+function splitCalcTaxComment(comment) {
+  const text = String(comment || "").trim();
+  const separator = text.indexOf(";");
+  const first = (separator >= 0 ? text.slice(0, separator) : text).trim();
+  if (!CALC_TAX_TYPE_SET.has(first)) return { taxType: "", comment: text };
+  return {
+    taxType: first,
+    comment: separator >= 0 ? text.slice(separator + 1).trim() : "",
   };
 }
 
 function getFormValues(fields) {
   const amount = fields.amount.value.trim();
+  const taxType = fields.to.value === "Налоги" ? String(fields.taxType?.value || "").trim() : "";
+  const manualComment = fields.comment.value.trim();
+  const comment = taxType ? `${taxType}${manualComment ? `; ${manualComment}` : ""}` : manualComment;
   return {
     from_place: fields.from.value.trim() || null,
     to_place: fields.to.value.trim() || null,
     amount: amount ? parseCalcAmountInput(amount) : null,
-    comment: appendActorToComment(fields.comment.value.trim()),
+    comment: appendActorToComment(comment),
+    tax_type: taxType,
   };
+}
+
+function calculationDbPayload(payload) {
+  const { tax_type: _taxType, ...databasePayload } = payload;
+  return databasePayload;
 }
 
 function validateCalculation(payload, row) {
   if (payload.amount === undefined) return MSG_SUM_INTEGER_ONLY;
   if (payload.amount == null) return "Укажите сумму";
+  if (payload.to_place === "Налоги" && !CALC_TAX_TYPE_SET.has(payload.tax_type)) {
+    return "Выберите тип налога";
+  }
   if (payload.from_place && payload.from_place === payload.to_place) {
     return "Откуда и куда не могут совпадать.";
   }
@@ -1390,6 +1433,7 @@ function bindCalculationFields(fields) {
     select.addEventListener("change", () => {
       setFormError(error);
       syncCalcFromToOptions(fields);
+      syncCalcTaxTypeField(fields);
     });
   }
   amount.addEventListener("blur", () => formatCalcAmountInput(amount));
@@ -1457,6 +1501,13 @@ function setupCalculationEditDialog(form) {
           <input id="calcEditAmount" class="calculations-amount-input" inputmode="numeric">
         </div>
       </div>
+      <div id="calcEditTaxTypeWrap" class="calculations-tax-type-row field" hidden>
+        <label for="calcEditTaxType">Тип налога</label>
+        <select id="calcEditTaxType">
+          <option value="">—</option>
+          ${CALC_TAX_TYPES.map((type) => `<option value="${type}">${type}</option>`).join("")}
+        </select>
+      </div>
       <div class="field calculations-comment-wrap">
         <label for="calcEditComment">Комментарий</label>
         <textarea id="calcEditComment" class="calculations-comment-input" rows="2" autocomplete="off" aria-autocomplete="list" aria-controls="calcEditCommentSuggestions"></textarea>
@@ -1502,7 +1553,7 @@ function setupCalculationEditDialog(form) {
     if (error) return;
 
     calculationEditSaving = true;
-    const controls = [fields.from, fields.to, fields.amount, fields.comment, cancel, save];
+    const controls = [fields.from, fields.to, fields.amount, fields.taxType, fields.comment, cancel, save].filter(Boolean);
     for (const control of controls) control.disabled = true;
     save.textContent = "Сохранение…";
     try {
@@ -1539,7 +1590,10 @@ function startEdit(button) {
   configureCalcPlaces(fields, row);
   fields.amount.value = row.amount == null ? "" : formatAmountWholeRubles(row.amount);
   refreshRublesIntegerInputState(fields.amount, fields.amount.value);
-  fields.comment.value = stripAuthorFromManualComment(row.comment);
+  const parsedTax = splitCalcTaxComment(stripAuthorFromManualComment(row.comment));
+  fields.taxType.value = row.to_place === "Налоги" ? parsedTax.taxType : "";
+  fields.comment.value = row.to_place === "Налоги" ? parsedTax.comment : stripAuthorFromManualComment(row.comment);
+  syncCalcTaxTypeField(fields, { reset: false });
   const suggestions = document.getElementById("calcEditCommentSuggestions");
   suggestions.hidden = true;
   setFormError(fields.error);
@@ -1569,7 +1623,7 @@ async function saveCalculationEdit(row, payload) {
   if (error) return { message: error };
   const { data: updatedRow, error: updateError } = await supabaseClient
     .from("calculations")
-    .update(payload)
+    .update(calculationDbPayload(payload))
     .eq("id", id)
     .is("deleted_at", null)
     .select("id, from_place, to_place, amount, comment")
@@ -1602,7 +1656,7 @@ async function submitForm(event) {
   setFormError(fields.error, validationError);
   if (validationError) return;
 
-  const insertPayload = { ...payload, created_at: new Date().toISOString() };
+  const insertPayload = { ...calculationDbPayload(payload), created_at: new Date().toISOString() };
   const { error } = await supabaseClient.from("calculations").insert([insertPayload]);
   if (error) {
     console.error("Ошибка добавления:", error);
@@ -1625,6 +1679,7 @@ async function submitForm(event) {
   setMessage("");
   form.reset();
   syncCalcFromToOptions(fields);
+  syncCalcTaxTypeField(fields);
   refreshRublesIntegerInputState(fields.amount, fields.amount.value);
   resizeTextarea(fields.comment);
   await loadCalculations({ force: true });

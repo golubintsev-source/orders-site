@@ -46,6 +46,8 @@
                 <option value="Дима">Дима</option>
                 <option value="Касса">Касса</option>
                 <option value="Покупка">Покупка</option>
+                <option value="Списание">Списание</option>
+                <option value="Налоги">Налоги</option>
                 <option value="Безнал">Безнал</option>
                 <option value="Другое">Другое</option>
               </select>
@@ -54,6 +56,17 @@
               <label for="calcAmount">Сумма</label>
               <input type="text" id="calcAmount" class="calculations-amount-input" inputmode="numeric" placeholder="0" title="Только целые рубли, без копеек" />
             </div>
+          </div>
+          <div id="calcTaxTypeWrap" class="calculations-tax-type-row field" hidden>
+            <label for="calcTaxType">Тип налога</label>
+            <select id="calcTaxType" disabled>
+              <option value="">—</option>
+              <option value="НДФЛ">НДФЛ</option>
+              <option value="Страховые взносы">Страховые взносы</option>
+              <option value="Травматизм">Травматизм</option>
+              <option value="НДС">НДС</option>
+              <option value="Налог на прибыль">Налог на прибыль</option>
+            </select>
           </div>
           <div class="calculations-form-row calculations-form-row--comment-submit">
             <div class="calculations-comment-wrap field">
