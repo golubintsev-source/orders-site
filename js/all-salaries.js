@@ -387,8 +387,8 @@ async function loadAllSalariesOnce() {
     resizeSalaryComment();
     renderSalarySources();
     renderSalaryRecipients();
-    const columns = "id, created_at, from_place, to_place, amount, comment, deleted_at";
-    const [legacyResult, formResult] = await Promise.all([
+    const columns = "id, created_at, order_id, from_place, to_place, amount, comment, deleted_at";
+    const [legacyResult, formResult, orderSalaryResult] = await Promise.all([
       fetchAllSupabaseRows(() =>
         supabaseClient
           .from("calculations")
@@ -411,10 +411,26 @@ async function loadAllSalariesOnce() {
           .order("id", { ascending: false }),
         { signal: scope.signal },
       ),
+      fetchAllSupabaseRows(() =>
+        supabaseClient
+          .from("calculations")
+          .select(columns)
+          .is("deleted_at", null)
+          .gte("created_at", SALARY_FORM_ONLY_FROM_ISO)
+          .not("order_id", "is", null)
+          .in("to_place", ["Монтаж", "Откосы"])
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false }),
+        { signal: scope.signal },
+      ),
     ]);
-    error = legacyResult.error || formResult.error;
+    error = legacyResult.error || formResult.error || orderSalaryResult.error;
     if (!error) {
-      data = [...(legacyResult.data || []), ...(formResult.data || [])]
+      data = [
+        ...(legacyResult.data || []),
+        ...(formResult.data || []),
+        ...(orderSalaryResult.data || []),
+      ]
         .sort((a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || Number(b.id) - Number(a.id),
         );

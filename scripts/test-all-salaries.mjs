@@ -11,6 +11,8 @@ import {
   installationSalaryOrderId,
   salaryCalculationAmount,
   SALARY_FORM_ONLY_FROM_ISO,
+  isOrderSalaryPaymentRow,
+  isSalaryPagePaymentRow,
 } from "../js/all-salaries-utils.js";
 
 assert.equal(SALARY_FORM_ONLY_FROM_ISO, "2026-11-10T21:00:00.000Z");
@@ -53,6 +55,27 @@ assert.equal(
   true,
   "после границы учитывается выплата из формы зарплат",
 );
+const orderSalaryAfterCutoff = {
+  ...firstFormOnlySecond,
+  id: 3158,
+  order_id: 1655,
+  from_place: "Дима",
+  to_place: "Монтаж",
+  amount: 10100,
+  comment: "з/п монтаж —Данил и сын—; Дима",
+};
+assert.equal(isOrderSalaryPaymentRow(orderSalaryAfterCutoff), true);
+assert.equal(isSalaryCalculationRow(orderSalaryAfterCutoff), true, "зарплата из заказа учитывается");
+assert.equal(
+  isSalaryCalculationRow({ ...orderSalaryAfterCutoff, order_id: null }),
+  false,
+  "такая же белая строка со страницы расчётов не учитывается",
+);
+assert.equal(isSalaryPagePaymentRow({
+  ...firstFormOnlySecond,
+  to_place: "Зарплата",
+  comment: "з/п Данил и сын, выплата; Дима",
+}), true);
 
 assert.equal(getSalaryEmployeeName("зп Иван Сотников возврат долг 1980=459 503; Лена"), "Иван Сотников");
 assert.equal(getSalaryEmployeeName("зп Леша; Лена"), "Леша");
@@ -195,4 +218,6 @@ const allSalariesSource = await readFile(new URL("../js/all-salaries.js", import
 assert.match(allSalariesSource, /\.lt\("created_at", SALARY_FORM_ONLY_FROM_ISO\)/);
 assert.match(allSalariesSource, /\.gte\("created_at", SALARY_FORM_ONLY_FROM_ISO\)/);
 assert.match(allSalariesSource, /\.eq\("to_place", "Зарплата"\)/);
+assert.match(allSalariesSource, /\.not\("order_id", "is", null\)/);
+assert.match(allSalariesSource, /\.in\("to_place", \["Монтаж", "Откосы"\]\)/);
 console.log("installation salary deltas: payment, decrease, refund, payer change, employee and month passed");

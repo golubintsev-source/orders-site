@@ -202,15 +202,32 @@ export function isSalaryPaymentRow(row) {
   return comment === prefix || comment.startsWith(`${prefix},`);
 }
 
+/** Выплата, созданная специальной формой страницы «Зарплаты». */
+export function isSalaryPagePaymentRow(row) {
+  return String(row?.to_place || "").trim() === "Зарплата" && isSalaryPaymentRow(row);
+}
+
+/** Зарплата за монтаж/откосы, созданная внутри конкретного заказа. */
+export function isOrderSalaryPaymentRow(row) {
+  const orderId = Number(row?.order_id);
+  if (!Number.isSafeInteger(orderId) || orderId <= 0) return false;
+  const destination = String(row?.to_place || "").trim();
+  if (destination !== "Монтаж" && destination !== "Откосы") return false;
+  const comment = stripManualCalculationAuthor(row?.comment);
+  return /^з\/п\s+(?:монтаж|откосы)\s+\S/iu.test(comment);
+}
+
 function isSalaryFormOnlyPeriod(createdAt) {
   const timestamp = new Date(createdAt).getTime();
   return Number.isFinite(timestamp) && timestamp >= SALARY_FORM_ONLY_FROM_MS;
 }
 
-/** До 11 ноября — старая логика; после — только форма на странице «Зарплаты». */
+/** До 11 ноября — старая логика; после — формы «Зарплаты» и редактирования заказа. */
 export function isSalaryCalculationRow(row) {
   if (!row || row.deleted_at != null) return false;
-  if (isSalaryFormOnlyPeriod(row.created_at)) return isSalaryPaymentRow(row);
+  if (isSalaryFormOnlyPeriod(row.created_at)) {
+    return isSalaryPagePaymentRow(row) || isOrderSalaryPaymentRow(row);
+  }
   if (isInstallationSalaryRow(row)) return true;
   const comment = String(row.comment ?? "");
   if (AUTOMATIC_CALCULATION_COMMENT_PREFIXES.some((prefix) => comment.startsWith(prefix))) {

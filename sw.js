@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v174: после 10 ноября зарплаты учитываются только из формы «Зарплаты».
-const STATIC_CACHE = "orders-site-static-v174";
+// v175: после 10 ноября учитываются зарплаты из формы и из редактирования заказа.
+const STATIC_CACHE = "orders-site-static-v175";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";
