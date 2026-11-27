@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   getSalaryEmployeeName,
   formatInstallationSalaryComment,
@@ -9,7 +10,10 @@ import {
   isInstallationSalaryRow,
   installationSalaryOrderId,
   salaryCalculationAmount,
+  SALARY_FORM_ONLY_FROM_ISO,
 } from "../js/all-salaries-utils.js";
+
+assert.equal(SALARY_FORM_ONLY_FROM_ISO, "2026-11-10T21:00:00.000Z");
 
 const manualSalary = {
   id: 1,
@@ -35,6 +39,20 @@ assert.equal(
   false,
 );
 assert.equal(isSalaryCalculationRow({ ...manualSalary, deleted_at: "2026-08-20T00:00:00Z" }), false);
+
+const lastLegacySecond = { ...manualSalary, created_at: "2026-11-10T20:59:59.999Z" };
+const firstFormOnlySecond = { ...manualSalary, created_at: SALARY_FORM_ONLY_FROM_ISO };
+assert.equal(isSalaryCalculationRow(lastLegacySecond), true, "до конца 10 ноября ключевые слова работают");
+assert.equal(isSalaryCalculationRow(firstFormOnlySecond), false, "с 11 ноября ключевые слова отключены");
+assert.equal(
+  isSalaryCalculationRow({
+    ...firstFormOnlySecond,
+    to_place: "Зарплата",
+    comment: "з/п Иван Сотников, Аванс; Алексей",
+  }),
+  true,
+  "после границы учитывается выплата из формы зарплат",
+);
 
 assert.equal(getSalaryEmployeeName("зп Иван Сотников возврат долг 1980=459 503; Лена"), "Иван Сотников");
 assert.equal(getSalaryEmployeeName("зп Леша; Лена"), "Леша");
@@ -167,4 +185,14 @@ assert.equal(isSalaryCalculationRow({ ...installation, deleted_at: "2026-10-31" 
 assert.equal(isSalaryCalculationRow({ ...installation, comment: "[AUTO_ORDER_DELTA] Предоплата; 1599; клиент ЗП" }), false);
 assert.equal(isSalaryCalculationRow({ ...installation, comment: "[AUTO_EXCESS_DELTA] Монтаж; 1599; ЗП" }), false);
 assert.equal(groupSalaryRowsByEmployee([{ ...installation, installer_name: "" }])[0].employee, "Монтажник не указан");
+assert.equal(
+  isSalaryCalculationRow({ ...installation, created_at: SALARY_FORM_ONLY_FROM_ISO }),
+  false,
+  "после границы автоматический монтаж не считается выплатой со страницы зарплат",
+);
+
+const allSalariesSource = await readFile(new URL("../js/all-salaries.js", import.meta.url), "utf8");
+assert.match(allSalariesSource, /\.lt\("created_at", SALARY_FORM_ONLY_FROM_ISO\)/);
+assert.match(allSalariesSource, /\.gte\("created_at", SALARY_FORM_ONLY_FROM_ISO\)/);
+assert.match(allSalariesSource, /\.eq\("to_place", "Зарплата"\)/);
 console.log("installation salary deltas: payment, decrease, refund, payer change, employee and month passed");

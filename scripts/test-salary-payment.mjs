@@ -25,7 +25,7 @@ for (const [email, expected] of [['aver1978aver@gmail.com', 'Вова'], ['golub
   assert.equal(context.defaultSalaryPaymentFrom({ currentUser: { email } }), expected);
 }
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const calcSources = [...html.match(/<select id="calcFrom">([\s\S]*?)<\/select>/)[1].matchAll(/<option value="([^"]+)">/g)].map(match => match[1]);
+const calcSources = [...html.match(/<select id="calcFrom"[^>]*>([\s\S]*?)<\/select>/)[1].matchAll(/<option value="([^"]+)">/g)].map(match => match[1]);
 assert.deepEqual(Array.from(vm.runInContext('SALARY_PAYMENT_FROM_PLACES', context)), calcSources);
 assert.ok(html.indexOf('id="salaryPaymentFrom"') < html.indexOf('id="salaryPaymentRecipient"'));
 const payload = build({ amount: '2 500', recipient: 'Павел', comment: 'Доплата' });

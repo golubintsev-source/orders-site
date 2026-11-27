@@ -12,6 +12,7 @@ import {
   groupSalaryRowsByMonth,
   formatInstallationSalaryComment,
   SALARY_COMMENT_TERMS,
+  SALARY_FORM_ONLY_FROM_ISO,
   installationSalaryOrderId,
   salaryCalculationAmount,
 } from "./all-salaries-utils.js";
@@ -386,16 +387,38 @@ async function loadAllSalariesOnce() {
     resizeSalaryComment();
     renderSalarySources();
     renderSalaryRecipients();
-    ({ data, error } = await fetchAllSupabaseRows(() =>
-      supabaseClient
-        .from("calculations")
-        .select("id, created_at, from_place, to_place, amount, comment, deleted_at")
-        .is("deleted_at", null)
-        .or([...SALARY_COMMENT_TERMS.map((term) => `comment.ilike.%${term}%`), "comment.like.[AUTO_ORDER_DELTA] Монтаж;*"].join(","))
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false }),
-      { signal: scope.signal },
-    ));
+    const columns = "id, created_at, from_place, to_place, amount, comment, deleted_at";
+    const [legacyResult, formResult] = await Promise.all([
+      fetchAllSupabaseRows(() =>
+        supabaseClient
+          .from("calculations")
+          .select(columns)
+          .is("deleted_at", null)
+          .lt("created_at", SALARY_FORM_ONLY_FROM_ISO)
+          .or([...SALARY_COMMENT_TERMS.map((term) => `comment.ilike.%${term}%`), "comment.like.[AUTO_ORDER_DELTA] Монтаж;*"].join(","))
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false }),
+        { signal: scope.signal },
+      ),
+      fetchAllSupabaseRows(() =>
+        supabaseClient
+          .from("calculations")
+          .select(columns)
+          .is("deleted_at", null)
+          .gte("created_at", SALARY_FORM_ONLY_FROM_ISO)
+          .eq("to_place", "Зарплата")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false }),
+        { signal: scope.signal },
+      ),
+    ]);
+    error = legacyResult.error || formResult.error;
+    if (!error) {
+      data = [...(legacyResult.data || []), ...(formResult.data || [])]
+        .sort((a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || Number(b.id) - Number(a.id),
+        );
+    }
   } catch (loadError) {
     error = loadError;
   }

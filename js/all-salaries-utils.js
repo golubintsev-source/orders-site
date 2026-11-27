@@ -7,6 +7,10 @@ export const AUTOMATIC_CALCULATION_COMMENT_PREFIXES = [
 
 export const SALARY_COMMENT_TERMS = ["з/п", "ЗП", "зарплата", "аванс", "премия", "бонус"];
 
+/** С 00:00 11 ноября по Москве учитываем только выплаты из формы «Зарплаты». */
+export const SALARY_FORM_ONLY_FROM_ISO = "2026-11-10T21:00:00.000Z";
+const SALARY_FORM_ONLY_FROM_MS = Date.parse(SALARY_FORM_ONLY_FROM_ISO);
+
 const RUSSIAN_MONTH_BY_FORM = new Map(
   [
     [0, ["январь", "января", "январе"]],
@@ -198,9 +202,15 @@ export function isSalaryPaymentRow(row) {
   return comment === prefix || comment.startsWith(`${prefix},`);
 }
 
-/** Зарплата — ручная строка с одним из зарплатных обозначений в комментарии. */
+function isSalaryFormOnlyPeriod(createdAt) {
+  const timestamp = new Date(createdAt).getTime();
+  return Number.isFinite(timestamp) && timestamp >= SALARY_FORM_ONLY_FROM_MS;
+}
+
+/** До 11 ноября — старая логика; после — только форма на странице «Зарплаты». */
 export function isSalaryCalculationRow(row) {
   if (!row || row.deleted_at != null) return false;
+  if (isSalaryFormOnlyPeriod(row.created_at)) return isSalaryPaymentRow(row);
   if (isInstallationSalaryRow(row)) return true;
   const comment = String(row.comment ?? "");
   if (AUTOMATIC_CALCULATION_COMMENT_PREFIXES.some((prefix) => comment.startsWith(prefix))) {
