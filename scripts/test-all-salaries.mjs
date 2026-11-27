@@ -221,3 +221,13 @@ assert.match(allSalariesSource, /\.eq\("to_place", "Зарплата"\)/);
 assert.match(allSalariesSource, /\.not\("order_id", "is", null\)/);
 assert.match(allSalariesSource, /\.in\("to_place", \["Монтаж", "Откосы"\]\)/);
 console.log("installation salary deltas: payment, decrease, refund, payer change, employee and month passed");
+
+const julySalary = { ...manualSalary, created_at: "2026-07-31T12:00:00Z", comment: "з/п Павел; Алексей" };
+const augustSalary = { ...manualSalary, created_at: "2026-08-01T12:00:00Z", comment: "з/п Павел; Алексей" };
+assert.deepEqual(groupSalaryRowsByMonth([julySalary]), []);
+assert.equal(groupSalaryRowsByMonth([augustSalary])[0].monthKey, "2026-08");
+assert.deepEqual(groupSalaryRowsByMonth([{ ...augustSalary, comment: "з/п Павел, за июль 2026; Алексей" }]), []);
+assert.equal(groupSalaryRowsByMonth([{ ...julySalary, comment: "з/п Павел, за август 2026; Алексей" }])[0].monthKey, "2026-08");
+assert.deepEqual(groupSalaryRowsByMonth([{ ...installation, created_at: "2026-07-31T12:00:00Z" }]), []);
+assert.equal(groupSalaryRowsByMonth([{ ...installation, created_at: "2026-08-01T12:00:00Z" }])[0].total, 10000);
+console.log("salary period starts with August 2026: passed");

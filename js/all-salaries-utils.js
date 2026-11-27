@@ -5,6 +5,8 @@ export const AUTOMATIC_CALCULATION_COMMENT_PREFIXES = [
   "[AUTO_EXCESS_DELTA]",
 ];
 
+export const SALARY_FIRST_MONTH = "2026-08";
+
 export const SALARY_COMMENT_TERMS = ["з/п", "ЗП", "зарплата", "аванс", "премия", "бонус"];
 
 /** С 00:00 11 ноября по Москве учитываем только выплаты из формы «Зарплаты». */
@@ -303,7 +305,7 @@ export function groupSalaryRowsByMonth(rows) {
     if (!isSalaryCalculationRow(row)) continue;
     const monthKey = salaryMonthKey(row.created_at, isInstallationSalaryRow(row) ? "" : row.comment);
     const amount = salaryCalculationAmount(row);
-    if (!monthKey || !Number.isFinite(amount)) continue;
+    if (!monthKey || monthKey < SALARY_FIRST_MONTH || !Number.isFinite(amount)) continue;
     let group = byMonth.get(monthKey);
     if (!group) {
       group = { monthKey, total: 0, rows: [] };
