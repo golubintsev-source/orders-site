@@ -8,8 +8,8 @@
  * API не кэшируем.
  */
 const BADGE_CACHE = "orders-site-badge-v1";
-// v172: налоговые расчёты сохраняют комментарий с префиксом «Налоги».
-const STATIC_CACHE = "orders-site-static-v172";
+// v173: поля «Откуда» и «Куда» обязательны в расчётах.
+const STATIC_CACHE = "orders-site-static-v173";
 const BADGE_COUNT_KEY = "/badge-count";
 const SHELL_UPDATED_KEY = "/shell-updated";
 const CHAT_VISIBILITY_KEY = "/chat-visibility";

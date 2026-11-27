@@ -1412,6 +1412,8 @@ function calculationDbPayload(payload) {
 function validateCalculation(payload, row) {
   if (payload.amount === undefined) return MSG_SUM_INTEGER_ONLY;
   if (payload.amount == null) return "Укажите сумму";
+  if (!payload.from_place) return "Укажите, откуда";
+  if (!payload.to_place) return "Укажите, куда";
   if (payload.to_place === "Налоги" && !CALC_TAX_TYPE_SET.has(payload.tax_type)) {
     return "Выберите тип налога";
   }
@@ -1493,11 +1495,11 @@ function setupCalculationEditDialog(form) {
       <div class="calculation-edit-places">
         <div class="field">
           <label for="calcEditFrom">Откуда</label>
-          <select id="calcEditFrom"></select>
+          <select id="calcEditFrom" required></select>
         </div>
         <div class="field">
           <label for="calcEditTo">Куда</label>
-          <select id="calcEditTo"></select>
+          <select id="calcEditTo" required></select>
         </div>
         <div class="field">
           <label for="calcEditAmount">Сумма</label>

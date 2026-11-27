@@ -45,7 +45,8 @@
     "test:calculations-order-column": "node scripts/test-calculations-order-column.mjs",
     "test:order-calculations-form": "node scripts/test-order-calculations-form.mjs",
     "test:finance-director-joke-interval": "node scripts/test-finance-director-joke-interval.mjs",
-    "test:calculations-tax-type": "node scripts/test-calculations-tax-type.mjs"
+    "test:calculations-tax-type": "node scripts/test-calculations-tax-type.mjs",
+    "test:calculations-required-places": "node scripts/test-calculations-required-places.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
